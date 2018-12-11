@@ -5,7 +5,7 @@
 #
 # - This file is managed by Puppet. DO NOT EDIT.
 ################################################################################
-# COMPUTE Node configuration parameters for reserved memory and physical cores
+# WORKER Node configuration parameters for reserved memory and physical cores
 # used by Base software and VSWITCH. These are resources that libvirt cannot use.
 #
 
@@ -16,7 +16,7 @@
 # validity against the actual number of logical CPU instances in the system.
 #
 ################################################################################
-COMPUTE_CPU_LIST=<%= @compute_cpu_list %>
+WORKER_CPU_LIST=<%= @worker_cpu_list %>
 
 ################################################################################
 #
@@ -32,10 +32,10 @@ PLATFORM_CPU_LIST=<%= @platform_cpu_list %>
 #
 # Example: To reserve 1500MB and 1 core on NUMA node0, and 1500MB and 1 core
 # on NUMA node1, the variable must be specified as follows.
-#   COMPUTE_BASE_MEMORY=("node0:1500MB:1" "node1:1500MB:1")
+#   WORKER_BASE_MEMORY=("node0:1500MB:1" "node1:1500MB:1")
 #
 ################################################################################
-COMPUTE_BASE_RESERVED=<%= @compute_base_reserved %>
+WORKER_BASE_RESERVED=<%= @worker_base_reserved %>
 
 ################################################################################
 #
@@ -68,7 +68,7 @@ COMPUTE_VSWITCH_CORES=<%= @reserved_vswitch_cores %>
 #
 # Example: To reserve 1 core on NUMA node0, the variable must be specified
 # as follows.
-#   COMPUTE_PLATFORM_CORES=("node0:0")
+#   WORKER_PLATFORM_CORES=("node0:0")
 #
 ################################################################################
-COMPUTE_PLATFORM_CORES=<%= @reserved_platform_cores %>
+WORKER_PLATFORM_CORES=<%= @reserved_platform_cores %>

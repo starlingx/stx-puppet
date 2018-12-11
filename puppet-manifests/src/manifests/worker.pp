@@ -1,5 +1,5 @@
 #
-# puppet manifest for compute hosts
+# puppet manifest for worker nodes
 #
 
 Exec {
@@ -48,7 +48,7 @@ include ::openstack::nova::placement
 include ::openstack::ceilometer
 include ::openstack::ceilometer::polling
 
-class { '::platform::config::compute::post':
+class { '::platform::config::worker::post':
   stage => post,
 }
 
