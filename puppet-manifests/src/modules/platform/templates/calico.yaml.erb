@@ -21,7 +21,7 @@
 # health and status
 #
 # curl -O -L https://github.com/projectcalico/calicoctl/releases/download/
-#                   v3.6.1/calicoctl
+#                   v3.6.2/calicoctl
 # chmod +x calicoctl
 # sudo mv calicoctl /usr/local/bin
 # export DATASTORE_TYPE=kubernetes
@@ -57,7 +57,17 @@ data:
           "nodename": "__KUBERNETES_NODE_NAME__",
           "mtu": __CNI_MTU__,
           "ipam": {
-              "type": "calico-ipam"
+            "type": "calico-ipam",
+            <%- if @pod_network_ipversion == 4 -%>
+            "assign_ipv4": "true",
+            <%- else -%>
+            "assign_ipv4": "false",
+            <%- end -%>
+            <%- if @pod_network_ipversion == 6 -%>
+            "assign_ipv6": "true"
+            <%- else -%>
+            "assign_ipv6": "false"
+            <%- end -%>
           },
           "policy": {
               "type": "k8s"
@@ -530,7 +540,7 @@ spec:
         # It can be deleted if this is a fresh installation, or if you have already
         # upgraded to use calico-ipam.
         - name: upgrade-ipam
-          image: <%= @quay_registry %>/calico/cni:v3.6.1
+          image: "<%= @quay_registry %>/calico/cni:v3.6.2"
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           env:
             - name: KUBERNETES_NODE_NAME
@@ -550,7 +560,7 @@ spec:
         # This container installs the Calico CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: <%= @quay_registry %>/calico/cni:v3.6.1
+          image: "<%= @quay_registry %>/calico/cni:v3.6.2"
           command: ["/install-cni.sh"]
           env:
             # Name of the CNI config file to create.
@@ -586,7 +596,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: <%= @quay_registry %>/calico/node:v3.6.1
+          image: "<%= @quay_registry %>/calico/node:v3.6.2"
           env:
             # Configure inbound failsafe rules
             - name: FELIX_FAILSAFEINBOUNDHOSTPORTS
@@ -615,6 +625,7 @@ spec:
             - name: CLUSTER_TYPE
               value: "k8s,bgp"
             # Auto-detect the BGP IP address.
+            <%- if @pod_network_ipversion == 4 -%>
             - name: IP
               value: "autodetect"
             - name: IP_AUTODETECTION_METHOD
@@ -622,26 +633,56 @@ spec:
             # Enable IPIP
             - name: CALICO_IPV4POOL_IPIP
               value: "Always"
+            # The default IPv4 pool to create on startup if none exists. Pod IPs will be
+            # chosen from this range. Changing this value after installation will have
+            # no effect. This should fall within `--cluster-cidr`.
+            - name: CALICO_IPV4POOL_CIDR
+              value: "<%= @pod_network_cidr %>"
+            - name: CALICO_IPV4POOL_NAT_OUTGOING
+              value: "true"
+            <%- else -%>
+            - name: IP
+              value: "none"
+            <%- end -%>
+            <%- if @pod_network_ipversion == 6 -%>
+            - name: IP6
+              value: "autodetect"
+            - name: IP6_AUTODETECTION_METHOD
+              value: "can-reach=<%= @apiserver_advertise_address %>"
+            # The default IPv6 pool to create on startup if none exists. Pod IPs will be
+            # chosen from this range. Changing this value after installation will have
+            # no effect. This should fall within `--cluster-cidr`.
+            - name: CALICO_IPV6POOL_CIDR
+              value: "<%= @pod_network_cidr %>"
+            - name: CALICO_IPV6POOL_NAT_OUTGOING
+              value: "true"
+            <%- else -%>
+            - name: IP6
+              value: "none"
+            <%- end -%>
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
               valueFrom:
                 configMapKeyRef:
                   name: calico-config
                   key: veth_mtu
-            # The default IPv4 pool to create on startup if none exists. Pod IPs will be
-            # chosen from this range. Changing this value after installation will have
-            # no effect. This should fall within `--cluster-cidr`.
-            - name: CALICO_IPV4POOL_CIDR
-              value: "<%= @pod_network_cidr %>"
             # Disable file logging so `kubectl logs` works.
             - name: CALICO_DISABLE_FILE_LOGGING
               value: "true"
             # Set Felix endpoint to host default action to ACCEPT.
             - name: FELIX_DEFAULTENDPOINTTOHOSTACTION
               value: "ACCEPT"
+            <%- if @pod_network_ipversion == 6 -%>
+            # Enable IPv6 on Kubernetes.
+            - name: FELIX_IPV6SUPPORT
+              value: "true"
+            - name: CALICO_ROUTER_ID
+              value: "hash"
+            <%- else -%>
             # Disable IPv6 on Kubernetes.
             - name: FELIX_IPV6SUPPORT
               value: "false"
+            <%- end -%>
             # Set Felix logging to "info"
             - name: FELIX_LOGSEVERITYSCREEN
               value: "info"
@@ -752,7 +793,7 @@ spec:
       serviceAccountName: calico-kube-controllers
       containers:
         - name: calico-kube-controllers
-          image: <%= @quay_registry %>/calico/kube-controllers:v3.6.1
+          image: "<%= @quay_registry %>/calico/kube-controllers:v3.6.2"
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
