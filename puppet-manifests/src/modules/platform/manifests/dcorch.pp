@@ -149,3 +149,12 @@ class platform::dcorch::runtime {
     }
   }
 }
+
+class platform::dcorch::stx_openstack::runtime
+  inherits ::platform::dcorch::params {
+  if ($::platform::params::distributed_cloud_role == 'systemcontroller') {
+    if $service_create {
+      class { '::dcorch::stx_openstack': }
+    }
+  }
+}
