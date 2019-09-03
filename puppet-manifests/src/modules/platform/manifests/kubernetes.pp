@@ -598,10 +598,6 @@ class platform::kubernetes::worker
     }
   }
 
-  file { '/var/run/.disable_worker_services':
-    ensure  => file,
-    replace => no,
-  }
   # TODO: The following exec is a workaround. Once kubernetes becomes the
   # default installation, /etc/pmon.d/libvirtd.conf needs to be removed from
   # the load.
