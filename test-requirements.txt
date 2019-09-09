@@ -1,0 +1,3 @@
+# hacking pulls in flake8
+hacking!=0.13.0,<0.14,>=0.12.0 # Apache-2.0
+bashate >= 0.2
