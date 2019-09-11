@@ -304,6 +304,19 @@ class platform::ceph::monitor
       }
     }
   }
+
+  # explicitly bind ceph-mgr to host-specific address
+  # to avoid automatic binding of floating address
+  if $::hostname == $mon_0_host {
+    ceph_config{
+      "mgr.${$::hostname}/public_addr": value => $mon_0_ip;
+    }
+  }
+  elsif $::hostname == $mon_1_host {
+    ceph_config{
+      "mgr.${$::hostname}/public_addr": value => $mon_1_ip;
+    }
+  }
 }
 
 define osd_crush_location(
