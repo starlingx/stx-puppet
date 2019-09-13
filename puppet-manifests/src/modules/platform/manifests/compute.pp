@@ -34,8 +34,8 @@ class platform::compute::grub::params (
   $n_cpus = '',
   $cpu_options = '',
   $m_hugepages = 'hugepagesz=2M hugepages=0',
-  $g_hugepages = undef,
-  $default_pgsz = 'default_hugepagesz=2M',
+  $g_hugepages = '',
+  $default_pgsz = '',
   $keys = [
     'kvm-intel.eptad',
     'default_hugepagesz',
@@ -55,17 +55,7 @@ class platform::compute::grub::params (
     $eptad = ''
   }
 
-  if $::is_gb_page_supported and $::platform::params::vswitch_type != 'none' {
-    if $g_hugepages != undef {
-      $gb_hugepages = $g_hugepages
-    } else {
-      $gb_hugepages = "hugepagesz=1G hugepages=${::number_of_numa_nodes}"
-    }
-  } else {
-    $gb_hugepages = ''
-  }
-
-  $grub_updates = strip("${eptad} ${$gb_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options}")
+  $grub_updates = strip("${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options}")
 }
 
 class platform::compute::grub::update
