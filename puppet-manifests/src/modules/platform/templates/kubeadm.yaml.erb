@@ -29,7 +29,7 @@ etcd:
     endpoints:
     - <%= @etcd_endpoint %>
 imageRepository: "<%= @k8s_registry %>"
-kubernetesVersion: v1.15.3
+kubernetesVersion: v1.16.0
 networking:
   dnsDomain: <%= @service_domain %>
   podSubnet: <%= @pod_network_cidr %>
