@@ -43,6 +43,21 @@ heartbeat_failure_action = <%= @heartbeat_failure_action %>
 ;  system service-parameter-modify platform maintenance mnfa_threshold=<value>
 mnfa_threshold = <%= @mnfa_threshold %>
 
+; Board Management Controller (BMC) Access Method
+; Controls the access method maintenance uses when communicating with
+;  provisioned BMCs for power/reset control and sensor monitoring.
+; Supported Methods are
+;       ipmi = use ipmi for bmc communications
+;    redfish = use redfish for bmc communications
+;      learn = use redfish if BMC supports it, otherwise use ipmi
+; Default is learn
+; Changes are automatically detected and handled by maintenance when
+;  modified through system service parameter CLI command.
+; To modify execute:
+;  system service-parameter-modify platform maintenance bmc_access_method=<method>
+;  system service-parameter-apply platform
+bmc_access_method = <%= @bmc_access_method %>
+
 [timeouts]
 worker_boot_timeout = <%= @worker_boot_timeout %> ; The max time (seconds) that Mtce waits for the mtcAlive
 controller_boot_timeout = <%= @controller_boot_timeout %> ; message after which it will time out and fail the host.

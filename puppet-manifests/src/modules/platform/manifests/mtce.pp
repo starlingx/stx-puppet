@@ -17,6 +17,7 @@ class platform::mtce::params (
   $mtce_multicast = undef,
   $mnfa_threshold = 2,
   $mnfa_timeout = 0,
+  $bmc_access_method = 'learn',
   $sm_client_port = 2224,
   $sm_server_port = 2124,
 ) { }
