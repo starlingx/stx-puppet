@@ -69,6 +69,10 @@ class openstack::keystone (
         'token/allow_expired_window': value => 0;
     }
 
+    keystone_config {
+        'security_compliance/lockout_duration': value => 1800;
+        'security_compliance/lockout_failure_attempts': value => 5;
+    }
 
     file { '/etc/keystone/keystone-extra.conf':
       ensure  => present,
