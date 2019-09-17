@@ -18,7 +18,8 @@ class platform::kubernetes::params (
   $k8s_reserved_cpus = undef,
   $k8s_reserved_mem = undef,
   $k8s_isol_cpus = undef,
-  $apiserver_cert_san = []
+  $apiserver_cert_san = [],
+  $k8s_cni_bin_dir = '/usr/libexec/cni'
 
 ) { }
 
@@ -107,6 +108,7 @@ class platform::kubernetes::kubeadm {
   $k8s_reserved_cpus = $::platform::kubernetes::params::k8s_reserved_cpus
   $k8s_reserved_mem = $::platform::kubernetes::params::k8s_reserved_mem
   $k8s_isol_cpus = $::platform::kubernetes::params::k8s_isol_cpus
+  $k8s_cni_bin_dir = $::platform::kubernetes::params::k8s_cni_bin_dir
 
   $iptables_file = "net.bridge.bridge-nf-call-ip6tables = 1
     net.bridge.bridge-nf-call-iptables = 1"
@@ -211,12 +213,75 @@ class platform::kubernetes::master::init
     $docker_registry = 'docker.io'
   }
 
-  if str2bool($::is_initial_config_primary) {
-    # For initial controller install, configure kubernetes from scratch.
-    $resolv_conf = '/etc/resolv.conf'
+  if str2bool($::is_initial_k8s_config) {
+    # This allows subsequent node installs
+    # Notes regarding ::is_initial_k8s_config check:
+    # - Ensures block is only run for new node installs (e.g. controller-1)
+    #  or reinstalls. This part is needed only once;
+    # - Ansible configuration is independently configuring Kubernetes. A retry
+    #   in configuration by puppet leads to failed manifest application.
+    #   This flag is created by Ansible on controller-0;
+    # - Ansible replay is not impacted by flag creation.
+
+    # If alternative k8s registry requires the authentication,
+    # kubeadm required images need to be pre-pulled on controller
+    if $k8s_registry != 'k8s.gcr.io' and $::platform::docker::params::k8s_registry_secret != undef {
+      File['/etc/kubernetes/kubeadm.yaml']
+      -> platform::docker::login_registry { 'login k8s registry':
+        registry_url    => $k8s_registry,
+        registry_secret => $::platform::docker::params::k8s_registry_secret
+      }
+
+      -> exec { 'kubeadm to pre pull images':
+        command   => 'kubeadm config images pull --config /etc/kubernetes/kubeadm.yaml',
+        logoutput => true,
+        before    => Exec['configure master node']
+      }
+
+      -> exec { 'logout k8s registry':
+        command   => "docker logout ${k8s_registry}",
+        logoutput => true,
+      }
+    }
+
+    # Create necessary certificate files
+    file { '/etc/kubernetes/pki':
+      ensure => directory,
+      owner  => 'root',
+      group  => 'root',
+      mode   => '0755',
+    }
+    -> file { '/etc/kubernetes/pki/ca.crt':
+      ensure  => file,
+      content => $ca_crt,
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0644',
+    }
+    -> file { '/etc/kubernetes/pki/ca.key':
+      ensure  => file,
+      content => $ca_key,
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0600',
+    }
+    -> file { '/etc/kubernetes/pki/sa.key':
+      ensure  => file,
+      content => $sa_key,
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0600',
+    }
+    -> file { '/etc/kubernetes/pki/sa.pub':
+      ensure  => file,
+      content => $sa_pub,
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0600',
+    }
 
     # Configure the master node.
-    file { '/etc/kubernetes/kubeadm.yaml':
+    -> file { '/etc/kubernetes/kubeadm.yaml':
       ensure  => file,
       content => template('platform/kubeadm.yaml.erb'),
     }
@@ -237,56 +302,10 @@ class platform::kubernetes::master::init
 
     # Add a bash profile script to set a k8s env variable
     -> file {'bash_profile_k8s':
-      ensure => file,
+      ensure => present,
       path   => '/etc/profile.d/kubeconfig.sh',
       mode   => '0644',
       source => "puppet:///modules/${module_name}/kubeconfig.sh"
-    }
-
-    # Deploy Multus as a Daemonset, and Calico is used as the default network
-    # (a network interface that every pod will be created with), each network
-    # attachment is made in addition to this default network.
-    -> file { '/etc/kubernetes/multus.yaml':
-      ensure  => file,
-      content => template('platform/multus.yaml.erb'),
-    }
-    -> exec {'deploy multus daemonset':
-      command   =>
-        'kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f /etc/kubernetes/multus.yaml',
-      logoutput => true,
-    }
-
-    # Configure calico networking using the Kubernetes API datastore.
-    -> file { '/etc/kubernetes/calico.yaml':
-      ensure  => file,
-      content => template('platform/calico.yaml.erb'),
-    }
-    -> exec { 'install calico networking':
-      command   =>
-        'kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f /etc/kubernetes/calico.yaml',
-      logoutput => true,
-    }
-
-    # Deploy sriov-cni as a Daemonset
-    -> file { '/etc/kubernetes/sriov-cni.yaml':
-      ensure  => file,
-      content => template('platform/sriov-cni.yaml.erb'),
-    }
-    -> exec {'deploy sriov-cni daemonset':
-      command   =>
-        'kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f /etc/kubernetes/sriov-cni.yaml',
-      logoutput => true,
-    }
-
-    # Deploy SRIOV network device plugin as a Daemonset
-    -> file { '/etc/kubernetes/sriovdp-daemonset.yaml':
-      ensure  => file,
-      content => template('platform/sriovdp-daemonset.yaml.erb'),
-    }
-    -> exec {'deploy sriov device plugin daemonset':
-      command   =>
-        'kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f /etc/kubernetes/sriovdp-daemonset.yaml',
-      logoutput => true,
     }
 
     # Remove the taint from the master node
@@ -322,137 +341,6 @@ class platform::kubernetes::master::init
     # Initial kubernetes config done on node
     -> file { '/etc/platform/.initial_k8s_config_complete':
       ensure => present,
-    }
-  } else {
-    if str2bool($::is_initial_k8s_config) {
-      # This allows subsequent node installs
-      # Notes regarding ::is_initial_k8s_config check:
-      # - Ensures block is only run for new node installs (e.g. controller-1)
-      #  or reinstalls. This part is needed only once;
-      # - Ansible configuration is independently configuring Kubernetes. A retry
-      #   in configuration by puppet leads to failed manifest application.
-      #   This flag is created by Ansible on controller-0;
-      # - Ansible replay is not impacted by flag creation.
-
-      # If alternative k8s registry requires the authentication,
-      # kubeadm required images need to be pre-pulled on controller
-      if $k8s_registry != 'k8s.gcr.io' and $::platform::docker::params::k8s_registry_secret != undef {
-        File['/etc/kubernetes/kubeadm.yaml']
-        -> platform::docker::login_registry { 'login k8s registry':
-          registry_url    => $k8s_registry,
-          registry_secret => $::platform::docker::params::k8s_registry_secret
-        }
-
-        -> exec { 'kubeadm to pre pull images':
-          command   => 'kubeadm config images pull --config /etc/kubernetes/kubeadm.yaml',
-          logoutput => true,
-          before    => Exec['configure master node']
-        }
-
-        -> exec { 'logout k8s registry':
-          command   => "docker logout ${k8s_registry}",
-          logoutput => true,
-        }
-      }
-
-      # Create necessary certificate files
-      file { '/etc/kubernetes/pki':
-        ensure => directory,
-        owner  => 'root',
-        group  => 'root',
-        mode   => '0755',
-      }
-      -> file { '/etc/kubernetes/pki/ca.crt':
-        ensure  => file,
-        content => $ca_crt,
-        owner   => 'root',
-        group   => 'root',
-        mode    => '0644',
-      }
-      -> file { '/etc/kubernetes/pki/ca.key':
-        ensure  => file,
-        content => $ca_key,
-        owner   => 'root',
-        group   => 'root',
-        mode    => '0600',
-      }
-      -> file { '/etc/kubernetes/pki/sa.key':
-        ensure  => file,
-        content => $sa_key,
-        owner   => 'root',
-        group   => 'root',
-        mode    => '0600',
-      }
-      -> file { '/etc/kubernetes/pki/sa.pub':
-        ensure  => file,
-        content => $sa_pub,
-        owner   => 'root',
-        group   => 'root',
-        mode    => '0600',
-      }
-
-      # Configure the master node.
-      -> file { '/etc/kubernetes/kubeadm.yaml':
-        ensure  => file,
-        content => template('platform/kubeadm.yaml.erb'),
-      }
-
-      -> exec { 'configure master node':
-        command   => 'kubeadm init --config=/etc/kubernetes/kubeadm.yaml',
-        logoutput => true,
-      }
-
-      # Update ownership/permissions for file created by "kubeadm init".
-      # We want it readable by sysinv and sysadmin.
-      -> file { '/etc/kubernetes/admin.conf':
-        ensure => file,
-        owner  => 'root',
-        group  => $::platform::params::protected_group_name,
-        mode   => '0640',
-      }
-
-      # Add a bash profile script to set a k8s env variable
-      -> file {'bash_profile_k8s':
-        ensure => present,
-        path   => '/etc/profile.d/kubeconfig.sh',
-        mode   => '0644',
-        source => "puppet:///modules/${module_name}/kubeconfig.sh"
-      }
-
-      # Remove the taint from the master node
-      -> exec { 'remove taint from master node':
-        command   => "kubectl --kubeconfig=/etc/kubernetes/admin.conf taint node ${::platform::params::hostname} node-role.kubernetes.io/master- || true", # lint:ignore:140chars
-        logoutput => true,
-      }
-
-      # Add kubelet service override
-      -> file { '/etc/systemd/system/kubelet.service.d/kube-stx-override.conf':
-        ensure  => file,
-        content => template('platform/kube-stx-override.conf.erb'),
-        owner   => 'root',
-        group   => 'root',
-        mode    => '0644',
-      }
-
-      # set kubelet monitored by pmond
-      -> file { '/etc/pmon.d/kubelet.conf':
-        ensure  => file,
-        content => template('platform/kubelet-pmond-conf.erb'),
-        owner   => 'root',
-        group   => 'root',
-        mode    => '0644',
-      }
-
-      # Reload systemd
-      -> exec { 'perform systemctl daemon reload for kubelet override':
-        command   => 'systemctl daemon-reload',
-        logoutput => true,
-      }
-
-      # Initial kubernetes config done on node
-      -> file { '/etc/platform/.initial_k8s_config_complete':
-        ensure => present,
-      }
     }
   }
 }
