@@ -176,7 +176,9 @@ class platform::compute::hugetlbf {
     # will be mounted at /dev/hugepages so let's make that happen too.
     # Once we upstream a fix to the helm chart to automatically determine
     # the mountpoint then we can remove this.
-    $page_size = '2M'
+    include ::platform::compute::grub::params
+    $default_pgsz_str = $::platform::compute::grub::params::default_pgsz
+    $page_size = strip(regsubst($default_pgsz_str, 'default_hugepagesz=', ''))
     $hugemnt ='/dev/hugepages'
     $options = "pagesize=${page_size}"
 
