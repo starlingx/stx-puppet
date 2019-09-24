@@ -2,7 +2,15 @@
 - project:
     check:
       jobs:
-        - openstack-tox-linters
+        - stx-puppet-linters
     gate:
       jobs:
-        - openstack-tox-linters
+        - stx-puppet-linters
+
+- job:
+    name: stx-puppet-linters
+    parent: openstack-tox-linters
+    description: |
+      Run linters for stx-puppet
+    pre-run: playbooks/tox-puppet-lint/pre.yaml
+
