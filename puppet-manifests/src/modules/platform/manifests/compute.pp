@@ -379,7 +379,6 @@ class platform::compute {
 
   Class[$name] -> Class['::platform::vswitch']
 
-  require ::platform::compute::grub::audit
   require ::platform::compute::hugetlbf
   require ::platform::compute::allocate
   require ::platform::compute::pmqos

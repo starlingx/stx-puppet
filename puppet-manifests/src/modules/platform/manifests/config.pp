@@ -386,6 +386,8 @@ class platform::config::worker::post
   file { '/var/run/.worker_config_complete':
     ensure => present,
   }
+
+  include ::platform::compute::grub::audit
 }
 
 class platform::config::storage::post
