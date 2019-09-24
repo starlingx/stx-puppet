@@ -17,7 +17,7 @@ BuildRequires: python2-devel
 A puppet module for %{module_dir}
 
 %prep
-%autosetup -q -n %{name}-%{version}/src
+%autosetup -n %{name}-%{version}/src
 
 %build
 
@@ -30,7 +30,7 @@ make install \
 
 %files
 %defattr(-,root,root,-)
-%license src/LICENSE
+%license LICENSE
 %dir %{_datadir}/puppet
 %dir %{_datadir}/puppet/modules
 %{_datadir}/puppet/modules/%{module_dir}

@@ -17,7 +17,7 @@ BuildRequires: python2-devel
 A puppet module for %{module_dir}
 
 %prep
-%autosetup -q -n %{name}-%{version}/src
+%autosetup -n %{name}-%{version}/src
 
 %build
 
