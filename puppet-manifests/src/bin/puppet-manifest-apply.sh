@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # Grab a lock before doing anything else
 LOCKFILE=/var/lock/.puppet.applyscript.lock
