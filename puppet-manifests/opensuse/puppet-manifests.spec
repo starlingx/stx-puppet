@@ -1,5 +1,5 @@
 Name:           puppet-manifests
-Version:        1.0
+Version:        1.0.0
 Release:        %{tis_patch_ver}%{?_tis_dist}
 Summary:        Puppet Configuration and Manifests
 License:        Apache-2.0
