@@ -10,7 +10,6 @@ Packager:       Wind River <info@windriver.com>
 URL:            unknown
 
 Source0:        %{name}-%{version}.tar.gz
-Source1:        LICENSE
 
 BuildArch:      noarch
 
@@ -26,10 +25,11 @@ A puppet module for dcorch dbsync service
 # The src for this puppet module needs to be staged to puppet/modules
 #
 %install
-install -d -m 0755 %{buildroot}%{_datadir}/puppet/modules/%{module_dir}
-cp -R %{name}-%{version}/%{module_dir} %{buildroot}%{_datadir}/puppet/modules
+make install \
+     MODULEDIR=%{buildroot}%{_datadir}/puppet/modules
+
 
 %files
-%license  %{name}-%{version}/LICENSE
+%license  LICENSE
 %{_datadir}/puppet/modules/%{module_dir}
 
