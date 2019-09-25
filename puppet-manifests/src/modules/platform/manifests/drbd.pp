@@ -446,7 +446,7 @@ class platform::drbd::cephmon ()
       ha_primary_override    => $drbd_primary,
       initial_setup_override => $drbd_initial,
       automount_override     => $drbd_automount,
-    } -> Class['::ceph']
+    }
   }
 }
 
