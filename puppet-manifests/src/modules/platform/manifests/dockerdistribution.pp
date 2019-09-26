@@ -1,5 +1,7 @@
 class platform::dockerdistribution::params (
     $registry_ks_endpoint = undef,
+    $registry_username = undef,
+    $registry_password = undef,
 ) {}
 
 define platform::dockerdistribution::write_config (
