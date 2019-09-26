@@ -19,7 +19,7 @@ BuildRequires: python2-devel
 A puppet module for dcorch dbsync service
 
 %prep
-%autosetup -c %{module_dir}
+%setup
 
 #
 # The src for this puppet module needs to be staged to puppet/modules
