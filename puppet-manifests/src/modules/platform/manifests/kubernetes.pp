@@ -17,6 +17,7 @@ class platform::kubernetes::params (
   $k8s_nodeset = undef,
   $k8s_reserved_cpus = undef,
   $k8s_reserved_mem = undef,
+  $k8s_isol_cpus = undef,
   $apiserver_cert_san = []
 
 ) { }
@@ -105,6 +106,7 @@ class platform::kubernetes::kubeadm {
   $host_labels = $::platform::kubernetes::params::host_labels
   $k8s_reserved_cpus = $::platform::kubernetes::params::k8s_reserved_cpus
   $k8s_reserved_mem = $::platform::kubernetes::params::k8s_reserved_mem
+  $k8s_isol_cpus = $::platform::kubernetes::params::k8s_isol_cpus
 
   $iptables_file = "net.bridge.bridge-nf-call-ip6tables = 1
     net.bridge.bridge-nf-call-iptables = 1"
@@ -119,7 +121,10 @@ class platform::kubernetes::kubeadm {
       join([
         '--system-reserved=',
         "cpu=${k8s_reserved_cpus},",
-        "memory=${k8s_reserved_mem}Mi"])
+        "memory=${k8s_reserved_mem}Mi"]),
+      join([
+        '--kube-reserved=',
+        "cpu=${k8s_isol_cpus}"])
       ], ' ')
   } else {
     $k8s_cpu_manager_opts = '--cpu-manager-policy=none'
