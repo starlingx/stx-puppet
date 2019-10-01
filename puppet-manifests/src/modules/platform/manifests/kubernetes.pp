@@ -374,6 +374,7 @@ class platform::kubernetes::worker::init
   inherits ::platform::kubernetes::worker::params {
 
   Class['::platform::docker::config'] -> Class[$name]
+  Class['::platform::filesystem::kubelet'] -> Class[$name]
 
   if str2bool($::is_initial_config) {
     include ::platform::params
