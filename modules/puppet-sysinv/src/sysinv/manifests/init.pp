@@ -1,17 +1,9 @@
 #
 # Files in this package are licensed under Apache; see LICENSE file.
 #
-# Copyright (c) 2013-2018 Wind River Systems, Inc.
+# Copyright (c) 2013-2019 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
-#
-#  Aug 2016: rebase mitaka
-#  Jun 2016: rebase centos
-#  Jun 2015: uprev kilo
-#  Dec 2014: uprev juno
-#  Jul 2014: rename ironic
-#  Dec 2013: uprev grizzly, havana
-#  Nov 2013: integrate source from https://github.com/stackforge/puppet-sysinv
 #
 
 #
@@ -215,16 +207,4 @@ class sysinv (
     'filter:authtoken/region_name': value => $region_name;
   }
 
-  if $::platform::kubernetes::params::enabled == true {
-    if $::platform::docker::params::quay_registry {
-      $quay_registry = $::platform::docker::params::quay_registry
-    } else {
-      $quay_registry = 'quay.io'
-    }
-
-    $armada_img_tag = "${quay_registry}/airshipit/armada:8a1638098f88d92bf799ef4934abe569789b885e-ubuntu_bionic"
-    sysinv_config {
-      'DEFAULT/armada_image_tag':    value =>  $armada_img_tag;
-    }
-  }
 }
