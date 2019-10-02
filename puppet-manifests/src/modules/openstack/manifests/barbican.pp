@@ -53,17 +53,18 @@ class openstack::barbican::service
 
   if $service_enabled {
 
-    include ::platform::network::mgmt::params
-    $api_host = $::platform::network::mgmt::params::subnet_version ? {
-      6       => "[${::platform::network::mgmt::params::controller_address}]",
-      default => $::platform::network::mgmt::params::controller_address,
-    }
     $api_fqdn = $::platform::params::controller_hostname
     $url_host = "http://${api_fqdn}:${api_port}"
     if str2bool($::is_initial_config_primary) {
         $enabled = true
+        $api_host = '[::]'
     } else {
         $enabled = false
+        include ::platform::network::mgmt::params
+        $api_host = $::platform::network::mgmt::params::subnet_version ? {
+          6       => "[${::platform::network::mgmt::params::controller_address}]",
+          default => $::platform::network::mgmt::params::controller_address,
+        }
     }
     include ::platform::amqp::params
 
