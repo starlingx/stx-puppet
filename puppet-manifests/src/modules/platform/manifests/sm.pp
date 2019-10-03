@@ -575,6 +575,11 @@ class platform::sm
       command => "sm-configure service_group yes controller storage-monitoring-services N 1 0 \"\" \"\"",
     }
 
+    if $::platform::params::distributed_cloud_role == 'subcloud' {
+        exec { 'Configure distributed-cloud-services redundancy model':
+            command => "sm-configure service_group yes controller distributed-cloud-services N 1 0 \"\" \"\"",
+        }
+    }
   }
 
   exec { 'Provision extension-fs (service-group-member)':
