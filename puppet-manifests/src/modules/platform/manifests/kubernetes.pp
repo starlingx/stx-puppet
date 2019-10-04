@@ -183,6 +183,7 @@ class platform::kubernetes::master::init
 
   include ::platform::params
   include ::platform::docker::params
+  include ::platform::dockerdistribution::params
 
   $apiserver_loopback_address = $pod_network_ipversion ? {
     4 => '127.0.0.1',
@@ -198,21 +199,6 @@ class platform::kubernetes::master::init
     $k8s_registry = 'k8s.gcr.io'
   }
 
-  # This is used for calico image in template calico.yaml.erb
-  if $::platform::docker::params::quay_registry {
-    $quay_registry = $::platform::docker::params::quay_registry
-  } else {
-    $quay_registry = 'quay.io'
-  }
-
-  # This is used for device plugin images in template multus.yaml.erb,
-  # sriov-cni.yaml.erb and sriovdp-daemonset.yaml.erb
-  if $::platform::docker::params::docker_registry {
-    $docker_registry = $::platform::docker::params::docker_registry
-  } else {
-    $docker_registry = 'docker.io'
-  }
-
   if str2bool($::is_initial_k8s_config) {
     # This allows subsequent node installs
     # Notes regarding ::is_initial_k8s_config check:
@@ -222,27 +208,6 @@ class platform::kubernetes::master::init
     #   in configuration by puppet leads to failed manifest application.
     #   This flag is created by Ansible on controller-0;
     # - Ansible replay is not impacted by flag creation.
-
-    # If alternative k8s registry requires the authentication,
-    # kubeadm required images need to be pre-pulled on controller
-    if $k8s_registry != 'k8s.gcr.io' and $::platform::docker::params::k8s_registry_secret != undef {
-      File['/etc/kubernetes/kubeadm.yaml']
-      -> platform::docker::login_registry { 'login k8s registry':
-        registry_url    => $k8s_registry,
-        registry_secret => $::platform::docker::params::k8s_registry_secret
-      }
-
-      -> exec { 'kubeadm to pre pull images':
-        command   => 'kubeadm config images pull --config /etc/kubernetes/kubeadm.yaml',
-        logoutput => true,
-        before    => Exec['configure master node']
-      }
-
-      -> exec { 'logout k8s registry':
-        command   => "docker logout ${k8s_registry}",
-        logoutput => true,
-      }
-    }
 
     # Create necessary certificate files
     file { '/etc/kubernetes/pki':
@@ -284,6 +249,21 @@ class platform::kubernetes::master::init
     -> file { '/etc/kubernetes/kubeadm.yaml':
       ensure  => file,
       content => template('platform/kubeadm.yaml.erb'),
+    }
+
+    -> exec { 'login local registry':
+      command   => "docker login registry.local:9001 -u ${::platform::dockerdistribution::params::registry_username} -p ${::platform::dockerdistribution::params::registry_password}", # lint:ignore:140chars
+      logoutput => true,
+    }
+
+    -> exec { 'kubeadm to pre pull images':
+      command   => 'kubeadm config images pull --config /etc/kubernetes/kubeadm.yaml',
+      logoutput => true,
+    }
+
+    -> exec { 'logout of local registry':
+      command   => 'docker logout registry.local:9001',
+      logoutput => true,
     }
 
     -> exec { 'configure master node':
@@ -377,7 +357,7 @@ class platform::kubernetes::worker::init
   Class['::platform::filesystem::kubelet'] -> Class[$name]
 
   if str2bool($::is_initial_config) {
-    include ::platform::params
+    include ::platform::dockerdistribution::params
 
     if $::platform::docker::params::k8s_registry {
       $k8s_registry = $::platform::docker::params::k8s_registry
@@ -385,31 +365,27 @@ class platform::kubernetes::worker::init
       $k8s_registry = 'k8s.gcr.io'
     }
 
-    # If alternative k8s registry requires the authentication,
-    # k8s pause image needs to be pre-pulled on worker nodes
-    if $k8s_registry != 'k8s.gcr.io' and $::platform::docker::params::k8s_registry_secret != undef {
-      # Get the pause image tag from kubeadm required images
-      # list and replace with alternative k8s registry
-      $get_k8s_pause_img = "kubeadm config images list 2>/dev/null |\
-        awk '/^k8s.gcr.io\\/pause:/{print \$1}' | sed 's/k8s.gcr.io/${k8s_registry}/'"
-      $k8s_pause_img = generate('/bin/sh', '-c', $get_k8s_pause_img)
+    # Get the pause image tag from kubeadm required images
+    # list and replace with local registry
+    $get_k8s_pause_img = "kubeadm config images list 2>/dev/null |\
+      awk '/^k8s.gcr.io\\/pause:/{print \$1}' | sed 's#k8s.gcr.io#registry.local:9001\\/${k8s_registry}#'"
+    $k8s_pause_img = generate('/bin/sh', '-c', $get_k8s_pause_img)
 
-      if k8s_pause_img {
-        platform::docker::login_registry { 'login k8s registry':
-          registry_url    => $k8s_registry,
-          registry_secret => $::platform::docker::params::k8s_registry_secret
-        }
+    if k8s_pause_img {
+      exec { 'login local registry':
+        command   => "docker login registry.local:9001 -u ${::platform::dockerdistribution::params::registry_username} -p ${::platform::dockerdistribution::params::registry_password}", # lint:ignore:140chars
+        logoutput => true,
+      }
 
-        -> exec { 'load k8s pause image':
-          command   => "docker image pull ${k8s_pause_img}",
-          logoutput => true,
-          before    => Exec['configure worker node']
-        }
+      -> exec { 'load k8s pause image':
+        command   => "docker image pull ${k8s_pause_img}",
+        logoutput => true,
+        before    => Exec['configure worker node']
+      }
 
-        -> exec { 'logout k8s registry':
-          command   => "docker logout ${k8s_registry}",
-          logoutput => true,
-        }
+      -> exec { 'logout of local registry':
+        command   => 'docker logout registry.local:9001',
+        logoutput => true,
       }
     }
   }

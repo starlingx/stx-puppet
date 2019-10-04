@@ -28,7 +28,7 @@ etcd:
   external:
     endpoints:
     - <%= @etcd_endpoint %>
-imageRepository: "<%= @k8s_registry %>"
+imageRepository: "registry.local:9001/<%= @k8s_registry %>"
 kubernetesVersion: v1.16.0
 networking:
   dnsDomain: <%= @service_domain %>
