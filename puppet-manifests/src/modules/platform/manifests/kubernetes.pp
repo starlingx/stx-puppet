@@ -194,7 +194,8 @@ class platform::kubernetes::master::init
 
   # This is used for imageRepository in template kubeadm.yaml.erb
   if $::platform::docker::params::k8s_registry {
-    $k8s_registry = $::platform::docker::params::k8s_registry
+    # If registry contains port, strip it out
+    $k8s_registry = regsubst($::platform::docker::params::k8s_registry, ':[0-9]+', '')
   } else {
     $k8s_registry = 'k8s.gcr.io'
   }
@@ -360,7 +361,8 @@ class platform::kubernetes::worker::init
     include ::platform::dockerdistribution::params
 
     if $::platform::docker::params::k8s_registry {
-      $k8s_registry = $::platform::docker::params::k8s_registry
+      # If registry contains port, strip it out
+      $k8s_registry = regsubst($::platform::docker::params::k8s_registry, ':[0-9]+', '')
     } else {
       $k8s_registry = 'k8s.gcr.io'
     }
