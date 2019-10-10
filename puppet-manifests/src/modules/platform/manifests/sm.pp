@@ -951,13 +951,14 @@ class platform::sm::runtime {
 }
 
 class platform::sm::stx_openstack::runtime {
+  include ::platform::params
   $system_type                   = $::platform::params::system_type
   $system_mode                   = $::platform::params::system_mode
   $stx_openstack_applied         = $::platform::params::stx_openstack_applied
 
   if $stx_openstack_applied {
     # Configure dbmon for AIO duplex and systemcontroller
-    if ($::platform::params::distributed_cloud_role =='systemcontroller') or
+    if ($::platform::params::distributed_cloud_role == 'systemcontroller') or
       ($system_type == 'All-in-one' and 'duplex' in $system_mode) {
         exec { 'provision service group member':
             command => 'sm-provision service-group-member cloud-services dbmon --apply'
@@ -987,6 +988,14 @@ class platform::sm::stx_openstack::runtime {
       environment => ['OCF_FUNCTIONS_DIR=/usr/lib/ocf/lib/heartbeat/',
         'OCF_RESKEY_pid=/var/run/resource-agents/dcdbsync-openstack-api.pid'],
       command     => '/usr/lib/ocf/resource.d/openstack/dcdbsync-api stop',
+    }
+  }
+
+  # Restart dcorch engine for systemcontroller after stx-openstack applied/removed
+  # since it's configuration is changed.
+  if ($::platform::params::distributed_cloud_role == 'systemcontroller') {
+    exec { 'restart distributed-cloud service group member':
+        command => 'sm-restart service dcorch-engine'
     }
   }
 }
