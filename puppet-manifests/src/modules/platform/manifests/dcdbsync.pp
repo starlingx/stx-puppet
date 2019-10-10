@@ -1,5 +1,6 @@
 class platform::dcdbsync::params (
   $api_port = 8219,
+  $api_openstack_port = 8220,
   $region_name = undef,
   $service_create = false,
   $service_enabled = false,
@@ -42,3 +43,30 @@ class platform::dcdbsync::api
   }
 }
 
+class platform::dcdbsync::stx_openstack::runtime
+  inherits ::platform::dcdbsync::params {
+  if ($::platform::params::distributed_cloud_role == 'systemcontroller' or
+      $::platform::params::distributed_cloud_role == 'subcloud') {
+    if $service_create and
+      $::platform::params::stx_openstack_applied {
+
+      include ::platform::network::mgmt::params
+
+      $api_host = $::platform::network::mgmt::params::controller_address
+      $api_fqdn = $::platform::params::controller_hostname
+      $url_host = "http://${api_fqdn}:${api_openstack_port}"
+
+      class { '::dcdbsync::openstack_init': }
+      class { '::dcdbsync::openstack_api':
+        keystone_tenant         => 'service',
+        keystone_user_domain    => 'service',
+        keystone_project_domain => 'service',
+        bind_host               => $api_host,
+        bind_port               => $api_openstack_port,
+        enabled                 => $service_enabled,
+      }
+    } else {
+      class { '::dcdbsync::openstack_cleanup': }
+    }
+  }
+}

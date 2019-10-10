@@ -424,6 +424,9 @@ class platform::sm
       -> exec { 'Configure OpenStack - DCDBsync-API':
         command => "sm-configure service_instance dcdbsync-api dcdbsync-api \"\"",
       }
+      -> exec { 'Configure OpenStack - DCDBsync-openstack-API':
+        command => "sm-configure service_instance dcdbsync-openstack-api dcdbsync-openstack-api \"config=/etc/dcdbsync/dcdbsync_openstack.conf\"",
+      }
       # Deprovision Horizon when running as a subcloud
       exec { 'Deprovision OpenStack - Horizon (service-group-member)':
         command => 'sm-deprovision service-group-member web-services horizon',
@@ -896,6 +899,9 @@ class platform::sm
     -> exec { 'Configure OpenStack - DCDBsync-API':
       command => "sm-configure service_instance dcdbsync-api dcdbsync-api \"\"",
     }
+    -> exec { 'Configure OpenStack - DCDBsync-openstack-API':
+      command => "sm-configure service_instance dcdbsync-openstack-api dcdbsync-openstack-api \"config=/etc/dcdbsync/dcdbsync_openstack.conf\"",
+    }
   }
 
   # lint:endignore:140chars
@@ -960,12 +966,27 @@ class platform::sm::stx_openstack::runtime {
     exec { 'provision guest-agent service group member':
         command => 'sm-provision service-group-member controller-services guest-agent --apply'
     }
+    # Configure openstack dcdbsync for systemcontroller and subcloud
+    if ($::platform::params::distributed_cloud_role =='systemcontroller') or
+      ($::platform::params::distributed_cloud_role =='subcloud') {
+        exec { 'provision distributed-cloud service group member':
+          command => 'sm-provision service-group-member distributed-cloud-services dcdbsync-openstack-api --apply'
+        }
+    }
   } else {
     exec { 'deprovision service group member':
         command => 'sm-deprovision service-group-member cloud-services dbmon --apply'
     }
     exec { 'deprovision guest-agent service group member':
         command => 'sm-deprovision service-group-member controller-services guest-agent --apply'
+    }
+    exec { 'deprovision distributed-cloud service group member':
+        command => 'sm-deprovision service-group-member distributed-cloud-services dcdbsync-openstack-api --apply'
+    }
+    -> exec { 'stop distributed-cloud service group member':
+      environment => ['OCF_FUNCTIONS_DIR=/usr/lib/ocf/lib/heartbeat/',
+        'OCF_RESKEY_pid=/var/run/resource-agents/dcdbsync-openstack-api.pid'],
+      command     => '/usr/lib/ocf/resource.d/openstack/dcdbsync-api stop',
     }
   }
 }
