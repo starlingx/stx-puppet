@@ -18,6 +18,8 @@ class platform::kubernetes::params (
   $k8s_reserved_cpus = undef,
   $k8s_reserved_mem = undef,
   $k8s_isol_cpus = undef,
+  $k8s_cpu_mgr_policy = 'none',
+  $k8s_topology_mgr_policy = 'best-effort',
   $apiserver_cert_san = [],
   $k8s_cni_bin_dir = '/usr/libexec/cni'
 
@@ -109,6 +111,8 @@ class platform::kubernetes::kubeadm {
   $k8s_reserved_mem = $::platform::kubernetes::params::k8s_reserved_mem
   $k8s_isol_cpus = $::platform::kubernetes::params::k8s_isol_cpus
   $k8s_cni_bin_dir = $::platform::kubernetes::params::k8s_cni_bin_dir
+  $k8s_cpu_mgr_policy = $::platform::kubernetes::params::k8s_cpu_mgr_policy
+  $k8s_topology_mgr_policy = $::platform::kubernetes::params::k8s_topology_mgr_policy
 
   $iptables_file = "net.bridge.bridge-nf-call-ip6tables = 1
     net.bridge.bridge-nf-call-iptables = 1"
@@ -118,7 +122,9 @@ class platform::kubernetes::kubeadm {
     and !('openstack-compute-node'
           in $host_labels) {
     $k8s_cpu_manager_opts = join([
-      '--cpu-manager-policy=static',
+      '--feature-gates TopologyManager=true',
+      "--cpu-manager-policy=${k8s_cpu_mgr_policy}",
+      "--topology-manager-policy=${k8s_topology_mgr_policy}",
       '--system-reserved-cgroup=/system.slice',
       join([
         '--system-reserved=',
