@@ -159,7 +159,7 @@ define delete_endpoints (
   $interfaces.each | String $val | {
     $get_endpoint_id = "openstack endpoint list --region ${region} --service ${service} --interface ${val} -f value -c ID"
     exec { "Delete ${region} ${service} ${val} endpoint":
-      command   => "source ${rc_file} && ${get_endpoint_id} | xargs ${delete_endpoint}",
+      command   => "source ${rc_file} && ${get_endpoint_id} | xargs -r ${delete_endpoint}",
       logoutput => true,
       provider  => shell,
     }
