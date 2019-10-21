@@ -159,8 +159,9 @@ class dcorch (
   }
 
   dcorch_api_paste_ini {
-    'pipeline:dcorch-api-proxy/pipeline': value => 'filter authtoken acceptor proxyapp';
+    'pipeline:dcorch-api-proxy/pipeline': value => 'filter version authtoken acceptor proxyapp';
     'filter:filter/paste.filter_factory': value => 'dcorch.api.proxy.apps.filter:ApiFiller.factory';
+    'filter:version/paste.filter_factory': value => 'dcorch.api.proxy.apps.acceptor:VersionAcceptor.factory';
     'filter:authtoken/paste.filter_factory': value =>  'keystonemiddleware.auth_token:filter_factory';
     'filter:acceptor/paste.filter_factory': value => 'dcorch.api.proxy.apps.acceptor:Acceptor.factory';
     'app:proxyapp/paste.app_factory': value => 'dcorch.api.proxy.apps.proxy:Proxy.factory';
