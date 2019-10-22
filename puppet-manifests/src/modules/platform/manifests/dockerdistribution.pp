@@ -9,6 +9,7 @@ define platform::dockerdistribution::write_config (
   $file_path = '/etc/docker-distribution/registry/runtime_config.yml',
   $docker_registry_ip = undef,
   $docker_registry_host = undef,
+  $docker_realm_host = undef,
 ){
   file { $file_path:
     ensure  => present,
@@ -26,9 +27,12 @@ class platform::dockerdistribution::config
 
   include ::platform::network::mgmt::params
   include ::platform::docker::params
+  include ::platform::haproxy::params
 
   $docker_registry_ip = $::platform::network::mgmt::params::controller_address
   $docker_registry_host = $::platform::network::mgmt::params::controller_address_url
+
+  $docker_realm_host = $::platform::haproxy::params::public_address_url
   $runtime_config = '/etc/docker-distribution/registry/runtime_config.yml'
   $used_config = '/etc/docker-distribution/registry/config.yml'
 
@@ -57,7 +61,8 @@ class platform::dockerdistribution::config
 
   platform::dockerdistribution::write_config { 'runtime_config':
     docker_registry_ip   => $docker_registry_ip,
-    docker_registry_host => $docker_registry_host
+    docker_registry_host => $docker_registry_host,
+    docker_realm_host    => $docker_realm_host,
   }
 
   -> exec { 'use runtime config file':
@@ -68,7 +73,8 @@ class platform::dockerdistribution::config
     registry_readonly    => true,
     file_path            => '/etc/docker-distribution/registry/readonly_config.yml',
     docker_registry_ip   => $docker_registry_ip,
-    docker_registry_host => $docker_registry_host
+    docker_registry_host => $docker_registry_host,
+    docker_realm_host    => $docker_realm_host,
   }
 
   file { '/etc/docker-distribution/registry/token_server.conf':
@@ -100,6 +106,7 @@ class platform::dockerdistribution::config
   if str2bool($::is_initial_config_primary) {
     $shared_dir = $::platform::params::config_path
     $certs_dir = '/etc/ssl/private'
+    $docker_registry_public_ip = $::platform::haproxy::params::public_ip_address
 
     # create the certificate files
     file { "${certs_dir}/registry-cert-extfile.cnf":
@@ -246,6 +253,8 @@ class platform::dockerdistribution
   include ::platform::kubernetes::params
 
   include platform::dockerdistribution::config
+
+  include ::platform::docker::haproxy
 
   Class['::platform::docker::config'] -> Class[$name]
 }

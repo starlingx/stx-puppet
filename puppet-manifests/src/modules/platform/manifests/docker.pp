@@ -12,6 +12,8 @@ class platform::docker::params (
   $quay_registry_secret   = undef,
   $docker_registry_secret = undef,
   $insecure_registry    = undef,
+  $registry_port        = '9001',
+  $token_port           = '9002',
 ) { }
 
 class platform::docker::config
@@ -90,3 +92,22 @@ class platform::docker::bootstrap
   include ::platform::docker::config::bootstrap
 }
 
+class platform::docker::haproxy
+  inherits ::platform::docker::params {
+
+  platform::haproxy::proxy { 'docker-registry':
+    server_name       => 's-docker-registry',
+    public_port       => $registry_port,
+    private_port      => $registry_port,
+    x_forwarded_proto => false,
+    tcp_mode          => true,
+  }
+
+  platform::haproxy::proxy { 'docker-token':
+    server_name       => 's-docker-token',
+    public_port       => $token_port,
+    private_port      => $token_port,
+    x_forwarded_proto => false,
+    tcp_mode          => true,
+  }
+}

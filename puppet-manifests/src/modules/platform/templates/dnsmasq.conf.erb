@@ -117,3 +117,11 @@ server=/<%= @service_domain %>/<%= @dns_service_ip %>
 # Local CNAME records
 cname=registry.local,controller
 cname=registry-token-server.local,controller
+
+<%- if @distributed_cloud_role == 'systemcontroller' -%>
+cname=registry.central,controller
+<%- end -%>
+
+<%- if @distributed_cloud_role == 'subcloud' -%>
+address=/registry.central/<%= @sc_address %>
+<%- end -%>
