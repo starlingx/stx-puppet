@@ -66,7 +66,15 @@ class platform::ceph
       $osd_pool_default_size = 2
     }
 
-    class { '::ceph':
+    # Update ownership/permissions for /etc/ceph/ceph.conf file.
+    # We want it readable by sysinv and sysadmin.
+    file { '/etc/ceph/ceph.conf':
+      ensure => file,
+      owner  => 'root',
+      group  => $::platform::params::protected_group_name,
+      mode   => '0640',
+    }
+    -> class { '::ceph':
       fsid                      => $cluster_uuid,
       authentication_type       => $authentication_type,
       mon_initial_members       => $mon_initial_members,
