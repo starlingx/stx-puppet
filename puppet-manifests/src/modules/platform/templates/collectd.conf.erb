@@ -95,11 +95,6 @@ LoadPlugin python
 <%- end -%>
 <%- @plugins.each do |plugin| -%>
     Import "<%= plugin %>"
-<%- if plugin == 'mtce_notifier' -%>
-    <Module "mtce_notifier">
-        Port <%= @mtce_notifier_port %>
-    </Module>
-<%- end -%>
 <%- end -%>
 <%- if @log_traces -%>
     LogTraces <%= @log_traces %>

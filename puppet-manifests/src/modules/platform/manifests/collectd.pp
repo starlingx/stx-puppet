@@ -12,7 +12,6 @@ class platform::collectd::params (
   # python plugin controls
   $module_path = undef,
   $plugins = [],
-  $mtce_notifier_port = undef,
   $log_traces = undef,
   $encoding = undef,
 
