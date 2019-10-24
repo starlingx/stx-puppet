@@ -104,7 +104,6 @@ timeSource              0xA0
 network_transport       UDPv<%= @slave_subnet %>
 <%- end -%>
 <%- end -%>
-<%- if @slave_only == false -%>
 #
 # Master interfaces
 #
@@ -112,6 +111,5 @@ network_transport       UDPv<%= @slave_subnet %>
 [<%= master_interface %>]
 <%- if scope['platform::ptp::transport'] == 'udp' -%>
 network_transport       UDPv<%= @master_subnet %>
-<%- end -%>
 <%- end -%>
 <%- end -%>
