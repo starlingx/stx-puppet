@@ -10,6 +10,8 @@ ExecStartPost=/bin/bash -c 'echo $MAINPID > /var/run/phc2sys.pid'
 ExecStopPost=/bin/rm -f /var/run/phc2sys.pid
 Restart=on-failure
 RestartPreventExitStatus=SIGTERM SIGINT SIGKILL SIGABRT 255
+CPUSchedulingPolicy=fifo
+CPUSchedulingPriority=70
 
 [Install]
 WantedBy=multi-user.target
