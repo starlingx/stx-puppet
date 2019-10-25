@@ -38,8 +38,7 @@ platform::collectd::params::collectd_d_dir: '/etc/collectd.d'
 
 # collectd: module named plugins
 platform::collectd::params::module_path: '/opt/collectd/extensions/python'
-platform::collectd::params::plugins: ['fm_notifier', 'mtce_notifier']
-platform::collectd::params::mtce_notifier_port: 2101
+platform::collectd::params::plugins: ['fm_notifier']
 platform::collectd::params::log_traces: true
 platform::collectd::params::encoding: "utf-8"
 
