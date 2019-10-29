@@ -98,13 +98,15 @@ timeSource              0xA0
 #
 # Slave interfaces
 #
+<%- if @slave_interfaces -%>
 <%- @slave_interfaces.each do |slave_interface| -%>
 [<%= slave_interface %>]
 <%- if scope['platform::ptp::transport'] == 'udp' -%>
 network_transport       UDPv<%= @slave_subnet %>
 <%- end -%>
 <%- end -%>
-<%- if @slave_only == false -%>
+<%- end -%>
+<%- if @master_interfaces -%>
 #
 # Master interfaces
 #
