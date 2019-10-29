@@ -8,11 +8,9 @@ class platform::ptp (
     include ::platform::network::oam::params
     $slave_interfaces   = $::platform::network::oam::params::interface_devices
     $slave_subnet       = $::platform::network::oam::params::subnet_version
-    if  $::platform::params::system_mode != 'simplex' {
-      include ::platform::network::mgmt::params
-      $master_interfaces  = $::platform::network::mgmt::params::interface_devices
-      $master_subnet      = $::platform::network::mgmt::params::subnet_version
-    }
+    include ::platform::network::mgmt::params
+    $master_interfaces  = $::platform::network::mgmt::params::interface_devices
+    $master_subnet      = $::platform::network::mgmt::params::subnet_version
     if $::platform::params::system_type == 'All-in-one' {
       $slave_only = true
     } else {
