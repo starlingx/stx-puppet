@@ -20,6 +20,38 @@ define platform::dockerdistribution::write_config (
   }
 }
 
+class platform::dockerdistribution::registries {
+  include ::platform::docker::params
+
+  # This class is to filter out insecure registries and store
+  # insecure registries' IP into array.
+  # insecure-registries used in template insecuredockerregistry.conf.erb
+  # If all registries are secure, insecure_registries will be an empty array
+  $registries = [
+    {url => $::platform::docker::params::k8s_registry,
+    secure => $::platform::docker::params::k8s_registry_secure},
+
+    {url => $::platform::docker::params::gcr_registry,
+    secure => $::platform::docker::params::gcr_registry_secure},
+
+    {url => $::platform::docker::params::quay_registry,
+    secure => $::platform::docker::params::quay_registry_secure},
+
+    {url => $::platform::docker::params::docker_registry,
+    secure => $::platform::docker::params::docker_registry_secure},
+
+    {url => $::platform::docker::params::elastic_registry,
+    secure => $::platform::docker::params::elastic_registry_secure},
+  ]
+
+  $insecure_registries_list = $registries.filter |$registry| { !$registry['secure'] }
+  $insecure_registries = unique(
+    $insecure_registries_list.reduce([]) |$result, $registry| {
+      $result + regsubst($registry['url'], '/.*', '')
+    }
+  )
+}
+
 class platform::dockerdistribution::config
   inherits ::platform::dockerdistribution::params {
   include ::platform::params
@@ -28,21 +60,15 @@ class platform::dockerdistribution::config
   include ::platform::network::mgmt::params
   include ::platform::docker::params
   include ::platform::haproxy::params
+  include ::platform::dockerdistribution::registries
 
   $docker_registry_ip = $::platform::network::mgmt::params::controller_address
   $docker_registry_host = $::platform::network::mgmt::params::controller_address_url
+  $insecure_registries = $::platform::dockerdistribution::registries::insecure_registries
 
   $docker_realm_host = $::platform::haproxy::params::public_address_url
   $runtime_config = '/etc/docker-distribution/registry/runtime_config.yml'
   $used_config = '/etc/docker-distribution/registry/config.yml'
-
-  # check insecure registries
-  if $::platform::docker::params::insecure_registry {
-    # insecure registry is true means unified registry was set
-    $insecure_registries = "\"${::platform::docker::params::k8s_registry}\""
-  } else {
-    $insecure_registries = ''
-  }
 
   # for external docker registry running insecure mode
   file { '/etc/docker':
@@ -222,15 +248,9 @@ class platform::dockerdistribution::compute
   include ::platform::kubernetes::params
 
   include ::platform::network::mgmt::params
-  include ::platform::docker::params
 
-  # check insecure registries
-  if $::platform::docker::params::insecure_registry {
-    # insecure registry is true means unified registry was set
-    $insecure_registries = "\"${::platform::docker::params::k8s_registry}\""
-  } else {
-    $insecure_registries = ''
-  }
+  include ::platform::dockerdistribution::registries
+  $insecure_registries = $::platform::dockerdistribution::registries::insecure_registries
 
   # for external docker registry running insecure mode
   file { '/etc/docker':
