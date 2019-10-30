@@ -24,7 +24,7 @@ health:
     threshold: 3
 auth:
   token:
-    realm: "https://<%= @docker_registry_host %>:9002/token/"
+    realm: "https://<%= @docker_realm_host %>:9002/token/"
     service: "<%= @docker_registry_host %>:9001"
     issuer: bird-token-server
     rootcertbundle: /etc/ssl/private/registry-cert.crt

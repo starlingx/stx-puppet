@@ -1,6 +1,7 @@
 class platform::haproxy::params (
   $private_ip_address,
   $public_ip_address,
+  $public_address_url,
   $enable_https = false,
 
   $global_options = undef,
@@ -20,6 +21,7 @@ define platform::haproxy::proxy (
   $x_forwarded_proto = true,
   $enable_https = undef,
   $public_api = true,
+  $tcp_mode = false,
 ) {
   include ::platform::haproxy::params
 
@@ -45,6 +47,12 @@ define platform::haproxy::proxy (
       $ssl_option = ' '
       $proto = undef
       $hsts_option = undef
+  }
+
+  if $tcp_mode {
+    $mode_option = 'tcp'
+  } else {
+    $mode_option = undef
   }
 
   if $public_ip_address {
@@ -76,6 +84,7 @@ define platform::haproxy::proxy (
       'reqadd'          => $proto,
       'timeout'         => $real_client_timeout,
       'rspadd'          => $hsts_option,
+      'mode'            => $mode_option,
     },
   }
 
@@ -91,6 +100,7 @@ define platform::haproxy::proxy (
     options          => {
       'server'  => "${server_name} ${private_ip}:${private_port}",
       'timeout' => $timeout_option,
+      'mode'    => $mode_option,
     }
   }
 }
@@ -141,6 +151,7 @@ class platform::haproxy::runtime {
     include ::platform::dcmanager::haproxy
     include ::platform::dcorch::haproxy
   }
+  include ::platform::docker::haproxy
   include ::openstack::keystone::haproxy
   include ::openstack::barbican::haproxy
 

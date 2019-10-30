@@ -38,12 +38,15 @@ class platform::dns::dnsmasq {
   include ::platform::kubernetes::params
   $service_domain = $::platform::kubernetes::params::service_domain
   $dns_service_ip = $::platform::kubernetes::params::dns_service_ip
+  $distributed_cloud_role = $::platform::params::distributed_cloud_role
+  $sc_address = $::platform::params::system_controller_addr
 
   file { '/etc/dnsmasq.conf':
       ensure  => 'present',
       replace => true,
       content => template('platform/dnsmasq.conf.erb'),
   }
+
 }
 
 

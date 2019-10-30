@@ -90,6 +90,7 @@ class platform::firewall::calico::oam::services {
   include ::openstack::horizon::params
   include ::platform::dcmanager::params
   include ::platform::dcorch::params
+  include ::platform::docker::params
 
   $ip_version = $::platform::network::oam::params::subnet_version
 
@@ -118,6 +119,8 @@ class platform::firewall::calico::oam::services {
   $patching_port = [$::platform::patching::params::public_port]
   $sysinv_port = [$::platform::sysinv::params::api_port]
   $sm_api_port = [$::platform::smapi::params::port]
+  $docker_registry_port = [$::platform::docker::params::registry_port]
+  $docker_token_port = [$::platform::docker::params::token_port]
   $kube_apiserver_port = [6443]
 
   if $::platform::ceph::params::service_enabled {
@@ -157,7 +160,7 @@ class platform::firewall::calico::oam::services {
   $t_udp_ports = concat($sm_port, $ntp_port, $snmp_port, $ptp_port)
   $t_tcp_ports = concat($ssh_port,
                         $fm_port, $nfv_vim_port, $patching_port, $sysinv_port, $sm_api_port,
-                        $kube_apiserver_port,
+                        $kube_apiserver_port, $docker_registry_port, $docker_token_port,
                         $ceph_radosgw_port, $barbican_api_port, $keystone_port, $horizon_port,
                         $dc_port)
 
