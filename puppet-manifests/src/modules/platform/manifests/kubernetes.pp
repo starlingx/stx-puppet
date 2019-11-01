@@ -198,14 +198,6 @@ class platform::kubernetes::master::init
 
   $apiserver_certsans = concat($apiserver_cert_san, $apiserver_loopback_address, $apiserver_advertise_address)
 
-  # This is used for imageRepository in template kubeadm.yaml.erb
-  if $::platform::docker::params::k8s_registry {
-    # If registry contains port, strip it out
-    $k8s_registry = regsubst($::platform::docker::params::k8s_registry, ':[0-9]+', '')
-  } else {
-    $k8s_registry = 'k8s.gcr.io'
-  }
-
   if str2bool($::is_initial_k8s_config) {
     # This allows subsequent node installs
     # Notes regarding ::is_initial_k8s_config check:
@@ -366,17 +358,10 @@ class platform::kubernetes::worker::init
   if str2bool($::is_initial_config) {
     include ::platform::dockerdistribution::params
 
-    if $::platform::docker::params::k8s_registry {
-      # If registry contains port, strip it out
-      $k8s_registry = regsubst($::platform::docker::params::k8s_registry, ':[0-9]+', '')
-    } else {
-      $k8s_registry = 'k8s.gcr.io'
-    }
-
     # Get the pause image tag from kubeadm required images
     # list and replace with local registry
     $get_k8s_pause_img = "kubeadm config images list 2>/dev/null |\
-      awk '/^k8s.gcr.io\\/pause:/{print \$1}' | sed 's#k8s.gcr.io#registry.local:9001\\/${k8s_registry}#'"
+      awk '/^k8s.gcr.io\\/pause:/{print \$1}' | sed 's#k8s.gcr.io#registry.local:9001\\/k8s.gcr.io#'"
     $k8s_pause_img = generate('/bin/sh', '-c', $get_k8s_pause_img)
 
     if k8s_pause_img {
