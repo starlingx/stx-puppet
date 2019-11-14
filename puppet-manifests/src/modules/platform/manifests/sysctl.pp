@@ -129,6 +129,20 @@ class platform::sysctl::controller
   sysctl::value { 'kernel.shmmax':
     value => '167772160'
   }
+
+  # Reserve ports in the ephemeral port range:
+  #
+  # Incorporate the reserved keystone port (35357) from
+  # /usr/lib/sysctl.d/openstack-keystone.conf
+  #
+  # Helm v2.13.1 hardcodes the following Tiller ports when installed in the
+  # k8s cluster: 44134 (server), 44135 (probe), 44136 (trace). Reserve them
+  # from the ephemeral port range. This will avoid potential port conflicts
+  # that will cause the tiller pod to crash when the port is assigned to
+  # another client/server
+  sysctl::value { 'net.ipv4.ip_local_reserved_ports':
+    value => '35357,44134-44136'
+  }
 }
 
 
