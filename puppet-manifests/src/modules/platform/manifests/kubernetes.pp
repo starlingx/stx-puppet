@@ -1,5 +1,6 @@
 class platform::kubernetes::params (
   $enabled = true,
+  $version = undef,
   $node_ip = undef,
   $pod_network_cidr = undef,
   $pod_network_ipversion = 4,
@@ -566,5 +567,126 @@ class platform::kubernetes::firewall
       outiface     => $oam_interface,
       tosource     => $oam_float_ip,
     }
+  }
+}
+
+class platform::kubernetes::upgrade_first_control_plane
+  inherits ::platform::kubernetes::params {
+
+  include ::platform::params
+  include ::platform::dockerdistribution::params
+
+  exec { 'login to local registry':
+    command   => "docker login registry.local:9001 -u ${::platform::dockerdistribution::params::registry_username} -p ${::platform::dockerdistribution::params::registry_password}", # lint:ignore:140chars
+    logoutput => true,
+  }
+
+  -> exec { 'pre pull images':
+    command   => "kubeadm config images pull --kubernetes-version ${version} --image-repository=registry.local:9001/k8s.gcr.io",
+    logoutput => true,
+  }
+
+  -> exec { 'logout of local registry':
+    command   => 'docker logout registry.local:9001',
+    logoutput => true,
+  }
+
+  -> exec { 'upgrade first control plane':
+    command   => "kubeadm upgrade apply ${version} -y",
+    logoutput => true,
+  }
+
+  if $::platform::params::system_mode != 'simplex' {
+    # For duplex and multi-node system, restrict the coredns pod to master nodes
+    exec { 'restrict coredns to master nodes':
+      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch deployment coredns -p \'{"spec":{"template":{"spec":{"nodeSelector":{"node-role.kubernetes.io/master":""}}}}}\'', # lint:ignore:140chars
+      logoutput => true,
+      require   => Exec['upgrade first control plane']
+    }
+    -> exec { 'Use anti-affinity for coredns pods':
+      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch deployment coredns -p \'{"spec":{"template":{"spec":{"affinity":{"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":{"matchExpressions":[{"key":"k8s-app","operator":"In","values":["kube-dns"]}]},"topologyKey":"kubernetes.io/hostname"}]}}}}}}\'', # lint:ignore:140chars
+      logoutput => true,
+    }
+  } else {
+    # For simplex system, 1 coredns is enough
+    exec { '1 coredns for simplex mode':
+      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system scale --replicas=1 deployment coredns', # lint:ignore:140chars
+      logoutput => true,
+      require   => Exec['upgrade first control plane']
+    }
+  }
+}
+
+class platform::kubernetes::upgrade_control_plane
+  inherits ::platform::kubernetes::params {
+
+  include ::platform::params
+  include ::platform::dockerdistribution::params
+
+  exec { 'login to local registry':
+    command   => "docker login registry.local:9001 -u ${::platform::dockerdistribution::params::registry_username} -p ${::platform::dockerdistribution::params::registry_password}", # lint:ignore:140chars
+    logoutput => true,
+  }
+
+  -> exec { 'pre pull images':
+    command   => "kubeadm config images pull --kubernetes-version ${version} --image-repository=registry.local:9001/k8s.gcr.io",
+    logoutput => true,
+  }
+
+  -> exec { 'logout of local registry':
+    command   => 'docker logout registry.local:9001',
+    logoutput => true,
+  }
+
+  -> exec { 'upgrade control plane':
+    command   => 'kubeadm upgrade node',
+    logoutput => true,
+  }
+}
+
+class platform::kubernetes::master::upgrade_kubelet
+  inherits ::platform::kubernetes::params {
+
+  exec { 'restart kubelet':
+      command => '/usr/local/sbin/pmon-restart kubelet'
+  }
+}
+
+class platform::kubernetes::worker::upgrade_kubelet
+  inherits ::platform::kubernetes::params {
+
+  include ::platform::dockerdistribution::params
+
+  # Get the pause image tag from kubeadm required images
+  # list and replace with local registry
+  $get_k8s_pause_img = "kubeadm config images list 2>/dev/null |\
+    awk '/^k8s.gcr.io\\/pause:/{print \$1}' | sed 's#k8s.gcr.io#registry.local:9001\\/k8s.gcr.io#'"
+  $k8s_pause_img = generate('/bin/sh', '-c', $get_k8s_pause_img)
+
+  if k8s_pause_img {
+    exec { 'login local registry':
+      command   => "docker login registry.local:9001 -u ${::platform::dockerdistribution::params::registry_username} -p ${::platform::dockerdistribution::params::registry_password}", # lint:ignore:140chars
+      logoutput => true,
+    }
+
+    -> exec { 'load k8s pause image':
+      command   => "docker image pull ${k8s_pause_img}",
+      logoutput => true,
+      before    => Exec['upgrade kubelet']
+    }
+
+    -> exec { 'logout of local registry':
+      command   => 'docker logout registry.local:9001',
+      logoutput => true,
+    }
+  }
+
+  exec { 'upgrade kubelet':
+    command   => 'kubeadm upgrade node',
+    logoutput => true,
+  }
+
+  -> exec { 'restart kubelet':
+      command => '/usr/local/sbin/pmon-restart kubelet'
   }
 }
