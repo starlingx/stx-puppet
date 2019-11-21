@@ -38,6 +38,7 @@ include ::platform::client
 include ::platform::ceph::worker
 include ::platform::worker::storage
 include ::platform::pciirqaffinity
+include ::platform::lmon
 
 class { '::platform::config::worker::post':
   stage => post,
