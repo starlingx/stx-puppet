@@ -96,24 +96,24 @@ manufacturerIdentity    00:00:00
 userDescription         ;
 timeSource              0xA0
 #
-# Slave interfaces
+# Slave devices
 #
-<%- if @slave_interfaces -%>
-<%- @slave_interfaces.each do |slave_interface| -%>
-[<%= slave_interface %>]
+<%- if @slave_devices -%>
+<%- @slave_devices.each do |slave_device| -%>
+[<%= slave_device['device'] %>]
 <%- if scope['platform::ptp::transport'] == 'udp' -%>
-network_transport       UDPv<%= @slave_subnet %>
+network_transport       UDPv<%= slave_device['family'] %>
 <%- end -%>
 <%- end -%>
 <%- end -%>
-<%- if @master_interfaces -%>
+<%- if @master_devices -%>
 #
-# Master interfaces
+# Master devices
 #
-<%- @master_interfaces.each do |master_interface| -%>
-[<%= master_interface %>]
+<%- @master_devices.each do |master_device| -%>
+[<%= master_device['device'] %>]
 <%- if scope['platform::ptp::transport'] == 'udp' -%>
-network_transport       UDPv<%= @master_subnet %>
+network_transport       UDPv<%= master_device['family'] %>
 <%- end -%>
 <%- end -%>
 <%- end -%>
