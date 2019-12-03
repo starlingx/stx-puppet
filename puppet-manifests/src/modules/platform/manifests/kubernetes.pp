@@ -1,5 +1,8 @@
 class platform::kubernetes::params (
   $enabled = true,
+  # K8S version we are upgrading to (None if not in an upgrade)
+  $upgrade_to_version = undef,
+  # K8S version running on a host
   $version = undef,
   $node_ip = undef,
   $pod_network_cidr = undef,
@@ -570,10 +573,9 @@ class platform::kubernetes::firewall
   }
 }
 
-class platform::kubernetes::upgrade_first_control_plane
+class platform::kubernetes::pre_pull_control_plane_images
   inherits ::platform::kubernetes::params {
 
-  include ::platform::params
   include ::platform::dockerdistribution::params
 
   exec { 'login to local registry':
@@ -582,7 +584,7 @@ class platform::kubernetes::upgrade_first_control_plane
   }
 
   -> exec { 'pre pull images':
-    command   => "kubeadm config images pull --kubernetes-version ${version} --image-repository=registry.local:9001/k8s.gcr.io",
+    command   => "kubeadm config images pull --kubernetes-version ${upgrade_to_version} --image-repository=registry.local:9001/k8s.gcr.io",
     logoutput => true,
   }
 
@@ -590,8 +592,14 @@ class platform::kubernetes::upgrade_first_control_plane
     command   => 'docker logout registry.local:9001',
     logoutput => true,
   }
+}
 
-  -> exec { 'upgrade first control plane':
+class platform::kubernetes::upgrade_first_control_plane
+  inherits ::platform::kubernetes::params {
+
+  include ::platform::params
+
+  exec { 'upgrade first control plane':
     command   => "kubeadm upgrade apply ${version} -y",
     logoutput => true,
   }
@@ -620,25 +628,7 @@ class platform::kubernetes::upgrade_first_control_plane
 class platform::kubernetes::upgrade_control_plane
   inherits ::platform::kubernetes::params {
 
-  include ::platform::params
-  include ::platform::dockerdistribution::params
-
-  exec { 'login to local registry':
-    command   => "docker login registry.local:9001 -u ${::platform::dockerdistribution::params::registry_username} -p ${::platform::dockerdistribution::params::registry_password}", # lint:ignore:140chars
-    logoutput => true,
-  }
-
-  -> exec { 'pre pull images':
-    command   => "kubeadm config images pull --kubernetes-version ${version} --image-repository=registry.local:9001/k8s.gcr.io",
-    logoutput => true,
-  }
-
-  -> exec { 'logout of local registry':
-    command   => 'docker logout registry.local:9001',
-    logoutput => true,
-  }
-
-  -> exec { 'upgrade control plane':
+  exec { 'upgrade control plane':
     command   => 'kubeadm upgrade node',
     logoutput => true,
   }
