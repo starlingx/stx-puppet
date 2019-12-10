@@ -7,6 +7,8 @@ class platform::dcmanager::params (
   $service_name = 'dcmanager',
   $default_endpoint_type = 'internalURL',
   $service_create = false,
+  $iso_base_dir_source = '/opt/platform/iso',
+  $iso_base_dir_target = '/www/pages/iso',
 ) {
   include ::platform::params
 
@@ -30,6 +32,14 @@ class platform::dcmanager
       rabbit_port     => $::platform::amqp::params::port,
       rabbit_userid   => $::platform::amqp::params::auth_user,
       rabbit_password => $::platform::amqp::params::auth_password,
+    }
+    file {$iso_base_dir_source:
+      ensure => directory,
+      mode   => '0755',
+    }
+    file {$iso_base_dir_target:
+      ensure => directory,
+      mode   => '0755',
     }
   }
 }
@@ -66,6 +76,29 @@ class platform::dcmanager::api
 
 
     include ::platform::dcmanager::haproxy
+  }
+}
+
+class platform::dcmanager::fs::runtime {
+  if $::platform::params::distributed_cloud_role == 'systemcontroller' {
+    include ::platform::dcmanager::params
+    $iso_base_dir_source = $::platform::dcmanager::params::iso_base_dir_source
+    $iso_base_dir_target = $::platform::dcmanager::params::iso_base_dir_target
+
+    file {$iso_base_dir_source:
+      ensure => directory,
+      mode   => '0755',
+    }
+
+    file {$iso_base_dir_target:
+      ensure => directory,
+      mode   => '0755',
+    }
+
+    exec { "bind mount ${iso_base_dir_target}":
+      command => "mount -o bind -t ext4 ${iso_base_dir_source} ${iso_base_dir_target}",
+      require => File[ $iso_base_dir_source, $iso_base_dir_target ]
+    }
   }
 }
 

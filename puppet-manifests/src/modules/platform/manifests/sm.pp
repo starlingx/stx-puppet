@@ -820,7 +820,11 @@ class platform::sm
     }
   }
 
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+  if $::platform::params::distributed_cloud_role == 'systemcontroller' {
+    include ::platform::dcmanager::params
+    $iso_fs_source_dir = $::platform::dcmanager::params::iso_base_dir_source
+    $iso_fs_target_dir = $::platform::dcmanager::params::iso_base_dir_target
+
     exec { 'Provision distributed-cloud-services (service-domain-member distributed-cloud-services)':
       command => 'sm-provision service-domain-member controller distributed-cloud-services',
     }
@@ -875,6 +879,12 @@ class platform::sm
     -> exec { 'Provision DCDBsync-RestApi in SM (service dcdbsync-api)':
       command => 'sm-provision service dcdbsync-api',
     }
+    -> exec { 'Provision DC ISO image FS (service-group-member dc-iso-fs)':
+      command => 'sm-provision service-group-member distributed-cloud-services dc-iso-fs',
+    }
+    -> exec { 'Provision DC ISO image FS in SM (service dc-iso-fs)':
+      command => 'sm-provision service dc-iso-fs',
+    }
     -> exec { 'Configure Platform - DCManager-Manager':
       command => "sm-configure service_instance dcmanager-manager dcmanager-manager \"\"",
     }
@@ -901,6 +911,9 @@ class platform::sm
     }
     -> exec { 'Configure OpenStack - DCDBsync-openstack-API':
       command => "sm-configure service_instance dcdbsync-openstack-api dcdbsync-openstack-api \"config=/etc/dcdbsync/dcdbsync_openstack.conf\"",
+    }
+    -> exec { 'Configure ISO image FileSystem':
+      command => "sm-configure service_instance dc-iso-fs dc-iso-fs \"device=${iso_fs_source_dir},directory=${iso_fs_target_dir},options=bind,noatime,nodiratime,fstype=ext4,check_level=20\"",
     }
   }
 
