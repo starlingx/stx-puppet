@@ -17,6 +17,8 @@ class platform::kubernetes::params (
   $ca_key = undef,
   $sa_key = undef,
   $sa_pub = undef,
+  $front_proxy_ca_crt = undef,
+  $front_proxy_ca_key = undef,
   $k8s_cpuset = undef,
   $k8s_nodeset = undef,
   $k8s_reserved_cpus = undef,
@@ -243,6 +245,20 @@ class platform::kubernetes::master::init
     -> file { '/etc/kubernetes/pki/sa.pub':
       ensure  => file,
       content => $sa_pub,
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0600',
+    }
+    -> file { '/etc/kubernetes/pki/front-proxy-ca.crt':
+      ensure  => file,
+      content => $front_proxy_ca_crt,
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0600',
+    }
+    -> file { '/etc/kubernetes/pki/front-proxy-ca.key':
+      ensure  => file,
+      content => $front_proxy_ca_key,
       owner   => 'root',
       group   => 'root',
       mode    => '0600',
