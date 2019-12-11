@@ -110,6 +110,7 @@ class platform::kubernetes::kubeadm {
 
   include ::platform::docker::params
   include ::platform::kubernetes::params
+  include ::platform::params
 
   $node_ip = $::platform::kubernetes::params::node_ip
   $host_labels = $::platform::kubernetes::params::host_labels
@@ -124,24 +125,28 @@ class platform::kubernetes::kubeadm {
     net.bridge.bridge-nf-call-iptables = 1"
 
   # Configure kubelet cpumanager options
-  if str2bool($::is_worker_subfunction)
-    and !('openstack-compute-node'
-          in $host_labels) {
-    $k8s_cpu_manager_opts = join([
-      '--feature-gates TopologyManager=true',
-      "--cpu-manager-policy=${k8s_cpu_mgr_policy}",
-      "--topology-manager-policy=${k8s_topology_mgr_policy}",
-      '--system-reserved-cgroup=/system.slice',
-      join([
-        '--system-reserved=',
-        "cpu=${k8s_reserved_cpus},",
-        "memory=${k8s_reserved_mem}Mi"]),
-      join([
-        '--kube-reserved=',
-        "cpu=${k8s_isol_cpus}"])
-      ], ' ')
-  } else {
+  if $::platform::params::distributed_cloud_role == 'systemcontroller' {
     $k8s_cpu_manager_opts = '--cpu-manager-policy=none'
+  } else {
+    if str2bool($::is_worker_subfunction)
+      and !('openstack-compute-node'
+            in $host_labels) {
+      $k8s_cpu_manager_opts = join([
+        '--feature-gates TopologyManager=true',
+        "--cpu-manager-policy=${k8s_cpu_mgr_policy}",
+        "--topology-manager-policy=${k8s_topology_mgr_policy}",
+        '--system-reserved-cgroup=/system.slice',
+        join([
+          '--system-reserved=',
+          "cpu=${k8s_reserved_cpus},",
+          "memory=${k8s_reserved_mem}Mi"]),
+        join([
+          '--kube-reserved=',
+          "cpu=${k8s_isol_cpus}"])
+        ], ' ')
+    } else {
+      $k8s_cpu_manager_opts = '--cpu-manager-policy=none'
+    }
   }
 
   # Enable kubelet extra parameters that are node specific such as
