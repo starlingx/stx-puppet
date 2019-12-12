@@ -125,7 +125,8 @@ class platform::kubernetes::kubeadm {
     net.bridge.bridge-nf-call-iptables = 1"
 
   # Configure kubelet cpumanager options
-  if $::platform::params::distributed_cloud_role == 'systemcontroller' {
+  if ($::personality == 'controller' and
+      $::platform::params::distributed_cloud_role == 'systemcontroller') {
     $k8s_cpu_manager_opts = '--cpu-manager-policy=none'
   } else {
     if str2bool($::is_worker_subfunction)
