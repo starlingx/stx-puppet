@@ -130,21 +130,24 @@ class platform::kubernetes::kubeadm {
     $k8s_cpu_manager_opts = '--cpu-manager-policy=none'
   } else {
     if str2bool($::is_worker_subfunction)
-      and !('openstack-compute-node'
-            in $host_labels) {
-      $k8s_cpu_manager_opts = join([
-        '--feature-gates TopologyManager=true',
-        "--cpu-manager-policy=${k8s_cpu_mgr_policy}",
-        "--topology-manager-policy=${k8s_topology_mgr_policy}",
-        '--system-reserved-cgroup=/system.slice',
-        join([
-          '--system-reserved=',
-          "cpu=${k8s_reserved_cpus},",
-          "memory=${k8s_reserved_mem}Mi"]),
-        join([
-          '--kube-reserved=',
-          "cpu=${k8s_isol_cpus}"])
-        ], ' ')
+      and !('openstack-compute-node' in $host_labels) {
+      $opts = join(['--feature-gates TopologyManager=true',
+                    "--cpu-manager-policy=${k8s_cpu_mgr_policy}",
+                    "--topology-manager-policy=${k8s_topology_mgr_policy}",
+                    '--system-reserved-cgroup=/system.slice'], ' ')
+      $opts_sys_res = join(['--system-reserved=',
+                            "cpu=${k8s_reserved_cpus},",
+                            "memory=${k8s_reserved_mem}Mi"])
+      $opts_kube_res = join(['--kube-reserved=',
+                            "cpu=${k8s_isol_cpus}"])
+      if $k8s_cpu_mgr_policy == 'none' {
+        $k8s_cpu_manager_opts = join([$opts,
+                                      $opts_sys_res], ' ')
+      } else {
+        $k8s_cpu_manager_opts = join([$opts,
+                                      $opts_sys_res,
+                                      $opts_kube_res], ' ')
+      }
     } else {
       $k8s_cpu_manager_opts = '--cpu-manager-policy=none'
     }
