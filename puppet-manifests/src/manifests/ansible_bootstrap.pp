@@ -9,6 +9,7 @@ Exec {
 
 include ::platform::config::bootstrap
 include ::platform::users::bootstrap
+include ::platform::sysctl::bootstrap
 include ::platform::ldap::bootstrap
 include ::platform::drbd::bootstrap
 include ::platform::postgresql::bootstrap
