@@ -368,6 +368,7 @@ class platform::kubernetes::master
   contain ::platform::kubernetes::coredns
   contain ::platform::kubernetes::firewall
 
+  Class['::platform::sysctl::controller::reserve_ports'] -> Class[$name]
   Class['::platform::etcd'] -> Class[$name]
   Class['::platform::docker::config'] -> Class[$name]
   # Ensure DNS is configured as name resolution is required when
