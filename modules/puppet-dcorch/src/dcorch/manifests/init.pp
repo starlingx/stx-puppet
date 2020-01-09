@@ -125,6 +125,7 @@ class dcorch (
 
   dcorch_config {
     'keystone_authtoken/region_name':  value => $region_name;
+    'keystone_authtoken/include_service_catalog':  value => false;
   }
   dcorch_config {
     'compute/bind_host' : value => $proxy_bind_host;
