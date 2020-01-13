@@ -100,6 +100,8 @@ include ::openstack::barbican::api
 
 include ::platform::sm
 
+include ::platform::lmon
+
 class { '::platform::config::controller::post':
   stage => post,
 }
