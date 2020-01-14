@@ -31,7 +31,6 @@ include ::platform::grub
 include ::platform::collectd
 include ::platform::filesystem::compute
 include ::platform::docker
-include ::platform::containerd
 include ::platform::dockerdistribution::compute
 include ::platform::kubernetes::worker
 include ::platform::multipath

@@ -223,8 +223,6 @@ class platform::kubernetes::master::init
     #   This flag is created by Ansible on controller-0;
     # - Ansible replay is not impacted by flag creation.
 
-    $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
-
     # Create necessary certificate files
     file { '/etc/kubernetes/pki':
       ensure => directory,
@@ -281,8 +279,18 @@ class platform::kubernetes::master::init
       content => template('platform/kubeadm.yaml.erb'),
     }
 
-    -> exec { 'pre pull k8s images':
-      command   => "kubeadm config images list --kubernetes-version ${version}  --image-repository registry.local:9001/k8s.gcr.io | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
+    -> exec { 'login local registry':
+      command   => "docker login registry.local:9001 -u ${::platform::dockerdistribution::params::registry_username} -p ${::platform::dockerdistribution::params::registry_password}", # lint:ignore:140chars
+      logoutput => true,
+    }
+
+    -> exec { 'kubeadm to pre pull images':
+      command   => 'kubeadm config images pull --config /etc/kubernetes/kubeadm.yaml',
+      logoutput => true,
+    }
+
+    -> exec { 'logout of local registry':
+      command   => 'docker logout registry.local:9001',
       logoutput => true,
     }
 
@@ -367,7 +375,6 @@ class platform::kubernetes::master
   Class['::platform::sysctl::controller::reserve_ports'] -> Class[$name]
   Class['::platform::etcd'] -> Class[$name]
   Class['::platform::docker::config'] -> Class[$name]
-  Class['::platform::containerd::config'] -> Class[$name]
   # Ensure DNS is configured as name resolution is required when
   # kubeadm init is run.
   Class['::platform::dns'] -> Class[$name]
@@ -386,7 +393,6 @@ class platform::kubernetes::worker::init
   inherits ::platform::kubernetes::worker::params {
 
   Class['::platform::docker::config'] -> Class[$name]
-  Class['::platform::containerd::config'] -> Class[$name]
   Class['::platform::filesystem::kubelet'] -> Class[$name]
 
   if str2bool($::is_initial_config) {
@@ -399,10 +405,20 @@ class platform::kubernetes::worker::init
     $k8s_pause_img = generate('/bin/sh', '-c', $get_k8s_pause_img)
 
     if k8s_pause_img {
-      exec { 'load k8s pause image by containerd':
-        command   => "crictl pull --creds ${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password} ${k8s_pause_img}", # lint:ignore:140chars
+      exec { 'login local registry':
+        command   => "docker login registry.local:9001 -u ${::platform::dockerdistribution::params::registry_username} -p ${::platform::dockerdistribution::params::registry_password}", # lint:ignore:140chars
+        logoutput => true,
+      }
+
+      -> exec { 'load k8s pause image':
+        command   => "docker image pull ${k8s_pause_img}",
         logoutput => true,
         before    => Exec['configure worker node']
+      }
+
+      -> exec { 'logout of local registry':
+        command   => 'docker logout registry.local:9001',
+        logoutput => true,
       }
     }
   }
@@ -598,10 +614,18 @@ class platform::kubernetes::pre_pull_control_plane_images
 
   include ::platform::dockerdistribution::params
 
-  $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
+  exec { 'login to local registry':
+    command   => "docker login registry.local:9001 -u ${::platform::dockerdistribution::params::registry_username} -p ${::platform::dockerdistribution::params::registry_password}", # lint:ignore:140chars
+    logoutput => true,
+  }
 
-  exec { 'pre pull images':
-    command   => "kubeadm config images list --kubernetes-version ${upgrade_to_version} --image-repository=registry.local:9001/k8s.gcr.io | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
+  -> exec { 'pre pull images':
+    command   => "kubeadm config images pull --kubernetes-version ${upgrade_to_version} --image-repository=registry.local:9001/k8s.gcr.io",
+    logoutput => true,
+  }
+
+  -> exec { 'logout of local registry':
+    command   => 'docker logout registry.local:9001',
     logoutput => true,
   }
 }
@@ -666,10 +690,20 @@ class platform::kubernetes::worker::upgrade_kubelet
   $k8s_pause_img = generate('/bin/sh', '-c', $get_k8s_pause_img)
 
   if k8s_pause_img {
-    exec { 'load k8s pause image':
-      command   => "crictl pull --creds ${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password} ${k8s_pause_img}", # lint:ignore:140chars
+    exec { 'login local registry':
+      command   => "docker login registry.local:9001 -u ${::platform::dockerdistribution::params::registry_username} -p ${::platform::dockerdistribution::params::registry_password}", # lint:ignore:140chars
+      logoutput => true,
+    }
+
+    -> exec { 'load k8s pause image':
+      command   => "docker image pull ${k8s_pause_img}",
       logoutput => true,
       before    => Exec['upgrade kubelet']
+    }
+
+    -> exec { 'logout of local registry':
+      command   => 'docker logout registry.local:9001',
+      logoutput => true,
     }
   }
 

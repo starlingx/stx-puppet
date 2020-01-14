@@ -42,7 +42,6 @@ include ::platform::grub
 include ::platform::etcd
 include ::platform::docker
 include ::platform::dockerdistribution
-include ::platform::containerd
 include ::platform::kubernetes::master
 include ::platform::helm
 
