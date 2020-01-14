@@ -270,25 +270,6 @@ class platform::dockerdistribution::compute
     mode    => '0644',
     content => template('platform/insecuredockerregistry.conf.erb'),
   }
-
-  # containerd requires ca file to access local secure registry
-  # For self signed cert, ca file is itself.
-  # cert_file and key_file are not needed when TLS mutual authentication is unused.
-  $shared_dir = $::platform::params::config_path
-  $certs_dir = '/etc/ssl/private'
-  file { $certs_dir:
-    ensure => 'directory',
-    owner  => 'root',
-    group  => 'root',
-    mode   => '0700',
-  }
-  -> file { "${certs_dir}/registry-cert.crt":
-    ensure => 'file',
-    owner  => 'root',
-    group  => 'root',
-    mode   => '0400',
-    source => "${shared_dir}/registry-cert.crt",
-  }
 }
 
 class platform::dockerdistribution
