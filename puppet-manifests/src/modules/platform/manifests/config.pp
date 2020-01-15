@@ -341,19 +341,6 @@ class platform::config::controller::post
 {
   include ::platform::params
 
-  # TODO(tngo): The following block will be removed when we switch to Ansible
-  if str2bool($::is_initial_config_primary) {
-    # copy configured hosts to redundant storage
-    file { "${::platform::params::config_path}/hosts":
-      source  => '/etc/hosts',
-      replace => false,
-    }
-
-    file { '/etc/platform/.unlock_ready':
-      ensure => present,
-    }
-  }
-
   if ! $::platform::params::controller_upgrade {
     file { '/etc/platform/.initial_config_complete':
       ensure => present,

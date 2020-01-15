@@ -77,8 +77,6 @@ make install \
      BINDIR=%{buildroot}%{local_bindir} \
      CONFIGDIR=%{buildroot}%{config_dir} \
      MODULEDIR=%{buildroot}%{module_dir}
-# This .orig file is not allow in SUSE, and it is not critical for StarlingX functionality
-rm %{puppet_modules}/platform/templates/calico.yaml.erb.orig
 
 %files
 %defattr(-,root,root,-)

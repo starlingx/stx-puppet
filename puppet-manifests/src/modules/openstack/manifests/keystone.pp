@@ -38,17 +38,8 @@ class openstack::keystone (
 
     $keystone_key_repo_path = "${::platform::drbd::platform::params::mountpoint}/keystone"
     $eng_workers = $::platform::params::eng_workers
-
-    # FIXME(mpeters): binding to wildcard address to allow bootstrap transition
-    # Not sure if there is a better way to transition from the localhost address
-    # to the management address while still being able to authenticate the client
-    if str2bool($::is_initial_config_primary) {
-      $enabled = true
-      $bind_host = '[::]'
-    } else {
-      $enabled = false
-      $bind_host = $::platform::network::mgmt::params::controller_address_url
-    }
+    $enabled = false
+    $bind_host = $::platform::network::mgmt::params::controller_address_url
 
     Class[$name] -> Class['::platform::client']
 
@@ -214,9 +205,9 @@ class openstack::keystone::bootstrap(
   # In the case of a Distributed Cloud deployment, apply the Keystone
   # controller configuration for each SubCloud, since Keystone is also
   # a localized service.
-  if ($::platform::params::init_keystone and
-      (!$::platform::params::region_config or
-        $::platform::params::distributed_cloud_role == 'subcloud')) {
+
+  if (!$::platform::params::region_config or
+      $::platform::params::distributed_cloud_role == 'subcloud') {
 
     include ::keystone::db::postgresql
 
@@ -274,7 +265,6 @@ class openstack::keystone::endpointgroup
 
   # $::platform::params::init_keystone should be checked by the caller.
   # as this class should be only invoked when initializing keystone.
-  # i.e. is_initial_config_primary is true is expected.
 
   if ($::platform::params::distributed_cloud_role =='systemcontroller') {
     $reference_region = $::openstack::keystone::params::region_name

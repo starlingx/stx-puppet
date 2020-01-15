@@ -38,12 +38,13 @@ class platform::etcd::setup {
   -> Service['etcd']
 }
 
-class platform::etcd::init
-  inherits ::platform::etcd::params {
+class platform::etcd::init (
+  $service_enabled = false,
+) inherits ::platform::etcd::params {
 
   $client_url = "http://${bind_address}:${port}"
 
-  if str2bool($::is_initial_config_primary) {
+  if $service_enabled {
     $service_ensure = 'running'
   }
   else {
@@ -99,13 +100,11 @@ class platform::etcd::datadir::bootstrap
   require ::platform::drbd::etcd::bootstrap
   Class['::platform::drbd::etcd::bootstrap'] -> Class[$name]
 
-  if $::platform::params::init_database {
-    file { $etcd_versioned_dir:
-        ensure => 'directory',
-        owner  => 'root',
-        group  => 'root',
-        mode   => '0755',
-    }
+  file { $etcd_versioned_dir:
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => '0755',
   }
 }
 
@@ -114,9 +113,10 @@ class platform::etcd::bootstrap
 
   include ::platform::etcd::datadir::bootstrap
   include ::platform::etcd::setup
-  include ::platform::etcd::init
 
   Class['::platform::etcd::datadir::bootstrap']
   -> Class['::platform::etcd::setup']
-  -> Class['::platform::etcd::init']
+  -> class { '::platform::etcd::init':
+    service_enabled => true,
+  }
 }

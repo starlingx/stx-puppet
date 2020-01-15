@@ -86,34 +86,31 @@ class platform::compute::grub::recovery {
 class platform::compute::grub::audit
   inherits ::platform::compute::grub::params {
 
-  if ! str2bool($::is_initial_config_primary) {
+  notice('Audit CPU and Grub Configuration')
 
-    notice('Audit CPU and Grub Configuration')
+  $expected_n_cpus = Integer($::number_of_logical_cpus)
+  $n_cpus_ok = ($n_cpus == $expected_n_cpus)
 
-    $expected_n_cpus = Integer($::number_of_logical_cpus)
-    $n_cpus_ok = ($n_cpus == $expected_n_cpus)
+  $cmd_ok = check_grub_config($grub_updates)
 
-    $cmd_ok = check_grub_config($grub_updates)
-
-    if $cmd_ok and $n_cpus_ok {
-      $ensure = present
-      notice('CPU and Boot Argument audit passed.')
+  if $cmd_ok and $n_cpus_ok {
+    $ensure = present
+    notice('CPU and Boot Argument audit passed.')
+  } else {
+    $ensure = absent
+    if !$cmd_ok {
+      notice('Kernel Boot Argument Mismatch')
+      include ::platform::compute::grub::recovery
     } else {
-      $ensure = absent
-      if !$cmd_ok {
-        notice('Kernel Boot Argument Mismatch')
-        include ::platform::compute::grub::recovery
-      } else {
-        notice("Mismatched CPUs: Found=${n_cpus}, Expected=${expected_n_cpus}")
-      }
+      notice("Mismatched CPUs: Found=${n_cpus}, Expected=${expected_n_cpus}")
     }
+  }
 
-    file { '/var/run/worker_goenabled':
-      ensure => $ensure,
-      owner  => 'root',
-      group  => 'root',
-      mode   => '0644',
-    }
+  file { '/var/run/worker_goenabled':
+    ensure => $ensure,
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0644',
   }
 }
 

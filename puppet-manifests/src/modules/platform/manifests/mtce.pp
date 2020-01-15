@@ -87,8 +87,24 @@ class platform::mtce::runtime {
   }
 }
 
-class platform::mtce::bootstrap {
+class platform::mtce::bootstrap
+  inherits ::platform::mtce::params {
+
   include ::platform::params
   include ::platform::mtce
-  include ::platform::mtce::agent
+
+  # configure a mtce keystone user
+  keystone_user { $auth_username:
+    ensure   => present,
+    password => $auth_pw,
+    enabled  => true,
+  }
+
+  # assign an admin role for this mtce user on the services tenant
+  keystone_user_role { "${auth_username}@${auth_project}":
+    ensure         => present,
+    user_domain    => $auth_user_domain,
+    project_domain => $auth_project_domain,
+    roles          => ['admin'],
+  }
 }
