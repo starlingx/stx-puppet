@@ -95,6 +95,8 @@ class dcmanager::api (
   $keystone_identity_uri      = false,
   $keystone_user_domain       = 'Default',
   $keystone_project_domain    = 'Default',
+  $keystone_http_connect_timeout = '10',
+  $keystone_http_request_max_retries = '3',
   $auth_type                  = 'password',
   $service_port               = '5000',
   $package_ensure             = 'latest',
@@ -151,6 +153,8 @@ class dcmanager::api (
       'keystone_authtoken/password':     value => $keystone_password, secret=> true;
       'keystone_authtoken/user_domain_name':  value => $keystone_user_domain;
       'keystone_authtoken/project_domain_name':  value => $keystone_project_domain;
+      'keystone_authtoken/http_connect_timeout': value => $keystone_http_connect_timeout;
+      'keystone_authtoken/http_request_max_retries': value => $keystone_http_request_max_retries;
     }
     dcmanager_config {
       'cache/admin_tenant':       value => $keystone_admin_tenant;
