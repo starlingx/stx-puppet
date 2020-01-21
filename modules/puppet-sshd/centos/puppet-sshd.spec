@@ -13,7 +13,7 @@ Source0:        %{name}-%{version}.tar.gz
 
 BuildArch:      noarch
 
-BuildRequires: python2-devel
+BuildRequires: platform-python-devel
 
 %description
 A puppet module for sshd
