@@ -500,7 +500,7 @@ class platform::kubernetes::coredns {
 
   include ::platform::params
 
-  if str2bool($::is_initial_config_primary) or str2bool($::is_initial_k8s_config) {
+  if str2bool($::is_initial_k8s_config) {
     if $::platform::params::system_mode != 'simplex' {
       # For duplex and multi-node system, restrict the dns pod to master nodes
       exec { 'restrict coredns to master nodes':

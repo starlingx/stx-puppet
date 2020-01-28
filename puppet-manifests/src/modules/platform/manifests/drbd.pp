@@ -99,21 +99,6 @@ define platform::drbd::filesystem (
     cpumask       => $::platform::drbd::params::cpumask,
     resync_after  => $resync_after,
   }
-
-  if str2bool($::is_initial_config_primary) {
-    # NOTE: The DRBD file system can only be resized immediately if not peering,
-    #       otherwise it must wait for the peer backing storage device to be
-    #       resized before issuing the resize locally.
-    Drbd::Resource[$title]
-
-    -> exec { "drbd resize ${title}":
-      command => "drbdadm -- --assume-peer-has-space resize ${title}",
-    }
-
-    -> exec { "resize2fs ${title}":
-      command => "resize2fs ${device}",
-    }
-  }
 }
 
 
@@ -283,17 +268,10 @@ class platform::drbd::etcd::params (
 class platform::drbd::etcd (
 ) inherits ::platform::drbd::etcd::params {
 
-  if str2bool($::is_initial_config_primary) {
-    $drbd_primary = true
-    $drbd_initial = true
-    $drbd_automount = true
-    $drbd_manage = true
-  } else {
-    $drbd_primary = undef
-    $drbd_initial = undef
-    $drbd_automount = undef
-    $drbd_manage = undef
-  }
+  $drbd_primary = undef
+  $drbd_initial = undef
+  $drbd_automount = undef
+  $drbd_manage = undef
 
   platform::drbd::filesystem { $resource_name:
     vg_name                => $vg_name,
@@ -346,17 +324,10 @@ class platform::drbd::dockerdistribution::params (
 class platform::drbd::dockerdistribution ()
   inherits ::platform::drbd::dockerdistribution::params {
 
-  if str2bool($::is_initial_config_primary) {
-    $drbd_primary = true
-    $drbd_initial = true
-    $drbd_automount = true
-    $drbd_manage = true
-  } else {
-    $drbd_primary = undef
-    $drbd_initial = undef
-    $drbd_automount = undef
-    $drbd_manage = undef
-  }
+  $drbd_primary = undef
+  $drbd_initial = undef
+  $drbd_automount = undef
+  $drbd_manage = undef
 
   platform::drbd::filesystem { $resource_name:
     vg_name                => $vg_name,
@@ -455,8 +426,8 @@ class platform::drbd(
   $service_enable = false,
   $service_ensure = 'stopped',
 ) {
-  if (str2bool($::is_initial_config_primary) or str2bool($::is_standalone_controller)
-  ){
+  if str2bool($::is_standalone_controller)
+  {
     # Enable DRBD on standalone
     class { '::drbd':
       service_enable => true,

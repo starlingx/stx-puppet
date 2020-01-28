@@ -35,14 +35,6 @@ class platform::amqp::rabbitmq (
 
   if $service_enabled {
     $service_ensure = 'running'
-  }
-  elsif str2bool($::is_initial_config_primary) {
-    $service_ensure = 'running'
-
-    # ensure service is stopped after initial configuration
-    class { '::platform::amqp::post':
-      stage => post
-    }
   } else {
     $service_ensure = 'stopped'
   }
