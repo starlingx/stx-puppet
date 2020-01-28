@@ -19,7 +19,12 @@ class platform::containerd::config
   # inherit the proxy setting from docker
   $http_proxy = $::platform::docker::params::http_proxy
   $https_proxy = $::platform::docker::params::https_proxy
-  $no_proxy = $::platform::docker::params::no_proxy
+  if $::platform::docker::params::no_proxy {
+    # Containerd doesn't work with the NO_PROXY environment
+    # variable if it has IPv6 addresses with square brackets,
+    # remove the square brackets
+    $no_proxy = regsubst($::platform::docker::params::no_proxy, '\\[|\\]', '', 'G')
+  }
   $insecure_registries = $::platform::dockerdistribution::registries::insecure_registries
 
   if $http_proxy or $https_proxy {
