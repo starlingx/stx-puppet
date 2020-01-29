@@ -5,20 +5,9 @@ class platform::kubernetes::params (
   # K8S version running on a host
   $version = undef,
   $node_ip = undef,
-  $pod_network_cidr = undef,
-  $pod_network_ipversion = 4,
-  $service_network_cidr = undef,
-  $apiserver_advertise_address = undef,
-  $etcd_endpoint = undef,
   $service_domain = undef,
   $dns_service_ip = undef,
   $host_labels = [],
-  $ca_crt = undef,
-  $ca_key = undef,
-  $sa_key = undef,
-  $sa_pub = undef,
-  $front_proxy_ca_crt = undef,
-  $front_proxy_ca_key = undef,
   $k8s_cpuset = undef,
   $k8s_nodeset = undef,
   $k8s_reserved_cpus = undef,
@@ -26,9 +15,8 @@ class platform::kubernetes::params (
   $k8s_isol_cpus = undef,
   $k8s_cpu_mgr_policy = 'none',
   $k8s_topology_mgr_policy = 'best-effort',
-  $apiserver_cert_san = [],
-  $k8s_cni_bin_dir = '/usr/libexec/cni'
-
+  $k8s_cni_bin_dir = '/usr/libexec/cni',
+  $join_cmd = undef
 ) { }
 
 class platform::kubernetes::cgroup::params (
@@ -206,13 +194,6 @@ class platform::kubernetes::master::init
   include ::platform::docker::params
   include ::platform::dockerdistribution::params
 
-  $apiserver_loopback_address = $pod_network_ipversion ? {
-    4 => '127.0.0.1',
-    6 => '::1',
-  }
-
-  $apiserver_certsans = concat($apiserver_cert_san, $apiserver_loopback_address, $apiserver_advertise_address)
-
   if str2bool($::is_initial_k8s_config) {
     # This allows subsequent node installs
     # Notes regarding ::is_initial_k8s_config check:
@@ -225,70 +206,26 @@ class platform::kubernetes::master::init
 
     $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
 
-    # Create necessary certificate files
-    file { '/etc/kubernetes/pki':
-      ensure => directory,
-      owner  => 'root',
-      group  => 'root',
-      mode   => '0755',
-    }
-    -> file { '/etc/kubernetes/pki/ca.crt':
-      ensure  => file,
-      content => $ca_crt,
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0644',
-    }
-    -> file { '/etc/kubernetes/pki/ca.key':
-      ensure  => file,
-      content => $ca_key,
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0600',
-    }
-    -> file { '/etc/kubernetes/pki/sa.key':
-      ensure  => file,
-      content => $sa_key,
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0600',
-    }
-    -> file { '/etc/kubernetes/pki/sa.pub':
-      ensure  => file,
-      content => $sa_pub,
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0600',
-    }
-    -> file { '/etc/kubernetes/pki/front-proxy-ca.crt':
-      ensure  => file,
-      content => $front_proxy_ca_crt,
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0600',
-    }
-    -> file { '/etc/kubernetes/pki/front-proxy-ca.key':
-      ensure  => file,
-      content => $front_proxy_ca_key,
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0600',
-    }
-
-    # Configure the master node.
-    -> file { '/etc/kubernetes/kubeadm.yaml':
-      ensure  => file,
-      content => template('platform/kubeadm.yaml.erb'),
-    }
-
-    -> exec { 'pre pull k8s images':
+    exec { 'pre pull k8s images':
       command   => "kubeadm config images list --kubernetes-version ${version}  --image-repository registry.local:9001/k8s.gcr.io | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
       logoutput => true,
     }
 
     -> exec { 'configure master node':
-      command   => 'kubeadm init --config=/etc/kubernetes/kubeadm.yaml',
+      command   => $join_cmd,
       logoutput => true,
+    }
+
+    -> exec { 'create kubeadm.yaml':
+      command => 'kubeadm config view > /etc/kubernetes/kubeadm.yaml',
+      creates => '/etc/kubernetes/kubeadm.yaml'
+    }
+
+    -> file { '/etc/kubernetes/kubeadm.yaml':
+      ensure => file,
+      owner  => 'root',
+      group  => 'root',
+      mode   => '0644',
     }
 
     # Update ownership/permissions for file created by "kubeadm init".
@@ -378,12 +315,8 @@ class platform::kubernetes::master
   -> Class['::platform::kubernetes::firewall']
 }
 
-class platform::kubernetes::worker::params (
-  $join_cmd = undef,
-) { }
-
 class platform::kubernetes::worker::init
-  inherits ::platform::kubernetes::worker::params {
+  inherits ::platform::kubernetes::params {
 
   Class['::platform::docker::config'] -> Class[$name]
   Class['::platform::containerd::config'] -> Class[$name]
