@@ -181,7 +181,7 @@ class platform::ceph::monitor
 
   if $service_enabled {
     if $system_type == 'All-in-one' and 'duplex' in $system_mode {
-      if str2bool($::is_standalone_controller) {
+      if str2bool($::is_controller_active) or str2bool($::is_standalone_controller) {
         # Ceph mon is configured on a DRBD partition,
         # when 'ceph' storage backend is added in sysinv.
         # Then SM takes care of starting ceph after manifests are applied.
@@ -208,7 +208,7 @@ class platform::ceph::monitor
       ensure       => present,
       volume_group => $::platform::filesystem::params::vg_name,
       size         => "${mon_lv_size_reserved}G",
-    } -> Class['platform::filesystem::docker']
+    }
   }
 
   if $configure_ceph_mon {
@@ -231,10 +231,6 @@ class platform::ceph::monitor
         fs_type    => $mon_fs_type,
         fs_options => $mon_fs_options,
       } -> Class['::ceph']
-
-      if $::personality == 'worker' {
-        Platform::Filesystem[$mon_lv_name] -> Class['platform::filesystem::docker']
-      }
 
       file { '/etc/pmon.d/ceph.conf':
         ensure => link,
@@ -552,14 +548,12 @@ class platform::ceph::runtime_base {
   include ::platform::ceph::monitor
   include ::platform::ceph
 
-  # Make sure mgr-restful-plugin is running as it is needed by sysinv config
-  # TODO(oponcea): Remove when sm supports in-service config reload
-  if str2bool($::is_controller_active) {
-    Ceph::Mon <| |>
-    -> exec { '/etc/init.d/mgr-restful-plugin start':
-      command   => '/etc/init.d/mgr-restful-plugin start',
-      logoutput => true,
-    }
+  $system_mode = $::platform::params::system_mode
+  $system_type = $::platform::params::system_type
+
+  if $system_type == 'All-in-one' and 'duplex' in $system_mode {
+    Drbd::Resource <| |> -> Class[$name]
+    Class[$name] -> Class['::platform::sm::ceph::runtime']
   }
 }
 

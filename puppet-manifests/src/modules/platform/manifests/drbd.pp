@@ -384,7 +384,8 @@ class platform::drbd::cephmon ()
   $system_mode = $::platform::params::system_mode
   $system_type = $::platform::params::system_type
 
-  if str2bool($::is_standalone_controller) and ! str2bool($::is_node_ceph_configured) {
+  if ((str2bool($::is_controller_active) or str2bool($::is_standalone_controller))
+    and ! str2bool($::is_node_ceph_configured)) {
     # Active controller, first time configuration.
     $drbd_primary = true
     $drbd_initial = true
