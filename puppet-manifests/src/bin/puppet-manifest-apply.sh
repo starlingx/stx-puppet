@@ -23,6 +23,7 @@ RUNTIMEDATA=$5
 PUPPET_MODULES_PATH=/usr/share/puppet/modules:/usr/share/openstack-puppet/modules
 PUPPET_MANIFEST=/etc/puppet/manifests/${MANIFEST}.pp
 PUPPET_TMP=/tmp/puppet
+FILEBUCKET_PATH=/var/lib/puppet/clientbucket
 
 # Setup log directory and file
 DATETIME=$(date -u +"%Y-%m-%d-%H-%M-%S")
@@ -85,6 +86,12 @@ function finish {
     if [ ! -f ${SAVEDLOGS} ]; then
         # Save the logs
         tar czf ${SAVEDLOGS} ${LOGDIR} 2>/dev/null
+    fi
+
+    # To avoid the ever growing contents of filebucket which may trigger inode
+    # issues, clean up its contents after every apply.
+    if [ -d ${FILEBUCKET_PATH} ]; then
+        rm -fr ${FILEBUCKET_PATH}/*
     fi
 }
 trap finish EXIT

@@ -28,6 +28,7 @@ include ::platform::grub
 include ::platform::collectd
 include ::platform::filesystem::storage
 include ::platform::docker
+include ::platform::containerd
 include ::platform::ceph::storage
 
 class { '::platform::config::storage::post':

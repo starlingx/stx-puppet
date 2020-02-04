@@ -5,20 +5,9 @@ class platform::kubernetes::params (
   # K8S version running on a host
   $version = undef,
   $node_ip = undef,
-  $pod_network_cidr = undef,
-  $pod_network_ipversion = 4,
-  $service_network_cidr = undef,
-  $apiserver_advertise_address = undef,
-  $etcd_endpoint = undef,
   $service_domain = undef,
   $dns_service_ip = undef,
   $host_labels = [],
-  $ca_crt = undef,
-  $ca_key = undef,
-  $sa_key = undef,
-  $sa_pub = undef,
-  $front_proxy_ca_crt = undef,
-  $front_proxy_ca_key = undef,
   $k8s_cpuset = undef,
   $k8s_nodeset = undef,
   $k8s_reserved_cpus = undef,
@@ -26,9 +15,8 @@ class platform::kubernetes::params (
   $k8s_isol_cpus = undef,
   $k8s_cpu_mgr_policy = 'none',
   $k8s_topology_mgr_policy = 'best-effort',
-  $apiserver_cert_san = [],
-  $k8s_cni_bin_dir = '/usr/libexec/cni'
-
+  $k8s_cni_bin_dir = '/usr/libexec/cni',
+  $join_cmd = undef
 ) { }
 
 class platform::kubernetes::cgroup::params (
@@ -206,13 +194,6 @@ class platform::kubernetes::master::init
   include ::platform::docker::params
   include ::platform::dockerdistribution::params
 
-  $apiserver_loopback_address = $pod_network_ipversion ? {
-    4 => '127.0.0.1',
-    6 => '::1',
-  }
-
-  $apiserver_certsans = concat($apiserver_cert_san, $apiserver_loopback_address, $apiserver_advertise_address)
-
   if str2bool($::is_initial_k8s_config) {
     # This allows subsequent node installs
     # Notes regarding ::is_initial_k8s_config check:
@@ -223,80 +204,28 @@ class platform::kubernetes::master::init
     #   This flag is created by Ansible on controller-0;
     # - Ansible replay is not impacted by flag creation.
 
-    # Create necessary certificate files
-    file { '/etc/kubernetes/pki':
-      ensure => directory,
-      owner  => 'root',
-      group  => 'root',
-      mode   => '0755',
-    }
-    -> file { '/etc/kubernetes/pki/ca.crt':
-      ensure  => file,
-      content => $ca_crt,
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0644',
-    }
-    -> file { '/etc/kubernetes/pki/ca.key':
-      ensure  => file,
-      content => $ca_key,
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0600',
-    }
-    -> file { '/etc/kubernetes/pki/sa.key':
-      ensure  => file,
-      content => $sa_key,
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0600',
-    }
-    -> file { '/etc/kubernetes/pki/sa.pub':
-      ensure  => file,
-      content => $sa_pub,
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0600',
-    }
-    -> file { '/etc/kubernetes/pki/front-proxy-ca.crt':
-      ensure  => file,
-      content => $front_proxy_ca_crt,
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0600',
-    }
-    -> file { '/etc/kubernetes/pki/front-proxy-ca.key':
-      ensure  => file,
-      content => $front_proxy_ca_key,
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0600',
-    }
+    $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
 
-    # Configure the master node.
-    -> file { '/etc/kubernetes/kubeadm.yaml':
-      ensure  => file,
-      content => template('platform/kubeadm.yaml.erb'),
-    }
-
-    -> exec { 'login local registry':
-      command   => "docker login registry.local:9001 -u ${::platform::dockerdistribution::params::registry_username} -p ${::platform::dockerdistribution::params::registry_password}", # lint:ignore:140chars
-      logoutput => true,
-    }
-
-    -> exec { 'kubeadm to pre pull images':
-      command   => 'kubeadm config images pull --config /etc/kubernetes/kubeadm.yaml',
-      logoutput => true,
-    }
-
-    -> exec { 'logout of local registry':
-      command   => 'docker logout registry.local:9001',
+    exec { 'pre pull k8s images':
+      command   => "kubeadm config images list --kubernetes-version ${version}  --image-repository registry.local:9001/k8s.gcr.io | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
       logoutput => true,
     }
 
     -> exec { 'configure master node':
-      command   => 'kubeadm init --config=/etc/kubernetes/kubeadm.yaml',
+      command   => $join_cmd,
       logoutput => true,
+    }
+
+    -> exec { 'create kubeadm.yaml':
+      command => 'kubeadm config view > /etc/kubernetes/kubeadm.yaml',
+      creates => '/etc/kubernetes/kubeadm.yaml'
+    }
+
+    -> file { '/etc/kubernetes/kubeadm.yaml':
+      ensure => file,
+      owner  => 'root',
+      group  => 'root',
+      mode   => '0644',
     }
 
     # Update ownership/permissions for file created by "kubeadm init".
@@ -351,6 +280,16 @@ class platform::kubernetes::master::init
       ensure => present,
     }
   }
+
+  # Run kube-cert-rotation daily
+  cron { 'kube-cert-rotation':
+    ensure      => 'present',
+    command     => '/usr/bin/kube-cert-rotation.sh',
+    environment => 'PATH=/bin:/usr/bin:/usr/sbin',
+    minute      => '10',
+    hour        => '*/24',
+    user        => 'root',
+  }
 }
 
 class platform::kubernetes::master
@@ -365,6 +304,7 @@ class platform::kubernetes::master
   Class['::platform::sysctl::controller::reserve_ports'] -> Class[$name]
   Class['::platform::etcd'] -> Class[$name]
   Class['::platform::docker::config'] -> Class[$name]
+  Class['::platform::containerd::config'] -> Class[$name]
   # Ensure DNS is configured as name resolution is required when
   # kubeadm init is run.
   Class['::platform::dns'] -> Class[$name]
@@ -375,14 +315,11 @@ class platform::kubernetes::master
   -> Class['::platform::kubernetes::firewall']
 }
 
-class platform::kubernetes::worker::params (
-  $join_cmd = undef,
-) { }
-
 class platform::kubernetes::worker::init
-  inherits ::platform::kubernetes::worker::params {
+  inherits ::platform::kubernetes::params {
 
   Class['::platform::docker::config'] -> Class[$name]
+  Class['::platform::containerd::config'] -> Class[$name]
   Class['::platform::filesystem::kubelet'] -> Class[$name]
 
   if str2bool($::is_initial_config) {
@@ -395,20 +332,10 @@ class platform::kubernetes::worker::init
     $k8s_pause_img = generate('/bin/sh', '-c', $get_k8s_pause_img)
 
     if k8s_pause_img {
-      exec { 'login local registry':
-        command   => "docker login registry.local:9001 -u ${::platform::dockerdistribution::params::registry_username} -p ${::platform::dockerdistribution::params::registry_password}", # lint:ignore:140chars
-        logoutput => true,
-      }
-
-      -> exec { 'load k8s pause image':
-        command   => "docker image pull ${k8s_pause_img}",
+      exec { 'load k8s pause image by containerd':
+        command   => "crictl pull --creds ${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password} ${k8s_pause_img}", # lint:ignore:140chars
         logoutput => true,
         before    => Exec['configure worker node']
-      }
-
-      -> exec { 'logout of local registry':
-        command   => 'docker logout registry.local:9001',
-        logoutput => true,
       }
     }
   }
@@ -506,7 +433,7 @@ class platform::kubernetes::coredns {
 
   include ::platform::params
 
-  if str2bool($::is_initial_config_primary) or str2bool($::is_initial_k8s_config) {
+  if str2bool($::is_initial_k8s_config) {
     if $::platform::params::system_mode != 'simplex' {
       # For duplex and multi-node system, restrict the dns pod to master nodes
       exec { 'restrict coredns to master nodes':
@@ -604,18 +531,10 @@ class platform::kubernetes::pre_pull_control_plane_images
 
   include ::platform::dockerdistribution::params
 
-  exec { 'login to local registry':
-    command   => "docker login registry.local:9001 -u ${::platform::dockerdistribution::params::registry_username} -p ${::platform::dockerdistribution::params::registry_password}", # lint:ignore:140chars
-    logoutput => true,
-  }
+  $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
 
-  -> exec { 'pre pull images':
-    command   => "kubeadm config images pull --kubernetes-version ${upgrade_to_version} --image-repository=registry.local:9001/k8s.gcr.io",
-    logoutput => true,
-  }
-
-  -> exec { 'logout of local registry':
-    command   => 'docker logout registry.local:9001',
+  exec { 'pre pull images':
+    command   => "kubeadm config images list --kubernetes-version ${upgrade_to_version} --image-repository=registry.local:9001/k8s.gcr.io | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
     logoutput => true,
   }
 }
@@ -680,20 +599,10 @@ class platform::kubernetes::worker::upgrade_kubelet
   $k8s_pause_img = generate('/bin/sh', '-c', $get_k8s_pause_img)
 
   if k8s_pause_img {
-    exec { 'login local registry':
-      command   => "docker login registry.local:9001 -u ${::platform::dockerdistribution::params::registry_username} -p ${::platform::dockerdistribution::params::registry_password}", # lint:ignore:140chars
-      logoutput => true,
-    }
-
-    -> exec { 'load k8s pause image':
-      command   => "docker image pull ${k8s_pause_img}",
+    exec { 'load k8s pause image':
+      command   => "crictl pull --creds ${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password} ${k8s_pause_img}", # lint:ignore:140chars
       logoutput => true,
       before    => Exec['upgrade kubelet']
-    }
-
-    -> exec { 'logout of local registry':
-      command   => 'docker logout registry.local:9001',
-      logoutput => true,
     }
   }
 

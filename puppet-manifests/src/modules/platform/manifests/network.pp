@@ -124,6 +124,13 @@ define network_address (
 }
 
 
+class platform::network::addresses (
+  $address_config = {},
+) {
+  create_resources('network_address', $address_config, {})
+}
+
+
 # Defines a single route resource for an interface.
 # If multiple are required in the future, then this will need to
 # iterate over a hash to create multiple entries per file.
@@ -142,34 +149,10 @@ define network_route6 (
 }
 
 
-class platform::addresses (
-  $address_config = {},
+class platform::network::routes (
+  $route_config = {}
 ) {
-  create_resources('network_address', $address_config, {})
-}
-
-define platform::interfaces::sriov_config(
-  $vf_addrs,
-  $vf_driver = undef
-) {
-  if $vf_driver != undef {
-    ensure_resource(kmod::load, $vf_driver)
-    exec { "sriov-vf-bind-device: ${title}":
-      command   => template('platform/sriov.bind-device.erb'),
-      logoutput => true,
-      require   => Kmod::Load[$vf_driver],
-    }
-  }
-}
-
-class platform::interfaces (
-  $network_config = {},
-  $route_config = {},
-  $sriov_config = {}
-) {
-  create_resources('network_config', $network_config, {})
   create_resources('network_route', $route_config, {})
-  create_resources('platform::interfaces::sriov_config', $sriov_config, {})
 
   include ::platform::params
   include ::platform::network::mgmt::params
@@ -187,9 +170,41 @@ class platform::interfaces (
 }
 
 
+define platform::interfaces::sriov_config(
+  $vf_addrs,
+  $vf_driver = undef
+) {
+  if $vf_driver != undef {
+    ensure_resource(kmod::load, $vf_driver)
+    exec { "sriov-vf-bind-device: ${title}":
+      command   => template('platform/sriov.bind-device.erb'),
+      logoutput => true,
+      require   => Kmod::Load[$vf_driver],
+    }
+  }
+}
+
+
+class platform::interfaces::sriov (
+  $sriov_config = {}
+) {
+  create_resources('platform::interfaces::sriov_config', $sriov_config, {})
+}
+
+
+class platform::interfaces (
+  $network_config = {},
+) {
+  create_resources('network_config', $network_config, {})
+
+  include ::platform::interfaces::sriov
+}
+
+
 class platform::network::apply {
   include ::platform::interfaces
-  include ::platform::addresses
+  include ::platform::network::addresses
+  include ::platform::network::routes
 
   Network_config <| |>
   -> Exec['apply-network-config']
@@ -253,4 +268,20 @@ class platform::network (
 
 class platform::network::runtime {
   include ::platform::network::apply
+}
+
+
+class platform::network::routes::runtime {
+  include ::platform::network::routes
+
+  # Adding Network_route dependency separately, in case it's empty,
+  # as puppet bug will remove dependency altogether if
+  # Network_route is empty. See below.
+  # https://projects.puppetlabs.com/issues/18399
+  Network_route <| |> -> Exec['apply-network-config']
+  Network_route6 <| |> -> Exec['apply-network-config']
+
+  exec {'apply-network-config':
+    command => 'apply_network_config.sh',
+  }
 }

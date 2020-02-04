@@ -42,6 +42,7 @@ include ::platform::grub
 include ::platform::etcd
 include ::platform::docker
 include ::platform::dockerdistribution
+include ::platform::containerd
 include ::platform::kubernetes::master
 include ::platform::helm
 
@@ -99,6 +100,8 @@ include ::openstack::barbican
 include ::openstack::barbican::api
 
 include ::platform::sm
+
+include ::platform::lmon
 
 class { '::platform::config::controller::post':
   stage => post,

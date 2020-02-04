@@ -87,6 +87,6 @@ class platform::params (
     $eng_workers_by_6 = min($eng_max_workers, $eng_workers_mem, max($phys_core_count/6, 2))
   }
 
-  $init_database = (str2bool($::is_initial_config_primary) or $controller_upgrade)
-  $init_keystone = (str2bool($::is_initial_config_primary) or $controller_upgrade)
+  $init_database = $controller_upgrade
+  $init_keystone = $controller_upgrade
 }

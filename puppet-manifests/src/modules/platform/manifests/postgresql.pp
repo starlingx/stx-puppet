@@ -94,17 +94,6 @@ class platform::postgresql::server (
     }
   }
 
-  if str2bool($::is_initial_config_primary) {
-    $service_ensure = 'running'
-
-    # ensure service is stopped after initial configuration
-    class { '::platform::postgresql::post':
-      stage => post
-    }
-  } else {
-    $service_ensure = 'stopped'
-  }
-
   class {'::postgresql::globals':
     datadir => $data_dir,
     confdir => $config_dir,
@@ -112,7 +101,7 @@ class platform::postgresql::server (
 
   -> class {'::postgresql::server':
     ip_mask_allow_all_users => $ipv4acl,
-    service_ensure          => $service_ensure,
+    service_ensure          => 'stopped',
   }
 }
 

@@ -31,6 +31,7 @@ include ::platform::grub
 include ::platform::collectd
 include ::platform::filesystem::compute
 include ::platform::docker
+include ::platform::containerd
 include ::platform::dockerdistribution::compute
 include ::platform::kubernetes::worker
 include ::platform::multipath
@@ -38,6 +39,7 @@ include ::platform::client
 include ::platform::ceph::worker
 include ::platform::worker::storage
 include ::platform::pciirqaffinity
+include ::platform::lmon
 
 class { '::platform::config::worker::post':
   stage => post,
