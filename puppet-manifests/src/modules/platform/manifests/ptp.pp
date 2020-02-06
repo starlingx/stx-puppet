@@ -1,8 +1,8 @@
 class platform::ptp (
   $enabled = false,
-  $mode = 'hardware',
-  $transport = 'l2',
-  $mechanism = 'e2e',
+  $ptp4l_options = [],
+  $transport = 'L2',
+  $phc2sys_options = '',
   $master_devices = [],
   $slave_devices = []
 ) {
