@@ -375,7 +375,7 @@ $SERVER["socket"] == "[::]:<%= @https_port %>" {
 # (i.e. mgmt or pxeboot networks)
 include "/etc/lighttpd/lighttpd-inc.conf"
 $HTTP["remoteip"] != "127.0.0.1" {
-        $HTTP["url"] =~ "^/(rel-[^/]*|feed|updates)/" {
+        $HTTP["url"] =~ "^/(rel-[^/]*|feed|updates|iso)/" {
                 dir-listing.activate = "enable"
         }
         $HTTP["remoteip"] != var.management_ip_network {
