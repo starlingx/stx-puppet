@@ -78,8 +78,6 @@ oom_score = 0
       conf_template = ""
     [plugins.cri.registry]
       [plugins.cri.registry.mirrors]
-        [plugins.cri.registry.mirrors."docker.io"]
-          endpoint = ["https://registry-1.docker.io"]
         # Begin of insecure registries
 <%- @insecure_registries.each do |insecure_registry| -%>
         [plugins.cri.registry.mirrors."<%= insecure_registry %>"]
