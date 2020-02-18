@@ -53,12 +53,18 @@ class platform::params (
   # memory headroom per worker (e.g., buffers, cached)
   $eng_overhead_mb = 1000
 
-  notice("DEBUG: Platform cpu count obtained from sysinv DB is ${platform_cpu_count}.")
-
   # number of workers per service
-  if $system_type == 'All-in-one' {
+  if ($system_type != 'All-in-one' or $distributed_cloud_role == 'systemcontroller') {
+    # number of workers we can support based on memory
+    $small_footprint = false
+    $eng_workers_mem = floor($::memorysize_mb) / ($eng_worker_mb + $eng_overhead_mb)
+    $eng_workers = min($eng_max_workers, $eng_workers_mem, max($phys_core_count, 2))
+    $eng_workers_by_2 = min($eng_max_workers, $eng_workers_mem, max($phys_core_count/2, 2))
+    $eng_workers_by_4 = min($eng_max_workers, $eng_workers_mem, max($phys_core_count/4, 2))
+    $eng_workers_by_5 = min($eng_max_workers, $eng_workers_mem, max($phys_core_count/5, 2))
+    $eng_workers_by_6 = min($eng_max_workers, $eng_workers_mem, max($phys_core_count/6, 2))
+  } else {
     $small_footprint = true
-
     # Set eng_workers for AIO based on the number of platform cores, not exceeding 2 for
     # AIO simplex, Xeon-D and virtual box and not exceeding 3 for AIO duplex.
     # All eng_workers derivatives are set to 1 for AIO.
@@ -76,15 +82,6 @@ class platform::params (
     $eng_workers_by_4 = $eng_min_workers
     $eng_workers_by_5 = $eng_min_workers
     $eng_workers_by_6 = $eng_min_workers
-  } else {
-    # number of workers we can support based on memory
-    $small_footprint = false
-    $eng_workers_mem = floor($::memorysize_mb) / ($eng_worker_mb + $eng_overhead_mb)
-    $eng_workers = min($eng_max_workers, $eng_workers_mem, max($phys_core_count, 2))
-    $eng_workers_by_2 = min($eng_max_workers, $eng_workers_mem, max($phys_core_count/2, 2))
-    $eng_workers_by_4 = min($eng_max_workers, $eng_workers_mem, max($phys_core_count/4, 2))
-    $eng_workers_by_5 = min($eng_max_workers, $eng_workers_mem, max($phys_core_count/5, 2))
-    $eng_workers_by_6 = min($eng_max_workers, $eng_workers_mem, max($phys_core_count/6, 2))
   }
 
   $init_database = $controller_upgrade
