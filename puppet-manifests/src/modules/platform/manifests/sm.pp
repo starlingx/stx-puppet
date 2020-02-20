@@ -672,6 +672,41 @@ class platform::sm
     command => 'sm-provision service registry-token-server',
   }
 
+  # Even when ceph is not configured, service domain members must be present
+  # because we can't configure them at runtime.
+  exec { 'Provision (service-domain-member storage-services)':
+    command => 'sm-provision service-domain-member controller storage-services',
+  }
+  -> exec { 'Provision (service-group storage-services)':
+    command => 'sm-provision service-group storage-services',
+  }
+  -> exec { 'Provision (service-domain-member storage-monitoring-services':
+    command => 'sm-provision service-domain-member controller storage-monitoring-services',
+  }
+  -> exec { 'Provision service-group storage-monitoring-services':
+    command => 'sm-provision service-group storage-monitoring-services',
+  }
+
+  # On an AIO-DX system, cephmon DRBD must always be configured, even
+  # if ceph is not enabled. Configured, but not enabled services have
+  # no impact on the system
+  if $system_type == 'All-in-one' and 'duplex' in $system_mode {
+    Exec['Provision service-group storage-monitoring-services']
+    -> exec { 'Configure Cephmon DRBD':
+      command => "sm-configure service_instance drbd-cephmon drbd-cephmon:${hostunit} \"drbd_resource=${cephmon_drbd_resource}\"",
+    }
+    -> exec { 'Configure Cephmon FileSystem':
+      command => "sm-configure service_instance cephmon-fs cephmon-fs \"device=${cephmon_fs_device},directory=${cephmon_fs_directory},options=noatime,nodiratime,fstype=ext4,check_level=20\"",
+    }
+    -> exec { 'Configure cephmon':
+      command => "sm-configure service_instance ceph-mon ceph-mon \"\"",
+    }
+    -> exec { 'Configure ceph-osd':
+      command => "sm-configure service_instance ceph-osd ceph-osd \"\"",
+    }
+  }
+
+
   # Barbican
   exec { 'Provision OpenStack - Barbican API (service-group-member)':
     command => 'sm-provision service-group-member cloud-services barbican-api',
@@ -694,52 +729,23 @@ class platform::sm
 
   if $ceph_configured {
     if $system_type == 'All-in-one' and 'duplex' in $system_mode {
-      exec { 'Provision Cephmon FS in SM (service-group-member cephmon-fs)':
+      Exec['Configure ceph-osd']
+      -> exec { 'Provision Cephmon FS in SM (service-group-member cephmon-fs)':
         command => 'sm-provision service-group-member controller-services cephmon-fs',
-      }
-      -> exec { 'Provision Cephmon FS in SM (service cephmon-fs)':
-        command => 'sm-provision service cephmon-fs',
       }
       -> exec { 'Provision Cephmon DRBD in SM (service-group-member drbd-cephmon':
         command => 'sm-provision service-group-member controller-services drbd-cephmon',
       }
-      -> exec { 'Provision Cephmon DRBD in SM (service drbd-cephmon)':
-        command => 'sm-provision service drbd-cephmon',
-      }
-      -> exec { 'Configure Cephmon DRBD':
-        command => "sm-configure service_instance drbd-cephmon drbd-cephmon:${hostunit} \"drbd_resource=${cephmon_drbd_resource}\"",
-      }
-      -> exec { 'Configure Cephmon FileSystem':
-        command => "sm-configure service_instance cephmon-fs cephmon-fs \"device=${cephmon_fs_device},directory=${cephmon_fs_directory},options=noatime,nodiratime,fstype=ext4,check_level=20\"",
-      }
-      -> exec { 'Configure cephmon':
-        command => "sm-configure service_instance ceph-mon ceph-mon \"\"",
-      }
       -> exec { 'Provision cephmon (service-group-member)':
         command => 'sm-provision service-group-member controller-services ceph-mon',
-      }
-      -> exec { 'Provision cephmon (service)':
-        command => 'sm-provision service ceph-mon',
-      }
-      -> exec { 'Configure ceph-osd':
-        command => "sm-configure service_instance ceph-osd ceph-osd \"\"",
       }
       -> exec { 'Provision ceph-osd (service-group-member)':
         command => 'sm-provision service-group-member storage-services ceph-osd',
       }
-      -> exec { 'Provision ceph-osd (service)':
-        command => 'sm-provision service ceph-osd',
-      }
     }
 
     # Ceph mgr RESTful plugin
-    exec { 'Provision mgr-restful-plugin (service-domain-member storage-services)':
-      command => 'sm-provision service-domain-member controller storage-services',
-    }
-    -> exec { 'Provision mgr-restful-plugin (service-group storage-services)':
-      command => 'sm-provision service-group storage-services',
-    }
-    -> exec { 'Provision mgr-restful-plugin (service-group-member mgr-restful-plugin)':
+    exec { 'Provision mgr-restful-plugin (service-group-member mgr-restful-plugin)':
       command => 'sm-provision service-group-member storage-services mgr-restful-plugin',
     }
     -> exec { 'Provision mgr-restful-plugin (service mgr-restful-plugin)':
@@ -747,12 +753,6 @@ class platform::sm
     }
 
     # Ceph-Manager
-    -> exec { 'Provision Ceph-Manager (service-domain-member storage-monitoring-services)':
-      command => 'sm-provision service-domain-member controller storage-monitoring-services',
-    }
-    -> exec { 'Provision Ceph-Manager service-group storage-monitoring-services)':
-      command => 'sm-provision service-group storage-monitoring-services',
-    }
     -> exec { 'Provision Ceph-Manager (service-group-member ceph-manager)':
       command => 'sm-provision service-group-member storage-monitoring-services ceph-manager',
     }
@@ -991,6 +991,38 @@ class platform::sm::rgw::runtime {
   } else {
     exec {'Deprovision Ceph-Rados-Gateway (service-group-member ceph-radosgw)':
       command => 'sm-deprovision service-group-member storage-monitoring-services ceph-radosgw --apply'
+    }
+  }
+}
+
+class platform::sm::ceph::runtime {
+  $ceph_configured = $::platform::ceph::params::service_enabled
+  $system_mode     = $::platform::params::system_mode
+  $system_type     = $::platform::params::system_type
+
+  if $ceph_configured {
+    Class['::platform::ceph::monitor'] -> Class[$name]
+    Class['::platform::ceph'] -> Class[$name]
+
+    if $system_type == 'All-in-one' and 'duplex' in $system_mode {
+      exec { 'Provision Cephmon FS in SM --apply (service-group-member cephmon-fs)':
+        command => 'sm-provision service-group-member controller-services cephmon-fs --apply',
+      }
+      -> exec { 'Provision Cephmon DRBD in SM --apply (service-group-member drbd-cephmon':
+        command => 'sm-provision service-group-member controller-services drbd-cephmon --apply',
+      }
+      -> exec { 'Provision cephmon --apply (service-group-member)':
+        command => 'sm-provision service-group-member controller-services ceph-mon --apply',
+      }
+      -> exec { 'Provision ceph-osd --apply (service-group-member)':
+        command => 'sm-provision service-group-member storage-services ceph-osd --apply',
+      }
+    }
+    exec { 'Provision mgr-restful-plugin --apply (service-group-member mgr-restful-plugin)':
+      command => 'sm-provision service-group-member storage-services mgr-restful-plugin --apply',
+    }
+    -> exec { 'Provision Ceph-Manager --apply (service-group-member ceph-manager)':
+      command => 'sm-provision service-group-member storage-monitoring-services ceph-manager --apply',
     }
   }
 }
