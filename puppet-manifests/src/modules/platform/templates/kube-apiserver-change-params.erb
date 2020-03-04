@@ -1,0 +1,14 @@
+python /usr/share/puppet/modules/platform/files/change_kube_apiserver_params.py \
+--configmap_file <%= @configmap_temp_file %> \
+<%- if @oidc_issuer_url -%>
+--oidc_issuer_url <%= @oidc_issuer_url %> \
+<%- end -%>
+<%- if @oidc_client_id -%>
+--oidc_client_id <%= @oidc_client_id %> \
+<%- end -%>
+<%- if @oidc_username_claim -%>
+--oidc_username_claim <%= @oidc_username_claim %> \
+<%- end -%>
+<%- if @oidc_groups_claim -%>
+--oidc_groups_claim <%= @oidc_groups_claim %> \
+<%- end -%>

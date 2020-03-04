@@ -3,9 +3,13 @@
     check:
       jobs:
         - stx-puppet-linters
+        - openstack-tox-pep8
+        - openstack-tox-pylint
     gate:
       jobs:
         - stx-puppet-linters
+        - openstack-tox-pep8
+        - openstack-tox-pylint
     post:
       jobs:
         - stx-stx-puppet-upload-git-mirror

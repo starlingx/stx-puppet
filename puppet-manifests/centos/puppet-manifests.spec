@@ -60,6 +60,9 @@ Requires: puppet-puppi
 Requires: puppet-vlan
 Requires: puppet-collectd
 
+# python scripts
+Requires: python2-ruamel-yaml
+
 %description
 Platform puppet configuration files and manifests
 

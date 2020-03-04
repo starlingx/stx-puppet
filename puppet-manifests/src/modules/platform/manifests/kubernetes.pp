@@ -16,7 +16,11 @@ class platform::kubernetes::params (
   $k8s_cpu_mgr_policy = 'none',
   $k8s_topology_mgr_policy = 'best-effort',
   $k8s_cni_bin_dir = '/usr/libexec/cni',
-  $join_cmd = undef
+  $join_cmd = undef,
+  $oidc_issuer_url = undef,
+  $oidc_client_id = undef,
+  $oidc_username_claim = undef,
+  $oidc_groups_claim = undef
 ) { }
 
 class platform::kubernetes::cgroup::params (
@@ -614,4 +618,60 @@ class platform::kubernetes::worker::upgrade_kubelet
   -> exec { 'restart kubelet':
       command => '/usr/local/sbin/pmon-restart kubelet'
   }
+}
+
+class platform::kubernetes::master::change_apiserver_parameters
+  inherits ::platform::kubernetes::params {
+
+  $configmap_temp_file = '/tmp/cluster_configmap.yaml'
+  $configview_temp_file = '/tmp/kubeadm_config_view.yaml'
+
+  file { $configmap_temp_file:
+    ensure => present,
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0600',
+  }
+
+  -> file { $configview_temp_file:
+    ensure => present,
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0600',
+  }
+
+  # Kubeadm stores the cluster configuration as a configmap in the cluster.
+  # We will change that configmap to include/remove kube-apiserver parameters.
+  # In order to restart kube-apiserver, we will use the "kubeadm init phase"
+  # command and feed it the output of "kubeadm config view".
+  # This keeps the configmap consistent and keeps kube-apiserver managed by kubeadm.
+
+  -> exec { 'read kubeadm config map':
+    command => "kubectl --kubeconfig=/etc/kubernetes/admin.conf get configmap kubeadm-config -o yaml -n kube-system > ${configmap_temp_file}" # lint:ignore:140chars
+  }
+
+  -> exec { 'update kube-apiserver params':
+    command => template('platform/kube-apiserver-change-params.erb')
+  }
+
+  -> exec { 'patch kubeadm config map':
+    command => "kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch configmap kubeadm-config -p \"$(cat ${configmap_temp_file})\"" # lint:ignore:140chars
+  }
+
+  -> exec { 'get patched configmap':
+    command => "kubeadm config view > ${configview_temp_file}"
+  }
+
+  -> exec { 'update kube-apiserver parameters':
+    command => "kubeadm init phase control-plane apiserver --config ${configview_temp_file}"
+  }
+
+  -> exec { 'remove temp configmap':
+    command => "rm ${configmap_temp_file}",
+  }
+
+  -> exec { 'remove temp configview':
+    command => "rm ${configview_temp_file}",
+  }
+
 }
