@@ -220,18 +220,6 @@ class platform::kubernetes::master::init
       logoutput => true,
     }
 
-    -> exec { 'create kubeadm.yaml':
-      command => 'kubeadm config view > /etc/kubernetes/kubeadm.yaml',
-      creates => '/etc/kubernetes/kubeadm.yaml'
-    }
-
-    -> file { '/etc/kubernetes/kubeadm.yaml':
-      ensure => file,
-      owner  => 'root',
-      group  => 'root',
-      mode   => '0644',
-    }
-
     # Update ownership/permissions for file created by "kubeadm init".
     # We want it readable by sysinv and sysadmin.
     -> file { '/etc/kubernetes/admin.conf':
