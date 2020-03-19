@@ -16,6 +16,7 @@ class platform::kubernetes::params (
   $k8s_cpu_mgr_policy = 'none',
   $k8s_topology_mgr_policy = 'best-effort',
   $k8s_cni_bin_dir = '/usr/libexec/cni',
+  $k8s_vol_plugin_dir = '/usr/libexec/kubernetes/kubelet-plugins/volume/exec/',
   $join_cmd = undef,
   $oidc_issuer_url = undef,
   $oidc_client_id = undef,
@@ -110,6 +111,7 @@ class platform::kubernetes::kubeadm {
   $k8s_reserved_mem = $::platform::kubernetes::params::k8s_reserved_mem
   $k8s_isol_cpus = $::platform::kubernetes::params::k8s_isol_cpus
   $k8s_cni_bin_dir = $::platform::kubernetes::params::k8s_cni_bin_dir
+  $k8s_vol_plugin_dir = $::platform::kubernetes::params::k8s_vol_plugin_dir
   $k8s_cpu_mgr_policy = $::platform::kubernetes::params::k8s_cpu_mgr_policy
   $k8s_topology_mgr_policy = $::platform::kubernetes::params::k8s_topology_mgr_policy
 
