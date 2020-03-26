@@ -258,8 +258,16 @@ class platform::sm
         command => "sm-configure service_instance management-ip management-ip \"ip=${mgmt_ip_param_ip},cidr_netmask=${mgmt_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7,dc=yes\"",
       }
   } else {
+      # For ipv6 the only way to initiate outgoing connections
+      # over the fixed ips is to set preferred_lft to 0 for the
+      # floating ips so that they are not used
+      if $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
+        $preferred_lft = '0'
+      } else {
+        $preferred_lft = 'forever'
+      }
       exec { 'Configure Management IP':
-        command => "sm-configure service_instance management-ip management-ip \"ip=${mgmt_ip_param_ip},cidr_netmask=${mgmt_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7\"",
+        command => "sm-configure service_instance management-ip management-ip \"ip=${mgmt_ip_param_ip},cidr_netmask=${mgmt_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7,preferred_lft=${preferred_lft}\"",
       }
   }
 
@@ -270,9 +278,17 @@ class platform::sm
           "sm-configure service_instance cluster-host-ip cluster-host-ip \"ip=${cluster_host_ip_param_ip},cidr_netmask=${cluster_host_ip_param_mask},nic=${cluster_host_ip_interface},arp_count=7,dc=yes\"",
     }
   } else {
+    # For ipv6 the only way to initiate outgoing connections
+    # over the fixed ips is to set preferred_lft to 0 for the
+    # floating ips so that they are not used
+    if $::platform::network::cluster_host::params::subnet_version == $::platform::params::ipv6 {
+      $preferred_lft_cluster = '0'
+    } else {
+      $preferred_lft_cluster = 'forever'
+    }
     exec { 'Configure Cluster Host IP service instance':
       command =>
-          "sm-configure service_instance cluster-host-ip cluster-host-ip \"ip=${cluster_host_ip_param_ip},cidr_netmask=${cluster_host_ip_param_mask},nic=${cluster_host_ip_interface},arp_count=7\"",
+          "sm-configure service_instance cluster-host-ip cluster-host-ip \"ip=${cluster_host_ip_param_ip},cidr_netmask=${cluster_host_ip_param_mask},nic=${cluster_host_ip_interface},arp_count=7,preferred_lft=${preferred_lft_cluster}\"",
     }
   }
 
@@ -503,7 +519,7 @@ class platform::sm
       }
   } else {
       exec { 'Configure Platform NFS':
-        command => "sm-configure service_instance platform-nfs-ip platform-nfs-ip \"ip=${platform_nfs_ip_param_ip},cidr_netmask=${platform_nfs_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7\"",
+        command => "sm-configure service_instance platform-nfs-ip platform-nfs-ip \"ip=${platform_nfs_ip_param_ip},cidr_netmask=${platform_nfs_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7,preferred_lft=${preferred_lft}\"",
       }
   }
 
