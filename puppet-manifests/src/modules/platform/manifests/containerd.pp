@@ -16,6 +16,12 @@ class platform::containerd::config
   include ::platform::kubernetes::params
   include ::platform::dockerdistribution::registries
 
+  # If containerd is started prior to networking providing a default route, the
+  # containerd cri plugin will fail to load and the status of the cri plugin
+  # will be in 'error'. This will prevent any crictl image pulls from working as
+  # containerd is not automatically restarted when plugins fail to load.
+  Anchor['platform::networking'] -> Class[$name]
+
   # inherit the proxy setting from docker
   $http_proxy = $::platform::docker::params::http_proxy
   $https_proxy = $::platform::docker::params::https_proxy
