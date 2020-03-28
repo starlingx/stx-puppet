@@ -170,25 +170,53 @@ class platform::network::routes (
 }
 
 
-define platform::interfaces::sriov_config(
+define platform::interfaces::sriov_enable (
+  $pf_addr,
+  $num_vfs,
   $vf_addrs,
   $vf_driver = undef
 ) {
-  if $vf_driver != undef {
+  if $num_vfs {
+    exec { "sriov-enable-device: ${title}":
+      command   => template('platform/sriov.enable-device.erb'),
+      logoutput => true,
+    }
+  }
+}
+
+
+define platform::interfaces::sriov_bind (
+  $pf_addr,
+  $num_vfs,
+  $vf_addrs,
+  $vf_driver = undef
+) {
+  if ($vf_driver != undef) and length($vf_addrs) > 0 {
     ensure_resource(kmod::load, $vf_driver)
-    exec { "sriov-vf-bind-device: ${title}":
+    Anchor['platform::networking']
+    -> exec { "sriov-vf-bind-device: ${title}":
       command   => template('platform/sriov.bind-device.erb'),
       logoutput => true,
-      require   => Kmod::Load[$vf_driver],
+      require   => [ Kmod::Load[$vf_driver] ],
     }
   }
 }
 
 
 class platform::interfaces::sriov (
-  $sriov_config = {}
+  $sriov_config = {},
+  $runtime = false
 ) {
-  create_resources('platform::interfaces::sriov_config', $sriov_config, {})
+  if $runtime {
+    create_resources('platform::interfaces::sriov_enable', $sriov_config, {})
+  } else {
+    create_resources('platform::interfaces::sriov_bind', $sriov_config, {})
+  }
+}
+
+
+class platform::interfaces::sriov::runtime {
+  class { 'platform::interfaces::sriov': runtime => true }
 }
 
 
