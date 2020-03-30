@@ -110,15 +110,6 @@ class platform::dcorch::engine
   }
 }
 
-class platform::dcorch::snmp
-  inherits ::platform::dcorch::params {
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
-    class { '::dcorch::snmp':
-      bind_host => $api_host,
-    }
-  }
-}
-
 
 class platform::dcorch::api_proxy
   inherits ::platform::dcorch::params {
