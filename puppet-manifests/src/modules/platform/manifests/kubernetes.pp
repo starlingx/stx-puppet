@@ -21,7 +21,8 @@ class platform::kubernetes::params (
   $oidc_issuer_url = undef,
   $oidc_client_id = undef,
   $oidc_username_claim = undef,
-  $oidc_groups_claim = undef
+  $oidc_groups_claim = undef,
+  $admission_plugins = undef
 ) { }
 
 class platform::kubernetes::cgroup::params (

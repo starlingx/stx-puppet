@@ -20,6 +20,9 @@ python /usr/share/puppet/modules/platform/files/change_kube_apiserver_params.py 
 <%- if @oidc_groups_claim -%>
 --oidc_groups_claim <%= @oidc_groups_claim %> \
 <%- end -%>
+<%- if @admission_plugins -%>
+--admission_plugins <%= @admission_plugins %> \
+<%- end -%>
 
 kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch configmap kubeadm-config -p "$(cat <%= @configmap_temp_file %>)"
 kubeadm config view > <%= @configmap_temp_file %>

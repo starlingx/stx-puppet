@@ -19,6 +19,7 @@ parser.add_argument("--oidc_issuer_url")
 parser.add_argument("--oidc_client_id")
 parser.add_argument("--oidc_username_claim")
 parser.add_argument("--oidc_groups_claim")
+parser.add_argument("--admission_plugins")
 args = parser.parse_args()
 
 if args.configmap_file:
@@ -58,6 +59,14 @@ if args.oidc_groups_claim:
 else:
     if 'oidc-groups-claim' in cluster_config['apiServer']['extraArgs']:
         del cluster_config['apiServer']['extraArgs']['oidc-groups-claim']
+
+if args.admission_plugins:
+    cluster_config['apiServer']['extraArgs']['enable-admission-plugins'] = \
+        args.admission_plugins
+else:
+    plugins = 'enable-admission-plugins'
+    if plugins in cluster_config['apiServer']['extraArgs']:
+        del cluster_config['apiServer']['extraArgs'][plugins]
 
 cluster_config_string = yaml.dump(cluster_config, Dumper=yaml.RoundTripDumper,
                                   default_flow_style=False)
