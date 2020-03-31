@@ -109,8 +109,14 @@ define network_address (
   # loopback interface. These addresses must be assigned using the host scope
   # or assignment is prevented (can't have multiple global scope addresses on
   # the loopback interface).
+
+  # For ipv6 the only way to initiate outgoing connections
+  # over the fixed ips is to set preferred_lft to 0 for the
+  # floating ips so that they are not used
   if $ifname == 'lo' {
     $options = 'scope host'
+  } elsif $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
+    $options = 'preferred_lft 0'
   } else {
     $options = ''
   }
