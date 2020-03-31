@@ -16,7 +16,12 @@ class platform::kubernetes::params (
   $k8s_cpu_mgr_policy = 'none',
   $k8s_topology_mgr_policy = 'best-effort',
   $k8s_cni_bin_dir = '/usr/libexec/cni',
-  $join_cmd = undef
+  $k8s_vol_plugin_dir = '/usr/libexec/kubernetes/kubelet-plugins/volume/exec/',
+  $join_cmd = undef,
+  $oidc_issuer_url = undef,
+  $oidc_client_id = undef,
+  $oidc_username_claim = undef,
+  $oidc_groups_claim = undef
 ) { }
 
 class platform::kubernetes::cgroup::params (
@@ -106,6 +111,7 @@ class platform::kubernetes::kubeadm {
   $k8s_reserved_mem = $::platform::kubernetes::params::k8s_reserved_mem
   $k8s_isol_cpus = $::platform::kubernetes::params::k8s_isol_cpus
   $k8s_cni_bin_dir = $::platform::kubernetes::params::k8s_cni_bin_dir
+  $k8s_vol_plugin_dir = $::platform::kubernetes::params::k8s_vol_plugin_dir
   $k8s_cpu_mgr_policy = $::platform::kubernetes::params::k8s_cpu_mgr_policy
   $k8s_topology_mgr_policy = $::platform::kubernetes::params::k8s_topology_mgr_policy
 
@@ -214,18 +220,6 @@ class platform::kubernetes::master::init
     -> exec { 'configure master node':
       command   => $join_cmd,
       logoutput => true,
-    }
-
-    -> exec { 'create kubeadm.yaml':
-      command => 'kubeadm config view > /etc/kubernetes/kubeadm.yaml',
-      creates => '/etc/kubernetes/kubeadm.yaml'
-    }
-
-    -> file { '/etc/kubernetes/kubeadm.yaml':
-      ensure => file,
-      owner  => 'root',
-      group  => 'root',
-      mode   => '0644',
     }
 
     # Update ownership/permissions for file created by "kubeadm init".
@@ -614,4 +608,16 @@ class platform::kubernetes::worker::upgrade_kubelet
   -> exec { 'restart kubelet':
       command => '/usr/local/sbin/pmon-restart kubelet'
   }
+}
+
+class platform::kubernetes::master::change_apiserver_parameters
+  inherits ::platform::kubernetes::params {
+
+  $configmap_temp_file = '/tmp/cluster_configmap.yaml'
+  $configview_temp_file = '/tmp/kubeadm_config_view.yaml'
+
+  exec { 'update kube-apiserver params':
+    command => template('platform/kube-apiserver-change-params.erb')
+  }
+
 }

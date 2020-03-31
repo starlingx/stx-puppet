@@ -1,0 +1,28 @@
+<%# Kubeadm stores the cluster configuration as a configmap in the cluster. -%>
+<%# We will change that configmap to include/remove kube-apiserver parameters. -%>
+<%# In order to restart kube-apiserver, we will use the "kubeadm init phase" -%>
+<%# command and feed it the output of "kubeadm config view". -%>
+<%# This keeps the configmap consistent and keeps kube-apiserver managed by kubeadm. -%>
+umask 077; touch <%= @configmap_temp_file %>
+umask 077; touch <%= @configview_temp_file %>
+kubectl --kubeconfig=/etc/kubernetes/admin.conf get configmap kubeadm-config -o yaml -n kube-system > <%= @configmap_temp_file %>
+python /usr/share/puppet/modules/platform/files/change_kube_apiserver_params.py \
+--configmap_file <%= @configmap_temp_file %> \
+<%- if @oidc_issuer_url -%>
+--oidc_issuer_url <%= @oidc_issuer_url %> \
+<%- end -%>
+<%- if @oidc_client_id -%>
+--oidc_client_id <%= @oidc_client_id %> \
+<%- end -%>
+<%- if @oidc_username_claim -%>
+--oidc_username_claim <%= @oidc_username_claim %> \
+<%- end -%>
+<%- if @oidc_groups_claim -%>
+--oidc_groups_claim <%= @oidc_groups_claim %> \
+<%- end -%>
+
+kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch configmap kubeadm-config -p "$(cat <%= @configmap_temp_file %>)"
+kubeadm config view > <%= @configmap_temp_file %>
+kubeadm init phase control-plane apiserver --config <%= @configmap_temp_file %>
+rm <%= @configmap_temp_file %>
+rm <%= @configview_temp_file %>
