@@ -91,9 +91,24 @@ class platform::containerd::install
   }
 }
 
-class platform::containerd
+class platform::containerd::controller
 {
   include ::platform::containerd::install
   include ::platform::containerd::config
 }
 
+class platform::containerd::worker
+{
+  if $::personality != 'controller' {
+    include ::platform::containerd::install
+    include ::platform::containerd::config
+  }
+}
+
+class platform::containerd::storage
+{
+  if $::personality != 'controller' {
+    include ::platform::containerd::install
+    include ::platform::containerd::config
+  }
+}
