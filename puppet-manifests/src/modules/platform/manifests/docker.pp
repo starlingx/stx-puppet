@@ -63,10 +63,26 @@ class platform::docker::install
   }
 }
 
-class platform::docker
+class platform::docker::controller
 {
   include ::platform::docker::install
   include ::platform::docker::config
+}
+
+class platform::docker::worker
+{
+  if $::personality != 'controller' {
+    include ::platform::docker::install
+    include ::platform::docker::config
+  }
+}
+
+class platform::docker::storage
+{
+  if $::personality != 'controller' {
+    include ::platform::docker::install
+    include ::platform::docker::config
+  }
 }
 
 class platform::docker::config::bootstrap

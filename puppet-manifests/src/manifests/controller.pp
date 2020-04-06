@@ -40,9 +40,9 @@ include ::platform::postgresql::server
 include ::platform::haproxy::server
 include ::platform::grub
 include ::platform::etcd
-include ::platform::docker
+include ::platform::docker::controller
 include ::platform::dockerdistribution
-include ::platform::containerd
+include ::platform::containerd::controller
 include ::platform::kubernetes::master
 include ::platform::helm
 
