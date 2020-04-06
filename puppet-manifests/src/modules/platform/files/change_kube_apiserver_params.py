@@ -61,8 +61,17 @@ else:
         del cluster_config['apiServer']['extraArgs']['oidc-groups-claim']
 
 if args.admission_plugins:
+    all_plugins = args.admission_plugins
+    # there are some plugins required by the system
+    # if the plugins is specified manually, these ones might
+    # be missed. We will add these automatically so the user
+    # does not need to keep track of them
+    required_plugins = ['NodeRestriction']
+    for plugin in required_plugins:
+        if plugin not in all_plugins:
+            all_plugins = all_plugins + "," + plugin
     cluster_config['apiServer']['extraArgs']['enable-admission-plugins'] = \
-        args.admission_plugins
+        all_plugins
 else:
     plugins = 'enable-admission-plugins'
     if plugins in cluster_config['apiServer']['extraArgs']:
