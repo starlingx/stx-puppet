@@ -69,6 +69,8 @@ class platform::dcorch::firewall
 
 class platform::dcorch::haproxy
   inherits ::platform::dcorch::params {
+  include ::platform::haproxy::params
+
   if $::platform::params::distributed_cloud_role =='systemcontroller' {
     platform::haproxy::proxy { 'dcorch-neutron-api-proxy':
       server_name  => 's-dcorch-neutron-api-proxy',
@@ -99,6 +101,31 @@ class platform::dcorch::haproxy
       server_name  => 's-dcorch-identity-api-proxy',
       public_port  => $identity_api_proxy_port,
       private_port => $identity_api_proxy_port,
+    }
+
+    # Configure rules for https enabled identity api proxy admin endpoint.
+    platform::haproxy::proxy { 'dcorch-identity-api-proxy-admin':
+      https_ep_type     => 'admin',
+      server_name       => 's-dcorch-identity-api-proxy',
+      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_port       => $identity_api_proxy_port + 1,
+      private_port      => $identity_api_proxy_port,
+    }
+    # Configure rules for https enabled sysinv api proxy admin endpoint.
+    platform::haproxy::proxy { 'dcorch-sysinv-api-proxy-admin':
+      https_ep_type     => 'admin',
+      server_name       => 's-dcorch-sysinv-api-proxy',
+      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_port       => $sysinv_api_proxy_port + 1,
+      private_port      => $sysinv_api_proxy_port,
+    }
+    # Configure rules for https enabled patching api proxy admin endpoint.
+    platform::haproxy::proxy { 'dcorch-patch-api-proxy-admin':
+      https_ep_type     => 'admin',
+      server_name       => 's-dcorch-patch-api-proxy',
+      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_port       => $patch_api_proxy_port + 1,
+      private_port      => $patch_api_proxy_port,
     }
   }
 }

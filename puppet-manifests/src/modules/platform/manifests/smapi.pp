@@ -29,6 +29,18 @@ class platform::smapi::haproxy
     public_port  => $port,
     private_port => $port,
   }
+
+  # Configure rules for DC https enabled admin endpoint.
+  if ($::platform::params::distributed_cloud_role == 'systemcontroller' or
+      $::platform::params::distributed_cloud_role == 'subcloud') {
+    platform::haproxy::proxy { 'sm-api-admin':
+      https_ep_type     => 'admin',
+      server_name       => 's-smapi-admin',
+      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_port       => $port + 1,
+      private_port      => $port,
+    }
+  }
 }
 
 class platform::smapi

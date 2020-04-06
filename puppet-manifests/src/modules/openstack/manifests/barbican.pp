@@ -90,11 +90,25 @@ class openstack::barbican::service (
 
 class openstack::barbican::haproxy
   inherits ::openstack::barbican::params {
+  include ::platform::params
+  include ::platform::haproxy::params
 
   platform::haproxy::proxy { 'barbican-restapi':
     server_name  => 's-barbican-restapi',
     public_port  => $api_port,
     private_port => $api_port,
+  }
+
+  # Configure rules for DC https enabled admin endpoint.
+  if ($::platform::params::distributed_cloud_role == 'systemcontroller' or
+      $::platform::params::distributed_cloud_role == 'subcloud') {
+    platform::haproxy::proxy { 'barbican-restapi-admin':
+      https_ep_type     => 'admin',
+      server_name       => 's-barbican-restapi',
+      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_port       => $api_port + 1,
+      private_port      => $api_port,
+    }
   }
 }
 

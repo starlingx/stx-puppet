@@ -41,6 +41,26 @@ class platform::dcdbsync::api
       }
     }
   }
+
+  include ::platform::dcdbsync::haproxy
+}
+
+class platform::dcdbsync::haproxy
+  inherits ::platform::dcdbsync::params {
+  include ::platform::params
+  include ::platform::haproxy::params
+
+  # Configure rules for https enabled admin endpoint.
+  if ($::platform::params::distributed_cloud_role == 'systemcontroller' or
+      $::platform::params::distributed_cloud_role == 'subcloud') {
+    platform::haproxy::proxy { 'dcdbsync-restapi-admin':
+      https_ep_type     => 'admin',
+      server_name       => 's-dcdbsync',
+      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_port       => $api_port + 1,
+      private_port      => $api_port,
+    }
+  }
 }
 
 class platform::dcdbsync::stx_openstack::runtime
