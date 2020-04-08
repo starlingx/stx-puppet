@@ -833,12 +833,6 @@ class platform::sm
     -> exec { 'Provision DCOrch-Engine in SM (service dcorch-engine)':
       command => 'sm-provision service dcorch-engine',
     }
-    -> exec { 'Provision DCOrch-Snmp (service-group-member dcorch-snmp)':
-        command => 'sm-provision service-group-member distributed-cloud-services dcorch-snmp',
-    }
-    -> exec { 'Provision DCOrch-Snmp in SM (service dcorch-snmp)':
-      command => 'sm-provision service dcorch-snmp',
-    }
     -> exec { 'Provision DCOrch-Identity-Api-Proxy (service-group-member dcorch-identity-api-proxy)':
       command => 'sm-provision service-group-member distributed-cloud-services dcorch-identity-api-proxy',
     }
@@ -877,9 +871,6 @@ class platform::sm
     }
     -> exec { 'Configure OpenStack - DCOrch-Engine':
       command => "sm-configure service_instance dcorch-engine dcorch-engine \"\"",
-    }
-    -> exec { 'Configure OpenStack - DCOrch-Snmp':
-      command => "sm-configure service_instance dcorch-snmp dcorch-snmp \"\"",
     }
     -> exec { 'Configure OpenStack - DCOrch-identity-api-proxy':
       command => "sm-configure service_instance dcorch-identity-api-proxy dcorch-identity-api-proxy \"\"",
