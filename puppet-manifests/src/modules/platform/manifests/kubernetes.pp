@@ -539,8 +539,9 @@ class platform::kubernetes::upgrade_first_control_plane
 
   include ::platform::params
 
+  # The --allow-*-upgrades options allow us to upgrade to any k8s release if necessary
   exec { 'upgrade first control plane':
-    command   => "kubeadm upgrade apply ${version} -y",
+    command   => "kubeadm upgrade apply ${version} --allow-experimental-upgrades --allow-release-candidate-upgrades -y",
     logoutput => true,
   }
 
