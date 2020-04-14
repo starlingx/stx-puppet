@@ -60,7 +60,7 @@
 #
 # [*bind_port*]
 #   (optional) The dcorch dbsync api port
-#   Defaults to 8220
+#   Defaults to 8229
 #
 # [*package_ensure*]
 #   (optional) The state of the package
@@ -93,7 +93,7 @@ class dcdbsync::openstack_api (
   $auth_type                  = 'password',
   $package_ensure             = 'latest',
   $bind_host                  = '0.0.0.0',
-  $bind_port                  = 8220,
+  $bind_port                  = 8229,
   $enabled                    = false
 ) {
 

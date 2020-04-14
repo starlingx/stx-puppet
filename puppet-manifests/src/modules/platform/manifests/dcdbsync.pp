@@ -1,6 +1,6 @@
 class platform::dcdbsync::params (
   $api_port = 8219,
-  $api_openstack_port = 8220,
+  $api_openstack_port = 8229,
   $region_name = undef,
   $service_create = false,
   $service_enabled = false,
