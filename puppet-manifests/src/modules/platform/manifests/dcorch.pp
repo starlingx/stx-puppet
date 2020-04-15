@@ -40,6 +40,17 @@ class platform::dcorch
       proxy_bind_host   => $api_host,
       proxy_remote_host => $api_host,
     }
+
+    # Purge dcorch database 20 minutes in the first hour daily
+    cron { 'dcorch-cleaner':
+      ensure      => 'present',
+      command     => '/usr/bin/clean-dcorch',
+      environment => 'PATH=/bin:/usr/bin:/usr/sbin',
+      minute      => '20',
+      hour        => '*/24',
+      user        => 'root',
+    }
+
   }
 }
 
