@@ -243,6 +243,7 @@ class platform::network::apply {
   Network_config <| |>
   -> Exec['apply-network-config']
   -> Network_address <| |>
+  -> Exec['wait-for-tentative']
   -> Anchor['platform::networking']
 
   # Adding Network_route dependency separately, in case it's empty,
@@ -259,6 +260,12 @@ class platform::network::apply {
 
   exec {'apply-network-config':
     command => 'apply_network_config.sh',
+  }
+  # Wait for network interface to leave tentative state during ipv6 DAD
+  exec {'wait-for-tentative':
+    command   => '[ $(ip -6 addr sh | grep -c inet6.*tentative) -eq 0 ]',
+    tries     => 10,
+    try_sleep => 1,
   }
 }
 
