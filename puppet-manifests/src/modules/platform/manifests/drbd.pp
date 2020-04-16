@@ -101,7 +101,20 @@ define platform::drbd::filesystem (
   }
 }
 
-
+# The device names (/dev/drbdX) for all drbd devices added in this manifest
+# should be kept in sync with the ones present in the restore ansible playbook
+# present in the ansible-playbooks repo at:
+# playbookconfig/src/playbooks/roles/restore-platform/restore-more-data/tasks/main.yml
+# (ansible task name is "Resize DRBD filesystems").
+# This is done because the device names are only defined here and never reach
+# sysinv, so there is no way to get this info from another place.
+# If adding another drbd-synced resource, check backup&restore works after resizing
+# the resource.
+#
+# NOTE: Only devices present in the "system controllerfs-list" command output
+#       need to be kept in sync. Filesystem that we don't allow resizing for
+#       (for example rabbitmq) or those that don't use the controllerfs
+#       command (for example cephmon) don't need to be kept in sync.
 class platform::drbd::pgsql::params (
   $device = '/dev/drbd0',
   $lv_name = 'pgsql-lv',
