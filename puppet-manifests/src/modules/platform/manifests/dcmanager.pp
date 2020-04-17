@@ -7,6 +7,7 @@ class platform::dcmanager::params (
   $service_name = 'dcmanager',
   $default_endpoint_type = 'internalURL',
   $service_create = false,
+  $deploy_base_dir = '/opt/platform/deploy',
   $iso_base_dir_source = '/opt/platform/iso',
   $iso_base_dir_target = '/www/pages/iso',
 ) {
@@ -38,6 +39,10 @@ class platform::dcmanager
       mode   => '0755',
     }
     file {$iso_base_dir_target:
+      ensure => directory,
+      mode   => '0755',
+    }
+    file {$deploy_base_dir:
       ensure => directory,
       mode   => '0755',
     }
@@ -84,6 +89,7 @@ class platform::dcmanager::fs::runtime {
     include ::platform::dcmanager::params
     $iso_base_dir_source = $::platform::dcmanager::params::iso_base_dir_source
     $iso_base_dir_target = $::platform::dcmanager::params::iso_base_dir_target
+    $deploy_base_dir = $::platform::dcmanager::params::deploy_base_dir
 
     file {$iso_base_dir_source:
       ensure => directory,
@@ -91,6 +97,11 @@ class platform::dcmanager::fs::runtime {
     }
 
     file {$iso_base_dir_target:
+      ensure => directory,
+      mode   => '0755',
+    }
+
+    file {$deploy_base_dir:
       ensure => directory,
       mode   => '0755',
     }
