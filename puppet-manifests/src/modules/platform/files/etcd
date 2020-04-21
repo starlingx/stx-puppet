@@ -19,6 +19,7 @@
 DESC="ETCD highly-available key value database"
 SERVICE="etcd.service"
 PIDFILE="/var/run/etcd.pid"
+UPGRADE_SWACT_FILE="/etc/platform/.upgrade_swact_controller_1"
 
 
 status()
@@ -46,16 +47,28 @@ start()
         fi
     fi
 
-    echo "Starting $SERVICE..."
+    RETVAL=0
 
-    systemctl start $SERVICE
+    if [ -e $UPGRADE_SWACT_FILE ]; then
+        echo "Perform upgrade_swact_migration migrate etcd ..."
+        /usr/bin/upgrade_swact_migration.py migrate_etcd
+        if [ $? -ne 0 ]
+        then
+            RETVAL=1
+        fi
+    fi
 
-    if [ $? -eq 0 ]; then
-        echo "Started $SERVICE successfully"
-        RETVAL=0
-    else
-        echo "$SERVICE failed!"
-        RETVAL=1
+    if [ $RETVAL -eq 0 ]; then
+        echo "Starting $SERVICE..."
+
+        systemctl start $SERVICE
+
+        if [ $? -eq 0 ]; then
+            echo "Started $SERVICE successfully"
+        else
+            echo "$SERVICE failed!"
+            RETVAL=1
+        fi
     fi
 
 }
@@ -98,6 +111,3 @@ case "$1" in
 esac
 
 exit $RETVAL
-
-
-
