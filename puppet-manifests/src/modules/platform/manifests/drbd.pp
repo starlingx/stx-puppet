@@ -223,19 +223,19 @@ class platform::drbd::extension (
   }
 }
 
-class platform::drbd::patch_vault::params (
+class platform::drbd::dc_vault::params (
   $service_enabled = false,
   $device = '/dev/drbd6',
-  $lv_name = 'patch-vault-lv',
-  $lv_size = '8',
-  $mountpoint = '/opt/patch-vault',
+  $lv_name = 'dc-vault-lv',
+  $lv_size = '15',
+  $mountpoint = '/opt/dc-vault',
   $port = '7794',
-  $resource_name = 'drbd-patch-vault',
+  $resource_name = 'drbd-dc-vault',
   $vg_name = 'cgts-vg',
 ) {}
 
-class platform::drbd::patch_vault (
-) inherits ::platform::drbd::patch_vault::params {
+class platform::drbd::dc_vault (
+) inherits ::platform::drbd::dc_vault::params {
 
   if str2bool($::is_standalone_controller) {
     $drbd_primary = true
@@ -460,7 +460,7 @@ class platform::drbd(
   include ::platform::drbd::rabbit
   include ::platform::drbd::platform
   include ::platform::drbd::extension
-  include ::platform::drbd::patch_vault
+  include ::platform::drbd::dc_vault
   include ::platform::drbd::etcd
   include ::platform::drbd::dockerdistribution
   include ::platform::drbd::cephmon
@@ -530,10 +530,10 @@ class platform::drbd::extension::runtime {
 }
 
 
-class platform::drbd::patch_vault::runtime {
+class platform::drbd::dc_vault::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
-  include ::platform::drbd::patch_vault
+  include ::platform::drbd::dc_vault
 }
 
 class platform::drbd::etcd::runtime {
