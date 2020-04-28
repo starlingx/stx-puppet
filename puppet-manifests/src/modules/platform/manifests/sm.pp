@@ -67,11 +67,11 @@ class platform::sm
   $extension_fs_device              = $::platform::drbd::extension::params::device
   $extension_fs_directory           = $::platform::drbd::extension::params::mountpoint
 
-  include ::platform::drbd::patch_vault::params
-  $drbd_patch_enabled           = $::platform::drbd::patch_vault::params::service_enabled
-  $patch_drbd_resource          = $::platform::drbd::patch_vault::params::resource_name
-  $patch_fs_device              = $::platform::drbd::patch_vault::params::device
-  $patch_fs_directory           = $::platform::drbd::patch_vault::params::mountpoint
+  include ::platform::drbd::dc_vault::params
+  $drbd_patch_enabled           = $::platform::drbd::dc_vault::params::service_enabled
+  $patch_drbd_resource          = $::platform::drbd::dc_vault::params::resource_name
+  $patch_fs_device              = $::platform::drbd::dc_vault::params::device
+  $patch_fs_directory           = $::platform::drbd::dc_vault::params::mountpoint
 
   include ::platform::drbd::etcd::params
   $etcd_drbd_resource           = $::platform::drbd::etcd::params::resource_name
@@ -385,12 +385,12 @@ class platform::sm
   }
 
   if $drbd_patch_enabled {
-    exec { 'Configure Patch-vault DRBD':
-      command => "sm-configure service_instance drbd-patch-vault drbd-patch-vault:${hostunit} \"drbd_resource=${patch_drbd_resource}\"",
+    exec { 'Configure DC-vault DRBD':
+      command => "sm-configure service_instance drbd-dc-vault drbd-dc-vault:${hostunit} \"drbd_resource=${patch_drbd_resource}\"",
     }
 
-    exec { 'Configure Patch-vault FileSystem':
-      command => "sm-configure service_instance patch-vault-fs patch-vault-fs \"device=${patch_fs_device},directory=${patch_fs_directory},options=noatime,nodiratime,fstype=ext4,check_level=20\"",
+    exec { 'Configure DC-vault FileSystem':
+      command => "sm-configure service_instance dc-vault-fs dc-vault-fs \"device=${patch_fs_device},directory=${patch_fs_directory},options=noatime,nodiratime,fstype=ext4,check_level=20\"",
     }
   }
 
@@ -618,17 +618,17 @@ class platform::sm
   }
 
   if $drbd_patch_enabled {
-    exec { 'Provision patch-vault-fs (service-group-member)':
-      command => 'sm-provision service-group-member controller-services  patch-vault-fs',
+    exec { 'Provision dc-vault-fs (service-group-member)':
+      command => 'sm-provision service-group-member controller-services  dc-vault-fs',
     }
-    -> exec { 'Provision patch-vault-fs (service)':
-      command => 'sm-provision service patch-vault-fs',
+    -> exec { 'Provision dc-vault-fs (service)':
+      command => 'sm-provision service dc-vault-fs',
     }
-    -> exec { 'Provision drbd-patch-vault (service-group-member)':
-      command => 'sm-provision service-group-member controller-services drbd-patch-vault',
+    -> exec { 'Provision drbd-dc-vault (service-group-member)':
+      command => 'sm-provision service-group-member controller-services drbd-dc-vault',
     }
-    -> exec { 'Provision drbd-patch-vault (service)':
-      command => 'sm-provision service drbd-patch-vault',
+    -> exec { 'Provision drbd-dc-vault (service)':
+      command => 'sm-provision service drbd-dc-vault',
     }
   }
 
