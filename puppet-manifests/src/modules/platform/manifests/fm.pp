@@ -38,6 +38,7 @@ class platform::fm
 class platform::fm::haproxy
   inherits ::platform::fm::params {
 
+  include ::platform::params
   include ::platform::haproxy::params
 
   platform::haproxy::proxy { 'fm-api-internal':
@@ -53,6 +54,18 @@ class platform::fm::haproxy
     server_name  => 's-fm-api-public',
     public_port  => $api_port,
     private_port => $api_port,
+  }
+
+  # Configure rules for DC https enabled admin endpoint.
+  if ($::platform::params::distributed_cloud_role == 'systemcontroller' or
+      $::platform::params::distributed_cloud_role == 'subcloud') {
+    platform::haproxy::proxy { 'fm-api-admin':
+      https_ep_type     => 'admin',
+      server_name       => 's-fm-api-admin',
+      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_port       => $api_port + 1,
+      private_port      => $api_port,
+    }
   }
 }
 
