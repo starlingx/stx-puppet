@@ -41,6 +41,10 @@ define platform::filesystem (
       options => 'defaults',
       fstype  => $fs_type,
     }
+    -> file { $mountpoint:
+      ensure => $ensure,
+      force  => true,
+    }
     -> exec { "wipe start of device ${device}":
       command => "dd if=/dev/zero of=${device} bs=512 count=34",
       onlyif  => "blkid ${device}",
@@ -94,6 +98,9 @@ define platform::filesystem (
       unless  => "mount | awk '{print \$3}' | grep -Fxq ${mountpoint}",
       command => "mount ${mountpoint}",
       path    => '/usr/bin'
+    }
+    -> exec {"Change ${mountpoint} dir permissions":
+      command => "chmod ${mode} ${mountpoint}",
     }
   }
 }
@@ -161,7 +168,8 @@ class platform::filesystem::conversion::params (
   $mountpoint = '/opt/conversion',
   $devmapper = '/dev/mapper/cgts--vg-conversion--lv',
   $fs_type = 'ext4',
-  $fs_options = ' '
+  $fs_options = ' ',
+  $mode = '0750'
 ) { }
 
 class platform::filesystem::scratch::params (
@@ -190,6 +198,7 @@ class platform::filesystem::conversion
 
   if $conversion_enabled {
     $ensure = present
+    $mode = '0777'
   }
   platform::filesystem { $lv_name:
     ensure     => $ensure,
@@ -197,7 +206,8 @@ class platform::filesystem::conversion
     lv_size    => $lv_size,
     mountpoint => $mountpoint,
     fs_type    => $fs_type,
-    fs_options => $fs_options
+    fs_options => $fs_options,
+    mode       => $mode
   }
 }
 
