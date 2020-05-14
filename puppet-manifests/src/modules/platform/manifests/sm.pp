@@ -821,6 +821,12 @@ class platform::sm
     -> exec { 'Provision DCManager-Manager in SM (service dcmanager-manager)':
       command => 'sm-provision service dcmanager-manager',
     }
+    -> exec { 'Provision DCManager-Audit (service-group-member dcmanager-audit)':
+      command => 'sm-provision service-group-member distributed-cloud-services dcmanager-audit',
+    }
+    -> exec { 'Provision DCManager-Audit in SM (service dcmanager-audit)':
+      command => 'sm-provision service dcmanager-audit',
+    }
     -> exec { 'Provision DCManager-RestApi (service-group-member dcmanager-api)':
       command => 'sm-provision service-group-member distributed-cloud-services dcmanager-api',
     }
@@ -865,6 +871,9 @@ class platform::sm
     }
     -> exec { 'Configure Platform - DCManager-Manager':
       command => "sm-configure service_instance dcmanager-manager dcmanager-manager \"\"",
+    }
+    -> exec { 'Configure Platform - DCManager-Audit':
+      command => "sm-configure service_instance dcmanager-audit dcmanager-audit \"\"",
     }
     -> exec { 'Configure OpenStack - DCManager-API':
       command => "sm-configure service_instance dcmanager-api dcmanager-api \"\"",
