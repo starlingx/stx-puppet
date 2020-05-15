@@ -171,6 +171,24 @@ define delete_endpoints (
   }
 }
 
+define openstack::keystone::user::option (
+  $admin_username,
+  $admin_password,
+  $auth_url,
+  $username,
+  $option,
+  String $option_value,
+) {
+  exec { "Set user ${username} option ${option} to ${option_value}":
+    command   => @("EOC"/L),
+      /usr/local/bin/set_keystone_user_option.sh \
+      ${admin_username} ${admin_password} ${auth_url} ${username} ${option} ${option_value}
+      | EOC
+    logoutput => true,
+    provider  => shell,
+  }
+}
+
 class openstack::keystone::api
   inherits ::openstack::keystone::params {
 
@@ -207,6 +225,7 @@ class openstack::keystone::bootstrap(
   include ::platform::params
   include ::platform::amqp::params
   include ::platform::drbd::platform::params
+  include ::platform::client::params
 
   $keystone_key_repo_path = "${::platform::drbd::platform::params::mountpoint}/keystone"
   $eng_workers = $::platform::params::eng_workers
@@ -260,7 +279,6 @@ class openstack::keystone::bootstrap(
       ensure => present,
     }
 
-
     # disabling the admin token per openstack recommendation
     include ::keystone::disable_admin_token_auth
 
@@ -281,6 +299,18 @@ class openstack::keystone::bootstrap(
         command => "psql -d keystone -c \"update public.project set id='${dc_services_project_id}' where name='services'\"",
         user    => 'postgres',
       }
+    }
+
+    # set admin ignore_lockout_failure_attempts option to true to exempt
+    # admin user from auth fail lockout.
+    Keystone::Resource::Service_identity <||>
+    -> openstack::keystone::user::option { 'Set user option':
+      admin_username => $::platform::client::params::admin_username,
+      admin_password => $::platform::client::params::admin_password,
+      auth_url       => $::platform::client::params::identity_auth_url,
+      username       => $::platform::client::params::admin_username,
+      option         => 'ignore_lockout_failure_attempts',
+      option_value   => bool2str(true),
     }
   }
 }
