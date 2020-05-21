@@ -26,10 +26,10 @@ oom_score = 0
   [plugins.cgroups]
     no_prometheus = false
   [plugins.cri]
-    stream_server_address = ""
+    stream_server_address = "<%= @stream_server_address %>"
     stream_server_port = "0"
     enable_selinux = false
-    sandbox_image = "registry.local:9001/k8s.gcr.io/pause:3.1"
+    sandbox_image = "registry.local:9001/k8s.gcr.io/pause:3.2"
     stats_collect_period = 10
     systemd_cgroup = false
     enable_tls_streaming = false

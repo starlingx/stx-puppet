@@ -20,8 +20,6 @@ class dcorch::params {
     $api_service           = 'dcorch-api'
     $engine_package        = 'distributedcloud-dcorch'
     $engine_service        = 'dcorch-engine'
-    $snmp_package          = 'distributedcloud-dcorch'
-    $snmp_service          = 'dcorch-snmp'
     $api_proxy_package      = 'distributedcloud-dcorch'
     $api_proxy_service      = 'dcorch-api-proxy'
 
@@ -35,8 +33,6 @@ class dcorch::params {
     $api_service           = 'dcorch-api'
     $engine_package        = false
     $engine_service        = 'dcorch-engine'
-    $snmp_package          = false
-    $snmp_service          = 'dcorch-snmp'
     $api_proxy_package      = false
     $api_proxy_service      = 'dcorch-api-proxy'
 
@@ -48,8 +44,6 @@ class dcorch::params {
     $client_package        = 'distributedcloud-client-dcorchclient'
     $api_package           = false
     $api_service           = 'dcorch-api'
-    $snmp_package          = false
-    $snmp_service          = 'dcorch-snmp'
     $engine_package        = false
     $engine_service        = 'dcorch-engine'
     $api_proxy_package      = false

@@ -40,6 +40,17 @@ class platform::dcorch
       proxy_bind_host   => $api_host,
       proxy_remote_host => $api_host,
     }
+
+    # Purge dcorch database 20 minutes in the first hour daily
+    cron { 'dcorch-cleaner':
+      ensure      => 'present',
+      command     => '/usr/bin/clean-dcorch',
+      environment => 'PATH=/bin:/usr/bin:/usr/sbin',
+      minute      => '20',
+      hour        => '*/24',
+      user        => 'root',
+    }
+
   }
 }
 
@@ -69,6 +80,8 @@ class platform::dcorch::firewall
 
 class platform::dcorch::haproxy
   inherits ::platform::dcorch::params {
+  include ::platform::haproxy::params
+
   if $::platform::params::distributed_cloud_role =='systemcontroller' {
     platform::haproxy::proxy { 'dcorch-neutron-api-proxy':
       server_name  => 's-dcorch-neutron-api-proxy',
@@ -100,6 +113,31 @@ class platform::dcorch::haproxy
       public_port  => $identity_api_proxy_port,
       private_port => $identity_api_proxy_port,
     }
+
+    # Configure rules for https enabled identity api proxy admin endpoint.
+    platform::haproxy::proxy { 'dcorch-identity-api-proxy-admin':
+      https_ep_type     => 'admin',
+      server_name       => 's-dcorch-identity-api-proxy',
+      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_port       => $identity_api_proxy_port + 1,
+      private_port      => $identity_api_proxy_port,
+    }
+    # Configure rules for https enabled sysinv api proxy admin endpoint.
+    platform::haproxy::proxy { 'dcorch-sysinv-api-proxy-admin':
+      https_ep_type     => 'admin',
+      server_name       => 's-dcorch-sysinv-api-proxy',
+      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_port       => $sysinv_api_proxy_port + 1,
+      private_port      => $sysinv_api_proxy_port,
+    }
+    # Configure rules for https enabled patching api proxy admin endpoint.
+    platform::haproxy::proxy { 'dcorch-patch-api-proxy-admin':
+      https_ep_type     => 'admin',
+      server_name       => 's-dcorch-patch-api-proxy',
+      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_port       => $patch_api_proxy_port + 1,
+      private_port      => $patch_api_proxy_port,
+    }
   }
 }
 
@@ -107,15 +145,6 @@ class platform::dcorch::engine
   inherits ::platform::dcorch::params {
   if $::platform::params::distributed_cloud_role =='systemcontroller' {
     include ::dcorch::engine
-  }
-}
-
-class platform::dcorch::snmp
-  inherits ::platform::dcorch::params {
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
-    class { '::dcorch::snmp':
-      bind_host => $api_host,
-    }
   }
 }
 

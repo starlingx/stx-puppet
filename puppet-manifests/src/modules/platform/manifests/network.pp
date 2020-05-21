@@ -109,8 +109,14 @@ define network_address (
   # loopback interface. These addresses must be assigned using the host scope
   # or assignment is prevented (can't have multiple global scope addresses on
   # the loopback interface).
+
+  # For ipv6 the only way to initiate outgoing connections
+  # over the fixed ips is to set preferred_lft to 0 for the
+  # floating ips so that they are not used
   if $ifname == 'lo' {
     $options = 'scope host'
+  } elsif $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
+    $options = 'preferred_lft 0'
   } else {
     $options = ''
   }
@@ -237,6 +243,7 @@ class platform::network::apply {
   Network_config <| |>
   -> Exec['apply-network-config']
   -> Network_address <| |>
+  -> Exec['wait-for-tentative']
   -> Anchor['platform::networking']
 
   # Adding Network_route dependency separately, in case it's empty,
@@ -253,6 +260,12 @@ class platform::network::apply {
 
   exec {'apply-network-config':
     command => 'apply_network_config.sh',
+  }
+  # Wait for network interface to leave tentative state during ipv6 DAD
+  exec {'wait-for-tentative':
+    command   => '[ $(ip -6 addr sh | grep -c inet6.*tentative) -eq 0 ]',
+    tries     => 10,
+    try_sleep => 1,
   }
 }
 

@@ -67,11 +67,11 @@ class platform::sm
   $extension_fs_device              = $::platform::drbd::extension::params::device
   $extension_fs_directory           = $::platform::drbd::extension::params::mountpoint
 
-  include ::platform::drbd::patch_vault::params
-  $drbd_patch_enabled           = $::platform::drbd::patch_vault::params::service_enabled
-  $patch_drbd_resource          = $::platform::drbd::patch_vault::params::resource_name
-  $patch_fs_device              = $::platform::drbd::patch_vault::params::device
-  $patch_fs_directory           = $::platform::drbd::patch_vault::params::mountpoint
+  include ::platform::drbd::dc_vault::params
+  $drbd_patch_enabled           = $::platform::drbd::dc_vault::params::service_enabled
+  $patch_drbd_resource          = $::platform::drbd::dc_vault::params::resource_name
+  $patch_fs_device              = $::platform::drbd::dc_vault::params::device
+  $patch_fs_directory           = $::platform::drbd::dc_vault::params::mountpoint
 
   include ::platform::drbd::etcd::params
   $etcd_drbd_resource           = $::platform::drbd::etcd::params::resource_name
@@ -258,8 +258,16 @@ class platform::sm
         command => "sm-configure service_instance management-ip management-ip \"ip=${mgmt_ip_param_ip},cidr_netmask=${mgmt_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7,dc=yes\"",
       }
   } else {
+      # For ipv6 the only way to initiate outgoing connections
+      # over the fixed ips is to set preferred_lft to 0 for the
+      # floating ips so that they are not used
+      if $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
+        $preferred_lft = '0'
+      } else {
+        $preferred_lft = 'forever'
+      }
       exec { 'Configure Management IP':
-        command => "sm-configure service_instance management-ip management-ip \"ip=${mgmt_ip_param_ip},cidr_netmask=${mgmt_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7\"",
+        command => "sm-configure service_instance management-ip management-ip \"ip=${mgmt_ip_param_ip},cidr_netmask=${mgmt_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7,preferred_lft=${preferred_lft}\"",
       }
   }
 
@@ -270,9 +278,17 @@ class platform::sm
           "sm-configure service_instance cluster-host-ip cluster-host-ip \"ip=${cluster_host_ip_param_ip},cidr_netmask=${cluster_host_ip_param_mask},nic=${cluster_host_ip_interface},arp_count=7,dc=yes\"",
     }
   } else {
+    # For ipv6 the only way to initiate outgoing connections
+    # over the fixed ips is to set preferred_lft to 0 for the
+    # floating ips so that they are not used
+    if $::platform::network::cluster_host::params::subnet_version == $::platform::params::ipv6 {
+      $preferred_lft_cluster = '0'
+    } else {
+      $preferred_lft_cluster = 'forever'
+    }
     exec { 'Configure Cluster Host IP service instance':
       command =>
-          "sm-configure service_instance cluster-host-ip cluster-host-ip \"ip=${cluster_host_ip_param_ip},cidr_netmask=${cluster_host_ip_param_mask},nic=${cluster_host_ip_interface},arp_count=7\"",
+          "sm-configure service_instance cluster-host-ip cluster-host-ip \"ip=${cluster_host_ip_param_ip},cidr_netmask=${cluster_host_ip_param_mask},nic=${cluster_host_ip_interface},arp_count=7,preferred_lft=${preferred_lft_cluster}\"",
     }
   }
 
@@ -369,12 +385,12 @@ class platform::sm
   }
 
   if $drbd_patch_enabled {
-    exec { 'Configure Patch-vault DRBD':
-      command => "sm-configure service_instance drbd-patch-vault drbd-patch-vault:${hostunit} \"drbd_resource=${patch_drbd_resource}\"",
+    exec { 'Configure DC-vault DRBD':
+      command => "sm-configure service_instance drbd-dc-vault drbd-dc-vault:${hostunit} \"drbd_resource=${patch_drbd_resource}\"",
     }
 
-    exec { 'Configure Patch-vault FileSystem':
-      command => "sm-configure service_instance patch-vault-fs patch-vault-fs \"device=${patch_fs_device},directory=${patch_fs_directory},options=noatime,nodiratime,fstype=ext4,check_level=20\"",
+    exec { 'Configure DC-vault FileSystem':
+      command => "sm-configure service_instance dc-vault-fs dc-vault-fs \"device=${patch_fs_device},directory=${patch_fs_directory},options=noatime,nodiratime,fstype=ext4,check_level=20\"",
     }
   }
 
@@ -503,7 +519,7 @@ class platform::sm
       }
   } else {
       exec { 'Configure Platform NFS':
-        command => "sm-configure service_instance platform-nfs-ip platform-nfs-ip \"ip=${platform_nfs_ip_param_ip},cidr_netmask=${platform_nfs_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7\"",
+        command => "sm-configure service_instance platform-nfs-ip platform-nfs-ip \"ip=${platform_nfs_ip_param_ip},cidr_netmask=${platform_nfs_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7,preferred_lft=${preferred_lft}\"",
       }
   }
 
@@ -602,17 +618,17 @@ class platform::sm
   }
 
   if $drbd_patch_enabled {
-    exec { 'Provision patch-vault-fs (service-group-member)':
-      command => 'sm-provision service-group-member controller-services  patch-vault-fs',
+    exec { 'Provision dc-vault-fs (service-group-member)':
+      command => 'sm-provision service-group-member controller-services  dc-vault-fs',
     }
-    -> exec { 'Provision patch-vault-fs (service)':
-      command => 'sm-provision service patch-vault-fs',
+    -> exec { 'Provision dc-vault-fs (service)':
+      command => 'sm-provision service dc-vault-fs',
     }
-    -> exec { 'Provision drbd-patch-vault (service-group-member)':
-      command => 'sm-provision service-group-member controller-services drbd-patch-vault',
+    -> exec { 'Provision drbd-dc-vault (service-group-member)':
+      command => 'sm-provision service-group-member controller-services drbd-dc-vault',
     }
-    -> exec { 'Provision drbd-patch-vault (service)':
-      command => 'sm-provision service drbd-patch-vault',
+    -> exec { 'Provision drbd-dc-vault (service)':
+      command => 'sm-provision service drbd-dc-vault',
     }
   }
 
@@ -805,6 +821,12 @@ class platform::sm
     -> exec { 'Provision DCManager-Manager in SM (service dcmanager-manager)':
       command => 'sm-provision service dcmanager-manager',
     }
+    -> exec { 'Provision DCManager-Audit (service-group-member dcmanager-audit)':
+      command => 'sm-provision service-group-member distributed-cloud-services dcmanager-audit',
+    }
+    -> exec { 'Provision DCManager-Audit in SM (service dcmanager-audit)':
+      command => 'sm-provision service dcmanager-audit',
+    }
     -> exec { 'Provision DCManager-RestApi (service-group-member dcmanager-api)':
       command => 'sm-provision service-group-member distributed-cloud-services dcmanager-api',
     }
@@ -816,12 +838,6 @@ class platform::sm
     }
     -> exec { 'Provision DCOrch-Engine in SM (service dcorch-engine)':
       command => 'sm-provision service dcorch-engine',
-    }
-    -> exec { 'Provision DCOrch-Snmp (service-group-member dcorch-snmp)':
-        command => 'sm-provision service-group-member distributed-cloud-services dcorch-snmp',
-    }
-    -> exec { 'Provision DCOrch-Snmp in SM (service dcorch-snmp)':
-      command => 'sm-provision service dcorch-snmp',
     }
     -> exec { 'Provision DCOrch-Identity-Api-Proxy (service-group-member dcorch-identity-api-proxy)':
       command => 'sm-provision service-group-member distributed-cloud-services dcorch-identity-api-proxy',
@@ -856,14 +872,14 @@ class platform::sm
     -> exec { 'Configure Platform - DCManager-Manager':
       command => "sm-configure service_instance dcmanager-manager dcmanager-manager \"\"",
     }
+    -> exec { 'Configure Platform - DCManager-Audit':
+      command => "sm-configure service_instance dcmanager-audit dcmanager-audit \"\"",
+    }
     -> exec { 'Configure OpenStack - DCManager-API':
       command => "sm-configure service_instance dcmanager-api dcmanager-api \"\"",
     }
     -> exec { 'Configure OpenStack - DCOrch-Engine':
       command => "sm-configure service_instance dcorch-engine dcorch-engine \"\"",
-    }
-    -> exec { 'Configure OpenStack - DCOrch-Snmp':
-      command => "sm-configure service_instance dcorch-snmp dcorch-snmp \"\"",
     }
     -> exec { 'Configure OpenStack - DCOrch-identity-api-proxy':
       command => "sm-configure service_instance dcorch-identity-api-proxy dcorch-identity-api-proxy \"\"",

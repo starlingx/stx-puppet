@@ -20,6 +20,12 @@ class platform::docker::params (
 class platform::docker::config
   inherits ::platform::docker::params {
 
+  # Docker restarts will trigger a containerd restart and containerd needs a
+  # default route present for it's CRI plugin to load correctly. Since we are
+  # defering containerd restart until after the network config is applied, do
+  # the same here to align config/restart times for both containerd and docker.
+  Anchor['platform::networking'] -> Class[$name]
+
   if $http_proxy or $https_proxy {
     file { '/etc/systemd/system/docker.service.d':
       ensure => 'directory',
@@ -63,10 +69,26 @@ class platform::docker::install
   }
 }
 
-class platform::docker
+class platform::docker::controller
 {
   include ::platform::docker::install
   include ::platform::docker::config
+}
+
+class platform::docker::worker
+{
+  if $::personality != 'controller' {
+    include ::platform::docker::install
+    include ::platform::docker::config
+  }
+}
+
+class platform::docker::storage
+{
+  if $::personality != 'controller' {
+    include ::platform::docker::install
+    include ::platform::docker::config
+  }
 }
 
 class platform::docker::config::bootstrap

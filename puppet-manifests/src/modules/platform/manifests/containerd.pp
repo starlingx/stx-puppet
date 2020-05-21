@@ -5,7 +5,8 @@ class platform::containerd::params (
   $no_proxy     = undef,
   $k8s_registry    = undef,
   $insecure_registries = undef,
-  $k8s_cni_bin_dir = '/usr/libexec/cni'
+  $k8s_cni_bin_dir = '/usr/libexec/cni',
+  $stream_server_address = 'localhost',
 ) { }
 
 class platform::containerd::config
@@ -15,6 +16,12 @@ class platform::containerd::config
   include ::platform::dockerdistribution::params
   include ::platform::kubernetes::params
   include ::platform::dockerdistribution::registries
+
+  # If containerd is started prior to networking providing a default route, the
+  # containerd cri plugin will fail to load and the status of the cri plugin
+  # will be in 'error'. This will prevent any crictl image pulls from working as
+  # containerd is not automatically restarted when plugins fail to load.
+  Anchor['platform::networking'] -> Class[$name]
 
   # inherit the proxy setting from docker
   $http_proxy = $::platform::docker::params::http_proxy
@@ -54,6 +61,12 @@ class platform::containerd::config
   # get cni bin directory
   $k8s_cni_bin_dir = $::platform::kubernetes::params::k8s_cni_bin_dir
 
+  if $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
+    $stream_server_address = '::1'
+  } else {
+    $stream_server_address = '127.0.0.1'
+  }
+
   file { '/etc/containerd':
     ensure => 'directory',
     owner  => 'root',
@@ -91,9 +104,24 @@ class platform::containerd::install
   }
 }
 
-class platform::containerd
+class platform::containerd::controller
 {
   include ::platform::containerd::install
   include ::platform::containerd::config
 }
 
+class platform::containerd::worker
+{
+  if $::personality != 'controller' {
+    include ::platform::containerd::install
+    include ::platform::containerd::config
+  }
+}
+
+class platform::containerd::storage
+{
+  if $::personality != 'controller' {
+    include ::platform::containerd::install
+    include ::platform::containerd::config
+  }
+}

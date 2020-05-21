@@ -51,12 +51,26 @@ class platform::patching
 
 class platform::patching::haproxy
   inherits ::platform::patching::params {
+  include ::platform::params
+  include ::platform::haproxy::params
 
   platform::haproxy::proxy { 'patching-restapi':
     server_name    => 's-patching',
     public_port    => $public_port,
     private_port   => $private_port,
     server_timeout => $server_timeout,
+  }
+
+  # Configure rules for DC https enabled admin endpoint.
+  if ($::platform::params::distributed_cloud_role == 'systemcontroller' or
+      $::platform::params::distributed_cloud_role == 'subcloud') {
+    platform::haproxy::proxy { 'patching-restapi-admin':
+      https_ep_type     => 'admin',
+      server_name       => 's-patching',
+      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_port       => $private_port + 1,
+      private_port      => $private_port,
+    }
   }
 }
 

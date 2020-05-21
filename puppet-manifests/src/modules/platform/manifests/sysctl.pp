@@ -46,6 +46,16 @@ class platform::sysctl
     sysctl::value { 'kernel.sched_rt_runtime_us':
       value => '1000000',
     }
+
+    # Enable check for raising timer interrupt only if one is pending.
+    # This allows nohz full mode to operate properly on isolated cores.
+    # Without it, ktimersoftd interferes with only one job being
+    # on the run queue on that core, causing it to drop out of nohz.
+    # If the check option doesn't exist in the kernel, silently fail.
+    exec { 'Enable ktimer_lockless_check mode if it exists':
+      command => "bash -c 'echo 1 2>/dev/null >/sys/kernel/ktimer_lockless_check; exit 0'",
+    }
+
   } else {
     # Disable NUMA balancing
     sysctl::value { 'kernel.numa_balancing':

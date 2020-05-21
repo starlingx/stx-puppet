@@ -10,9 +10,9 @@ class platform::kubernetes::params (
   $host_labels = [],
   $k8s_cpuset = undef,
   $k8s_nodeset = undef,
-  $k8s_reserved_cpus = undef,
+  $k8s_platform_cpuset = undef,
   $k8s_reserved_mem = undef,
-  $k8s_isol_cpus = undef,
+  $k8s_all_reserved_cpuset = undef,
   $k8s_cpu_mgr_policy = 'none',
   $k8s_topology_mgr_policy = 'best-effort',
   $k8s_cni_bin_dir = '/usr/libexec/cni',
@@ -21,7 +21,8 @@ class platform::kubernetes::params (
   $oidc_issuer_url = undef,
   $oidc_client_id = undef,
   $oidc_username_claim = undef,
-  $oidc_groups_claim = undef
+  $oidc_groups_claim = undef,
+  $admission_plugins = undef
 ) { }
 
 class platform::kubernetes::cgroup::params (
@@ -107,9 +108,9 @@ class platform::kubernetes::kubeadm {
 
   $node_ip = $::platform::kubernetes::params::node_ip
   $host_labels = $::platform::kubernetes::params::host_labels
-  $k8s_reserved_cpus = $::platform::kubernetes::params::k8s_reserved_cpus
+  $k8s_platform_cpuset = $::platform::kubernetes::params::k8s_platform_cpuset
   $k8s_reserved_mem = $::platform::kubernetes::params::k8s_reserved_mem
-  $k8s_isol_cpus = $::platform::kubernetes::params::k8s_isol_cpus
+  $k8s_all_reserved_cpuset = $::platform::kubernetes::params::k8s_all_reserved_cpuset
   $k8s_cni_bin_dir = $::platform::kubernetes::params::k8s_cni_bin_dir
   $k8s_vol_plugin_dir = $::platform::kubernetes::params::k8s_vol_plugin_dir
   $k8s_cpu_mgr_policy = $::platform::kubernetes::params::k8s_cpu_mgr_policy
@@ -127,21 +128,22 @@ class platform::kubernetes::kubeadm {
       and !('openstack-compute-node' in $host_labels) {
       $opts = join(['--feature-gates TopologyManager=true',
                     "--cpu-manager-policy=${k8s_cpu_mgr_policy}",
-                    "--topology-manager-policy=${k8s_topology_mgr_policy}",
-                    '--system-reserved-cgroup=/system.slice'], ' ')
+                    "--topology-manager-policy=${k8s_topology_mgr_policy}"], ' ')
+
       $opts_sys_res = join(['--system-reserved=',
-                            "cpu=${k8s_reserved_cpus},",
                             "memory=${k8s_reserved_mem}Mi"])
-      $opts_kube_res = join(['--kube-reserved=',
-                            "cpu=${k8s_isol_cpus}"])
+
       if $k8s_cpu_mgr_policy == 'none' {
-        $k8s_cpu_manager_opts = join([$opts,
-                                      $opts_sys_res], ' ')
+        $k8s_reserved_cpus = $k8s_platform_cpuset
       } else {
-        $k8s_cpu_manager_opts = join([$opts,
-                                      $opts_sys_res,
-                                      $opts_kube_res], ' ')
+        # The union of platform, isolated, and vswitch
+        $k8s_reserved_cpus = $k8s_all_reserved_cpuset
       }
+
+      $opts_res_cpus = "--reserved-cpus=${k8s_reserved_cpus}"
+      $k8s_cpu_manager_opts = join([$opts,
+                                    $opts_sys_res,
+                                    $opts_res_cpus], ' ')
     } else {
       $k8s_cpu_manager_opts = '--cpu-manager-policy=none'
     }
@@ -538,8 +540,9 @@ class platform::kubernetes::upgrade_first_control_plane
 
   include ::platform::params
 
+  # The --allow-*-upgrades options allow us to upgrade to any k8s release if necessary
   exec { 'upgrade first control plane':
-    command   => "kubeadm upgrade apply ${version} -y",
+    command   => "kubeadm upgrade apply ${version} --allow-experimental-upgrades --allow-release-candidate-upgrades -y",
     logoutput => true,
   }
 

@@ -43,6 +43,10 @@ class dcorch::keystone::auth (
   $cinder_proxy_public_url_v3    = 'http://127.0.0.1:28776/v3/%(tenant_id)s',
   $patching_proxy_public_url     = 'http://127.0.0.1:25491',
   $identity_proxy_public_url     = 'http://127.0.0.1:25000/v3',
+
+  $identity_proxy_admin_url      = 'http://127.0.0.1:25000/v3',
+  $sysinv_proxy_admin_url        = 'http://127.0.0.1:26385/v1',
+  $patching_proxy_admin_url      = 'http://127.0.0.1:25491',
 ) {
   if $::platform::params::distributed_cloud_role =='systemcontroller' {
     keystone::resource::service_identity { 'dcorch':
@@ -68,7 +72,7 @@ class dcorch::keystone::auth (
       type         =>  'platform',
       region       =>  $region,
       public_url   =>  $sysinv_proxy_public_url,
-      admin_url    =>  $sysinv_proxy_internal_url,
+      admin_url    =>  $sysinv_proxy_admin_url,
       internal_url =>  $sysinv_proxy_internal_url
     }
 
@@ -78,7 +82,7 @@ class dcorch::keystone::auth (
       type         =>  'patching',
       region       =>  $region,
       public_url   =>  $patching_proxy_public_url,
-      admin_url    =>  $patching_proxy_internal_url,
+      admin_url    =>  $patching_proxy_admin_url,
       internal_url =>  $patching_proxy_internal_url
     }
     keystone_endpoint { "${region}/keystone::identity" :
@@ -87,7 +91,7 @@ class dcorch::keystone::auth (
       type         =>  'identity',
       region       =>  $region,
       public_url   =>  $identity_proxy_public_url,
-      admin_url    =>  $identity_proxy_internal_url,
+      admin_url    =>  $identity_proxy_admin_url,
       internal_url =>  $identity_proxy_internal_url
     }
   }

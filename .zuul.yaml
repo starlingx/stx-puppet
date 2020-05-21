@@ -1,5 +1,7 @@
 ---
 - project:
+    templates:
+      - stx-bandit-jobs
     check:
       jobs:
         - stx-puppet-linters

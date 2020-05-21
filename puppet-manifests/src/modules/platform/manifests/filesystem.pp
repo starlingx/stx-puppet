@@ -10,6 +10,7 @@ define platform::filesystem (
   $fs_type,
   $fs_options,
   $fs_use_all = false,
+  $ensure = present,
   $mode = '0750',
 ) {
   include ::platform::filesystem::params
@@ -27,44 +28,80 @@ define platform::filesystem (
     $fs_size_is_minsize = false
   }
 
-  # create logical volume
-  logical_volume { $lv_name:
-      ensure          => present,
-      volume_group    => $vg_name,
-      size            => $size,
-      size_is_minsize => $fs_size_is_minsize,
+  if ($ensure == 'absent') {
+    exec { "umount mountpoint ${mountpoint}":
+      command => "umount ${mountpoint}; true",
+      onlyif  => "test -e ${mountpoint}",
+    }
+    -> mount { $name:
+      ensure  => $ensure,
+      atboot  => 'yes',
+      name    => $mountpoint,
+      device  => $device,
+      options => 'defaults',
+      fstype  => $fs_type,
+    }
+    -> file { $mountpoint:
+      ensure => $ensure,
+      force  => true,
+    }
+    -> exec { "wipe start of device ${device}":
+      command => "dd if=/dev/zero of=${device} bs=512 count=34",
+      onlyif  => "blkid ${device}",
+    }
+    -> exec { "wipe end of device ${device}":
+      command => "dd if=/dev/zero of=${device} bs=512 seek=$(($(blockdev --getsz ${device}) - 34)) count=34",
+      onlyif  => "blkid ${device}",
+    }
+    -> exec { "lvremove lv ${lv_name}":
+      command => "lvremove -f cgts-vg ${lv_name}; true",
+      onlyif  => "test -e /dev/cgts-vg/${lv_name}"
+    }
   }
 
-  # create filesystem
-  -> filesystem { $device:
-    ensure  => present,
-    fs_type => $fs_type,
-    options => $fs_options,
-  }
+  if ($ensure == 'present') {
+    # create logical volume
+    logical_volume { $lv_name:
+        ensure          => $ensure,
+        volume_group    => $vg_name,
+        size            => $size,
+        size_is_minsize => $fs_size_is_minsize,
+    }
 
-  -> file { $mountpoint:
-    ensure => 'directory',
-    owner  => 'root',
-    group  => 'root',
-    mode   => $mode,
-  }
+    # create filesystem
+    -> filesystem { $device:
+      ensure  => $ensure,
+      fs_type => $fs_type,
+      options => $fs_options,
+    }
 
-  -> mount { $name:
-    ensure  => 'mounted',
-    atboot  => 'yes',
-    name    => $mountpoint,
-    device  => $device,
-    options => 'defaults',
-    fstype  => $fs_type,
-  }
+    -> file { $mountpoint:
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => $mode,
+    }
 
-  # The above mount resource doesn't actually remount devices that were already present in /etc/fstab, but were
-  # unmounted during manifest application. To get around this, we attempt to mount them again, if they are not
-  # already mounted.
-  -> exec { "mount ${device}":
-    unless  => "mount | awk '{print \$3}' | grep -Fxq ${mountpoint}",
-    command => "mount ${mountpoint}",
-    path    => '/usr/bin'
+    -> mount { $name:
+      ensure  => 'mounted',
+      atboot  => 'yes',
+      name    => $mountpoint,
+      device  => $device,
+      options => 'defaults',
+      fstype  => $fs_type,
+    }
+
+    # The above mount resource doesn't actually remount devices that were already present in /etc/fstab, but were
+    # unmounted during manifest application. To get around this, we attempt to mount them again, if they are not
+    # already mounted.
+    -> exec { "mount ${device}":
+      unless  => "mount | awk '{print \$3}' | grep -Fxq ${mountpoint}",
+      command => "mount ${mountpoint}",
+      path    => '/usr/bin'
+    }
+    -> exec {"Change ${mountpoint} dir permissions":
+      command => "chmod ${mode} ${mountpoint}",
+    }
   }
 }
 
@@ -123,6 +160,18 @@ class platform::filesystem::backup
   }
 }
 
+class platform::filesystem::conversion::params (
+  $conversion_enabled = false,
+  $ensure = absent,
+  $lv_size = '1',
+  $lv_name = 'conversion-lv',
+  $mountpoint = '/opt/conversion',
+  $devmapper = '/dev/mapper/cgts--vg-conversion--lv',
+  $fs_type = 'ext4',
+  $fs_options = ' ',
+  $mode = '0750'
+) { }
+
 class platform::filesystem::scratch::params (
   $lv_size = '8',
   $lv_name = 'scratch-lv',
@@ -141,6 +190,24 @@ class platform::filesystem::scratch
     mountpoint => $mountpoint,
     fs_type    => $fs_type,
     fs_options => $fs_options
+  }
+}
+
+class platform::filesystem::conversion
+  inherits ::platform::filesystem::conversion::params {
+
+  if $conversion_enabled {
+    $ensure = present
+    $mode = '0777'
+  }
+  platform::filesystem { $lv_name:
+    ensure     => $ensure,
+    lv_name    => $lv_name,
+    lv_size    => $lv_size,
+    mountpoint => $mountpoint,
+    fs_type    => $fs_type,
+    fs_options => $fs_options,
+    mode       => $mode
   }
 }
 
@@ -216,6 +283,7 @@ class platform::filesystem::compute {
 class platform::filesystem::controller {
   include ::platform::filesystem::backup
   include ::platform::filesystem::scratch
+  include ::platform::filesystem::conversion
   include ::platform::filesystem::docker
   include ::platform::filesystem::kubelet
 }
@@ -247,6 +315,25 @@ class platform::filesystem::scratch::runtime {
     lv_name   => $lv_name,
     lv_size   => $lv_size,
     devmapper => $devmapper,
+  }
+}
+
+class platform::filesystem::conversion::runtime {
+  include ::platform::filesystem::conversion
+  include ::platform::filesystem::conversion::params
+
+  $conversion_enabled = $::platform::filesystem::conversion::params::conversion_enabled
+  $lv_name = $::platform::filesystem::conversion::params::lv_name
+  $lv_size = $::platform::filesystem::conversion::params::lv_size
+  $devmapper = $::platform::filesystem::conversion::params::devmapper
+
+  if $conversion_enabled {
+    Class['::platform::filesystem::conversion']
+    -> platform::filesystem::resize { $lv_name:
+      lv_name   => $lv_name,
+      lv_size   => $lv_size,
+      devmapper => $devmapper,
+    }
   }
 }
 

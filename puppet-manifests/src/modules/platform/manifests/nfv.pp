@@ -56,11 +56,25 @@ class platform::nfv::runtime {
 
 class platform::nfv::haproxy
   inherits ::platform::nfv::params {
+  include ::platform::params
+  include ::platform::haproxy::params
 
   platform::haproxy::proxy { 'vim-restapi':
     server_name  => 's-vim-restapi',
     public_port  => $api_port,
     private_port => $api_port,
+  }
+
+  # Configure rules for DC https enabled admin endpoint.
+  if ($::platform::params::distributed_cloud_role == 'systemcontroller' or
+      $::platform::params::distributed_cloud_role == 'subcloud') {
+    platform::haproxy::proxy { 'vim-restapi-admin':
+      https_ep_type     => 'admin',
+      server_name       => 's-vim-restapi',
+      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_port       => $api_port + 1,
+      private_port      => $api_port,
+    }
   }
 }
 

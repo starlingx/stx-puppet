@@ -295,6 +295,43 @@ class platform::config::certs::ssl_ca
   }
 }
 
+class platform::config::dccert::params (
+  $dc_root_ca_crt = '',
+  $dc_adminep_crt = ''
+) { }
+
+
+class platform::config::dc_root_ca
+  inherits ::platform::config::dccert::params {
+  $dc_root_ca_file = '/etc/pki/ca-trust/source/anchors/dc-adminep-root-ca.crt'
+  $dc_adminep_cert_file = '/etc/ssl/private/admin-ep-cert.pem'
+
+  if ! empty($dc_adminep_crt) {
+    file { 'adminep-cert':
+      ensure  => present,
+      path    => $dc_adminep_cert_file,
+      owner   => root,
+      group   => root,
+      mode    => '0400',
+      content => $dc_adminep_crt,
+    }
+  }
+
+  if ! empty($dc_root_ca_crt) {
+    file { 'create-dc-adminep-root-ca-cert':
+      ensure  => present,
+      path    => $dc_root_ca_file,
+      owner   => root,
+      group   => root,
+      mode    => '0644',
+      content => $dc_root_ca_crt,
+    }
+    -> exec { 'update-dc-ca-trust':
+      command     => 'update-ca-trust',
+    }
+  }
+}
+
 
 class platform::config::runtime {
   include ::platform::config::certs::ssl_ca
@@ -313,6 +350,10 @@ class platform::config::pre {
   include ::platform::config::file
   include ::platform::config::tpm
   include ::platform::config::certs::ssl_ca
+  if ($::platform::params::distributed_cloud_role =='systemcontroller' and
+      $::personality == 'controller') {
+    include ::platform::config::dc_root_ca
+  }
 }
 
 
