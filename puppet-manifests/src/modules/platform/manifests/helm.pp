@@ -116,4 +116,7 @@ class platform::helm
 
 class platform::helm::runtime {
   include ::platform::helm::repositories
+  include ::openstack::lighttpd::runtime
+
+  Exec['sm-restart-lighttpd'] -> Class['::platform::helm::repositories']
 }
