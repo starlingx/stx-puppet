@@ -11,6 +11,7 @@ define platform::filesystem (
   $fs_options,
   $fs_use_all = false,
   $ensure = present,
+  $group = 'root',
   $mode = '0750',
 ) {
   include ::platform::filesystem::params
@@ -78,7 +79,7 @@ define platform::filesystem (
     -> file { $mountpoint:
       ensure => 'directory',
       owner  => 'root',
-      group  => 'root',
+      group  => $group,
       mode   => $mode,
     }
 
@@ -101,6 +102,9 @@ define platform::filesystem (
     }
     -> exec {"Change ${mountpoint} dir permissions":
       command => "chmod ${mode} ${mountpoint}",
+    }
+    -> exec {"Change ${mountpoint} dir group":
+      command => "chgrp ${group} ${mountpoint}",
     }
   }
 }
@@ -178,18 +182,28 @@ class platform::filesystem::scratch::params (
   $mountpoint = '/scratch',
   $devmapper = '/dev/mapper/cgts--vg-scratch--lv',
   $fs_type = 'ext4',
-  $fs_options = ' '
+  $fs_options = ' ',
+  $group = 'sys_protected',
+  $mode = '0770'
 ) { }
 
 class platform::filesystem::scratch
   inherits ::platform::filesystem::scratch::params {
 
+  if $::personality == 'controller' {
+    $default_lv_size = '16'
+  } else {
+    $default_lv_size = $lv_size
+  }
+
   platform::filesystem { $lv_name:
     lv_name    => $lv_name,
-    lv_size    => $lv_size,
+    lv_size    => $default_lv_size,
     mountpoint => $mountpoint,
     fs_type    => $fs_type,
-    fs_options => $fs_options
+    fs_options => $fs_options,
+    group      => $group,
+    mode       => $mode
   }
 }
 

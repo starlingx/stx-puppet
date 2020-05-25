@@ -14,6 +14,8 @@ class platform::dcorch::params (
   $cinder_enable_ports   = false,
   $patch_api_proxy_port = 25491,
   $identity_api_proxy_port = 25000,
+  $sysinv_api_proxy_client_timeout = '600s',
+  $sysinv_api_proxy_server_timeout = '600s',
 ) {
   include ::platform::params
 
@@ -94,9 +96,11 @@ class platform::dcorch::haproxy
       private_port => $nova_api_proxy_port,
     }
     platform::haproxy::proxy { 'dcorch-sysinv-api-proxy':
-      server_name  => 's-dcorch-sysinv-api-proxy',
-      public_port  => $sysinv_api_proxy_port,
-      private_port => $sysinv_api_proxy_port,
+      server_name    => 's-dcorch-sysinv-api-proxy',
+      public_port    => $sysinv_api_proxy_port,
+      private_port   => $sysinv_api_proxy_port,
+      client_timeout => $sysinv_api_proxy_client_timeout,
+      server_timeout => $sysinv_api_proxy_server_timeout,
     }
     platform::haproxy::proxy { 'dcorch-cinder-api-proxy':
       server_name  => 's-cinder-dc-api-proxy',
@@ -129,6 +133,8 @@ class platform::dcorch::haproxy
       public_ip_address => $::platform::haproxy::params::private_ip_address,
       public_port       => $sysinv_api_proxy_port + 1,
       private_port      => $sysinv_api_proxy_port,
+      client_timeout    => $sysinv_api_proxy_client_timeout,
+      server_timeout    => $sysinv_api_proxy_server_timeout,
     }
     # Configure rules for https enabled patching api proxy admin endpoint.
     platform::haproxy::proxy { 'dcorch-patch-api-proxy-admin':
