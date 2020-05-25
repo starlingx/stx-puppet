@@ -202,6 +202,7 @@ class openstack::keystone::api
 
 class openstack::keystone::bootstrap(
   $default_domain = 'Default',
+  $dc_services_project_id = undef,
 ) {
   include ::platform::params
   include ::platform::amqp::params
@@ -262,6 +263,25 @@ class openstack::keystone::bootstrap(
 
     # disabling the admin token per openstack recommendation
     include ::keystone::disable_admin_token_auth
+
+    if $dc_services_project_id {
+      exec { 'update keystone assignment target id for services to match system controller':
+        command => "psql -d keystone -c \"update public.assignment set target_id='${dc_services_project_id}' from public.project where\
+                    public.assignment.target_id=public.project.id and public.project.name='services'\"",
+        user    => 'postgres',
+        # keystone interleaves creation of users, projects, roles and assignments and internally caches ids so we have to wait until all the
+        # users of services project are completed before we can manipulate the database entries
+        require => [ Class['::keystone::roles::admin'],
+                    Class['::openstack::barbican::bootstrap'],
+                    Class['::platform::sysinv::bootstrap'],
+                    Class['::platform::mtce::bootstrap'],
+                    Class['::platform::fm::bootstrap'] ],
+      }
+      -> exec { 'update keystone services project id to match system controller':
+        command => "psql -d keystone -c \"update public.project set id='${dc_services_project_id}' where name='services'\"",
+        user    => 'postgres',
+      }
+    }
   }
 }
 
