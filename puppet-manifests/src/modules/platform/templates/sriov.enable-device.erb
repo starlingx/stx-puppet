@@ -1,1 +1,1 @@
-echo 0 > /sys/bus/pci/devices/<%= @pf_addr %>/sriov_numvfs; echo <%= @num_vfs -%> > /sys/bus/pci/devices/<%= @pf_addr %>/sriov_numvfs
+echo 0 > /sys/bus/pci/devices/<%= @addr %>/<%= @vf_file %>; echo <%= @num_vfs -%> > /sys/bus/pci/devices/<%= @addr %>/<%= @vf_file %>

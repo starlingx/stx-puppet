@@ -177,11 +177,11 @@ class platform::network::routes (
 
 
 define platform::interfaces::sriov_enable (
-  $pf_addr,
+  $addr,
   $num_vfs,
-  $vf_addrs,
-  $vf_driver = undef
+  $vf_config = undef
 ) {
+  $vf_file = 'sriov_numvfs'
   if $num_vfs {
     exec { "sriov-enable-device: ${title}":
       command   => template('platform/sriov.enable-device.erb'),
@@ -192,22 +192,27 @@ define platform::interfaces::sriov_enable (
 
 
 define platform::interfaces::sriov_bind (
-  $pf_addr,
-  $num_vfs,
-  $vf_addrs,
-  $vf_driver = undef
+  $addr,
+  $driver
 ) {
-  if ($vf_driver != undef) and length($vf_addrs) > 0 {
-    ensure_resource(kmod::load, $vf_driver)
+  if ($driver != undef) {
+    ensure_resource(kmod::load, $driver)
     Anchor['platform::networking']
     -> exec { "sriov-vf-bind-device: ${title}":
       command   => template('platform/sriov.bind-device.erb'),
       logoutput => true,
-      require   => [ Kmod::Load[$vf_driver] ],
+      require   => [ Kmod::Load[$driver] ],
     }
   }
 }
 
+define platform::interfaces::sriov_vf_bind (
+  $addr,
+  $num_vfs,
+  $vf_config
+) {
+  create_resources('platform::interfaces::sriov_bind', $vf_config, {})
+}
 
 class platform::interfaces::sriov (
   $sriov_config = {},
@@ -216,7 +221,7 @@ class platform::interfaces::sriov (
   if $runtime {
     create_resources('platform::interfaces::sriov_enable', $sriov_config, {})
   } else {
-    create_resources('platform::interfaces::sriov_bind', $sriov_config, {})
+    create_resources('platform::interfaces::sriov_vf_bind', $sriov_config, {})
   }
 }
 

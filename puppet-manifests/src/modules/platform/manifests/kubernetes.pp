@@ -371,7 +371,7 @@ class platform::kubernetes::worker::init
 
 class platform::kubernetes::worker::pci
 (
-  $pcidp_network_resources = undef,
+  $pcidp_resources = undef,
 ) {
   include ::platform::kubernetes::params
 
