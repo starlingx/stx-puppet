@@ -137,9 +137,25 @@ class platform::sysinv::api
 }
 
 
-class platform::sysinv::bootstrap {
+class platform::sysinv::bootstrap (
+  $dc_sysinv_user_id = undef,
+) {
   include ::sysinv::db::postgresql
   include ::sysinv::keystone::auth
+
+  if $dc_sysinv_user_id {
+    exec { 'update keystone sysinv assignment actor_id to match system controller':
+      command => "psql -d keystone -c \"update public.assignment set actor_id='${dc_sysinv_user_id}' from public.local_user where\
+                  public.assignment.actor_id=public.local_user.user_id and public.local_user.name='sysinv'\"",
+      user    => 'postgres',
+      require => Class['::sysinv::keystone::auth'],
+    }
+    -> exec { 'update keystone sysinv user id to match system controller':
+      command => "psql -d keystone -c \"update public.user set id='${dc_sysinv_user_id}' from public.local_user where\
+                  public.user.id=public.local_user.user_id and public.local_user.name='sysinv'\"",
+      user    => 'postgres',
+    }
+  }
 
   include ::platform::sysinv
 
