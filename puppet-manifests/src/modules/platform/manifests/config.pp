@@ -337,6 +337,9 @@ class platform::config::runtime {
   include ::platform::config::certs::ssl_ca
 }
 
+class platform::config::dc_root_ca::runtime {
+  include platform::config::dc_root_ca
+}
 
 class platform::config::pre {
   group { 'nobody':
