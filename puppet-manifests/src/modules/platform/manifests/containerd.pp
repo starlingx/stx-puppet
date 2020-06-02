@@ -61,6 +61,12 @@ class platform::containerd::config
   # get cni bin directory
   $k8s_cni_bin_dir = $::platform::kubernetes::params::k8s_cni_bin_dir
 
+  # generate the registry auth
+  $registry_auth = chomp(
+    base64('encode',
+      join([$::platform::dockerdistribution::params::registry_username,
+            $::platform::dockerdistribution::params::registry_password], ':')))
+
   if $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
     $stream_server_address = '::1'
   } else {
