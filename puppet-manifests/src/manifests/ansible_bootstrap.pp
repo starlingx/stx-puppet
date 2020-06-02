@@ -27,6 +27,7 @@ include ::platform::etcd::bootstrap
 
 # Puppet classes to enable initial controller unlock
 include ::platform::drbd::dockerdistribution::bootstrap
+include ::platform::filesystem::scratch
 include ::platform::filesystem::backup
 include ::platform::filesystem::kubelet
 include ::platform::mtce::bootstrap
