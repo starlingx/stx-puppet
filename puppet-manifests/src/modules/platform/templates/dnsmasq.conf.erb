@@ -4,6 +4,7 @@ interface=<%= @pxeboot_interface %>
 <%- end -%>
 interface=<%= @mgmt_interface %>
 bind-interfaces
+listen-address=<%= @mgmt_controller_address %>
 
 # Serve addresses from the pxeboot subnet
 dhcp-range=set:pxeboot,<%= @pxeboot_subnet_start %>,<%= @pxeboot_subnet_end %>,<%= @pxeboot_subnet_netmask %>,1h
