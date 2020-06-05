@@ -85,11 +85,15 @@ oom_score = 0
 <%- end -%>
         # End of insecure registries
     [plugins.cri.registry.configs."registry.local:9001".tls]
-      ca_file = "/etc/ssl/private/registry-cert.crt"
-      cert_file = "/etc/ssl/private/registry-cert.crt"
-      key_file = "/etc/ssl/private/registry-cert.key"
+      ca_file   = "/etc/ssl/private/registry-cert.crt"
+      cert_file = ""
+      key_file  = ""
     [plugins.cri.registry.configs."registry.local:9001".auth]
-      auth = "<%= @registry_auth %>"
+      username = ""
+      password = ""
+      auth = ""
+      identitytoken = ""
+
     [plugins.cri.x509_key_pair_streaming]
       tls_cert_file = ""
       tls_key_file = ""
