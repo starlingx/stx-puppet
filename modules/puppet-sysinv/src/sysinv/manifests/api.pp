@@ -65,6 +65,10 @@
 #   (Optional) domain name for auth project.
 #   Defaults to 'Default'.
 #
+# [*keystone_interface*]
+#   (Optional) Interface to use for the Identity API endpoint.
+#   Defaults to 'internal'.
+#
 # [*auth_type*]
 #   (Optional) Authentication type to load.
 #   Defaults to 'password'.
@@ -155,6 +159,7 @@ class sysinv::api (
   $keystone_identity_uri      = false,
   $keystone_user_domain       = 'Default',
   $keystone_project_domain    = 'Default',
+  $keystone_interface         = 'internal',
   $auth_type                  = 'password',
   $openstack_keystone_tenant  = 'admin',
   $openstack_keystone_user    = 'admin',
@@ -260,6 +265,7 @@ class sysinv::api (
       'keystone_authtoken/password':     value => $keystone_password, secret=> true;
       'keystone_authtoken/user_domain_name':  value => $keystone_user_domain;
       'keystone_authtoken/project_domain_name':  value => $keystone_project_domain;
+      'keystone_authtoken/interface':  value => $keystone_interface;
     }
     sysinv_config {
       'openstack_keystone_authtoken/auth_type':    value => $openstack_auth_type;
