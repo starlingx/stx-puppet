@@ -215,7 +215,7 @@ class platform::kubernetes::master::init
     $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
 
     exec { 'pre pull k8s images':
-      command   => "kubeadm config images list --kubernetes-version ${version}  --image-repository registry.local:9001/k8s.gcr.io | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
+      command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${version}  --image-repository registry.local:9001/k8s.gcr.io | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
       logoutput => true,
     }
 
@@ -323,7 +323,7 @@ class platform::kubernetes::worker::init
 
     # Get the pause image tag from kubeadm required images
     # list and replace with local registry
-    $get_k8s_pause_img = "kubeadm config images list 2>/dev/null |\
+    $get_k8s_pause_img = "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list 2>/dev/null |\
       awk '/^k8s.gcr.io\\/pause:/{print \$1}' | sed 's#k8s.gcr.io#registry.local:9001\\/k8s.gcr.io#'"
     $k8s_pause_img = generate('/bin/sh', '-c', $get_k8s_pause_img)
 
@@ -530,7 +530,7 @@ class platform::kubernetes::pre_pull_control_plane_images
   $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
 
   exec { 'pre pull images':
-    command   => "kubeadm config images list --kubernetes-version ${upgrade_to_version} --image-repository=registry.local:9001/k8s.gcr.io | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
+    command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${upgrade_to_version} --image-repository=registry.local:9001/k8s.gcr.io | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
     logoutput => true,
   }
 }
@@ -542,7 +542,7 @@ class platform::kubernetes::upgrade_first_control_plane
 
   # The --allow-*-upgrades options allow us to upgrade to any k8s release if necessary
   exec { 'upgrade first control plane':
-    command   => "kubeadm upgrade apply ${version} --allow-experimental-upgrades --allow-release-candidate-upgrades -y",
+    command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf upgrade apply ${version} --allow-experimental-upgrades --allow-release-candidate-upgrades -y", # lint:ignore:140chars
     logoutput => true,
   }
 
@@ -571,7 +571,7 @@ class platform::kubernetes::upgrade_control_plane
   inherits ::platform::kubernetes::params {
 
   exec { 'upgrade control plane':
-    command   => 'kubeadm upgrade node',
+    command   => 'kubeadm --kubeconfig=/etc/kubernetes/admin.conf upgrade node',
     logoutput => true,
   }
 }
@@ -591,7 +591,7 @@ class platform::kubernetes::worker::upgrade_kubelet
 
   # Get the pause image tag from kubeadm required images
   # list and replace with local registry
-  $get_k8s_pause_img = "kubeadm config images list 2>/dev/null |\
+  $get_k8s_pause_img = "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list 2>/dev/null |\
     awk '/^k8s.gcr.io\\/pause:/{print \$1}' | sed 's#k8s.gcr.io#registry.local:9001\\/k8s.gcr.io#'"
   $k8s_pause_img = generate('/bin/sh', '-c', $get_k8s_pause_img)
 
@@ -604,7 +604,7 @@ class platform::kubernetes::worker::upgrade_kubelet
   }
 
   exec { 'upgrade kubelet':
-    command   => 'kubeadm upgrade node',
+    command   => 'kubeadm --kubeconfig=/etc/kubernetes/admin.conf upgrade node',
     logoutput => true,
   }
 
