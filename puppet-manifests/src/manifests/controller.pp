@@ -45,6 +45,7 @@ include ::platform::dockerdistribution
 include ::platform::containerd::controller
 include ::platform::kubernetes::master
 include ::platform::helm
+include ::platform::armada
 
 include ::platform::patching
 include ::platform::patching::api

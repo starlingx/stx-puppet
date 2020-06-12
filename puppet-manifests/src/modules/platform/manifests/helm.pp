@@ -24,7 +24,7 @@ define platform::helm::repository (
       command   => "helm repo index ${repo_path}",
       logoutput => true,
       user      => 'www',
-      group     => 'www',
+      group     => 'root',
       require   => User['www'],
     }
 
@@ -94,15 +94,6 @@ class platform::helm
     include ::platform::helm::repositories
 
     Class['::platform::kubernetes::master']
-
-    -> exec { 'initialize helm':
-      environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf', 'HOME=/home/sysadmin' ],
-      command     => 'helm init --skip-refresh --client-only',
-      logoutput   => true,
-      user        => 'sysadmin',
-      group       => 'sys_protected',
-      require     => User['sysadmin']
-    }
 
     -> exec { 'restart lighttpd for helm':
       require   => [File['/etc/lighttpd/lighttpd.conf', $target_helm_repos_base_dir, $source_helm_repos_base_dir]],
