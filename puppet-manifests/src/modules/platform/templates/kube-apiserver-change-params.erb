@@ -25,7 +25,7 @@ python /usr/share/puppet/modules/platform/files/change_kube_apiserver_params.py 
 <%- end -%>
 
 kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch configmap kubeadm-config -p "$(cat <%= @configmap_temp_file %>)"
-kubeadm config view > <%= @configmap_temp_file %>
+kubeadm --kubeconfig=/etc/kubernetes/admin.conf config view > <%= @configmap_temp_file %>
 kubeadm init phase control-plane apiserver --config <%= @configmap_temp_file %>
 rm <%= @configmap_temp_file %>
 rm <%= @configview_temp_file %>
