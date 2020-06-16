@@ -137,3 +137,28 @@ class platform::dcmanager::runtime {
     }
   }
 }
+
+class platform::dcmanager::bootstrap (
+  $dc_dcmanager_user_id = undef,
+) {
+
+  # dc_dcmanager_user_id is only defined on subclouds
+  if $dc_dcmanager_user_id {
+
+    class { '::dcmanager::keystone::auth':
+      configure_endpoint => false,
+    }
+
+    exec { 'update keystone dcmanager assignment actor_id to match system controller':
+      command => "psql -d keystone -c \"update public.assignment set actor_id='${dc_dcmanager_user_id}' from public.local_user where\
+                  public.assignment.actor_id=public.local_user.user_id and public.local_user.name='dcmanager'\"",
+      user    => 'postgres',
+      require => Class['::dcmanager::keystone::auth'],
+    }
+    -> exec { 'update keystone dcmanager user id to match system controller':
+      command => "psql -d keystone -c \"update public.user set id='${dc_dcmanager_user_id}' from public.local_user where\
+                  public.user.id=public.local_user.user_id and public.local_user.name='dcmanager'\"",
+      user    => 'postgres',
+    }
+  }
+}
