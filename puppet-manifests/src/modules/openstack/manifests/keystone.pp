@@ -293,7 +293,8 @@ class openstack::keystone::bootstrap(
                     Class['::openstack::barbican::bootstrap'],
                     Class['::platform::sysinv::bootstrap'],
                     Class['::platform::mtce::bootstrap'],
-                    Class['::platform::fm::bootstrap'] ],
+                    Class['::platform::fm::bootstrap'],
+                    Class['::platform::dcmanager::bootstrap']],
       }
       -> exec { 'update keystone services project id to match system controller':
         command => "psql -d keystone -c \"update public.project set id='${dc_services_project_id}' where name='services'\"",

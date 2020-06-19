@@ -14,9 +14,9 @@
 #
 class dcmanager::keystone::auth (
   $password,
-  $auth_domain,
-  $admin_project_name,
-  $admin_project_domain,
+  $auth_domain          = 'Default',
+  $admin_project_name   = 'services',
+  $admin_project_domain = 'Default',
   $auth_name            = 'dcmanager',
   $email                = 'dcmanager@localhost',
   $tenant               = 'admin',

@@ -124,6 +124,7 @@ class dcmanager::api (
   if $keystone_identity_uri {
     dcmanager_config { 'keystone_authtoken/auth_url': value => $keystone_identity_uri; }
     dcmanager_config { 'cache/auth_uri': value => "${keystone_identity_uri}/v3"; }
+    dcmanager_config { 'endpoint_cache/auth_uri': value => "${keystone_identity_uri}/v3"; }
   } else {
     dcmanager_config { 'keystone_authtoken/auth_url': value => "${keystone_auth_protocol}://${keystone_auth_host}:5000/v3"; }
   }
@@ -160,6 +161,15 @@ class dcmanager::api (
       'cache/admin_tenant':       value => $keystone_admin_tenant;
       'cache/admin_username':     value => $keystone_admin_user;
       'cache/admin_password':     value => $keystone_admin_password, secret=> true;
+    }
+    dcmanager_config {
+      'endpoint_cache/auth_plugin':    value => $auth_type;
+      'endpoint_cache/username':     value => $keystone_user;
+      'endpoint_cache/password':     value => $keystone_password, secret=> true;
+      'endpoint_cache/project_name': value => $keystone_tenant;
+      'endpoint_cache/user_domain_name':     value => $keystone_user_domain;
+      'endpoint_cache/project_domain_name':  value => $keystone_project_domain;
+      'endpoint_cache/http_connect_timeout': value => $keystone_http_connect_timeout;
     }
 
     if $keystone_auth_admin_prefix {

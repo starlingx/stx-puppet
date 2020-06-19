@@ -81,6 +81,7 @@
 class dcorch::api_proxy (
   $keystone_password,
   $keystone_admin_password,
+  $dcmanager_keystone_password,
   $keystone_admin_user        = 'admin',
   $keystone_admin_tenant      = 'admin',
   $keystone_enabled           = true,
@@ -95,6 +96,8 @@ class dcorch::api_proxy (
   $keystone_identity_uri      = false,
   $keystone_user_domain       = 'Default',
   $keystone_project_domain    = 'Default',
+  $keystone_http_connect_timeout = '10',
+  $dcmanager_keystone_user    = 'dcmanager',
   $auth_type                  = 'password',
   $service_port               = '5000',
   $package_ensure             = 'latest',
@@ -122,6 +125,7 @@ class dcorch::api_proxy (
   if $keystone_identity_uri {
     dcorch_config { 'keystone_authtoken/auth_url': value => $keystone_identity_uri; }
     dcorch_config { 'cache/auth_uri': value => "${keystone_identity_uri}/v3"; }
+    dcorch_config { 'endpoint_cache/auth_uri': value => "${keystone_identity_uri}/v3"; }
   } else {
     dcorch_config { 'keystone_authtoken/auth_url': value => "${keystone_auth_protocol}://${keystone_auth_host}:5000/"; }
   }
@@ -156,6 +160,15 @@ class dcorch::api_proxy (
       'cache/admin_tenant': value => $keystone_admin_tenant;
       'cache/admin_username':     value => $keystone_admin_user;
       'cache/admin_password':     value => $keystone_admin_password, secret=> true;
+    }
+    dcorch_config {
+      'endpoint_cache/auth_plugin':  value => $auth_type;
+      'endpoint_cache/username':     value => $dcmanager_keystone_user;
+      'endpoint_cache/password':     value => $dcmanager_keystone_password, secret=> true;
+      'endpoint_cache/project_name': value => $keystone_tenant;
+      'endpoint_cache/user_domain_name':     value => $keystone_user_domain;
+      'endpoint_cache/project_domain_name':  value => $keystone_project_domain;
+      'endpoint_cache/http_connect_timeout': value => $keystone_http_connect_timeout;
     }
 
     if $keystone_auth_admin_prefix {
