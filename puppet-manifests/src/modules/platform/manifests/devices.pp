@@ -43,14 +43,24 @@ class platform::devices::qat (
 define platform::devices::sriov_enable (
   $num_vfs,
   $addr,
-  $driver
+  $driver,
+  $device_id
 ) {
   if ($driver == 'igb_uio') {
     $vf_file = 'max_vfs'
   } else {
     $vf_file = 'sriov_numvfs'
   }
-  if $num_vfs {
+  if ($num_vfs > 0) {
+    if ($device_id == '0d8f') {
+      exec { "Waiting for n3000 reset before enabling device: ${title}":
+        command   => 'test -e /var/run/.sysinv_n3000_reset',
+        path      => '/usr/bin/',
+        tries     => 60,
+        try_sleep => 1,
+      }
+      -> Exec["sriov-enable-device: ${title}"]
+    }
     exec { "sriov-enable-device: ${title}":
       command   => template('platform/sriov.enable-device.erb'),
       logoutput => true,
@@ -61,9 +71,19 @@ define platform::devices::sriov_enable (
 define platform::devices::sriov_bind (
   $addr,
   $driver,
-  $num_vfs = undef
+  $num_vfs = undef,
+  $device_id = undef
 ) {
   if ($driver != undef) and ($addr != undef) {
+    if ($device_id != undef) and ($device_id == '0d8f') {
+      exec { "Waiting for n3000 reset before binding device: ${title}":
+        command   => 'test -e /var/run/.sysinv_n3000_reset',
+        path      => '/usr/bin/',
+        tries     => 60,
+        try_sleep => 1,
+      }
+      -> Exec["sriov-bind-device: ${title}"]
+    }
     ensure_resource(kmod::load, $driver)
     exec { "sriov-bind-device: ${title}":
       command   => template('platform/sriov.bind-device.erb'),

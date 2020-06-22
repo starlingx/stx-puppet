@@ -178,11 +178,13 @@ class platform::network::routes (
 
 define platform::interfaces::sriov_enable (
   $addr,
+  $device_id,
   $num_vfs,
+  $port_name,
   $vf_config = undef
 ) {
   $vf_file = 'sriov_numvfs'
-  if $num_vfs {
+  if ($num_vfs > 0) {
     exec { "sriov-enable-device: ${title}":
       command   => template('platform/sriov.enable-device.erb'),
       logoutput => true,
@@ -208,9 +210,24 @@ define platform::interfaces::sriov_bind (
 
 define platform::interfaces::sriov_vf_bind (
   $addr,
+  $device_id,
   $num_vfs,
+  $port_name,
   $vf_config
 ) {
+  if ($device_id == '0d58') {
+    exec { "Waiting for n3000 reset before binding device: ${title}":
+      command   => 'test -e /var/run/.sysinv_n3000_reset',
+      path      => '/usr/bin/',
+      tries     => 60,
+      try_sleep => 1,
+    }
+    -> exec { "Restarting n3000 NICs for interface: ${title}":
+      command => "ifdown ${port_name}; ifup ${port_name}",
+      path    => '/usr/sbin/',
+    }
+    -> Anchor['platform::networking']
+  }
   create_resources('platform::interfaces::sriov_bind', $vf_config, {})
 }
 
@@ -235,8 +252,6 @@ class platform::interfaces (
   $network_config = {},
 ) {
   create_resources('network_config', $network_config, {})
-
-  include ::platform::interfaces::sriov
 }
 
 
