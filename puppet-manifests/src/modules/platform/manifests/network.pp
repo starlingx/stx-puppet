@@ -184,7 +184,7 @@ define platform::interfaces::sriov_enable (
   $vf_config = undef
 ) {
   $vf_file = 'sriov_numvfs'
-  if ($num_vfs > 0) {
+  if ($num_vfs != undef) and ($num_vfs > 0) {
     exec { "sriov-enable-device: ${title}":
       command   => template('platform/sriov.enable-device.erb'),
       logoutput => true,
