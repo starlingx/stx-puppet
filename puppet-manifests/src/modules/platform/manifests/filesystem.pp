@@ -190,15 +190,9 @@ class platform::filesystem::scratch::params (
 class platform::filesystem::scratch
   inherits ::platform::filesystem::scratch::params {
 
-  if $::personality == 'controller' {
-    $default_lv_size = '16'
-  } else {
-    $default_lv_size = $lv_size
-  }
-
   platform::filesystem { $lv_name:
     lv_name    => $lv_name,
-    lv_size    => $default_lv_size,
+    lv_size    => $lv_size,
     mountpoint => $mountpoint,
     fs_type    => $fs_type,
     fs_options => $fs_options,
