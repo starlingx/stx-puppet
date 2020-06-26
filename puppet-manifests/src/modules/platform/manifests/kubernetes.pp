@@ -374,6 +374,7 @@ class platform::kubernetes::worker::pci
   $pcidp_resources = undef,
 ) {
   include ::platform::kubernetes::params
+  include ::platform::kubernetes::worker::sriovdp
 
   file { '/etc/pcidp':
     ensure => 'directory',
@@ -390,6 +391,25 @@ class platform::kubernetes::worker::pci
   }
 }
 
+class platform::kubernetes::worker::sriovdp {
+  include ::platform::kubernetes::params
+  $host_labels = $::platform::kubernetes::params::host_labels
+  if ($::personality == 'controller') and
+      str2bool($::is_worker_subfunction)
+      and ('sriovdp' in $host_labels) {
+    # In an AIO system, it's possible for the device plugin pods to start
+    # before the device VFs are bound to a driver.  Restarting the device
+    # plugin pods will allow them to re-scan the set of matching
+    # device ids/drivers specified in the /etc/pcidp/config.json file.
+    # This may be mitigated by moving to helm + configmap for the device
+    # plugin.
+    exec { 'Restart sriovdp daemonset':
+      path      => '/usr/bin:/usr/sbin:/bin',
+      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf rollout restart ds -n kube-system kube-sriov-device-plugin-amd64 || true', # lint:ignore:140chars
+      logoutput => true,
+    }
+  }
+}
 
 class platform::kubernetes::worker
   inherits ::platform::kubernetes::params {

@@ -239,6 +239,7 @@ class platform::interfaces::sriov (
     create_resources('platform::interfaces::sriov_enable', $sriov_config, {})
   } else {
     create_resources('platform::interfaces::sriov_vf_bind', $sriov_config, {})
+    Platform::Interfaces::Sriov_vf_bind <| |> -> Class['::platform::kubernetes::worker::sriovdp']
   }
 }
 

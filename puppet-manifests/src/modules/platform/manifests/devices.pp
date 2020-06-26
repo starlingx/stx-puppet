@@ -117,21 +117,10 @@ define platform::devices::sriov_pf_enable (
 
 class platform::devices::fpga::fec::vf
   inherits ::platform::devices::fpga::fec::params {
+  include ::platform::kubernetes::worker::sriovdp
   require ::platform::devices::fpga::fec::pf
   create_resources('platform::devices::sriov_vf_bind', $device_config, {})
-  if ($::personality == 'controller') and (length($device_config) > 0) {
-    # In an AIO system, it's possible for the device plugin pods to start
-    # before the device VFs are bound to a driver.  Restarting the device
-    # plugin pods will allow them to re-scan the set of matching
-    # device ids/drivers specified in the /etc/pcidp/config.json file.
-    # This may be mitigated by moving to helm + configmap for the device
-    # plugin.
-    exec { 'Restart sriovdp daemonset':
-      path      => '/usr/bin:/usr/sbin:/bin',
-      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf rollout restart ds -n kube-system kube-sriov-device-plugin-amd64 || true', # lint:ignore:140chars
-      logoutput => true,
-    }
-  }
+  Platform::Devices::Sriov_vf_bind <| |> -> Class['platform::kubernetes::worker::sriovdp']
 }
 
 class platform::devices::fpga::fec::pf
