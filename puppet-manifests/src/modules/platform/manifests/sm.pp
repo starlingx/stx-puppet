@@ -93,6 +93,11 @@ class platform::sm
   $cephmon_fs_device              = $::platform::drbd::cephmon::params::device
   $cephmon_fs_directory           = $::platform::drbd::cephmon::params::mountpoint
 
+  include ::platform::rook::params
+  $rookmon_drbd_resource          = $::platform::drbd::rookmon::params::resource_name
+  $rookmon_fs_device              = $::platform::drbd::rookmon::params::device
+  $rookmon_fs_directory           = $::platform::drbd::rookmon::params::mountpoint
+
   include ::openstack::keystone::params
   $keystone_api_version          = $::openstack::keystone::params::api_version
   $keystone_identity_uri         = $::openstack::keystone::params::identity_uri
@@ -164,6 +169,7 @@ class platform::sm
   # Ceph-Rados-Gateway
   include ::platform::ceph::params
   $ceph_configured = $::platform::ceph::params::service_enabled
+  $rook_configured = $::platform::rook::params::service_enabled
   $rgw_configured = $::platform::ceph::params::rgw_enabled
 
   if $system_mode == 'simplex' {
@@ -725,6 +731,17 @@ class platform::sm
     -> exec { 'Configure ceph-osd':
       command => "sm-configure service_instance ceph-osd ceph-osd \"\"",
     }
+
+    Exec['Provision service-group storage-monitoring-services']
+    -> exec { 'Configure Rookmon DRBD':
+      command => "sm-configure service_instance drbd-rookmon drbd-rookmon:${hostunit} \"drbd_resource=${rookmon_drbd_resource}\"",
+    }
+    -> exec { 'Configure Rookmon FileSystem':
+      command => "sm-configure service_instance rookmon-fs rookmon-fs \"device=${rookmon_fs_device},directory=${rookmon_fs_directory},options=noatime,nodiratime,fstype=ext4,check_level=20\"",
+    }
+    -> exec { 'Configure Rook mon exit':
+      command => "sm-configure service_instance rook-mon-exit rook-mon-exit \"\"",
+    }
   }
 
 
@@ -779,6 +796,20 @@ class platform::sm
     }
     -> exec { 'Provision Ceph-Manager in SM (service ceph-manager)':
       command => 'sm-provision service ceph-manager',
+    }
+  }
+
+  if $rook_configured {
+    if $system_type == 'All-in-one' and 'duplex' in $system_mode {
+      exec { 'Provision Rookmon FS in SM (service-group-member rookmon-fs)':
+        command => 'sm-provision service-group-member controller-services rookmon-fs',
+      }
+      -> exec { 'Provision Rookmon DRBD in SM (service-group-member drbd-rookmon)':
+        command => 'sm-provision service-group-member controller-services drbd-rookmon',
+      }
+      -> exec { 'Provision Rook-mon-exit in SM (service-group-member rook-mon-exit)':
+        command => 'sm-provision service-group-member controller-services rook-mon-exit',
+      }
     }
   }
 
@@ -1027,6 +1058,7 @@ class platform::sm::rgw::runtime {
 
 class platform::sm::ceph::runtime {
   $ceph_configured = $::platform::ceph::params::service_enabled
+  $rook_configured = $::platform::rook::params::service_enabled
   $system_mode     = $::platform::params::system_mode
   $system_type     = $::platform::params::system_type
 
@@ -1053,6 +1085,20 @@ class platform::sm::ceph::runtime {
     }
     -> exec { 'Provision Ceph-Manager --apply (service-group-member ceph-manager)':
       command => 'sm-provision service-group-member storage-monitoring-services ceph-manager --apply',
+    }
+  }
+
+  if $rook_configured {
+    if $system_type == 'All-in-one' and 'duplex' in $system_mode {
+      exec { 'Provision Cephmon FS in SM (service-group-member cephmon-fs)':
+        command => 'sm-provision service-group-member controller-services rookmon-fs --apply',
+      }
+      -> exec { 'Provision Cephmon DRBD in SM (service-group-member drbd-cephmon':
+        command => 'sm-provision service-group-member controller-services drbd-rookmon --apply',
+      }
+      -> exec { 'Provision Rook-mon-exit in SM (service-group-member rook-mon-exit)':
+        command => 'sm-provision service-group-member controller-services rook-mon-exit --apply',
+      }
     }
   }
 }

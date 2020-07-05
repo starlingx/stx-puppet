@@ -435,6 +435,60 @@ class platform::drbd::cephmon ()
   }
 }
 
+class platform::drbd::rookmon::params (
+  $device = '/dev/drbd9',
+  $lv_name = 'ceph-mon-lv',
+  $mountpoint = '/var/lib/ceph/mon-a',
+  $port = '7788',
+  $resource_name = 'drbd-cephmon',
+  $vg_name = 'cgts-vg',
+) {}
+
+class platform::drbd::rookmon ()
+  inherits ::platform::drbd::rookmon::params {
+
+  include ::platform::rook::params
+
+  $system_mode = $::platform::params::system_mode
+  $system_type = $::platform::params::system_type
+
+  if ((str2bool($::is_controller_active) or str2bool($::is_standalone_controller))
+    and ! str2bool($::is_node_rook_ceph_configured)) {
+    # Active controller, first time configuration.
+    $drbd_primary = true
+    $drbd_initial = true
+    $drbd_automount = true
+
+  } elsif str2bool($::is_standalone_controller) {
+    # Active standalone controller, successive reboots.
+    $drbd_primary = true
+    $drbd_initial = undef
+    $drbd_automount = true
+  } else {
+    # Node unlock, reboot or standby configuration
+    # Do not mount ceph
+    $drbd_primary = undef
+    $drbd_initial = undef
+    $drbd_automount = undef
+  }
+
+  if ($platform::rook::params::service_enabled and
+    $system_type == 'All-in-one' and 'duplex' in $system_mode) {
+    platform::drbd::filesystem { $resource_name:
+      vg_name                => $vg_name,
+      lv_name                => $lv_name,
+      lv_size                => $platform::rook::params::mon_lv_size,
+      port                   => $port,
+      device                 => $device,
+      mountpoint             => $mountpoint,
+      resync_after           => undef,
+      manage_override        => true,
+      ha_primary_override    => $drbd_primary,
+      initial_setup_override => $drbd_initial,
+      automount_override     => $drbd_automount,
+    }
+  }
+}
 
 class platform::drbd(
   $service_enable = false,
@@ -464,6 +518,7 @@ class platform::drbd(
   include ::platform::drbd::etcd
   include ::platform::drbd::dockerdistribution
   include ::platform::drbd::cephmon
+  include ::platform::drbd::rookmon
   include ::platform::drbd::trigger_resize_check
 
   # network changes need to be applied prior to DRBD resources
@@ -569,5 +624,10 @@ class platform::drbd::cephmon::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
   include ::platform::drbd::cephmon
-  include ::platform::drbd::trigger_resize_check
+}
+
+class platform::drbd::rookmon::runtime {
+  include ::platform::drbd::params
+  include ::platform::drbd::runtime_service_enable
+  include ::platform::drbd::rookmon
 }
