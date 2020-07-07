@@ -53,12 +53,8 @@ define platform::devices::sriov_enable (
   }
   if ($num_vfs > 0) {
     if ($device_id == '0d8f') {
-      exec { "Waiting for n3000 reset before enabling device: ${title}":
-        command   => 'test -e /var/run/.sysinv_n3000_reset',
-        path      => '/usr/bin/',
-        tries     => 60,
-        try_sleep => 1,
-      }
+      include platform::devices::fpga::n3000::reset
+      Class['platform::devices::fpga::n3000::reset']
       -> Exec["sriov-enable-device: ${title}"]
     }
     exec { "sriov-enable-device: ${title}":
@@ -76,12 +72,8 @@ define platform::devices::sriov_bind (
 ) {
   if ($driver != undef) and ($addr != undef) {
     if ($device_id != undef) and ($device_id == '0d8f') {
-      exec { "Waiting for n3000 reset before binding device: ${title}":
-        command   => 'test -e /var/run/.sysinv_n3000_reset',
-        path      => '/usr/bin/',
-        tries     => 60,
-        try_sleep => 1,
-      }
+      include platform::devices::fpga::n3000::reset
+      Class['platform::devices::fpga::n3000::reset']
       -> Exec["sriov-bind-device: ${title}"]
     }
     ensure_resource(kmod::load, $driver)
@@ -136,6 +128,19 @@ class platform::devices::fpga::fec::runtime {
 class platform::devices::fpga::fec::params (
   $device_config = {}
 ) { }
+
+class platform::devices::fpga::n3000::reset {
+  # The N3000 FPGA is reset via docker container application by the
+  # sysinv FPGA agent on startup.  This will clear the number of VFs
+  # configured on the FEC device as well as any bound drivers.
+  exec { 'Waiting for n3000 reset before enabling device':
+    command   => 'test -e /var/run/.sysinv_n3000_reset',
+    path      => '/usr/bin/',
+    tries     => 60,
+    try_sleep => 1,
+    require   => Anchor['platform::networking'],
+  }
+}
 
 class platform::devices::fpga::fec::config
   inherits ::platform::devices::fpga::fec::params {

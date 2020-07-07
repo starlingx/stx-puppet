@@ -216,17 +216,13 @@ define platform::interfaces::sriov_vf_bind (
   $vf_config
 ) {
   if ($device_id == '0d58') {
-    exec { "Waiting for n3000 reset before binding device: ${title}":
-      command   => 'test -e /var/run/.sysinv_n3000_reset',
-      path      => '/usr/bin/',
-      tries     => 60,
-      try_sleep => 1,
-    }
-    -> exec { "Restarting n3000 NICs for interface: ${title}":
+    include ::platform::devices::fpga::n3000::reset
+    exec { "Restarting n3000 NICs for interface: ${title}":
       command => "ifdown ${port_name}; ifup ${port_name}",
       path    => '/usr/sbin/',
+      require => Class['::platform::devices::fpga::n3000::reset']
     }
-    -> Anchor['platform::networking']
+    -> Platform::Interfaces::Sriov_bind <| |>
   }
   create_resources('platform::interfaces::sriov_bind', $vf_config, {})
 }
