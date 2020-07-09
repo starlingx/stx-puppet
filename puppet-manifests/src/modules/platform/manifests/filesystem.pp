@@ -69,6 +69,21 @@ define platform::filesystem (
         size_is_minsize => $fs_size_is_minsize,
     }
 
+    # Wipe 10MB at the beginning and at the end
+    # of each LV in cgts-vg to prevent problems caused
+    # by stale data on the disk
+    -> exec { "wipe start of device ${lv_name}":
+      command => "dd if=/dev/zero of=${lv_name} bs=1M count=10",
+      onlyif  => "test ! -e /etc/platform/.${lv_name}"
+    }
+    -> exec { "wipe end of device ${lv_name}":
+      command => "dd if=/dev/zero of=${lv_name} bs=1M seek=$(($(blockdev --getsz ${lv_name})/2048 - 10)) count=10",
+      onlyif  => "test ! -e /etc/platform/.${lv_name}"
+    }
+    -> exec { "mark lv as wiped ${lv_name}:":
+      command => "touch /etc/platform/.${lv_name}",
+      onlyif  => "test ! -e /etc/platform/.${lv_name}"
+    }
     # create filesystem
     -> filesystem { $device:
       ensure  => $ensure,
@@ -125,12 +140,11 @@ define platform::filesystem::resize(
     command => "lvextend -L${lv_size}G ${device}",
     returns => [0, 5]
   }
-  # After a partition extend, make sure that there is no leftover drbd
-  # type metadata from a previous install. Drbd writes its meta at the
-  # very end of a block device causing confusion for blkid.
+  # After a partition extend, wipe 10MB at the end of the partition
+  # to make sure that there is no leftover
+  # type metadata from a previous install
   -> exec { "wipe end of device ${device}":
-    command => "dd if=/dev/zero of=${device} bs=512 seek=$(($(blockdev --getsz ${device}) - 34)) count=34",
-    onlyif  => "blkid ${device} | grep TYPE=\\\"drbd\\\"",
+    command => "dd if=/dev/zero of=${device} bs=1M seek=$(($(blockdev --getsz ${device})/2048 - 10)) count=10",
   }
   -> exec { "resize2fs ${devmapper}":
     command => "resize2fs ${devmapper}",
