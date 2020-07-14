@@ -31,7 +31,7 @@ class platform::mtce
 
   file { '/etc/mtc.ini':
     ensure  => present,
-    mode    => '0755',
+    mode    => '0600',
     content => template('mtce/mtc_ini.erb'),
   }
 
