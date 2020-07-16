@@ -42,6 +42,13 @@ class openstack::barbican
     ensure  => present,
     content => template('openstack/barbican-api-logrotate.erb')
   }
+
+  # Limit configuration file permission
+  file { '/etc/barbican/barbican.conf':
+    owner => 'barbican',
+    group => 'barbican',
+    mode  => '0600',
+  }
 }
 
 class openstack::barbican::service (
