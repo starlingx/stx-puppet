@@ -72,6 +72,7 @@ class sysinv (
 
   Package['sysinv'] -> Sysinv_config<||>
   Package['sysinv'] -> Sysinv_api_paste_ini<||>
+  Package['sysinv'] -> Certmon_config<||>
 
   # this anchor is used to simplify the graph between sysinv components by
   # allowing a resource to serve as a point where the configuration of sysinv begins

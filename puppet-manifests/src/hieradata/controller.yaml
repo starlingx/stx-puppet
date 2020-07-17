@@ -159,6 +159,11 @@ sysinv::api::keystone_project_domain: 'Default'
 
 sysinv::conductor::enabled: false
 
+# cert-mon
+sysinv::certmon::use_syslog: true
+sysinv::certmon::log_facility: 'local6'
+sysinv::certmon::debug: false
+
 
 # nfvi
 nfv::nfvi::infrastructure_rest_api_data_port_fault_handling_enabled: false
