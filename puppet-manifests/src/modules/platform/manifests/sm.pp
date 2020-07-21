@@ -15,6 +15,7 @@ class platform::sm
   $system_mode                   = $::platform::params::system_mode
   $system_type                   = $::platform::params::system_type
   $stx_openstack_applied         = $::platform::params::stx_openstack_applied
+  $dc_role                       = $::platform::params::distributed_cloud_role
 
   include ::platform::network::pxeboot::params
   if $::platform::network::pxeboot::params::interface_name {
@@ -701,6 +702,13 @@ class platform::sm
   }
   -> exec { 'Provision service-group storage-monitoring-services':
     command => 'sm-provision service-group storage-monitoring-services',
+  }
+
+  # Provision cert-mon for systemcontroller and subcloud
+  if $dc_role =='systemcontroller' or $dc_role =='subcloud' {
+    exec { 'provision cert-mon service in controller-services group':
+      command => 'sm-provision service-group-member controller-services cert-mon'
+    }
   }
 
   # On an AIO-DX system, cephmon DRBD must always be configured, even
