@@ -88,6 +88,12 @@ oom_score = 0
       ca_file = "/etc/docker/certs.d/registry.local:9001/registry-cert.crt"
     [plugins.cri.registry.configs."registry.local:9001".auth]
       auth = "<%= @registry_auth %>"
+# Central cloud registry config for distributed cloud subclouds
+<%- if @distributed_cloud_role == 'subcloud' -%>
+    [plugins.cri.registry.configs."registry.central:9001".tls]
+      ca_file = "/etc/docker/certs.d/registry.central:9001/registry-cert.crt"
+<%- end -%>
+# End central cloud registry config for distributed cloud subclouds
     [plugins.cri.x509_key_pair_streaming]
       tls_cert_file = ""
       tls_key_file = ""
