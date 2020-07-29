@@ -159,7 +159,7 @@ define platform::filesystem::resize(
 
 class platform::filesystem::backup::params (
   $lv_name = 'backup-lv',
-  $lv_size = '5',
+  $lv_size = '1',
   $mountpoint = '/opt/backups',
   $devmapper = '/dev/mapper/cgts--vg-backup--lv',
   $fs_type = 'ext4',
@@ -191,7 +191,7 @@ class platform::filesystem::conversion::params (
 ) { }
 
 class platform::filesystem::scratch::params (
-  $lv_size = '8',
+  $lv_size = '2',
   $lv_name = 'scratch-lv',
   $mountpoint = '/scratch',
   $devmapper = '/dev/mapper/cgts--vg-scratch--lv',
@@ -234,7 +234,7 @@ class platform::filesystem::conversion
 }
 
 class platform::filesystem::kubelet::params (
-  $lv_size = '10',
+  $lv_size = '2',
   $lv_name = 'kubelet-lv',
   $mountpoint = '/var/lib/kubelet',
   $devmapper = '/dev/mapper/cgts--vg-kubelet--lv',
@@ -292,11 +292,17 @@ class platform::filesystem::storage {
 
 
 class platform::filesystem::compute {
-  include ::platform::filesystem::kubelet
-  class {'platform::filesystem::docker::params' :
-    lv_size => 30
-  }
-  -> class {'platform::filesystem::docker' :
+  if $::personality == 'worker' {
+    # The default docker size for controller is 20G
+    # other than 30G. To prevent the docker size to
+    # be overrided to 30G for AIO, this is scoped to
+    # worker node.
+    include ::platform::filesystem::kubelet
+    class {'platform::filesystem::docker::params' :
+      lv_size => 30
+    }
+    -> class {'platform::filesystem::docker' :
+    }
   }
 
   Class['::platform::lvm::vg::cgts_vg'] -> Class[$name]
@@ -390,7 +396,7 @@ class platform::filesystem::docker::runtime {
 
 
 class platform::filesystem::docker::params::bootstrap (
-  $lv_size = '30',
+  $lv_size = '20',
   $lv_name = 'docker-lv',
   $mountpoint = '/var/lib/docker',
   $devmapper = '/dev/mapper/cgts--vg-docker--lv',
