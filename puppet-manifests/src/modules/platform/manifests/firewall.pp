@@ -131,11 +131,7 @@ class platform::firewall::calico::oam::services {
 
   $barbican_api_port = [$::openstack::barbican::params::api_port]
 
-  if !$::platform::params::region_config {
-    $keystone_port = [$::openstack::keystone::params::api_port]
-  } else {
-    $keystone_port = []
-  }
+  $keystone_port = [$::openstack::keystone::params::api_port]
 
   if $::platform::params::distributed_cloud_role != 'subcloud'  {
     if $::openstack::horizon::params::enable_https {

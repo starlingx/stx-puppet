@@ -133,12 +133,10 @@ class openstack::keystone::haproxy
   include ::platform::params
   include ::platform::haproxy::params
 
-  if !$::platform::params::region_config {
-    platform::haproxy::proxy { 'keystone-restapi':
-      server_name  => 's-keystone',
-      public_port  => $api_port,
-      private_port => $api_port,
-    }
+  platform::haproxy::proxy { 'keystone-restapi':
+    server_name  => 's-keystone',
+    public_port  => $api_port,
+    private_port => $api_port,
   }
 
   # Configure rules for DC https enabled admin endpoint.
