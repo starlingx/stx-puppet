@@ -22,8 +22,8 @@
 class dcorch (
   $database_connection         = '',
   $database_idle_timeout       = 3600,
-  $database_max_pool_size      = 5,
-  $database_max_overflow       = 10,
+  $database_max_pool_size      = 1,
+  $database_max_overflow       = 500,
   $control_exchange            = 'openstack',
   $rabbit_host                 = '127.0.0.1',
   $rabbit_port                 = 5672,
