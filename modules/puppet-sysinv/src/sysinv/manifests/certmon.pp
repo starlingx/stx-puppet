@@ -101,6 +101,8 @@ class sysinv::certmon (
 
     if $::platform::params::distributed_cloud_role == 'systemcontroller' {
         certmon_config {
+          'DEFAULT/transport_url':    value => $::platform::amqp::params::transport_url;
+
           'endpoint_cache/auth_plugin':    value => $auth_type;
           'endpoint_cache/username':     value => $dc_keystone_user;
           'endpoint_cache/password':     value => $dc_keystone_password, secret=> true;
