@@ -253,11 +253,9 @@ class platform::config::certs::ssl_ca
   $ssl_ca_file = '/etc/pki/ca-trust/source/anchors/ca-cert.pem'
   if str2bool($::is_initial_config) {
     $docker_restart_cmd = 'systemctl restart docker'
-    $containerd_restart_cmd = 'systemctl restart containerd'
   }
   else {
     $docker_restart_cmd = 'pmon-restart dockerd'
-    $containerd_restart_cmd = 'pmon-restart containerd'
   }
 
   if ! empty($ssl_ca_cert) {
@@ -283,11 +281,6 @@ class platform::config::certs::ssl_ca
   }
   -> exec { 'restart docker':
     command     => $docker_restart_cmd,
-    subscribe   => File[$ssl_ca_file],
-    refreshonly => true
-  }
-  -> exec { 'restart containerd':
-    command     => $containerd_restart_cmd,
     subscribe   => File[$ssl_ca_file],
     refreshonly => true
   }
