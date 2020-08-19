@@ -40,6 +40,8 @@ class platform::dns::dnsmasq {
   $dns_service_ip = $::platform::kubernetes::params::dns_service_ip
   $distributed_cloud_role = $::platform::params::distributed_cloud_role
   $sc_address = $::platform::params::system_controller_addr
+  $sc_mgmt_address = $::platform::params::system_controller_mgmt_addr
+  $is_virtual_system = $::platform::params::virtual_system
 
   file { '/etc/dnsmasq.conf':
       ensure  => 'present',

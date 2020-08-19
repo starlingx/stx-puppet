@@ -129,28 +129,37 @@ class platform::kubernetes::kubeadm {
     $k8s_cpu_manager_opts = join([$opts,
                                   $opts_sys_res], ' ')
   } else {
-    if str2bool($::is_worker_subfunction)
-      and !('openstack-compute-node' in $host_labels) {
-      $opts = join(['--feature-gates TopologyManager=true',
-                    "--cpu-manager-policy=${k8s_cpu_mgr_policy}",
-                    "--topology-manager-policy=${k8s_topology_mgr_policy}"], ' ')
+    if !$::platform::params::virtual_system {
+      if str2bool($::is_worker_subfunction)
+        and !('openstack-compute-node' in $host_labels) {
+        # Enable TopologyManager for hosts with the worker subfunction.
+        # Exceptions are:
+        #   - DC System controllers
+        #   - Virtualized nodes (lab environment only)
 
-      if $k8s_cpu_mgr_policy == 'none' {
-        $k8s_reserved_cpus = $k8s_platform_cpuset
+        $opts = join(['--feature-gates TopologyManager=true',
+                      "--cpu-manager-policy=${k8s_cpu_mgr_policy}",
+                      "--topology-manager-policy=${k8s_topology_mgr_policy}"], ' ')
+
+        if $k8s_cpu_mgr_policy == 'none' {
+          $k8s_reserved_cpus = $k8s_platform_cpuset
+        } else {
+          # The union of platform, isolated, and vswitch
+          $k8s_reserved_cpus = $k8s_all_reserved_cpuset
+        }
+
+        $opts_res_cpus = "--reserved-cpus=${k8s_reserved_cpus}"
+        $k8s_cpu_manager_opts = join([$opts,
+                                      $opts_sys_res,
+                                      $opts_res_cpus], ' ')
       } else {
-        # The union of platform, isolated, and vswitch
-        $k8s_reserved_cpus = $k8s_all_reserved_cpuset
+        $opts = '--cpu-manager-policy=none'
+        $k8s_cpu_manager_opts = join([$opts,
+                                      $opts_sys_res], ' ')
+
       }
-
-      $opts_res_cpus = "--reserved-cpus=${k8s_reserved_cpus}"
-      $k8s_cpu_manager_opts = join([$opts,
-                                    $opts_sys_res,
-                                    $opts_res_cpus], ' ')
     } else {
-      $opts = '--cpu-manager-policy=none'
-      $k8s_cpu_manager_opts = join([$opts,
-                                    $opts_sys_res], ' ')
-
+      $k8s_cpu_manager_opts = '--cpu-manager-policy=none'
     }
   }
 
