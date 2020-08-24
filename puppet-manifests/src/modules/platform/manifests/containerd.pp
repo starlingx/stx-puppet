@@ -16,6 +16,7 @@ class platform::containerd::config
   include ::platform::dockerdistribution::params
   include ::platform::kubernetes::params
   include ::platform::dockerdistribution::registries
+  include ::platform::params
 
   # If containerd is started prior to networking providing a default route, the
   # containerd cri plugin will fail to load and the status of the cri plugin
@@ -33,6 +34,7 @@ class platform::containerd::config
     $no_proxy = regsubst($::platform::docker::params::no_proxy, '\\[|\\]', '', 'G')
   }
   $insecure_registries = $::platform::dockerdistribution::registries::insecure_registries
+  $distributed_cloud_role = $::platform::params::distributed_cloud_role
 
   if $http_proxy or $https_proxy {
     file { '/etc/systemd/system/containerd.service.d':
