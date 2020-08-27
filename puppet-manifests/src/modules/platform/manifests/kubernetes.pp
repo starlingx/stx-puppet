@@ -120,18 +120,20 @@ class platform::kubernetes::kubeadm {
     net.bridge.bridge-nf-call-iptables = 1"
 
   # Configure kubelet cpumanager options
+  $opts_sys_res = join(['--system-reserved=',
+                        "memory=${k8s_reserved_mem}Mi"])
+
   if ($::personality == 'controller' and
       $::platform::params::distributed_cloud_role == 'systemcontroller') {
-    $k8s_cpu_manager_opts = '--cpu-manager-policy=none'
+    $opts = '--cpu-manager-policy=none'
+    $k8s_cpu_manager_opts = join([$opts,
+                                  $opts_sys_res], ' ')
   } else {
     if str2bool($::is_worker_subfunction)
       and !('openstack-compute-node' in $host_labels) {
       $opts = join(['--feature-gates TopologyManager=true',
                     "--cpu-manager-policy=${k8s_cpu_mgr_policy}",
                     "--topology-manager-policy=${k8s_topology_mgr_policy}"], ' ')
-
-      $opts_sys_res = join(['--system-reserved=',
-                            "memory=${k8s_reserved_mem}Mi"])
 
       if $k8s_cpu_mgr_policy == 'none' {
         $k8s_reserved_cpus = $k8s_platform_cpuset
@@ -145,7 +147,10 @@ class platform::kubernetes::kubeadm {
                                     $opts_sys_res,
                                     $opts_res_cpus], ' ')
     } else {
-      $k8s_cpu_manager_opts = '--cpu-manager-policy=none'
+      $opts = '--cpu-manager-policy=none'
+      $k8s_cpu_manager_opts = join([$opts,
+                                    $opts_sys_res], ' ')
+
     }
   }
 
