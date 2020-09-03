@@ -464,6 +464,7 @@ class platform::drbd(
   include ::platform::drbd::etcd
   include ::platform::drbd::dockerdistribution
   include ::platform::drbd::cephmon
+  include ::platform::drbd::trigger_resize_check
 
   # network changes need to be applied prior to DRBD resources
   Anchor['platform::networking']
@@ -490,6 +491,7 @@ class platform::drbd::bootstrap {
   include ::platform::drbd::rabbit
   include ::platform::drbd::platform
   include ::platform::drbd::extension
+  include ::platform::drbd::trigger_resize_check
 }
 
 
@@ -509,10 +511,20 @@ class platform::drbd::runtime_service_enable {
   }
 }
 
+class platform::drbd::trigger_resize_check {
+  file {'/etc/platform/.cfs_drbdadm_reconfigured':
+    ensure => absent
+  }
+  file {'/var/run/.config_controller_fini':
+    ensure => absent
+  }
+}
+
 class platform::drbd::pgsql::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
   include ::platform::drbd::pgsql
+  include ::platform::drbd::trigger_resize_check
 }
 
 
@@ -520,6 +532,7 @@ class platform::drbd::platform::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
   include ::platform::drbd::platform
+  include ::platform::drbd::trigger_resize_check
 }
 
 
@@ -527,6 +540,7 @@ class platform::drbd::extension::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
   include ::platform::drbd::extension
+  include ::platform::drbd::trigger_resize_check
 }
 
 
@@ -534,22 +548,26 @@ class platform::drbd::dc_vault::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
   include ::platform::drbd::dc_vault
+  include ::platform::drbd::trigger_resize_check
 }
 
 class platform::drbd::etcd::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
   include ::platform::drbd::etcd
+  include ::platform::drbd::trigger_resize_check
 }
 
 class platform::drbd::dockerdistribution::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
   include ::platform::drbd::dockerdistribution
+  include ::platform::drbd::trigger_resize_check
 }
 
 class platform::drbd::cephmon::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
   include ::platform::drbd::cephmon
+  include ::platform::drbd::trigger_resize_check
 }
