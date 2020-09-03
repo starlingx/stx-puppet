@@ -176,3 +176,10 @@ class platform::haproxy::runtime {
     stage => post
   }
 }
+
+class platform::haproxy::restart::runtime {
+  class {'::platform::haproxy::reload':
+    stage => post
+  }
+}
+
