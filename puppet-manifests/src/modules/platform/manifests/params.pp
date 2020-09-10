@@ -25,6 +25,8 @@ class platform::params (
   $security_feature = undef,
   $stx_openstack_applied = false,
   $system_controller_addr = undef,
+  $system_controller_mgmt_addr = undef,
+  $virtual_system = false,
 ) {
   $ipv4 = 4
   $ipv6 = 6
