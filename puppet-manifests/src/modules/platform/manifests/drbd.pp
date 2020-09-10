@@ -168,7 +168,7 @@ class platform::drbd::rabbit ()
 class platform::drbd::platform::params (
   $device = '/dev/drbd2',
   $lv_name = 'platform-lv',
-  $lv_size = '10',
+  $lv_size = '1',
   $mountpoint = '/opt/platform',
   $port = '7790',
   $vg_name = 'cgts-vg',
@@ -270,7 +270,7 @@ class platform::drbd::etcd::params (
   #$service_enable = false,
   $device = '/dev/drbd7',
   $lv_name = 'etcd-lv',
-  $lv_size = '5',
+  $lv_size = '1',
   $mountpoint = '/opt/etcd',
   $port = '7797',
   $resource_name = 'drbd-etcd',
@@ -327,7 +327,7 @@ class platform::drbd::etcd::bootstrap (
 class platform::drbd::dockerdistribution::params (
   $device = '/dev/drbd8',
   $lv_name = 'dockerdistribution-lv',
-  $lv_size = '1',
+  $lv_size = '8',
   $mountpoint = '/var/lib/docker-distribution',
   $port = '7798',
   $resource_name = 'drbd-dockerdistribution',
