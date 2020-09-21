@@ -48,4 +48,16 @@ class dcdbsync::keystone::auth (
     admin_url           => $admin_url,
     internal_url        => $internal_url,
   }
+
+  # dcdbsync is a private service only used by dcorch,
+  # its API is not exposed for public access.
+  -> exec { 'Delete public endpoint':
+    path      => '/usr/bin',
+    command   => @("CMD"/L),
+      /bin/sh -c 'source /etc/platform/openrc && \
+      openstack endpoint list --service dcorch-dbsync --interface public --format value -c ID | \
+      xargs --no-run-if-empty openstack endpoint delete'
+      | CMD
+    logoutput => true,
+  }
 }
