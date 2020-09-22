@@ -336,10 +336,10 @@ class platform::network::routes::runtime {
   # as puppet bug will remove dependency altogether if
   # Network_route is empty. See below.
   # https://projects.puppetlabs.com/issues/18399
-  Network_route <| |> -> Exec['apply-network-config']
-  Network_route6 <| |> -> Exec['apply-network-config']
+  Network_route <| |> -> Exec['apply-network-config route setup']
+  Network_route6 <| |> -> Exec['apply-network-config route setup']
 
-  exec {'apply-network-config':
-    command => 'apply_network_config.sh',
+  exec {'apply-network-config route setup':
+    command => 'apply_network_config.sh --routes',
   }
 }
