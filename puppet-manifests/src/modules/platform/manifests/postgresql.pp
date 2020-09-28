@@ -57,22 +57,14 @@ class platform::postgresql::server (
     value => '1000',
   }
 
-  # Set large values for postgres in normal mode
-  # In AIO or virtual box, use reduced settings
+  # Set large values for postgres in standard or system controller.
+  # In AIO or virtual box, use reduced settings.
   #
-
-  # Normal mode
-  # 1500 connections
-  # 80 MB shared buffer
-  # work_mem 512 MB since some ceilometer queries entail extensive
-  # TODO: with ceilometer removed, determine if work_mem can be revisited
-  # sorting as well as hash joins and hash based aggregation.
-  # checkpoint_segments increased to reduce frequency of checkpoints
-  if str2bool($::is_worker_subfunction) or str2bool($::is_virtual) {
-    # AIO or virtual box
-    # 700 connections needs about 80MB shared buffer
-    # Leave work_mem as the default for vbox and AIO
-    # Leave checkpoint_segments as the default for vbox and AIO
+  if ((str2bool($::is_worker_subfunction) and
+        ($::platform::params::distributed_cloud_role !='systemcontroller')) or
+      (str2bool($::is_virtual))) {
+    # Non system controller AIO or virtual box
+    # 700 connections, 80MB shared_buffers
     postgresql::server::config_entry { 'max_connections':
       value => '700',
     }
@@ -80,6 +72,14 @@ class platform::postgresql::server (
       value => '80MB',
     }
   } else {
+    # System controller or standard controller
+    # 1500 connections, 80MB shared_buffers, increase work_mem and
+    # checkpoint_segments
+    # TODO:
+    #   - re-assess work_mem setting considering the complexity of the current
+    #     queries.
+    #   - re-assess shared_buffers setting for the system controller in a large
+    #     distributed cloud.
     postgresql::server::config_entry { 'max_connections':
       value => '1500',
     }

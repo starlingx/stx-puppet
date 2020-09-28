@@ -1,7 +1,7 @@
 #
 # Files in this package are licensed under Apache; see LICENSE file.
 #
-# Copyright (c) 2013-2016 Wind River Systems, Inc.
+# Copyright (c) 2013-2020 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -22,7 +22,7 @@
 class dcmanager (
   $database_connection         = '',
   $database_idle_timeout       = 3600,
-  $database_max_pool_size      = 1,
+  $database_max_pool_size      = 105,
   $database_max_overflow       = 100,
   $control_exchange            = 'openstack',
   $rabbit_host                 = '127.0.0.1',
