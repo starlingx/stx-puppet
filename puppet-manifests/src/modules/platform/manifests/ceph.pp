@@ -325,6 +325,28 @@ class platform::ceph::monitor
   }
 }
 
+class platform::ceph::metadataserver
+  inherits ::platform::ceph::params {
+  if $::hostname == $mon_0_host {
+        Class['::ceph']
+          -> ceph_config {
+            "mds.${$::hostname}/host": value => $mon_0_host;
+          }
+    }
+  if $::hostname == $mon_1_host {
+        Class['::ceph']
+          -> ceph_config {
+            "mds.${$::hostname}/host": value => $mon_1_host;
+          }
+    }
+  if $::hostname == $mon_2_host {
+        Class['::ceph']
+          -> ceph_config {
+            "mds.${$::hostname}/host": value => $mon_2_host;
+          }
+    }
+  }
+
 define osd_crush_location(
   $osd_id,
   $osd_uuid,
@@ -541,12 +563,14 @@ class platform::ceph::worker {
   if $::personality == 'worker' {
     include ::platform::ceph
     include ::platform::ceph::monitor
+    include ::platform::ceph::metadataserver
   }
 }
 
 class platform::ceph::storage {
     include ::platform::ceph
     include ::platform::ceph::monitor
+    include ::platform::ceph::metadataserver
     include ::platform::ceph::osds
 
     # Ensure partitions update prior to ceph storage configuration
@@ -556,6 +580,7 @@ class platform::ceph::storage {
 class platform::ceph::controller {
     include ::platform::ceph
     include ::platform::ceph::monitor
+    include ::platform::ceph::metadataserver
 
     # is_active_controller_found is checking the existence of
     # /var/run/.active_controller_not_found, which will be created
@@ -575,6 +600,7 @@ class platform::ceph::controller {
 
 class platform::ceph::runtime_base {
   include ::platform::ceph::monitor
+  include ::platform::ceph::metadataserver
   include ::platform::ceph
 
   $system_mode = $::platform::params::system_mode
