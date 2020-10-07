@@ -17,6 +17,7 @@ class platform::containerd::config
   include ::platform::kubernetes::params
   include ::platform::dockerdistribution::registries
   include ::platform::params
+  include ::platform::mtce::params
 
   # If containerd is started prior to networking providing a default route, the
   # containerd cri plugin will fail to load and the status of the cri plugin
@@ -66,8 +67,8 @@ class platform::containerd::config
   # generate the registry auth
   $registry_auth = chomp(
     base64('encode',
-      join([$::platform::dockerdistribution::params::registry_username,
-            $::platform::dockerdistribution::params::registry_password], ':')))
+      join([$::platform::mtce::params::auth_username,
+            $::platform::mtce::params::auth_pw], ':')))
 
   if $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
     $stream_server_address = '::1'
