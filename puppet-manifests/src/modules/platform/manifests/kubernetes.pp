@@ -407,19 +407,22 @@ class platform::kubernetes::worker::pci
 
 class platform::kubernetes::worker::sriovdp {
   include ::platform::kubernetes::params
+  include ::platform::params
   $host_labels = $::platform::kubernetes::params::host_labels
   if ($::personality == 'controller') and
       str2bool($::is_worker_subfunction)
       and ('sriovdp' in $host_labels) {
     # In an AIO system, it's possible for the device plugin pods to start
-    # before the device VFs are bound to a driver.  Restarting the device
-    # plugin pods will allow them to re-scan the set of matching
-    # device ids/drivers specified in the /etc/pcidp/config.json file.
+    # before the device VFs are bound to a driver.  Deleting the device
+    # plugin pods will cause them to be recreated by the daemonset and
+    # allow them to re-scan the set of matching device ids/drivers
+    # specified in the /etc/pcidp/config.json file.
     # This may be mitigated by moving to helm + configmap for the device
     # plugin.
-    exec { 'Restart sriovdp daemonset':
+    exec { 'Delete sriov device plugin pod if present':
       path      => '/usr/bin:/usr/sbin:/bin',
-      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf rollout restart ds -n kube-system kube-sriov-device-plugin-amd64 || true', # lint:ignore:140chars
+      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf delete pod -n kube-system --selector=app=sriovdp --field-selector spec.nodeName=$(hostname) --timeout=60s', # lint:ignore:140chars
+      onlyif    => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf get pods -n kube-system --selector=app=sriovdp --field-selector spec.nodeName=$(hostname) | grep kube-sriov-device-plugin', # lint:ignore:140chars
       logoutput => true,
     }
   }
