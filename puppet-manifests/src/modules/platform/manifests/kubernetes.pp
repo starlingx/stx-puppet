@@ -658,3 +658,34 @@ class platform::kubernetes::master::change_apiserver_parameters
   }
 
 }
+
+class platform::kubernetes::certsans::runtime
+  inherits ::platform::kubernetes::params {
+  include ::platform::params
+  include ::platform::network::mgmt::params
+  include ::platform::network::oam::params
+  include ::platform::network::cluster_host::params
+
+  if $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
+    $localhost_address = '::1'
+  } else {
+    $localhost_address = '127.0.0.1'
+  }
+
+  if $::platform::params::system_mode == 'simplex' {
+    $certsans = "\"${platform::network::cluster_host::params::controller_address}, \
+                   ${localhost_address}, \
+                   ${platform::network::oam::params::controller_address}\""
+  } else {
+    $certsans = "\"${platform::network::cluster_host::params::controller_address}, \
+                   ${localhost_address}, \
+                   ${platform::network::oam::params::controller_address}, \
+                   ${platform::network::oam::params::controller0_address}, \
+                   ${platform::network::oam::params::controller1_address}\""
+  }
+
+  exec { 'update kube-apiserver certSANs':
+    provider => shell,
+    command  => template('platform/kube-apiserver-update-certSANs.erb')
+  }
+}
