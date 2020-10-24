@@ -29,6 +29,22 @@ class platform::kubernetes::params (
   $etcd_servers = undef,
 ) { }
 
+class platform::kubernetes::configuration {
+
+  if 'kube-ignore-isol-cpus' in $::platform::kubernetes::params::host_labels {
+    $ensure = 'present'
+  } else {
+    $ensure = 'absent'
+  }
+
+  file { '/etc/kubernetes/ignore_isolcpus':
+    ensure => $ensure,
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0644',
+  }
+}
+
 class platform::kubernetes::cgroup::params (
   $cgroup_root = '/sys/fs/cgroup',
   $cgroup_name = 'k8s-infra',
@@ -314,6 +330,7 @@ class platform::kubernetes::master
   contain ::platform::kubernetes::master::init
   contain ::platform::kubernetes::coredns
   contain ::platform::kubernetes::firewall
+  contain ::platform::kubernetes::configuration
 
   Class['::platform::sysctl::controller::reserve_ports'] -> Class[$name]
   Class['::platform::etcd'] -> Class[$name]
@@ -322,7 +339,8 @@ class platform::kubernetes::master
   # Ensure DNS is configured as name resolution is required when
   # kubeadm init is run.
   Class['::platform::dns'] -> Class[$name]
-  Class['::platform::kubernetes::kubeadm']
+  Class['::platform::kubernetes::configuration']
+  -> Class['::platform::kubernetes::kubeadm']
   -> Class['::platform::kubernetes::cgroup']
   -> Class['::platform::kubernetes::master::init']
   -> Class['::platform::kubernetes::coredns']
@@ -442,8 +460,10 @@ class platform::kubernetes::worker
     contain ::platform::kubernetes::kubeadm
     contain ::platform::kubernetes::cgroup
     contain ::platform::kubernetes::worker::init
+    contain ::platform::kubernetes::configuration
 
-    Class['::platform::kubernetes::kubeadm']
+    Class['::platform::kubernetes::configuration']
+    -> Class['::platform::kubernetes::kubeadm']
     -> Class['::platform::kubernetes::cgroup']
     -> Class['::platform::kubernetes::worker::init']
   } else {
