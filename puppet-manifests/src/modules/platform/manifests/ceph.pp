@@ -138,7 +138,9 @@ class platform::ceph
         create_ini_settings($mon_settings, $defaults)
 
         # Remove section header
-        Ini_setting<| |>
+        Ini_setting["${ceph_config_file} [mon.${monitor}] public_addr",
+                    "${ceph_config_file} [mon.${monitor}] host",
+                    "${ceph_config_file} [mon.${monitor}] mon_addr"]
         -> file_line { "[mon.${monitor}]":
           ensure => absent,
           path   => $ceph_config_file,

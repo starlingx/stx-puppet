@@ -81,6 +81,13 @@ class openstack::keystone (
       token_expiration      => $token_expiration,
       notification_driver   => 'messagingv2',
     }
+    # remove admin_token from keystone.conf
+    -> ini_setting { 'remove admin_token in config':
+      ensure  => absent,
+      path    => '/etc/keystone/keystone.conf',
+      section => 'DEFAULT',
+      setting => 'admin_token',
+    }
 
     # create keystone policy configuration
     file { '/etc/keystone/policy.json':
