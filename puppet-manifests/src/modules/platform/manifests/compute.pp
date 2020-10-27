@@ -67,8 +67,16 @@ class platform::compute::grub::update
   exec { 'Remove the cpu arguments':
     command => "grubby --update-kernel=ALL --remove-args='${to_be_removed}'",
   }
+  -> exec { 'Remove the cpu arguments from /etc/default/grub':
+    command   => "/usr/local/bin/puppet-update-default-grub.sh --remove ${to_be_removed}",
+    logoutput => true,
+  }
   -> exec { 'Add the cpu arguments':
     command => "grubby --update-kernel=ALL --args='${grub_updates}'",
+  }
+  -> exec { 'Add the cpu arguments to /etc/default/grub':
+    command   => "/usr/local/bin/puppet-update-default-grub.sh --add ${grub_updates}",
+    logoutput => true,
   }
 }
 
