@@ -7,6 +7,7 @@ class platform::fm::params (
   $service_enabled = true,
   $trap_destinations = [],
   $sysinv_catalog_info = 'platform:sysinv:internalURL',
+  $snmp_enabled = 0,
 ) { }
 
 
@@ -19,6 +20,7 @@ class platform::fm::config
     system_name         => $system_name,
     trap_destinations   => $trap_dest_str,
     sysinv_catalog_info => $sysinv_catalog_info,
+    snmp_enabled        => $snmp_enabled,
   }
 }
 
