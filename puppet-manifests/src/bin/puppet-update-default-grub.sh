@@ -46,6 +46,17 @@ function add_options {
     for boot_opt in "$@"; do
         boot_arg=${boot_opt/=*/}
 
+        if [ "${boot_arg}" = "hugepagesz" ]; then
+            # hugepagesz is paired with hugepages, and can appear multiple times.
+            # Cache the arg and process with hugepages
+            hugepagesz_arg="${boot_opt}"
+            continue
+        elif [ "${boot_arg}" = "hugepages" ]; then
+            # Use the cached hugepagesz as part of the arg
+            boot_arg="${hugepagesz_arg} ${boot_arg}"
+            boot_opt="${hugepagesz_arg} ${boot_opt}"
+        fi
+
         # Get the persisted arg from /etc/default/grub, if it exists
         persisted_arg=$(
             grep "^GRUB_CMDLINE_LINUX=" /etc/default/grub \
