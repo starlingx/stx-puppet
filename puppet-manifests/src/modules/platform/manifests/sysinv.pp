@@ -3,6 +3,7 @@ class platform::sysinv::params (
   $region_name = undef,
   $service_create = false,
   $fm_catalog_info = 'faultmanagement:fm:internalURL',
+  $server_timeout = '600s',
 ) { }
 
 class platform::sysinv
@@ -82,9 +83,10 @@ class platform::sysinv::haproxy
   include ::platform::haproxy::params
 
   platform::haproxy::proxy { 'sysinv-restapi':
-    server_name  => 's-sysinv',
-    public_port  => $api_port,
-    private_port => $api_port,
+    server_name    => 's-sysinv',
+    public_port    => $api_port,
+    private_port   => $api_port,
+    server_timeout => $server_timeout,
   }
 
   # Configure rules for DC https enabled admin endpoint.
@@ -96,6 +98,7 @@ class platform::sysinv::haproxy
       public_ip_address => $::platform::haproxy::params::private_ip_address,
       public_port       => $api_port + 1,
       private_port      => $api_port,
+      server_timeout    => $server_timeout,
     }
   }
 }
@@ -137,9 +140,25 @@ class platform::sysinv::api
 }
 
 
-class platform::sysinv::bootstrap {
+class platform::sysinv::bootstrap (
+  $dc_sysinv_user_id = undef,
+) {
   include ::sysinv::db::postgresql
   include ::sysinv::keystone::auth
+
+  if $dc_sysinv_user_id {
+    exec { 'update keystone sysinv assignment actor_id to match system controller':
+      command => "psql -d keystone -c \"update public.assignment set actor_id='${dc_sysinv_user_id}' from public.local_user where\
+                  public.assignment.actor_id=public.local_user.user_id and public.local_user.name='sysinv'\"",
+      user    => 'postgres',
+      require => Class['::sysinv::keystone::auth'],
+    }
+    -> exec { 'update keystone sysinv user id to match system controller':
+      command => "psql -d keystone -c \"update public.user set id='${dc_sysinv_user_id}' from public.local_user where\
+                  public.user.id=public.local_user.user_id and public.local_user.name='sysinv'\"",
+      user    => 'postgres',
+    }
+  }
 
   include ::platform::sysinv
 

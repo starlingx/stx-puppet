@@ -18,6 +18,7 @@ class sysinv::params {
 
   $sysinv_dir = '/etc/sysinv'
   $sysinv_conf = '/etc/sysinv/sysinv.conf'
+  $certmon_conf = '/etc/sysinv/cert-mon.conf'
   $sysinv_paste_api_ini = '/etc/sysinv/api-paste.ini'
 
   if $::osfamily == 'Debian' {
@@ -29,6 +30,7 @@ class sysinv::params {
     $conductor_service  = 'sysinv-conductor'
     $agent_package      = 'sysinv'
     $agent_service      = 'sysinv-agent'
+    $certmon_package    = 'cert-mon'
     $db_sync_command    = 'sysinv-dbsync'
 
   } elsif($::osfamily == 'RedHat') {
@@ -41,6 +43,7 @@ class sysinv::params {
     $conductor_service  = 'sysinv-conductor'
     $agent_package      = false
     $agent_service      = 'sysinv-agent'
+    $certmon_package    = false
     $db_sync_command    = 'sysinv-dbsync'
 
   } elsif($::osfamily == 'WRLinux') {
@@ -53,6 +56,7 @@ class sysinv::params {
     $conductor_service  = 'sysinv-conductor'
     $agent_package      = false
     $agent_service      = 'sysinv-agent'
+    $certmon_package    = false
     $db_sync_command    = 'sysinv-dbsync'
 
   } else {

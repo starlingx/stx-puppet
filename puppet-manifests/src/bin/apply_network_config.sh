@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ################################################################################
-# Copyright (c) 2016 Wind River Systems, Inc.
+# Copyright (c) 2016-2020 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -26,10 +26,46 @@ export RTNAME_INCLUDE="route-*"
 ACQUIRE_LOCK=1
 RELEASE_LOCK=0
 
-if [ ! -d /var/run/network-scripts.puppet/ ] ; then
-    # No puppet files? Nothing to do!
+declare ROUTES_ONLY="no"
+
+function usage {
+    cat <<EOF >&2
+$0 [ --routes ]
+
+Options:
+  --routes : Update routes config only
+EOF
+}
+
+OPTS=$(getopt -o h -l help,routes -- "$@")
+if [ $? -ne 0 ]; then
+    usage
     exit 1
 fi
+
+eval set -- "${OPTS}"
+
+while true; do
+    case $1 in
+        --)
+            # End of getopt arguments
+            shift
+            break
+            ;;
+        --routes)
+            ROUTES_ONLY="yes"
+            shift
+            ;;
+        -h | --help )
+            usage
+            exit 1
+            ;;
+        *)
+            usage
+            exit 1
+            ;;
+    esac
+done
 
 function log_it {
     logger "${0} ${1}"
@@ -61,7 +97,7 @@ function do_cp {
 }
 
 # Return items in list1 that are not in list2
-array_diff () {
+function array_diff {
     list1=${!1}
     list2=${!2}
 
@@ -276,165 +312,189 @@ function sysinv_agent_lock {
     esac
 }
 
-# First thing to do is deal with the case of there being no routes left on an interface.
-# In this case, there will be no route-<if> in the puppet directory.
-# We'll just create an empty one so that the below will loop will work in all cases.
+function update_routes {
+    # First thing to do is deal with the case of there being no routes left on an interface.
+    # In this case, there will be no route-<if> in the puppet directory.
+    # We'll just create an empty one so that the below will loop will work in all cases.
 
-for rt_path in $(find /etc/sysconfig/network-scripts/ -name "${RTNAME_INCLUDE}"); do
-    rt=$(basename $rt_path)
-
-    if [ ! -e /var/run/network-scripts.puppet/$rt ]; then
-        touch /var/run/network-scripts.puppet/$rt
+    if [ ! -d /var/run/network-scripts.puppet/ ] ; then
+        mkdir -p /var/run/network-scripts.puppet
     fi
-done
 
-for rt_path in $(find /var/run/network-scripts.puppet/ -name "${RTNAME_INCLUDE}"); do
-    rt=$(basename $rt_path)
-    iface_rt=${rt#route-}
+    for rt_path in $(find /etc/sysconfig/network-scripts/ -name "${RTNAME_INCLUDE}"); do
+        rt=$(basename $rt_path)
 
-    if [ -e /etc/sysconfig/network-scripts/$rt ]; then
-        # There is an existing route file.  Check if there are changes.
-        diff -I ".*Last generated.*" -q /var/run/network-scripts.puppet/$rt \
-                                        /etc/sysconfig/network-scripts/$rt >/dev/null 2>&1
-
-        if [ $? -ne 0 ] ; then
-            # We may need to perform some manual route deletes
-            # Look for route lines that are present in the current netscripts route file,
-            # but not in the new puppet version.  Need to manually delete these routes.
-            grep -v HEADER /etc/sysconfig/network-scripts/$rt | while read oldRouteLine
-            do
-                grepCmd="grep -q '$oldRouteLine' $rt_path > /dev/null"
-                eval $grepCmd
-                if [ $? -ne 0 ] ; then
-                    log_it "Removing route: $oldRouteLine"
-                    $(/usr/sbin/ip route del $oldRouteLine)
-                fi
-            done
+        if [ ! -e /var/run/network-scripts.puppet/$rt ]; then
+            touch /var/run/network-scripts.puppet/$rt
         fi
-    fi
+    done
 
+    for rt_path in $(find /var/run/network-scripts.puppet/ -name "${RTNAME_INCLUDE}"); do
+        rt=$(basename $rt_path)
+        iface_rt=${rt#route-}
 
-    if [ -s /var/run/network-scripts.puppet/$rt ] ; then
-        # Whether this is a new routes file or there are changes, ultimately we will need
-        # to ifup the file to add any potentially new routes.
+        if [ -e /etc/sysconfig/network-scripts/$rt ]; then
+            # There is an existing route file.  Check if there are changes.
+            diff -I ".*Last generated.*" -q /var/run/network-scripts.puppet/$rt \
+                                            /etc/sysconfig/network-scripts/$rt >/dev/null 2>&1
 
-        do_cp /var/run/network-scripts.puppet/$rt /etc/sysconfig/network-scripts/$rt
-        /etc/sysconfig/network-scripts/ifup-routes $iface_rt
-
-    else
-        # Puppet routes file is empty, because we created an empty one due to absence of any routes
-        # so that our check with the existing netscripts routes would work.
-        # Just delete the netscripts file as there are no static routes left on this interface.
-        do_rm /etc/sysconfig/network-scripts/$rt
-    fi
-
-    # Puppet redhat.rb file does not support removing routes from the same resource file.
-    # Need to smoke the temp one so it will be properly recreated next time.
-
-    do_cp /var/run/network-scripts.puppet/$rt /var/run/network-scripts.puppet/$iface_rt.back
-    do_rm /var/run/network-scripts.puppet/$rt
-
-done
-
-
-
-
-upDown=()
-changed=()
-for cfg_path in $(find /var/run/network-scripts.puppet/ -name "${IFNAME_INCLUDE}"); do
-    cfg=$(basename $cfg_path)
-
-    diff -I ".*Last generated.*" -q /var/run/network-scripts.puppet/$cfg \
-                                    /etc/sysconfig/network-scripts/$cfg >/dev/null 2>&1
-
-    if [ $? -ne 0 ] ; then
-        # puppet file needs to be copied to network dir because diff detected
-        changed+=($cfg)
-        # but do we need to actually start the iface?
-        if is_dhcp /var/run/network-scripts.puppet/$cfg   || \
-           is_dhcp /etc/sysconfig/network-scripts/$cfg  ; then
-           # if dhcp type iface, then too many possible attr's to compare against, so
-           # just add cfg to the upDown list because we know (from above) cfg file is changed
-            log_it "dhcp detected for $cfg - adding to upDown list"
-            upDown+=($cfg)
-        else
-            # not in dhcp situation so check if any significant
-            # cfg attributes have changed to warrant an iface restart
-            is_eq_ifcfg /var/run/network-scripts.puppet/$cfg \
-                        /etc/sysconfig/network-scripts/$cfg
             if [ $? -ne 0 ] ; then
-                log_it "$cfg changed"
-                # Remove alias portion in the interface name if any.
-                # Check if the base interface is already on the list for
-                # restart. If not, add it to the list.
-                # The alias interface does not need to be restarted.
-                base_cfg=${cfg/:*/}
-                found=0
-                for chk in ${upDown[@]}; do
-                    if [ "$base_cfg" = "$chk" ]; then
-                        found=1
-                        break
+                # We may need to perform some manual route deletes
+                # Look for route lines that are present in the current netscripts route file,
+                # but not in the new puppet version.  Need to manually delete these routes.
+                grep -v HEADER /etc/sysconfig/network-scripts/$rt | while read oldRouteLine
+                do
+                    grepCmd="grep -q '$oldRouteLine' $rt_path > /dev/null"
+                    eval $grepCmd
+                    if [ $? -ne 0 ] ; then
+                        log_it "Removing route: $oldRouteLine"
+                        $(/usr/sbin/ip route del $oldRouteLine)
                     fi
                 done
+            fi
+        fi
 
-                if [ $found -eq 0 ]; then
-                    log_it "Adding $base_cfg to upDown list"
-                    upDown+=($base_cfg)
+
+        if [ -s /var/run/network-scripts.puppet/$rt ] ; then
+            # Whether this is a new routes file or there are changes, ultimately we will need
+            # to ifup the file to add any potentially new routes.
+
+            do_cp /var/run/network-scripts.puppet/$rt /etc/sysconfig/network-scripts/$rt
+            /etc/sysconfig/network-scripts/ifup-routes $iface_rt
+
+        else
+            # Puppet routes file is empty, because we created an empty one due to absence of any routes
+            # so that our check with the existing netscripts routes would work.
+            # Just delete the netscripts file as there are no static routes left on this interface.
+            do_rm /etc/sysconfig/network-scripts/$rt
+        fi
+
+        # Puppet redhat.rb file does not support removing routes from the same resource file.
+        # Need to smoke the temp one so it will be properly recreated next time.
+
+        do_cp /var/run/network-scripts.puppet/$rt /var/run/network-scripts.puppet/$iface_rt.back
+        do_rm /var/run/network-scripts.puppet/$rt
+
+    done
+}
+
+function update_interfaces {
+    upDown=()
+    changed=()
+    for cfg_path in $(find /var/run/network-scripts.puppet/ -name "${IFNAME_INCLUDE}"); do
+        cfg=$(basename $cfg_path)
+
+        diff -I ".*Last generated.*" -q /var/run/network-scripts.puppet/$cfg \
+                                        /etc/sysconfig/network-scripts/$cfg >/dev/null 2>&1
+
+        if [ $? -ne 0 ] ; then
+            # puppet file needs to be copied to network dir because diff detected
+            changed+=($cfg)
+            # but do we need to actually start the iface?
+            if is_dhcp /var/run/network-scripts.puppet/$cfg   || \
+               is_dhcp /etc/sysconfig/network-scripts/$cfg  ; then
+               # if dhcp type iface, then too many possible attr's to compare against, so
+               # just add cfg to the upDown list because we know (from above) cfg file is changed
+                log_it "dhcp detected for $cfg - adding to upDown list"
+                upDown+=($cfg)
+            else
+                # not in dhcp situation so check if any significant
+                # cfg attributes have changed to warrant an iface restart
+                is_eq_ifcfg /var/run/network-scripts.puppet/$cfg \
+                            /etc/sysconfig/network-scripts/$cfg
+                if [ $? -ne 0 ] ; then
+                    log_it "$cfg changed"
+                    # Remove alias portion in the interface name if any.
+                    # Check if the base interface is already on the list for
+                    # restart. If not, add it to the list.
+                    # The alias interface does not need to be restarted.
+                    base_cfg=${cfg/:*/}
+                    found=0
+                    for chk in ${upDown[@]}; do
+                        if [ "$base_cfg" = "$chk" ]; then
+                            found=1
+                            break
+                        fi
+                    done
+
+                    if [ $found -eq 0 ]; then
+                        log_it "Adding $base_cfg to upDown list"
+                        upDown+=($base_cfg)
+                    fi
                 fi
             fi
         fi
+    done
+
+    current=()
+    for f in $(find /etc/sysconfig/network-scripts/ -name "${IFNAME_INCLUDE}"); do
+        current+=($(basename $f))
+    done
+
+    active=()
+    for f in $(find /var/run/network-scripts.puppet/ -name "${IFNAME_INCLUDE}"); do
+        active+=($(basename $f))
+    done
+
+    # synchronize with sysinv-agent audit
+    sysinv_agent_lock $ACQUIRE_LOCK
+
+    remove=$(array_diff current[@] active[@])
+    for r in ${remove[@]}; do
+        # Bring down interface before we execute network restart, interfaces
+        # that do not have an ifcfg are not managed by init script
+        iface=${r#ifcfg-}
+        do_if_down $iface
+        do_rm /etc/sysconfig/network-scripts/$r
+    done
+
+    # now down the changed ifaces by dealing with vlan interfaces first so that
+    # they are brought down gracefully (i.e., without taking their dependencies
+    # away unexpectedly).
+    for iftype in vlan ethernet; do
+        for cfg in ${upDown[@]}; do
+            ifcfg=/etc/sysconfig/network-scripts/$cfg
+            if iftype_filter $iftype $ifcfg; then
+                do_if_down ${ifcfg#ifcfg-}
+            fi
+        done
+    done
+
+    # now copy the puppet changed interfaces to /etc/sysconfig/network-scripts
+    for cfg in ${changed[@]}; do
+        do_cp /var/run/network-scripts.puppet/$cfg /etc/sysconfig/network-scripts/$cfg
+    done
+
+    # now ifup changed ifaces by dealing with vlan interfaces last so that their
+    # dependencies are met before they are configured.
+    for iftype in ethernet vlan; do
+        for cfg in ${upDown[@]}; do
+            ifcfg=/var/run/network-scripts.puppet/$cfg
+            if iftype_filter $iftype $ifcfg; then
+                do_if_up ${ifcfg#ifcfg-}
+            fi
+        done
+    done
+
+    # unlock: synchronize with sysinv-agent audit
+    sysinv_agent_lock $RELEASE_LOCK
+}
+
+if [ $ROUTES_ONLY = "yes" ]; then
+    update_routes
+else
+    if [ ! -d /var/run/network-scripts.puppet/ ] ; then
+        # No puppet files? Nothing to do!
+        exit 1
     fi
-done
 
-current=()
-for f in $(find /etc/sysconfig/network-scripts/ -name "${IFNAME_INCLUDE}"); do
-    current+=($(basename $f))
-done
+    if [ ! -f /var/run/network-scripts.puppet/ifcfg-lo ]; then
+        # Something has gone horribly wrong
+        log_it "No /var/run/network-scripts.puppet/ifcfg-lo found! Aborting..."
+        exit 1
+    fi
 
-active=()
-for f in $(find /var/run/network-scripts.puppet/ -name "${IFNAME_INCLUDE}"); do
-    active+=($(basename $f))
-done
+    update_routes
+    update_interfaces
+fi
 
-# synchronize with sysinv-agent audit
-sysinv_agent_lock $ACQUIRE_LOCK
-
-remove=$(array_diff current[@] active[@])
-for r in ${remove[@]}; do
-    # Bring down interface before we execute network restart, interfaces
-    # that do not have an ifcfg are not managed by init script
-    iface=${r#ifcfg-}
-    do_if_down $iface
-    do_rm /etc/sysconfig/network-scripts/$r
-done
-
-# now down the changed ifaces by dealing with vlan interfaces first so that
-# they are brought down gracefully (i.e., without taking their dependencies
-# away unexpectedly).
-for iftype in vlan ethernet; do
-    for cfg in ${upDown[@]}; do
-        ifcfg=/etc/sysconfig/network-scripts/$cfg
-        if iftype_filter $iftype $ifcfg; then
-            do_if_down ${ifcfg#ifcfg-}
-        fi
-    done
-done
-
-# now copy the puppet changed interfaces to /etc/sysconfig/network-scripts
-for cfg in ${changed[@]}; do
-    do_cp /var/run/network-scripts.puppet/$cfg /etc/sysconfig/network-scripts/$cfg
-done
-
-# now ifup changed ifaces by dealing with vlan interfaces last so that their
-# dependencies are met before they are configured.
-for iftype in ethernet vlan; do
-    for cfg in ${upDown[@]}; do
-        ifcfg=/var/run/network-scripts.puppet/$cfg
-        if iftype_filter $iftype $ifcfg; then
-            do_if_up ${ifcfg#ifcfg-}
-        fi
-    done
-done
-
-# unlock: synchronize with sysinv-agent audit
-sysinv_agent_lock $RELEASE_LOCK

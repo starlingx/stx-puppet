@@ -15,6 +15,7 @@ class platform::sm
   $system_mode                   = $::platform::params::system_mode
   $system_type                   = $::platform::params::system_type
   $stx_openstack_applied         = $::platform::params::stx_openstack_applied
+  $dc_role                       = $::platform::params::distributed_cloud_role
 
   include ::platform::network::pxeboot::params
   if $::platform::network::pxeboot::params::interface_name {
@@ -702,6 +703,10 @@ class platform::sm
   -> exec { 'Provision service-group storage-monitoring-services':
     command => 'sm-provision service-group storage-monitoring-services',
   }
+  -> exec { 'Provision cert-mon service in controller-services group':
+    command => 'sm-provision service-group-member controller-services cert-mon'
+  }
+
 
   # On an AIO-DX system, cephmon DRBD must always be configured, even
   # if ceph is not enabled. Configured, but not enabled services have
@@ -827,6 +832,12 @@ class platform::sm
     -> exec { 'Provision DCManager-Audit in SM (service dcmanager-audit)':
       command => 'sm-provision service dcmanager-audit',
     }
+    -> exec { 'Provision DCManager-Orchestrator (service-group-member dcmanager-orchestrator)':
+      command => 'sm-provision service-group-member distributed-cloud-services dcmanager-orchestrator',
+    }
+    -> exec { 'Provision DCManager-Orchestrator in SM (service dcmanager-orchestrator)':
+      command => 'sm-provision service dcmanager-orchestrator',
+    }
     -> exec { 'Provision DCManager-RestApi (service-group-member dcmanager-api)':
       command => 'sm-provision service-group-member distributed-cloud-services dcmanager-api',
     }
@@ -874,6 +885,9 @@ class platform::sm
     }
     -> exec { 'Configure Platform - DCManager-Audit':
       command => "sm-configure service_instance dcmanager-audit dcmanager-audit \"\"",
+    }
+    -> exec { 'Configure Platform - DCManager-Orchestrator':
+      command => "sm-configure service_instance dcmanager-orchestrator dcmanager-orchestrator \"\"",
     }
     -> exec { 'Configure OpenStack - DCManager-API':
       command => "sm-configure service_instance dcmanager-api dcmanager-api \"\"",

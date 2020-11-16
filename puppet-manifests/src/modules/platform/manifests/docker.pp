@@ -134,3 +134,16 @@ class platform::docker::haproxy
     tcp_mode          => true,
   }
 }
+
+class platform::docker::login
+{
+  include ::platform::dockerdistribution::params
+
+  Class['::platform::dockerdistribution::compute'] ~> Class[$name]
+
+  exec { 'docker-login':
+    command => "/usr/local/sbin/run_docker_login \
+${::platform::dockerdistribution::params::registry_username} \
+${::platform::dockerdistribution::params::registry_password}&"
+  }
+}

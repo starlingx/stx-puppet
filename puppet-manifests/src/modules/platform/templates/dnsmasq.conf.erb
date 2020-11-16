@@ -4,6 +4,7 @@ interface=<%= @pxeboot_interface %>
 <%- end -%>
 interface=<%= @mgmt_interface %>
 bind-interfaces
+listen-address=<%= @mgmt_controller_address %>
 
 # Serve addresses from the pxeboot subnet
 dhcp-range=set:pxeboot,<%= @pxeboot_subnet_start %>,<%= @pxeboot_subnet_end %>,<%= @pxeboot_subnet_netmask %>,1h
@@ -123,5 +124,23 @@ cname=registry.central,controller
 <%- end -%>
 
 <%- if @distributed_cloud_role == 'subcloud' -%>
+<%- if @is_virtual_system == true and @sc_mgmt_address != nil -%>
+# For virtual subcloud (StarlingX running in Openstack Nova VM - QEMU/KVM),
+# there is no physical OAM interface (no external network access) to connect
+# to central-cloud's local registry, so central registry is exposed on the
+# MGMT interface and "registry.central" domain needs to be set to system
+# controller's MGMT IP to allow subcloud to pull images from central registry
+# via the MGMT interface.
+address=/registry.central/<%= @sc_mgmt_address %>
+# The "registry.local" domain needs to be explicitly specified with subcloud's
+# MGMT IP as dcorch synchronizes the dns server on subcloud with system controller's
+# dns server which cannot be reached on subcloud.
+address=/registry.local/<%= @mgmt_controller_address %>
+<%- else -%>
+# For regular DC, central-cloud's local registry is exposed on the OAM interface
+# (to provide the ability to push images externally to central registry), so set
+# "registry.central" to system controller's OAM IP on subcloud to allow subcloud
+# to pull images from central registry via the OAM interface.
 address=/registry.central/<%= @sc_address %>
+<%- end -%>
 <%- end -%>

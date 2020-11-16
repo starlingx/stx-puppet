@@ -27,12 +27,14 @@ include ::platform::remotelogging
 include ::platform::mtce
 include ::platform::sysinv
 include ::platform::devices
+include ::platform::interfaces::sriov
 include ::platform::grub
 include ::platform::collectd
 include ::platform::filesystem::compute
 include ::platform::docker::worker
 include ::platform::containerd::worker
 include ::platform::dockerdistribution::compute
+include ::platform::docker::login
 include ::platform::kubernetes::worker
 include ::platform::multipath
 include ::platform::client

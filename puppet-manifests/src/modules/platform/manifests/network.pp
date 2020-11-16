@@ -177,12 +177,14 @@ class platform::network::routes (
 
 
 define platform::interfaces::sriov_enable (
-  $pf_addr,
+  $addr,
+  $device_id,
   $num_vfs,
-  $vf_addrs,
-  $vf_driver = undef
+  $port_name,
+  $vf_config = undef
 ) {
-  if $num_vfs {
+  $vf_file = 'sriov_numvfs'
+  if ($num_vfs != undef) and ($num_vfs > 0) {
     exec { "sriov-enable-device: ${title}":
       command   => template('platform/sriov.enable-device.erb'),
       logoutput => true,
@@ -192,22 +194,38 @@ define platform::interfaces::sriov_enable (
 
 
 define platform::interfaces::sriov_bind (
-  $pf_addr,
-  $num_vfs,
-  $vf_addrs,
-  $vf_driver = undef
+  $addr,
+  $driver
 ) {
-  if ($vf_driver != undef) and length($vf_addrs) > 0 {
-    ensure_resource(kmod::load, $vf_driver)
+  if ($driver != undef) {
+    ensure_resource(kmod::load, $driver)
     Anchor['platform::networking']
     -> exec { "sriov-vf-bind-device: ${title}":
       command   => template('platform/sriov.bind-device.erb'),
       logoutput => true,
-      require   => [ Kmod::Load[$vf_driver] ],
+      require   => [ Kmod::Load[$driver] ],
     }
   }
 }
 
+define platform::interfaces::sriov_vf_bind (
+  $addr,
+  $device_id,
+  $num_vfs,
+  $port_name,
+  $vf_config
+) {
+  if ($device_id == '0d58') {
+    include ::platform::devices::fpga::n3000::reset
+    exec { "Restarting n3000 NICs for interface: ${title}":
+      command => "ifdown ${port_name}; ifup ${port_name}",
+      path    => '/usr/sbin/',
+      require => Class['::platform::devices::fpga::n3000::reset']
+    }
+    -> Platform::Interfaces::Sriov_bind <| |>
+  }
+  create_resources('platform::interfaces::sriov_bind', $vf_config, {})
+}
 
 class platform::interfaces::sriov (
   $sriov_config = {},
@@ -216,7 +234,8 @@ class platform::interfaces::sriov (
   if $runtime {
     create_resources('platform::interfaces::sriov_enable', $sriov_config, {})
   } else {
-    create_resources('platform::interfaces::sriov_bind', $sriov_config, {})
+    create_resources('platform::interfaces::sriov_vf_bind', $sriov_config, {})
+    Platform::Interfaces::Sriov_vf_bind <| |> -> Class['::platform::kubernetes::worker::sriovdp']
   }
 }
 
@@ -230,8 +249,6 @@ class platform::interfaces (
   $network_config = {},
 ) {
   create_resources('network_config', $network_config, {})
-
-  include ::platform::interfaces::sriov
 }
 
 
@@ -319,10 +336,10 @@ class platform::network::routes::runtime {
   # as puppet bug will remove dependency altogether if
   # Network_route is empty. See below.
   # https://projects.puppetlabs.com/issues/18399
-  Network_route <| |> -> Exec['apply-network-config']
-  Network_route6 <| |> -> Exec['apply-network-config']
+  Network_route <| |> -> Exec['apply-network-config route setup']
+  Network_route6 <| |> -> Exec['apply-network-config route setup']
 
-  exec {'apply-network-config':
-    command => 'apply_network_config.sh',
+  exec {'apply-network-config route setup':
+    command => 'apply_network_config.sh --routes',
   }
 }

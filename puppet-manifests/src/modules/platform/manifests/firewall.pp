@@ -131,11 +131,7 @@ class platform::firewall::calico::oam::services {
 
   $barbican_api_port = [$::openstack::barbican::params::api_port]
 
-  if !$::platform::params::region_config {
-    $keystone_port = [$::openstack::keystone::params::api_port]
-  } else {
-    $keystone_port = []
-  }
+  $keystone_port = [$::openstack::keystone::params::api_port]
 
   if $::platform::params::distributed_cloud_role != 'subcloud'  {
     if $::openstack::horizon::params::enable_https {
@@ -165,12 +161,24 @@ class platform::firewall::calico::oam::services {
                         $dc_port)
 
   $file_name = '/tmp/gnp_all_oam.yaml'
+  $oam_if_gnp = 'controller-oam-if-gnp'
   file { $file_name:
       ensure  => file,
       content => template('platform/calico_oam_if_gnp.yaml.erb'),
       owner   => 'root',
       group   => 'root',
       mode    => '0640',
+  }
+  # Remove annotation as it contains last-applied-configuration with
+  # resourceVersion in it, which will require the gnp re-apply to
+  # provide a matching resourceVersion in the yaml file.
+  -> exec { "remove annotation from ${oam_if_gnp}":
+    path    => '/usr/bin:/usr/sbin:/bin',
+    command => @("CMD"/L),
+      kubectl --kubeconfig=/etc/kubernetes/admin.conf annotate globalnetworkpolicies.crd.projectcalico.org \
+      ${oam_if_gnp} kubectl.kubernetes.io/last-applied-configuration-
+      | CMD
+    onlyif  => "kubectl --kubeconfig=/etc/kubernetes/admin.conf get globalnetworkpolicies.crd.projectcalico.org ${oam_if_gnp}"
   }
   -> exec { "apply resource ${file_name}":
     path    => '/usr/bin:/usr/sbin:/bin',

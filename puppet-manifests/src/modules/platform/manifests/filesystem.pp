@@ -11,6 +11,7 @@ define platform::filesystem (
   $fs_options,
   $fs_use_all = false,
   $ensure = present,
+  $group = 'root',
   $mode = '0750',
 ) {
   include ::platform::filesystem::params
@@ -68,6 +69,21 @@ define platform::filesystem (
         size_is_minsize => $fs_size_is_minsize,
     }
 
+    # Wipe 10MB at the beginning and at the end
+    # of each LV in cgts-vg to prevent problems caused
+    # by stale data on the disk
+    -> exec { "wipe start of device ${lv_name}":
+      command => "dd if=/dev/zero of=${lv_name} bs=1M count=10",
+      onlyif  => "test ! -e /etc/platform/.${lv_name}"
+    }
+    -> exec { "wipe end of device ${lv_name}":
+      command => "dd if=/dev/zero of=${lv_name} bs=1M seek=$(($(blockdev --getsz ${lv_name})/2048 - 10)) count=10",
+      onlyif  => "test ! -e /etc/platform/.${lv_name}"
+    }
+    -> exec { "mark lv as wiped ${lv_name}:":
+      command => "touch /etc/platform/.${lv_name}",
+      onlyif  => "test ! -e /etc/platform/.${lv_name}"
+    }
     # create filesystem
     -> filesystem { $device:
       ensure  => $ensure,
@@ -78,7 +94,7 @@ define platform::filesystem (
     -> file { $mountpoint:
       ensure => 'directory',
       owner  => 'root',
-      group  => 'root',
+      group  => $group,
       mode   => $mode,
     }
 
@@ -102,6 +118,9 @@ define platform::filesystem (
     -> exec {"Change ${mountpoint} dir permissions":
       command => "chmod ${mode} ${mountpoint}",
     }
+    -> exec {"Change ${mountpoint} dir group":
+      command => "chgrp ${group} ${mountpoint}",
+    }
   }
 }
 
@@ -121,12 +140,11 @@ define platform::filesystem::resize(
     command => "lvextend -L${lv_size}G ${device}",
     returns => [0, 5]
   }
-  # After a partition extend, make sure that there is no leftover drbd
-  # type metadata from a previous install. Drbd writes its meta at the
-  # very end of a block device causing confusion for blkid.
+  # After a partition extend, wipe 10MB at the end of the partition
+  # to make sure that there is no leftover
+  # type metadata from a previous install
   -> exec { "wipe end of device ${device}":
-    command => "dd if=/dev/zero of=${device} bs=512 seek=$(($(blockdev --getsz ${device}) - 34)) count=34",
-    onlyif  => "blkid ${device} | grep TYPE=\\\"drbd\\\"",
+    command => "dd if=/dev/zero of=${device} bs=1M seek=$(($(blockdev --getsz ${device})/2048 - 10)) count=10",
   }
   -> exec { "resize2fs ${devmapper}":
     command => "resize2fs ${devmapper}",
@@ -141,7 +159,7 @@ define platform::filesystem::resize(
 
 class platform::filesystem::backup::params (
   $lv_name = 'backup-lv',
-  $lv_size = '5',
+  $lv_size = '1',
   $mountpoint = '/opt/backups',
   $devmapper = '/dev/mapper/cgts--vg-backup--lv',
   $fs_type = 'ext4',
@@ -173,12 +191,14 @@ class platform::filesystem::conversion::params (
 ) { }
 
 class platform::filesystem::scratch::params (
-  $lv_size = '8',
+  $lv_size = '2',
   $lv_name = 'scratch-lv',
   $mountpoint = '/scratch',
   $devmapper = '/dev/mapper/cgts--vg-scratch--lv',
   $fs_type = 'ext4',
-  $fs_options = ' '
+  $fs_options = ' ',
+  $group = 'sys_protected',
+  $mode = '0770'
 ) { }
 
 class platform::filesystem::scratch
@@ -189,7 +209,9 @@ class platform::filesystem::scratch
     lv_size    => $lv_size,
     mountpoint => $mountpoint,
     fs_type    => $fs_type,
-    fs_options => $fs_options
+    fs_options => $fs_options,
+    group      => $group,
+    mode       => $mode
   }
 }
 
@@ -212,7 +234,7 @@ class platform::filesystem::conversion
 }
 
 class platform::filesystem::kubelet::params (
-  $lv_size = '10',
+  $lv_size = '2',
   $lv_name = 'kubelet-lv',
   $mountpoint = '/var/lib/kubelet',
   $devmapper = '/dev/mapper/cgts--vg-kubelet--lv',
@@ -270,11 +292,17 @@ class platform::filesystem::storage {
 
 
 class platform::filesystem::compute {
-  include ::platform::filesystem::kubelet
-  class {'platform::filesystem::docker::params' :
-    lv_size => 30
-  }
-  -> class {'platform::filesystem::docker' :
+  if $::personality == 'worker' {
+    # The default docker size for controller is 20G
+    # other than 30G. To prevent the docker size to
+    # be overrided to 30G for AIO, this is scoped to
+    # worker node.
+    include ::platform::filesystem::kubelet
+    class {'platform::filesystem::docker::params' :
+      lv_size => 30
+    }
+    -> class {'platform::filesystem::docker' :
+    }
   }
 
   Class['::platform::lvm::vg::cgts_vg'] -> Class[$name]
@@ -368,7 +396,7 @@ class platform::filesystem::docker::runtime {
 
 
 class platform::filesystem::docker::params::bootstrap (
-  $lv_size = '30',
+  $lv_size = '20',
   $lv_name = 'docker-lv',
   $mountpoint = '/var/lib/docker',
   $devmapper = '/dev/mapper/cgts--vg-docker--lv',

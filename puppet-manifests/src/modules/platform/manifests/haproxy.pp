@@ -162,7 +162,6 @@ class platform::haproxy::runtime {
   if ($::platform::params::distributed_cloud_role == 'systemcontroller' or
       $::platform::params::distributed_cloud_role == 'subcloud') {
     include ::platform::dcdbsync::haproxy
-    include ::platform::smapi::haproxy
   }
   if $::platform::params::distributed_cloud_role =='systemcontroller' {
     include ::platform::dcmanager::haproxy
@@ -171,8 +170,16 @@ class platform::haproxy::runtime {
   include ::platform::docker::haproxy
   include ::openstack::keystone::haproxy
   include ::openstack::barbican::haproxy
+  include ::platform::smapi::haproxy
 
   class {'::platform::haproxy::reload':
     stage => post
   }
 }
+
+class platform::haproxy::restart::runtime {
+  class {'::platform::haproxy::reload':
+    stage => post
+  }
+}
+

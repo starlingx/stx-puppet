@@ -138,7 +138,9 @@ class platform::ceph
         create_ini_settings($mon_settings, $defaults)
 
         # Remove section header
-        Ini_setting<| |>
+        Ini_setting["${ceph_config_file} [mon.${monitor}] public_addr",
+                    "${ceph_config_file} [mon.${monitor}] host",
+                    "${ceph_config_file} [mon.${monitor}] mon_addr"]
         -> file_line { "[mon.${monitor}]":
           ensure => absent,
           path   => $ceph_config_file,
@@ -331,15 +333,25 @@ define osd_crush_location(
   $journal_path,
   $tier_name,
 ) {
-  ceph_config{
-    "osd.${$osd_id}/devs": value => $data_path;
-  }
   # Only set the crush location for additional tiers
   if $tier_name != 'storage' {
     ceph_config {
       "osd.${$osd_id}/host":           value => "${$::platform::params::hostname}-${$tier_name}";
       "osd.${$osd_id}/crush_location": value => "root=${tier_name}-tier host=${$::platform::params::hostname}-${$tier_name}";
     }
+  }
+}
+
+define osd_location(
+  $osd_id,
+  $osd_uuid,
+  $disk_path,
+  $data_path,
+  $journal_path,
+  $tier_name,
+) {
+  ceph_config {
+    "osd.${$osd_id}/devs": value => $data_path;
   }
 }
 
@@ -430,6 +442,12 @@ class platform::ceph::osds(
     create_resources('platform_ceph_osd', $osd_config)
     create_resources('platform_ceph_journal', $journal_config)
   }
+
+  # Ensure ceph.conf is created
+  Class['::ceph'] -> Osd_location <| |>
+
+  # Update ceph.conf with OSDs present on the node
+  create_resources('osd_location', $osd_config)
 }
 
 class platform::ceph::haproxy

@@ -81,6 +81,13 @@ class openstack::keystone (
       token_expiration      => $token_expiration,
       notification_driver   => 'messagingv2',
     }
+    # remove admin_token from keystone.conf
+    -> ini_setting { 'remove admin_token in config':
+      ensure  => absent,
+      path    => '/etc/keystone/keystone.conf',
+      section => 'DEFAULT',
+      setting => 'admin_token',
+    }
 
     # create keystone policy configuration
     file { '/etc/keystone/policy.json':
@@ -133,12 +140,10 @@ class openstack::keystone::haproxy
   include ::platform::params
   include ::platform::haproxy::params
 
-  if !$::platform::params::region_config {
-    platform::haproxy::proxy { 'keystone-restapi':
-      server_name  => 's-keystone',
-      public_port  => $api_port,
-      private_port => $api_port,
-    }
+  platform::haproxy::proxy { 'keystone-restapi':
+    server_name  => 's-keystone',
+    public_port  => $api_port,
+    private_port => $api_port,
   }
 
   # Configure rules for DC https enabled admin endpoint.
@@ -168,6 +173,24 @@ define delete_endpoints (
       logoutput => true,
       provider  => shell,
     }
+  }
+}
+
+define openstack::keystone::user::option (
+  $admin_username,
+  $admin_password,
+  $auth_url,
+  $username,
+  $option,
+  String $option_value,
+) {
+  exec { "Set user ${username} option ${option} to ${option_value}":
+    command   => @("EOC"/L),
+      /usr/local/bin/set_keystone_user_option.sh \
+      ${admin_username} ${admin_password} ${auth_url} ${username} ${option} ${option_value}
+      | EOC
+    logoutput => true,
+    provider  => shell,
   }
 }
 
@@ -202,10 +225,12 @@ class openstack::keystone::api
 
 class openstack::keystone::bootstrap(
   $default_domain = 'Default',
+  $dc_services_project_id = undef,
 ) {
   include ::platform::params
   include ::platform::amqp::params
   include ::platform::drbd::platform::params
+  include ::platform::client::params
 
   $keystone_key_repo_path = "${::platform::drbd::platform::params::mountpoint}/keystone"
   $eng_workers = $::platform::params::eng_workers
@@ -259,9 +284,40 @@ class openstack::keystone::bootstrap(
       ensure => present,
     }
 
-
     # disabling the admin token per openstack recommendation
     include ::keystone::disable_admin_token_auth
+
+    if $dc_services_project_id {
+      exec { 'update keystone assignment target id for services to match system controller':
+        command => "psql -d keystone -c \"update public.assignment set target_id='${dc_services_project_id}' from public.project where\
+                    public.assignment.target_id=public.project.id and public.project.name='services'\"",
+        user    => 'postgres',
+        # keystone interleaves creation of users, projects, roles and assignments and internally caches ids so we have to wait until all the
+        # users of services project are completed before we can manipulate the database entries
+        require => [ Class['::keystone::roles::admin'],
+                    Class['::openstack::barbican::bootstrap'],
+                    Class['::platform::sysinv::bootstrap'],
+                    Class['::platform::mtce::bootstrap'],
+                    Class['::platform::fm::bootstrap'],
+                    Class['::platform::dcmanager::bootstrap']],
+      }
+      -> exec { 'update keystone services project id to match system controller':
+        command => "psql -d keystone -c \"update public.project set id='${dc_services_project_id}' where name='services'\"",
+        user    => 'postgres',
+      }
+    }
+
+    # set admin ignore_lockout_failure_attempts option to true to exempt
+    # admin user from auth fail lockout.
+    Keystone::Resource::Service_identity <||>
+    -> openstack::keystone::user::option { 'Set user option':
+      admin_username => $::platform::client::params::admin_username,
+      admin_password => $::platform::client::params::admin_password,
+      auth_url       => $::platform::client::params::identity_auth_url,
+      username       => $::platform::client::params::admin_username,
+      option         => 'ignore_lockout_failure_attempts',
+      option_value   => bool2str(true),
+    }
   }
 }
 

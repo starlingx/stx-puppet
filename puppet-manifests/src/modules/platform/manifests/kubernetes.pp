@@ -120,30 +120,44 @@ class platform::kubernetes::kubeadm {
     net.bridge.bridge-nf-call-iptables = 1"
 
   # Configure kubelet cpumanager options
+  $opts_sys_res = join(['--system-reserved=',
+                        "memory=${k8s_reserved_mem}Mi"])
+
   if ($::personality == 'controller' and
       $::platform::params::distributed_cloud_role == 'systemcontroller') {
-    $k8s_cpu_manager_opts = '--cpu-manager-policy=none'
+    $opts = '--cpu-manager-policy=none'
+    $k8s_cpu_manager_opts = join([$opts,
+                                  $opts_sys_res], ' ')
   } else {
-    if str2bool($::is_worker_subfunction)
-      and !('openstack-compute-node' in $host_labels) {
-      $opts = join(['--feature-gates TopologyManager=true',
-                    "--cpu-manager-policy=${k8s_cpu_mgr_policy}",
-                    "--topology-manager-policy=${k8s_topology_mgr_policy}"], ' ')
+    if !$::platform::params::virtual_system {
+      if str2bool($::is_worker_subfunction)
+        and !('openstack-compute-node' in $host_labels) {
+        # Enable TopologyManager for hosts with the worker subfunction.
+        # Exceptions are:
+        #   - DC System controllers
+        #   - Virtualized nodes (lab environment only)
 
-      $opts_sys_res = join(['--system-reserved=',
-                            "memory=${k8s_reserved_mem}Mi"])
+        $opts = join(['--feature-gates TopologyManager=true',
+                      "--cpu-manager-policy=${k8s_cpu_mgr_policy}",
+                      "--topology-manager-policy=${k8s_topology_mgr_policy}"], ' ')
 
-      if $k8s_cpu_mgr_policy == 'none' {
-        $k8s_reserved_cpus = $k8s_platform_cpuset
+        if $k8s_cpu_mgr_policy == 'none' {
+          $k8s_reserved_cpus = $k8s_platform_cpuset
+        } else {
+          # The union of platform, isolated, and vswitch
+          $k8s_reserved_cpus = $k8s_all_reserved_cpuset
+        }
+
+        $opts_res_cpus = "--reserved-cpus=${k8s_reserved_cpus}"
+        $k8s_cpu_manager_opts = join([$opts,
+                                      $opts_sys_res,
+                                      $opts_res_cpus], ' ')
       } else {
-        # The union of platform, isolated, and vswitch
-        $k8s_reserved_cpus = $k8s_all_reserved_cpuset
-      }
+        $opts = '--cpu-manager-policy=none'
+        $k8s_cpu_manager_opts = join([$opts,
+                                      $opts_sys_res], ' ')
 
-      $opts_res_cpus = "--reserved-cpus=${k8s_reserved_cpus}"
-      $k8s_cpu_manager_opts = join([$opts,
-                                    $opts_sys_res,
-                                    $opts_res_cpus], ' ')
+      }
     } else {
       $k8s_cpu_manager_opts = '--cpu-manager-policy=none'
     }
@@ -215,7 +229,7 @@ class platform::kubernetes::master::init
     $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
 
     exec { 'pre pull k8s images':
-      command   => "kubeadm config images list --kubernetes-version ${version}  --image-repository registry.local:9001/k8s.gcr.io | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
+      command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${version}  --image-repository registry.local:9001/k8s.gcr.io | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
       logoutput => true,
     }
 
@@ -323,7 +337,7 @@ class platform::kubernetes::worker::init
 
     # Get the pause image tag from kubeadm required images
     # list and replace with local registry
-    $get_k8s_pause_img = "kubeadm config images list 2>/dev/null |\
+    $get_k8s_pause_img = "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list 2>/dev/null |\
       awk '/^k8s.gcr.io\\/pause:/{print \$1}' | sed 's#k8s.gcr.io#registry.local:9001\\/k8s.gcr.io#'"
     $k8s_pause_img = generate('/bin/sh', '-c', $get_k8s_pause_img)
 
@@ -371,9 +385,10 @@ class platform::kubernetes::worker::init
 
 class platform::kubernetes::worker::pci
 (
-  $pcidp_network_resources = undef,
+  $pcidp_resources = undef,
 ) {
   include ::platform::kubernetes::params
+  include ::platform::kubernetes::worker::sriovdp
 
   file { '/etc/pcidp':
     ensure => 'directory',
@@ -390,6 +405,28 @@ class platform::kubernetes::worker::pci
   }
 }
 
+class platform::kubernetes::worker::sriovdp {
+  include ::platform::kubernetes::params
+  include ::platform::params
+  $host_labels = $::platform::kubernetes::params::host_labels
+  if ($::personality == 'controller') and
+      str2bool($::is_worker_subfunction)
+      and ('sriovdp' in $host_labels) {
+    # In an AIO system, it's possible for the device plugin pods to start
+    # before the device VFs are bound to a driver.  Deleting the device
+    # plugin pods will cause them to be recreated by the daemonset and
+    # allow them to re-scan the set of matching device ids/drivers
+    # specified in the /etc/pcidp/config.json file.
+    # This may be mitigated by moving to helm + configmap for the device
+    # plugin.
+    exec { 'Delete sriov device plugin pod if present':
+      path      => '/usr/bin:/usr/sbin:/bin',
+      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf delete pod -n kube-system --selector=app=sriovdp --field-selector spec.nodeName=$(hostname) --timeout=60s', # lint:ignore:140chars
+      onlyif    => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf get pods -n kube-system --selector=app=sriovdp --field-selector spec.nodeName=$(hostname) | grep kube-sriov-device-plugin', # lint:ignore:140chars
+      logoutput => true,
+    }
+  }
+}
 
 class platform::kubernetes::worker
   inherits ::platform::kubernetes::params {
@@ -530,7 +567,7 @@ class platform::kubernetes::pre_pull_control_plane_images
   $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
 
   exec { 'pre pull images':
-    command   => "kubeadm config images list --kubernetes-version ${upgrade_to_version} --image-repository=registry.local:9001/k8s.gcr.io | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
+    command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${upgrade_to_version} --image-repository=registry.local:9001/k8s.gcr.io | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
     logoutput => true,
   }
 }
@@ -542,7 +579,7 @@ class platform::kubernetes::upgrade_first_control_plane
 
   # The --allow-*-upgrades options allow us to upgrade to any k8s release if necessary
   exec { 'upgrade first control plane':
-    command   => "kubeadm upgrade apply ${version} --allow-experimental-upgrades --allow-release-candidate-upgrades -y",
+    command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf upgrade apply ${version} --allow-experimental-upgrades --allow-release-candidate-upgrades -y", # lint:ignore:140chars
     logoutput => true,
   }
 
@@ -571,7 +608,7 @@ class platform::kubernetes::upgrade_control_plane
   inherits ::platform::kubernetes::params {
 
   exec { 'upgrade control plane':
-    command   => 'kubeadm upgrade node',
+    command   => 'kubeadm --kubeconfig=/etc/kubernetes/admin.conf upgrade node',
     logoutput => true,
   }
 }
@@ -591,7 +628,7 @@ class platform::kubernetes::worker::upgrade_kubelet
 
   # Get the pause image tag from kubeadm required images
   # list and replace with local registry
-  $get_k8s_pause_img = "kubeadm config images list 2>/dev/null |\
+  $get_k8s_pause_img = "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list 2>/dev/null |\
     awk '/^k8s.gcr.io\\/pause:/{print \$1}' | sed 's#k8s.gcr.io#registry.local:9001\\/k8s.gcr.io#'"
   $k8s_pause_img = generate('/bin/sh', '-c', $get_k8s_pause_img)
 
@@ -604,7 +641,7 @@ class platform::kubernetes::worker::upgrade_kubelet
   }
 
   exec { 'upgrade kubelet':
-    command   => 'kubeadm upgrade node',
+    command   => 'kubeadm --kubeconfig=/etc/kubernetes/admin.conf upgrade node',
     logoutput => true,
   }
 
@@ -623,4 +660,35 @@ class platform::kubernetes::master::change_apiserver_parameters
     command => template('platform/kube-apiserver-change-params.erb')
   }
 
+}
+
+class platform::kubernetes::certsans::runtime
+  inherits ::platform::kubernetes::params {
+  include ::platform::params
+  include ::platform::network::mgmt::params
+  include ::platform::network::oam::params
+  include ::platform::network::cluster_host::params
+
+  if $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
+    $localhost_address = '::1'
+  } else {
+    $localhost_address = '127.0.0.1'
+  }
+
+  if $::platform::params::system_mode == 'simplex' {
+    $certsans = "\"${platform::network::cluster_host::params::controller_address}, \
+                   ${localhost_address}, \
+                   ${platform::network::oam::params::controller_address}\""
+  } else {
+    $certsans = "\"${platform::network::cluster_host::params::controller_address}, \
+                   ${localhost_address}, \
+                   ${platform::network::oam::params::controller_address}, \
+                   ${platform::network::oam::params::controller0_address}, \
+                   ${platform::network::oam::params::controller1_address}\""
+  }
+
+  exec { 'update kube-apiserver certSANs':
+    provider => shell,
+    command  => template('platform/kube-apiserver-update-certSANs.erb')
+  }
 }

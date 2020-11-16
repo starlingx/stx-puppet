@@ -126,7 +126,7 @@ class platform::ldap::bootstrap
   $dn = 'cn=ldapadmin,dc=cgcs,dc=local'
 
   exec { 'populate initial ldap configuration':
-    command => "ldapadd -D ${dn} -w ${admin_pw} -f /etc/openldap/initial_config.ldif"
+    command => "ldapadd -D ${dn} -w \"${admin_pw}\" -f /etc/openldap/initial_config.ldif"
   }
   -> exec { 'create ldap admin user':
     command => 'ldapadduser admin root'
@@ -152,6 +152,6 @@ class platform::ldap::bootstrap
   }
   -> exec { 'ldap cgcs-cli shell update':
     command =>
-      "ldapmodify -D ${dn} -w ${admin_pw} -f /tmp/ldap.cgcs-shell.ldif"
+      "ldapmodify -D ${dn} -w \"${admin_pw}\" -f /tmp/ldap.cgcs-shell.ldif"
   }
 }

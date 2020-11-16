@@ -1,0 +1,61 @@
+<%# Kubeadm stores the cluster configuration as a configmap in the cluster. -%>
+<%# We will update that configmap to have the new apiserver cert SANs. -%>
+<%# In order to restart kube-apiserver, we will use the "kubeadm init phase" -%>
+<%# command and feed it with the output of "kubeadm config view". -%>
+<%# This keeps the configmap consistent and keeps kube-apiserver managed by kubeadm. -%>
+
+s_exit() {
+    rm "$config_temp_file"
+    exit "${1:-0}"
+}
+
+<%- if @certsans.nil? -%>
+echo "Mandatory certsans is not set."
+exit 1
+<%- end -%>
+
+config_temp_file=$(mktemp)
+
+kubectl --kubeconfig=/etc/kubernetes/admin.conf get configmap kubeadm-config -o yaml -n kube-system > "$config_temp_file"
+if [ $? -ne 0 ]; then
+    echo "Get kubeadm config failed."
+    s_exit 1
+fi
+
+python /usr/share/puppet/modules/platform/files/update_kube_apiserver_certSANs.py \
+--configmap_file "$config_temp_file" --certsans <%= @certsans %>
+if [ $? -ne 0 ]; then
+    echo "Update kubeadm config temp file failed."
+    s_exit 1
+fi
+
+kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch configmap kubeadm-config -p "$(cat $config_temp_file)"
+if [ $? -ne 0 ]; then
+    echo "Patch kubeadm config failed."
+    s_exit 1
+fi
+
+kubeadm --kubeconfig=/etc/kubernetes/admin.conf config view > "$config_temp_file"
+if [ $? -ne 0 ]; then
+    echo "Dump cluster config failed."
+    s_exit 1
+fi
+
+# move the existing apiserver cert files so that kubeadm init can re-generate them.
+# this is also to backup these files in case the kubeadm init fails.
+mv /etc/kubernetes/pki/apiserver.crt /tmp
+mv /etc/kubernetes/pki/apiserver.key /tmp
+
+kubeadm init phase certs apiserver --config "$config_temp_file"
+if [ $? -ne 0 ]; then
+    echo "Update kube apiserver certificate failed."
+    # restore original cert files
+    mv /tmp/apiserver.crt /etc/kubernetes/pki/
+    mv /tmp/apiserver.key /etc/kubernetes/pki/
+    s_exit 1
+fi
+
+rm /tmp/apiserver.crt
+rm /tmp/apiserver.key
+s_exit
+

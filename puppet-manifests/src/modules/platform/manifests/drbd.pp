@@ -168,7 +168,7 @@ class platform::drbd::rabbit ()
 class platform::drbd::platform::params (
   $device = '/dev/drbd2',
   $lv_name = 'platform-lv',
-  $lv_size = '10',
+  $lv_size = '1',
   $mountpoint = '/opt/platform',
   $port = '7790',
   $vg_name = 'cgts-vg',
@@ -270,7 +270,7 @@ class platform::drbd::etcd::params (
   #$service_enable = false,
   $device = '/dev/drbd7',
   $lv_name = 'etcd-lv',
-  $lv_size = '5',
+  $lv_size = '1',
   $mountpoint = '/opt/etcd',
   $port = '7797',
   $resource_name = 'drbd-etcd',
@@ -327,7 +327,7 @@ class platform::drbd::etcd::bootstrap (
 class platform::drbd::dockerdistribution::params (
   $device = '/dev/drbd8',
   $lv_name = 'dockerdistribution-lv',
-  $lv_size = '1',
+  $lv_size = '8',
   $mountpoint = '/var/lib/docker-distribution',
   $port = '7798',
   $resource_name = 'drbd-dockerdistribution',
@@ -464,6 +464,7 @@ class platform::drbd(
   include ::platform::drbd::etcd
   include ::platform::drbd::dockerdistribution
   include ::platform::drbd::cephmon
+  include ::platform::drbd::trigger_resize_check
 
   # network changes need to be applied prior to DRBD resources
   Anchor['platform::networking']
@@ -490,6 +491,7 @@ class platform::drbd::bootstrap {
   include ::platform::drbd::rabbit
   include ::platform::drbd::platform
   include ::platform::drbd::extension
+  include ::platform::drbd::trigger_resize_check
 }
 
 
@@ -509,10 +511,20 @@ class platform::drbd::runtime_service_enable {
   }
 }
 
+class platform::drbd::trigger_resize_check {
+  file {'/etc/platform/.cfs_drbdadm_reconfigured':
+    ensure => absent
+  }
+  file {'/var/run/.config_controller_fini':
+    ensure => absent
+  }
+}
+
 class platform::drbd::pgsql::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
   include ::platform::drbd::pgsql
+  include ::platform::drbd::trigger_resize_check
 }
 
 
@@ -520,6 +532,7 @@ class platform::drbd::platform::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
   include ::platform::drbd::platform
+  include ::platform::drbd::trigger_resize_check
 }
 
 
@@ -527,6 +540,7 @@ class platform::drbd::extension::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
   include ::platform::drbd::extension
+  include ::platform::drbd::trigger_resize_check
 }
 
 
@@ -534,22 +548,26 @@ class platform::drbd::dc_vault::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
   include ::platform::drbd::dc_vault
+  include ::platform::drbd::trigger_resize_check
 }
 
 class platform::drbd::etcd::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
   include ::platform::drbd::etcd
+  include ::platform::drbd::trigger_resize_check
 }
 
 class platform::drbd::dockerdistribution::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
   include ::platform::drbd::dockerdistribution
+  include ::platform::drbd::trigger_resize_check
 }
 
 class platform::drbd::cephmon::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
   include ::platform::drbd::cephmon
+  include ::platform::drbd::trigger_resize_check
 }
