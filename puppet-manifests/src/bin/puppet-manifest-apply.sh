@@ -31,6 +31,7 @@ LOGDIR="/var/log/puppet/${DATETIME}_${PERSONALITY}"
 LOGFILE=${LOGDIR}/puppet.log
 
 mkdir -p ${LOGDIR}
+chmod 700 ${LOGDIR}
 rm -f /var/log/puppet/latest
 ln -s ${LOGDIR} /var/log/puppet/latest
 
