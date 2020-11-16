@@ -703,13 +703,10 @@ class platform::sm
   -> exec { 'Provision service-group storage-monitoring-services':
     command => 'sm-provision service-group storage-monitoring-services',
   }
-
-  # Provision cert-mon for systemcontroller and subcloud
-  if $dc_role =='systemcontroller' or $dc_role =='subcloud' {
-    exec { 'provision cert-mon service in controller-services group':
-      command => 'sm-provision service-group-member controller-services cert-mon'
-    }
+  -> exec { 'Provision cert-mon service in controller-services group':
+    command => 'sm-provision service-group-member controller-services cert-mon'
   }
+
 
   # On an AIO-DX system, cephmon DRBD must always be configured, even
   # if ceph is not enabled. Configured, but not enabled services have
