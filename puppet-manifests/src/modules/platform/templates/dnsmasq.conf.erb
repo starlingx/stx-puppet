@@ -94,7 +94,15 @@ strict-order
 # queries failing for a very long time, even after the service comes up (e.g.
 # after a host is rebooted).
 max-cache-ttl=5
-local=//
+# The CNAME entry below will only cause dnsmasq to respond to queries
+# that match the address family.  Therefore dnsmasq will forward
+# queries to the external servers for local domain queries that don't
+# match the request record type (i.e. A or AAAA records).
+# This line will prevent all requests with the .local domain from
+# being forwarded to external servers.  This will ensure registry.local
+# is not forwarded in all cases, regardless of record type being
+# requested.
+local=/local/
 port=53
 bogus-priv
 clear-on-reload
