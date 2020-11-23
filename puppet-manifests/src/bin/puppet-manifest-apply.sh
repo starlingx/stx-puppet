@@ -87,6 +87,7 @@ function finish {
     if [ ! -f ${SAVEDLOGS} ]; then
         # Save the logs
         tar czf ${SAVEDLOGS} ${LOGDIR} 2>/dev/null
+        chmod 600 ${SAVEDLOGS}
     fi
 
     # To avoid the ever growing contents of filebucket which may trigger inode
