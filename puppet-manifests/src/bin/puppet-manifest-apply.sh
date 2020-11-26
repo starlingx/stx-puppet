@@ -41,7 +41,7 @@ chmod 600 ${LOGFILE}
 
 # Remove old log directories
 declare -i NUM_DIRS=`ls -d1 /var/log/puppet/[0-9]* 2>/dev/null | wc -l`
-declare -i MAX_DIRS=20
+declare -i MAX_DIRS=50
 if [ ${NUM_DIRS} -gt ${MAX_DIRS} ]; then
     let -i RMDIRS=${NUM_DIRS}-${MAX_DIRS}
     ls -d1 /var/log/puppet/[0-9]* | head -${RMDIRS} | xargs --no-run-if-empty rm -rf
