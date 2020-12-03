@@ -556,10 +556,21 @@ class platform::ceph::storage {
 class platform::ceph::controller {
     include ::platform::ceph
     include ::platform::ceph::monitor
-    include ::platform::ceph::osds
 
-    # Ensure partitions update prior to ceph storage configuration
-    Class['::platform::partitions'] -> Class['::platform::ceph::osds']
+    # is_active_controller_found is checking the existence of
+    # /var/run/.active_controller_not_found, which will be created
+    # by /etc/init.d/controller_config if it couldn't detect an active
+    # controller. This will be the case for DOR (Dead Office Recovery),
+    # during which both controllers are booting up thus there is no
+    # active controller. The ceph::osds class has to be skipped in this
+    # case otherwise it will fail for not being able to find ceph monitor
+    # cluster.
+    if str2bool($::is_active_controller_found) {
+      include ::platform::ceph::osds
+
+      # Ensure partitions update prior to ceph storage configuration
+      Class['::platform::partitions'] -> Class['::platform::ceph::osds']
+    }
 }
 
 class platform::ceph::runtime_base {
