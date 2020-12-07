@@ -55,7 +55,7 @@ class platform::dockerdistribution::registries {
 class platform::dockerdistribution::config
   inherits ::platform::dockerdistribution::params {
   include ::platform::params
-  include ::platform::kubernetes::params
+#  include ::platform::kubernetes::params
 
   include ::platform::network::mgmt::params
   include ::platform::docker::params
@@ -135,7 +135,7 @@ class platform::dockerdistribution::config
 # the registry. This is needed for insecure external registry
 class platform::dockerdistribution::compute
   inherits ::platform::dockerdistribution::params {
-  include ::platform::kubernetes::params
+#  include ::platform::kubernetes::params
 
   include ::platform::network::mgmt::params
 
@@ -183,7 +183,7 @@ class platform::dockerdistribution::compute
 
 class platform::dockerdistribution
   inherits ::platform::dockerdistribution::params {
-  include ::platform::kubernetes::params
+#  include ::platform::kubernetes::params
 
   include platform::dockerdistribution::config
 

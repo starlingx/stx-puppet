@@ -35,9 +35,9 @@ class platform::dns::dnsmasq {
     $mgmt_subnet_netmask = $::platform::network::mgmt::params::subnet_prefixlen
   }
 
-  include ::platform::kubernetes::params
-  $service_domain = $::platform::kubernetes::params::service_domain
-  $dns_service_ip = $::platform::kubernetes::params::dns_service_ip
+#  include ::platform::kubernetes::params
+#  $service_domain = $::platform::kubernetes::params::service_domain
+#  $dns_service_ip = $::platform::kubernetes::params::dns_service_ip
   $distributed_cloud_role = $::platform::params::distributed_cloud_role
   $sc_address = $::platform::params::system_controller_addr
   $sc_mgmt_address = $::platform::params::system_controller_mgmt_addr

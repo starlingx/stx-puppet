@@ -35,7 +35,7 @@ include ::platform::docker::worker
 include ::platform::containerd::worker
 include ::platform::dockerdistribution::compute
 include ::platform::docker::login
-include ::platform::kubernetes::worker
+#include ::platform::kubernetes::worker
 include ::platform::multipath
 include ::platform::client
 include ::platform::ceph::worker

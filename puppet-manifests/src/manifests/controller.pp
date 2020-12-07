@@ -39,13 +39,13 @@ include ::platform::amqp::rabbitmq
 include ::platform::postgresql::server
 include ::platform::haproxy::server
 include ::platform::grub
-include ::platform::etcd
+#include ::platform::etcd
 include ::platform::docker::controller
 include ::platform::dockerdistribution
 include ::platform::containerd::controller
-include ::platform::kubernetes::master
-include ::platform::helm
-include ::platform::armada
+#include ::platform::kubernetes::master
+#include ::platform::helm
+#include ::platform::armada
 
 include ::platform::patching
 include ::platform::patching::api

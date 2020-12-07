@@ -354,7 +354,7 @@ class platform::compute::kvm_timer_advance(
 ) {
   if $enabled {
     # include the declaration of the kubelet service
-    include ::platform::kubernetes::worker
+#    include ::platform::kubernetes::worker
 
     file { '/etc/kvm-timer-advance/kvm-timer-advance.conf':
       ensure  => 'present',
@@ -364,7 +364,7 @@ class platform::compute::kvm_timer_advance(
     -> service { 'kvm_timer_advance_setup':
       ensure => 'running',
       enable => true,
-      before => Service['kubelet'],
+#      before => Service['kubelet'],
     }
     # A separate enable is required since we have modified the service resource
     # to never enable/disable services in puppet.

@@ -74,19 +74,19 @@ class platform::sm
   $patch_fs_device              = $::platform::drbd::dc_vault::params::device
   $patch_fs_directory           = $::platform::drbd::dc_vault::params::mountpoint
 
-  include ::platform::drbd::etcd::params
-  $etcd_drbd_resource           = $::platform::drbd::etcd::params::resource_name
-  $etcd_fs_device               = $::platform::drbd::etcd::params::device
-  $etcd_fs_directory            = $::platform::drbd::etcd::params::mountpoint
+#  include ::platform::drbd::etcd::params
+#  $etcd_drbd_resource           = $::platform::drbd::etcd::params::resource_name
+#  $etcd_fs_device               = $::platform::drbd::etcd::params::device
+#  $etcd_fs_directory            = $::platform::drbd::etcd::params::mountpoint
 
   include ::platform::drbd::dockerdistribution::params
   $dockerdistribution_drbd_resource          = $::platform::drbd::dockerdistribution::params::resource_name
   $dockerdistribution_fs_device              = $::platform::drbd::dockerdistribution::params::device
   $dockerdistribution_fs_directory           = $::platform::drbd::dockerdistribution::params::mountpoint
 
-  include ::platform::helm::repositories::params
-  $helmrepo_fs_source_dir = $::platform::helm::repositories::params::source_helm_repos_base_dir
-  $helmrepo_fs_target_dir = $::platform::helm::repositories::params::target_helm_repos_base_dir
+#  include ::platform::helm::repositories::params
+#  $helmrepo_fs_source_dir = $::platform::helm::repositories::params::source_helm_repos_base_dir
+#  $helmrepo_fs_target_dir = $::platform::helm::repositories::params::target_helm_repos_base_dir
 
   include ::platform::drbd::cephmon::params
   $cephmon_drbd_resource          = $::platform::drbd::cephmon::params::resource_name
@@ -396,23 +396,23 @@ class platform::sm
   }
 
   # Configure helm chart repository
-  exec { 'Provision Helm Chart Repository FS in SM (service-group-member helmrepository-fs)':
-    command => 'sm-provision service-group-member controller-services helmrepository-fs',
-  }
-  -> exec { 'Provision Helm Chart Repository FS in SM (service helmrepository-fs)':
-    command => 'sm-provision service helmrepository-fs',
-  }
-  -> exec { 'Configure Helm Chart Repository FileSystem':
-    command => "sm-configure service_instance helmrepository-fs helmrepository-fs \"device=${helmrepo_fs_source_dir},directory=${helmrepo_fs_target_dir},options=bind,noatime,nodiratime,fstype=ext4,check_level=20\"",
-  }
+#  exec { 'Provision Helm Chart Repository FS in SM (service-group-member helmrepository-fs)':
+#    command => 'sm-provision service-group-member controller-services helmrepository-fs',
+#  }
+#  -> exec { 'Provision Helm Chart Repository FS in SM (service helmrepository-fs)':
+#    command => 'sm-provision service helmrepository-fs',
+#  }
+#  -> exec { 'Configure Helm Chart Repository FileSystem':
+#    command => "sm-configure service_instance helmrepository-fs helmrepository-fs \"device=${helmrepo_fs_source_dir},directory=${helmrepo_fs_target_dir},options=bind,noatime,nodiratime,fstype=ext4,check_level=20\"",
+#  }
 
-  exec { 'Configure ETCD DRBD':
-    command => "sm-configure service_instance drbd-etcd drbd-etcd:${hostunit} drbd_resource=${etcd_drbd_resource}",
-  }
+#  exec { 'Configure ETCD DRBD':
+#    command => "sm-configure service_instance drbd-etcd drbd-etcd:${hostunit} drbd_resource=${etcd_drbd_resource}",
+#  }
 
-  exec { 'Configure ETCD DRBD FileSystem':
-    command => "sm-configure service_instance etcd-fs etcd-fs \"device=${etcd_fs_device},directory=${etcd_fs_directory},options=noatime,nodiratime,fstype=ext4,check_level=20\"",
-  }
+#  exec { 'Configure ETCD DRBD FileSystem':
+#    command => "sm-configure service_instance etcd-fs etcd-fs \"device=${etcd_fs_device},directory=${etcd_fs_directory},options=noatime,nodiratime,fstype=ext4,check_level=20\"",
+#  }
 
   # TODO: region code needs to be revisited
   if $region_config {
@@ -500,9 +500,9 @@ class platform::sm
   }
 
   # etcd
-  exec { 'Configure ETCD':
-    command => "sm-configure service_instance etcd etcd \"config=/etc/etcd/etcd.conf,user=root\"",
-  }
+#  exec { 'Configure ETCD':
+#    command => "sm-configure service_instance etcd etcd \"config=/etc/etcd/etcd.conf,user=root\"",
+#  }
 
   # Docker Distribution
   exec { 'Configure Docker Distribution':
@@ -634,24 +634,24 @@ class platform::sm
   }
 
   # Configure ETCD for Kubernetes
-  exec { 'Provision etcd-fs (service-group-member)':
-    command => 'sm-provision service-group-member controller-services etcd-fs',
-  }
-  -> exec { 'Provision etcd-fs (service)':
-    command => 'sm-provision service etcd-fs',
-  }
-  -> exec { 'Provision drbd-etcd (service-group-member)':
-    command => 'sm-provision service-group-member controller-services drbd-etcd',
-  }
-  -> exec { 'Provision drbd-etcd (service)':
-    command => 'sm-provision service drbd-etcd',
-  }
-  -> exec { 'Provision ETCD (service-group-member)':
-      command => 'sm-provision service-group-member controller-services etcd',
-  }
-  -> exec { 'Provision ETCD (service)':
-    command => 'sm-provision service etcd',
-  }
+#  exec { 'Provision etcd-fs (service-group-member)':
+#    command => 'sm-provision service-group-member controller-services etcd-fs',
+#  }
+#  -> exec { 'Provision etcd-fs (service)':
+#    command => 'sm-provision service etcd-fs',
+#  }
+#  -> exec { 'Provision drbd-etcd (service-group-member)':
+#    command => 'sm-provision service-group-member controller-services drbd-etcd',
+#  }
+#  -> exec { 'Provision drbd-etcd (service)':
+#    command => 'sm-provision service drbd-etcd',
+#  }
+#  -> exec { 'Provision ETCD (service-group-member)':
+#      command => 'sm-provision service-group-member controller-services etcd',
+#  }
+#  -> exec { 'Provision ETCD (service)':
+#    command => 'sm-provision service etcd',
+#  }
 
   if $stx_openstack_applied {
     # Configure dbmon for AIO duplex and systemcontroller

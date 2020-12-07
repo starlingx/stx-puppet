@@ -14,7 +14,7 @@ class platform::containerd::config
 
   include ::platform::docker::params
   include ::platform::dockerdistribution::params
-  include ::platform::kubernetes::params
+#  include ::platform::kubernetes::params
   include ::platform::dockerdistribution::registries
   include ::platform::params
   include ::platform::mtce::params
@@ -62,7 +62,7 @@ class platform::containerd::config
   Class['::platform::filesystem::docker'] ~> Class[$name]
 
   # get cni bin directory
-  $k8s_cni_bin_dir = $::platform::kubernetes::params::k8s_cni_bin_dir
+#  $k8s_cni_bin_dir = $::platform::kubernetes::params::k8s_cni_bin_dir
 
   # generate the registry auth
   $registry_auth = chomp(

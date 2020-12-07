@@ -67,7 +67,7 @@ class sysinv (
 ) {
 
   include sysinv::params
-  include ::platform::kubernetes::params
+#  include ::platform::kubernetes::params
   include ::platform::docker::params
 
   Package['sysinv'] -> Sysinv_config<||>

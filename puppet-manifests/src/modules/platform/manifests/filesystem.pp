@@ -233,27 +233,6 @@ class platform::filesystem::conversion
   }
 }
 
-class platform::filesystem::kubelet::params (
-  $lv_size = '2',
-  $lv_name = 'kubelet-lv',
-  $mountpoint = '/var/lib/kubelet',
-  $devmapper = '/dev/mapper/cgts--vg-kubelet--lv',
-  $fs_type = 'ext4',
-  $fs_options = ' '
-) { }
-
-class platform::filesystem::kubelet
-  inherits ::platform::filesystem::kubelet::params {
-
-  platform::filesystem { $lv_name:
-    lv_name    => $lv_name,
-    lv_size    => $lv_size,
-    mountpoint => $mountpoint,
-    fs_type    => $fs_type,
-    fs_options => $fs_options
-  }
-}
-
 class platform::filesystem::docker::params (
   $lv_size = '1',
   $lv_name = 'docker-lv',
@@ -279,7 +258,7 @@ class platform::filesystem::docker
 }
 
 class platform::filesystem::storage {
-  include ::platform::filesystem::kubelet
+#  include ::platform::filesystem::kubelet
 
   class {'platform::filesystem::docker::params' :
     lv_size => 30
@@ -297,7 +276,6 @@ class platform::filesystem::compute {
     # other than 30G. To prevent the docker size to
     # be overrided to 30G for AIO, this is scoped to
     # worker node.
-    include ::platform::filesystem::kubelet
     class {'platform::filesystem::docker::params' :
       lv_size => 30
     }
@@ -313,7 +291,7 @@ class platform::filesystem::controller {
   include ::platform::filesystem::scratch
   include ::platform::filesystem::conversion
   include ::platform::filesystem::docker
-  include ::platform::filesystem::kubelet
+#  include ::platform::filesystem::kubelet
 }
 
 
@@ -365,19 +343,19 @@ class platform::filesystem::conversion::runtime {
   }
 }
 
-class platform::filesystem::kubelet::runtime {
+#class platform::filesystem::kubelet::runtime {
 
-  include ::platform::filesystem::kubelet::params
-  $lv_name = $::platform::filesystem::kubelet::params::lv_name
-  $lv_size = $::platform::filesystem::kubelet::params::lv_size
-  $devmapper = $::platform::filesystem::kubelet::params::devmapper
+#  include ::platform::filesystem::kubelet::params
+#  $lv_name = $::platform::filesystem::kubelet::params::lv_name
+#  $lv_size = $::platform::filesystem::kubelet::params::lv_size
+#  $devmapper = $::platform::filesystem::kubelet::params::devmapper
 
-  platform::filesystem::resize { $lv_name:
-    lv_name   => $lv_name,
-    lv_size   => $lv_size,
-    devmapper => $devmapper,
-  }
-}
+#  platform::filesystem::resize { $lv_name:
+#    lv_name   => $lv_name,
+#    lv_size   => $lv_size,
+#    devmapper => $devmapper,
+#  }
+#}
 
 
 class platform::filesystem::docker::runtime {

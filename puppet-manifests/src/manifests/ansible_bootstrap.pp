@@ -23,13 +23,13 @@ include ::platform::sysinv::bootstrap
 
 # Puppet classes to enable the bring up of kubernetes master
 include ::platform::docker::bootstrap
-include ::platform::etcd::bootstrap
+#include ::platform::etcd::bootstrap
 
 # Puppet classes to enable initial controller unlock
 include ::platform::drbd::dockerdistribution::bootstrap
 include ::platform::filesystem::scratch
 include ::platform::filesystem::backup
-include ::platform::filesystem::kubelet
+#include ::platform::filesystem::kubelet
 include ::platform::mtce::bootstrap
 include ::platform::fm::bootstrap
 
