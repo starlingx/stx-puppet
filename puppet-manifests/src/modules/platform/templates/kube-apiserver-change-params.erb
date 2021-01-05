@@ -23,6 +23,18 @@ python /usr/share/puppet/modules/platform/files/change_kube_apiserver_params.py 
 <%- if @admission_plugins -%>
 --admission_plugins <%= @admission_plugins %> \
 <%- end -%>
+<%- if @etcd_cafile -%>
+--etcd_cafile <%= @etcd_cafile %> \
+<%- end -%>
+<%- if @etcd_certfile -%>
+--etcd_certfile <%= @etcd_certfile %> \
+<%- end -%>
+<%- if @etcd_keyfile -%>
+--etcd_keyfile <%= @etcd_keyfile %> \
+<%- end -%>
+<%- if @etcd_servers -%>
+--etcd_servers <%= @etcd_servers %>
+<%- end -%>
 
 kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch configmap kubeadm-config -p "$(cat <%= @configmap_temp_file %>)"
 kubeadm --kubeconfig=/etc/kubernetes/admin.conf config view > <%= @configmap_temp_file %>

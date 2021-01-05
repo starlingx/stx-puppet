@@ -22,7 +22,11 @@ class platform::kubernetes::params (
   $oidc_client_id = undef,
   $oidc_username_claim = undef,
   $oidc_groups_claim = undef,
-  $admission_plugins = undef
+  $admission_plugins = undef,
+  $etcd_cafile = undef,
+  $etcd_certfile = undef,
+  $etcd_keyfile = undef,
+  $etcd_servers = undef,
 ) { }
 
 class platform::kubernetes::cgroup::params (
@@ -650,8 +654,12 @@ class platform::kubernetes::worker::upgrade_kubelet
   }
 }
 
-class platform::kubernetes::master::change_apiserver_parameters
-  inherits ::platform::kubernetes::params {
+class platform::kubernetes::master::change_apiserver_parameters (
+  $etcd_cafile = $platform::kubernetes::params::etcd_cafile,
+  $etcd_certfile = $platform::kubernetes::params::etcd_certfile,
+  $etcd_keyfile = $platform::kubernetes::params::etcd_keyfile,
+  $etcd_servers = $platform::kubernetes::params::etcd_servers,
+) inherits ::platform::kubernetes::params {
 
   $configmap_temp_file = '/tmp/cluster_configmap.yaml'
   $configview_temp_file = '/tmp/kubeadm_config_view.yaml'
@@ -659,7 +667,6 @@ class platform::kubernetes::master::change_apiserver_parameters
   exec { 'update kube-apiserver params':
     command => template('platform/kube-apiserver-change-params.erb')
   }
-
 }
 
 class platform::kubernetes::certsans::runtime
