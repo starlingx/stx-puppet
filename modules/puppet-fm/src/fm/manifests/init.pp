@@ -78,6 +78,7 @@ class fm (
   $trap_destinations                  = undef,
   $sysinv_catalog_info                = undef,
   $snmp_enabled                       = 0,
+  $snmp_trap_server_port              = 162,
 ) inherits fm::params {
 
   include ::fm::deps
@@ -110,7 +111,7 @@ class fm (
   fm_config {
     'snmp/snmp_enabled':      value => $snmp_enabled;
     'snmp/trap_server_ip':    value => 'controller';
-    'snmp/trap_server_port':  value => '162';
+    'snmp/trap_server_port':  value => $snmp_trap_server_port;
   }
 
   fm_api_paste_ini {
