@@ -5,7 +5,6 @@ class platform::fm::params (
   $system_name = undef,
   $service_create = false,
   $service_enabled = true,
-  $trap_destinations = [],
   $sysinv_catalog_info = 'platform:sysinv:internalURL',
   $snmp_enabled = 0,
   $snmp_trap_server_port = 162,
@@ -15,11 +14,9 @@ class platform::fm::params (
 class platform::fm::config
   inherits ::platform::fm::params {
 
-  $trap_dest_str = join($trap_destinations,',')
   class { '::fm':
     region_name           => $region_name,
     system_name           => $system_name,
-    trap_destinations     => $trap_dest_str,
     sysinv_catalog_info   => $sysinv_catalog_info,
     snmp_enabled          => $snmp_enabled,
     snmp_trap_server_port => $snmp_trap_server_port,
