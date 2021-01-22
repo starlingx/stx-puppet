@@ -437,7 +437,7 @@ class platform::ceph::osds(
   # skip_osds_during_restore is set to true when the default primary
   # ceph backend "ceph-store" has "restore" as its task and it is
   # not an AIO system.
-  if ! $skip_osds_during_restore {
+  if ! $skip_osds_during_restore and $service_enabled {
     file { '/var/lib/ceph/osd':
       ensure => 'directory',
       path   => '/var/lib/ceph/osd',
