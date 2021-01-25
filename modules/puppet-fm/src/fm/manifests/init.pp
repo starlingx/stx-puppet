@@ -75,7 +75,6 @@ class fm (
   $event_log_max_size                 = 4000,
   $system_name                        = undef,
   $region_name                        = undef,
-  $trap_destinations                  = undef,
   $sysinv_catalog_info                = undef,
   $snmp_enabled                       = 0,
   $snmp_trap_server_port              = 162,
@@ -91,7 +90,6 @@ class fm (
     'DEFAULT/event_log_max_size':   value => $event_log_max_size;
     'DEFAULT/system_name':          value => $system_name;
     'DEFAULT/region_name':          value => $region_name;
-    'DEFAULT/trap_destinations':    value => $trap_destinations;
   }
 
   # Automatically add psycopg2 driver to postgresql (only does this if it is missing)
