@@ -195,7 +195,9 @@ define platform::interfaces::sriov_enable (
 
 define platform::interfaces::sriov_bind (
   $addr,
-  $driver
+  $driver,
+  $vfnumber = undef,
+  $max_tx_rate = undef
 ) {
   if ($driver != undef) {
     ensure_resource(kmod::load, $driver)
@@ -227,6 +229,32 @@ define platform::interfaces::sriov_vf_bind (
   create_resources('platform::interfaces::sriov_bind', $vf_config, {})
 }
 
+
+define platform::interfaces::sriov_ratelimit (
+  $addr,
+  $driver,
+  $port_name,
+  $vfnumber = undef,
+  $max_tx_rate = undef
+) {
+  if $max_tx_rate {
+    exec { "sriov-vf-rate-limit: ${title}":
+      command   => template('platform/sriov.ratelimit.erb'),
+      logoutput => true,
+    }
+  }
+}
+
+define platform::interfaces::sriov_vf_ratelimit (
+  $addr,
+  $device_id,
+  $num_vfs,
+  $port_name,
+  $vf_config
+) {
+  create_resources('platform::interfaces::sriov_ratelimit', $vf_config, {port_name => $port_name})
+}
+
 class platform::interfaces::sriov (
   $sriov_config = {},
   $runtime = false
@@ -235,6 +263,7 @@ class platform::interfaces::sriov (
     create_resources('platform::interfaces::sriov_enable', $sriov_config, {})
   } else {
     create_resources('platform::interfaces::sriov_vf_bind', $sriov_config, {})
+    create_resources('platform::interfaces::sriov_vf_ratelimit', $sriov_config, {})
     Platform::Interfaces::Sriov_vf_bind <| |> -> Class['::platform::kubernetes::worker::sriovdp']
   }
 }
