@@ -409,6 +409,10 @@ class platform::kubernetes::worker::pci
   }
 }
 
+class platform::kubernetes::worker::pci::runtime {
+  include ::platform::kubernetes::worker::pci
+}
+
 class platform::kubernetes::worker::sriovdp {
   include ::platform::kubernetes::params
   include ::platform::params
