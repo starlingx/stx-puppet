@@ -603,6 +603,55 @@ class platform::sm
             command => "sm-configure service_group yes controller distributed-cloud-services N 1 0 \"\" \"\"",
         }
     }
+  } else {
+    exec { 'Provision oam-ip service group member':
+      command => 'sm-provision service-group-member oam-services oam-ip',
+    }
+    -> exec { 'Provision oam-ip service':
+      command => 'sm-provision service oam-ip',
+    }
+
+    exec { 'Configure oam-service redundancy model to DX':
+      command => "sm-configure service_group yes controller oam-services 'N + M' 1 1 \"\" directory-services",
+    }
+
+    exec { 'Configure controller-services redundancy model to DX':
+      command => "sm-configure service_group yes controller controller-services 'N + M' 1 1 \"\" directory-services",
+    }
+
+    exec { 'Configure cloud-services redundancy model to DX':
+      command => "sm-configure service_group yes controller cloud-services 'N + M' 1 1 \"\" directory-services",
+    }
+
+    exec { 'Configure vim-services redundancy model to DX':
+      command => "sm-configure service_group yes controller vim-services 'N + M' 1 1 \"\" directory-services",
+    }
+
+    exec { 'Configure patching-services redundancy model to DX':
+      command => "sm-configure service_group yes controller patching-services 'N + M' 1 1 \"\" \"\"",
+    }
+
+    exec { 'Configure directory-services redundancy model to DX':
+      command => "sm-configure service_group yes controller directory-services N 2 0 \"\" \"\"",
+    }
+
+    exec { 'Configure web-services redundancy model to DX':
+      command => "sm-configure service_group yes controller web-services N 2 0 \"\" \"\"",
+    }
+
+    exec { 'Configure storage-services redundancy model to DX':
+      command => "sm-configure service_group yes controller storage-services N 2 0 \"\" \"\"",
+    }
+
+    exec { 'Configure storage-monitoring-services redundancy model to DX':
+      command => "sm-configure service_group yes controller storage-monitoring-services 'N + M' 1 1 \"\" \"\"",
+    }
+
+    if $::platform::params::distributed_cloud_role == 'subcloud' {
+        exec { 'Configure distributed-cloud-services redundancy model to DX':
+            command => "sm-configure service_group yes controller distributed-cloud-services 'N + M' 1 1 \"\" \"\"",
+        }
+    }
   }
 
   exec { 'Provision extension-fs (service-group-member)':
