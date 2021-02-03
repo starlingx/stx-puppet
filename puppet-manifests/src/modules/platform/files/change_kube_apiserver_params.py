@@ -82,33 +82,23 @@ else:
     if plugins in cluster_config['apiServer']['extraArgs']:
         del cluster_config['apiServer']['extraArgs'][plugins]
 
+# etcd parameters are required to start up kube-apiserver
+# do not remove any existing etcd parameters in the config map
 if args.etcd_cafile:
     cluster_config['etcd']['external']['caFile'] = \
         args.etcd_cafile
-else:
-    if 'caFile' in cluster_config['etcd']['external']:
-        del cluster_config['etcd']['external']['caFile']
 
 if args.etcd_certfile:
     cluster_config['etcd']['external']['certFile'] = \
         args.etcd_certfile
-else:
-    if 'certFile' in cluster_config['etcd']['external']:
-        del cluster_config['etcd']['external']['certFile']
 
 if args.etcd_keyfile:
     cluster_config['etcd']['external']['keyFile'] = \
         args.etcd_keyfile
-else:
-    if 'keyFile' in cluster_config['etcd']['external']:
-        del cluster_config['etcd']['external']['keyFile']
 
 if args.etcd_servers:
     cluster_config['etcd']['external']['endpoints'] = \
         args.etcd_servers.split(',')
-else:
-    if 'endpoints' in cluster_config['etcd']['external']:
-        del cluster_config['etcd']['external']['endpoints']
 
 cluster_config_string = yaml.dump(cluster_config, Dumper=yaml.RoundTripDumper,
                                   default_flow_style=False)
