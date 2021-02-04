@@ -76,6 +76,11 @@ define platform::devices::sriov_bind (
       Class['platform::devices::fpga::n3000::reset']
       -> Exec["sriov-bind-device: ${title}"]
     }
+    if ($device_id != undef) and ($device_id == '0d5c') {
+      include platform::devices::acc100::fec
+      Exec["sriov-enable-device: ${title}"]
+      -> Class['platform::devices::acc100::fec']
+    }
     ensure_resource(kmod::load, $driver)
     exec { "sriov-bind-device: ${title}":
       command   => template('platform/sriov.bind-device.erb'),
@@ -153,9 +158,19 @@ class platform::devices::fpga::fec {
   require ::platform::devices::fpga::fec::config
 }
 
+class platform::devices::acc100::fec (
+  $enabled = false
+)
+{
+  if $enabled {
+      exec { 'Mt.Bryce: Configuring baseband device':
+        command   => template('platform/processing.accelerator-config.erb'),
+        logoutput => true,
+      }
+  }
+}
 
 class platform::devices {
   include ::platform::devices::qat
   include ::platform::devices::fpga::fec
 }
-
