@@ -114,10 +114,8 @@ define platform::devices::sriov_pf_enable (
 
 class platform::devices::fpga::fec::vf
   inherits ::platform::devices::fpga::fec::params {
-  include ::platform::kubernetes::worker::sriovdp
   require ::platform::devices::fpga::fec::pf
   create_resources('platform::devices::sriov_vf_bind', $device_config, {})
-  Platform::Devices::Sriov_vf_bind <| |> -> Class['platform::kubernetes::worker::sriovdp']
 }
 
 class platform::devices::fpga::fec::pf

@@ -218,14 +218,17 @@ class platform::kubernetes::kubeadm {
     group  => 'root',
     mode   => '0700',
   }
-  # Start kubelet.
-  -> service { 'kubelet':
-    enable => true,
-  }
   # A seperate enable is required since we have modified the service resource
   # to never enable services.
   -> exec { 'enable-kubelet':
     command => '/usr/bin/systemctl enable kubelet.service',
+  }
+  # Start kubelet if it is standard controller.
+  if !str2bool($::is_worker_subfunction) {
+    File['/etc/kubernetes/manifests']
+    -> service { 'kubelet':
+      enable => true,
+    }
   }
 }
 
@@ -407,7 +410,6 @@ class platform::kubernetes::worker::pci
   $pcidp_resources = undef,
 ) {
   include ::platform::kubernetes::params
-  include ::platform::kubernetes::worker::sriovdp
 
   file { '/etc/pcidp':
     ensure => 'directory',
@@ -426,29 +428,6 @@ class platform::kubernetes::worker::pci
 
 class platform::kubernetes::worker::pci::runtime {
   include ::platform::kubernetes::worker::pci
-}
-
-class platform::kubernetes::worker::sriovdp {
-  include ::platform::kubernetes::params
-  include ::platform::params
-  $host_labels = $::platform::kubernetes::params::host_labels
-  if ($::personality == 'controller') and
-      str2bool($::is_worker_subfunction)
-      and ('sriovdp' in $host_labels) {
-    # In an AIO system, it's possible for the device plugin pods to start
-    # before the device VFs are bound to a driver.  Deleting the device
-    # plugin pods will cause them to be recreated by the daemonset and
-    # allow them to re-scan the set of matching device ids/drivers
-    # specified in the /etc/pcidp/config.json file.
-    # This may be mitigated by moving to helm + configmap for the device
-    # plugin.
-    exec { 'Delete sriov device plugin pod if present':
-      path      => '/usr/bin:/usr/sbin:/bin',
-      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf delete pod -n kube-system --selector=app=sriovdp --field-selector spec.nodeName=$(hostname) --timeout=360s', # lint:ignore:140chars
-      onlyif    => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf get pods -n kube-system --selector=app=sriovdp --field-selector spec.nodeName=$(hostname) | grep kube-sriov-device-plugin', # lint:ignore:140chars
-      logoutput => true,
-    }
-  }
 }
 
 class platform::kubernetes::worker
@@ -470,9 +449,9 @@ class platform::kubernetes::worker
     # Reconfigure cgroups cpusets on AIO
     contain ::platform::kubernetes::cgroup
 
-    # Add refresh dependency for kubelet for hugepage allocation
     Class['::platform::compute::allocate']
-    ~> service { 'kubelet':
+    -> service { 'kubelet':
+      enable => true,
     }
   }
 

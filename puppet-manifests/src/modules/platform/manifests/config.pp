@@ -441,6 +441,18 @@ class platform::config::storage::post
   }
 }
 
+class platform::config::aio::post
+{
+  file { '/etc/platform/.initial_controller_config_complete':
+    ensure => present,
+  }
+
+  file { '/var/run/.controller_config_complete':
+    ensure => present,
+  }
+  include ::platform::config::worker::post
+}
+
 class platform::config::bootstrap {
   stage { 'pre':
     before => Stage['main'],

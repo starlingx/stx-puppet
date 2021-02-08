@@ -270,10 +270,8 @@ class platform::interfaces::sriov::enable
 
 class platform::interfaces::sriov::config
   inherits platform::interfaces::sriov {
-  include ::platform::kubernetes::worker::sriovdp
   create_resources('platform::interfaces::sriov_vf_bind', $sriov_config, {})
   create_resources('platform::interfaces::sriov_vf_ratelimit', $sriov_config, {})
-  Platform::Interfaces::Sriov_vf_bind <| |> -> Class['::platform::kubernetes::worker::sriovdp']
 }
 
 class platform::interfaces::sriov::runtime {
