@@ -338,19 +338,16 @@ class platform::kubernetes::worker::init
 
   if str2bool($::is_initial_config) {
     include ::platform::dockerdistribution::params
-
-    # Get the pause image tag from kubeadm required images
-    # list and replace with local registry
-    $get_k8s_pause_img = "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list 2>/dev/null |\
-      awk '/^k8s.gcr.io\\/pause:/{print \$1}' | sed 's#k8s.gcr.io#registry.local:9001\\/k8s.gcr.io#'"
-    $k8s_pause_img = generate('/bin/sh', '-c', $get_k8s_pause_img)
-
-    if k8s_pause_img {
-      exec { 'load k8s pause image by containerd':
-        command   => "crictl pull --creds ${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password} ${k8s_pause_img}", # lint:ignore:140chars
-        logoutput => true,
-        before    => Exec['configure worker node']
-      }
+    # Pull pause image tag from kubeadm required images list for this version
+    # kubeadm config images list does not use the --kubeconfig argument
+    # and admin.conf will not exist on a pure worker, and kubelet.conf will not
+    # exist until after a join.
+    $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
+    exec { 'load k8s pause image by containerd':
+      # splitting this command over multiple lines appears to break puppet-lint
+      command   => "kubeadm config images list --kubernetes-version ${version} --image-repository=registry.local:9001/k8s.gcr.io 2>/dev/null | grep k8s.gcr.io/pause: | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
+      logoutput => true,
+      before    => Exec['configure worker node'],
     }
   }
 
@@ -615,6 +612,7 @@ class platform::kubernetes::upgrade_first_control_plane
 class platform::kubernetes::upgrade_control_plane
   inherits ::platform::kubernetes::params {
 
+  # control plane is only upgraded on a controller (which has admin.conf)
   exec { 'upgrade control plane':
     command   => 'kubeadm --kubeconfig=/etc/kubernetes/admin.conf upgrade node',
     logoutput => true,
@@ -634,22 +632,19 @@ class platform::kubernetes::worker::upgrade_kubelet
 
   include ::platform::dockerdistribution::params
 
-  # Get the pause image tag from kubeadm required images
-  # list and replace with local registry
-  $get_k8s_pause_img = "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list 2>/dev/null |\
-    awk '/^k8s.gcr.io\\/pause:/{print \$1}' | sed 's#k8s.gcr.io#registry.local:9001\\/k8s.gcr.io#'"
-  $k8s_pause_img = generate('/bin/sh', '-c', $get_k8s_pause_img)
+  # workers use kubelet.conf rather than admin.conf
+  $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
 
-  if k8s_pause_img {
-    exec { 'load k8s pause image':
-      command   => "crictl pull --creds ${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password} ${k8s_pause_img}", # lint:ignore:140chars
-      logoutput => true,
-      before    => Exec['upgrade kubelet']
-    }
+  # Pull the pause image tag from kubeadm required images list for this version
+  exec { 'pull pause image':
+    # spltting this command over multiple lines will break puppet-lint for later violations
+    command   => "kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf config images list --kubernetes-version ${upgrade_to_version} --image-repository=registry.local:9001/k8s.gcr.io 2>/dev/null | grep k8s.gcr.io/pause: | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
+    logoutput => true,
+    before    => Exec['upgrade kubelet'],
   }
 
   exec { 'upgrade kubelet':
-    command   => 'kubeadm --kubeconfig=/etc/kubernetes/admin.conf upgrade node',
+    command   => 'kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf upgrade node',
     logoutput => true,
   }
 
