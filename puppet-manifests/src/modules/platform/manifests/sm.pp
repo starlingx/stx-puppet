@@ -912,6 +912,12 @@ class platform::sm
     -> exec { 'Provision DCManager-Audit in SM (service dcmanager-audit)':
       command => 'sm-provision service dcmanager-audit',
     }
+    -> exec { 'Provision DCManager-Audit-Worker (service-group-member dcmanager-audit-worker)':
+      command => 'sm-provision service-group-member distributed-cloud-services dcmanager-audit-worker',
+    }
+    -> exec { 'Provision DCManager-Audit-Worker in SM (service dcmanager-audit-worker)':
+      command => 'sm-provision service dcmanager-audit-worker',
+    }
     -> exec { 'Provision DCManager-Orchestrator (service-group-member dcmanager-orchestrator)':
       command => 'sm-provision service-group-member distributed-cloud-services dcmanager-orchestrator',
     }
@@ -965,6 +971,9 @@ class platform::sm
     }
     -> exec { 'Configure Platform - DCManager-Audit':
       command => "sm-configure service_instance dcmanager-audit dcmanager-audit \"\"",
+    }
+    -> exec { 'Configure Platform - DCManager-Audit-Worker':
+      command => "sm-configure service_instance dcmanager-audit-worker dcmanager-audit-worker \"\"",
     }
     -> exec { 'Configure Platform - DCManager-Orchestrator':
       command => "sm-configure service_instance dcmanager-orchestrator dcmanager-orchestrator \"\"",
