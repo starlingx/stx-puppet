@@ -7,6 +7,7 @@ class platform::containerd::params (
   $insecure_registries = undef,
   $k8s_cni_bin_dir = '/usr/libexec/cni',
   $stream_server_address = 'localhost',
+  $custom_container_runtime = undef,
 ) { }
 
 class platform::containerd::config
@@ -36,6 +37,9 @@ class platform::containerd::config
   }
   $insecure_registries = $::platform::dockerdistribution::registries::insecure_registries
   $distributed_cloud_role = $::platform::params::distributed_cloud_role
+
+  # grab custom cri class entries
+  $custom_container_runtime = $::platform::containerd::params::custom_container_runtime
 
   if $http_proxy or $https_proxy {
     file { '/etc/systemd/system/containerd.service.d':
