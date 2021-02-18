@@ -241,6 +241,8 @@ define platform::interfaces::sriov_ratelimit (
     exec { "sriov-vf-rate-limit: ${title}":
       command   => template('platform/sriov.ratelimit.erb'),
       logoutput => true,
+      tries     => 5,
+      try_sleep => 1,
     }
   }
 }
