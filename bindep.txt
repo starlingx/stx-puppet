@@ -1,0 +1,2 @@
+ruby-devel [test platform:rpm]
+ruby-dev [test platform:dpkg]
