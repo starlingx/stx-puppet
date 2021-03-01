@@ -426,7 +426,7 @@ class platform::kubernetes::worker::sriovdp {
     # plugin.
     exec { 'Delete sriov device plugin pod if present':
       path      => '/usr/bin:/usr/sbin:/bin',
-      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf delete pod -n kube-system --selector=app=sriovdp --field-selector spec.nodeName=$(hostname) --timeout=60s', # lint:ignore:140chars
+      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf delete pod -n kube-system --selector=app=sriovdp --field-selector spec.nodeName=$(hostname) --timeout=360s', # lint:ignore:140chars
       onlyif    => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf get pods -n kube-system --selector=app=sriovdp --field-selector spec.nodeName=$(hostname) | grep kube-sriov-device-plugin', # lint:ignore:140chars
       logoutput => true,
     }
