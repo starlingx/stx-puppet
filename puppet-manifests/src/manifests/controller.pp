@@ -104,6 +104,8 @@ include ::platform::sm
 include ::platform::lmon
 include ::platform::rook
 
+include ::platform::deviceimage
+
 class { '::platform::config::controller::post':
   stage => post,
 }

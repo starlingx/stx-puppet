@@ -88,6 +88,10 @@ class platform::sm
   $helmrepo_fs_source_dir = $::platform::helm::repositories::params::source_helm_repos_base_dir
   $helmrepo_fs_target_dir = $::platform::helm::repositories::params::target_helm_repos_base_dir
 
+  include ::platform::deviceimage::params
+  $deviceimage_fs_source_dir = $::platform::deviceimage::params::source_deviceimage_base_dir
+  $deviceimage_fs_target_dir = $::platform::deviceimage::params::target_deviceimage_base_dir
+
   include ::platform::drbd::cephmon::params
   $cephmon_drbd_resource          = $::platform::drbd::cephmon::params::resource_name
   $cephmon_fs_device              = $::platform::drbd::cephmon::params::device
@@ -418,6 +422,17 @@ class platform::sm
 
   exec { 'Configure ETCD DRBD FileSystem':
     command => "sm-configure service_instance etcd-fs etcd-fs \"device=${etcd_fs_device},directory=${etcd_fs_directory},options=noatime,nodiratime,fstype=ext4,check_level=20\"",
+  }
+
+  # Configure device image repository
+  exec { 'Provision device-image-fs (service-group-member)':
+    command => 'sm-provision service-group-member controller-services device-image-fs',
+  }
+  -> exec { 'Provision device-image-fs (service)':
+    command => 'sm-provision service device-image-fs',
+  }
+  -> exec { 'Configure Device Image Repository FileSystem':
+    command => "sm-configure service_instance device-image-fs device-image-fs \"device=${deviceimage_fs_source_dir},directory=${deviceimage_fs_target_dir},options=bind,noatime,nodiratime,fstype=ext4,check_level=20\"",
   }
 
   # TODO: region code needs to be revisited
