@@ -1,0 +1,56 @@
+/bin/true # puppet requires this for correct template parsing
+
+# During a migration from AIO-SX to AIO-DX, Ceph's crushmap need to
+# be updated to add a new bucket for controller-1 and the ruleset
+# update to replicate data between hosts
+
+set -x
+
+CRUSHMAP_BIN=/tmp/crushmap.bin
+CRUSHMAP_TXT=/tmp/crushmap.rule
+NEW_CRUSHMAP_TXT=/tmp/new-crushmap.rule
+NEW_CRUSHMAP_BIN=/tmp/new-crushmap.bin
+
+# add controller-1 bucket
+timeout 10 ceph osd crush add-bucket controller-1 host
+
+if [ $? -ne 0 ]; then
+    echo "Ceph is down or failed to create bucket"
+    exit 1
+fi
+
+ceph osd crush move controller-1 chassis=group-0
+
+if [ $? -ne 0 ]; then
+    echo "Failed to add controller-1 bucket host"
+    exit 1
+fi
+
+# update ruleset
+ceph osd getcrushmap -o $CRUSHMAP_BIN
+crushtool -d $CRUSHMAP_BIN -o $CRUSHMAP_TXT
+
+if [ $? -ne 0 ]; then
+    echo "Failed to read and decompile crushmap rules"
+    exit 1
+fi
+
+sed -e 's/\(step chooseleaf\) \(firstn [[:digit:]] type\) osd/\1 \2 host/' $CRUSHMAP_TXT > $NEW_CRUSHMAP_TXT
+
+# compile crushmap
+crushtool -c $NEW_CRUSHMAP_TXT -o $NEW_CRUSHMAP_BIN
+
+if [ $? -ne 0 ]; then
+    echo "Failed to compile new crushmap rules"
+    exit 1
+fi
+
+ceph osd setcrushmap -i $NEW_CRUSHMAP_BIN
+
+if [ $? -ne 0 ]; then
+    echo "Failed to set new crushmap ruleset"
+    exit 1
+fi
+
+set +x
+exit 0

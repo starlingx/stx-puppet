@@ -391,19 +391,21 @@ class platform::drbd::cephmon::params (
 
 class platform::drbd::cephmon ()
   inherits ::platform::drbd::cephmon::params {
-
   include ::platform::ceph::params
 
   $system_mode = $::platform::params::system_mode
   $system_type = $::platform::params::system_type
 
-  if ((str2bool($::is_controller_active) or str2bool($::is_standalone_controller))
-    and ! str2bool($::is_node_ceph_configured)) {
+  # If migrating from AIO SX to DX we want to override
+  # these properties and handle it as an initial ceph setup
+  # so DRBD is properly configured
+  if ($::platform::ceph::params::simplex_to_duplex_migration or
+    ((str2bool($::is_controller_active) or str2bool($::is_standalone_controller))
+    and ! str2bool($::is_node_ceph_configured))) {
     # Active controller, first time configuration.
     $drbd_primary = true
     $drbd_initial = true
     $drbd_automount = true
-
   } elsif str2bool($::is_standalone_controller) {
     # Active standalone controller, successive reboots.
     $drbd_primary = true

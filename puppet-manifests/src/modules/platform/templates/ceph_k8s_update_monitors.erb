@@ -1,0 +1,59 @@
+/bin/true # puppet requires this for correct template parsing
+
+set -x
+
+# Query the k8s API to make sure it's accesible, if not exit with a non-zero
+# return code to trigger a puppet retry
+kubectl --kubeconfig=/etc/kubernetes/admin.conf get StorageClass --all-namespaces
+if [ $? -ne 0 ]; then
+    echo "kube-apiserver not available yet"
+    exit 1
+fi
+
+CONTROLLER_0_IP=<%= @mon_0_ip %>
+CONTROLLER_FLOATING_IP=<%= @floating_mon_ip %>
+
+STORAGE_CLASSES=$(kubectl --kubeconfig=/etc/kubernetes/admin.conf get StorageClass --all-namespaces | \
+ grep -E "ceph.com/cephfs|ceph.com/rbd" | awk '{print $1}')
+EXISTING_PVCS=$(kubectl --kubeconfig=/etc/kubernetes/admin.conf get PersistentVolume --all-namespaces --no-headers | awk '{print $1}')
+
+for PVC in $EXISTING_PVCS; do
+    PVC_SC=$(kubectl --kubeconfig=/etc/kubernetes/admin.conf get PersistentVolume $PVC -o json | \
+            grep -Eo '"storageClassName"[^,]*' | awk '{print $2}' | sed 's/"//g')
+
+    for SC in ${STORAGE_CLASSES}
+    do
+        if [ "$SC" == "$PVC_SC" ]; then
+            # Loops over existing Persistent Volumes and replace it changing the CEPH monitor ip address
+            # This is required because updating the monitor ip is not allowed by kubernetes and therefore we need
+            # to re-create it. The replace command will block due to the pv-protection finalizer waiting for the bounded PVC
+            # to be removed but we want to replace the PV without removing the bounded PVC. Therefore, we run the replace command
+            # in the background and run a patch removing the pv-protection finalizer so that replace command completes.
+            kubectl --kubeconfig=/etc/kubernetes/admin.conf get PersistentVolume $PVC -o yaml | sed "s/$CONTROLLER_0_IP/$CONTROLLER_FLOATING_IP/g" | \
+                kubectl --kubeconfig=/etc/kubernetes/admin.conf replace --cascade=false --force -f - >/dev/null &
+            sleep 1
+            TIMEOUT=4
+            DELAY=0
+            while [[ $DELAY -lt $TIMEOUT ]]; do
+                timestamp=$(kubectl --kubeconfig=/etc/kubernetes/admin.conf get pv $PVC -o jsonpath='{.metadata.deletionTimestamp}')
+                if [ ! -z "${timestamp}" ]; then
+                    break
+                else
+                    sleep 1
+                    DELAY=$((DELAY + 1))
+                fi
+            done
+
+            if [[ $DELAY -ne $TIMEOUT ]]; then
+                kubectl --kubeconfig=/etc/kubernetes/admin.conf patch PersistentVolume ${PVC} -p '{"metadata":{"finalizers":null}}' --type=merge
+                wait
+                echo "PersistentVolume/${PVC} replaced"
+            else
+                exit 1
+            fi
+        fi
+    done
+done
+
+set +x
+exit 0

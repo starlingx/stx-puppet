@@ -37,9 +37,12 @@ class platform::ceph::params(
   $rgw_gc_processor_max_time = '300',
   $rgw_gc_processor_period = '300',
   $configure_ceph_mon_info = false,
+  $simplex_to_duplex_migration = false,
+  $cephfs_filesystems = {},
   $ceph_config_file = '/etc/ceph/ceph.conf',
   $ceph_config_ready_path = '/var/run/.ceph_started',
   $node_ceph_configured_flag = '/etc/platform/.node_ceph_configured',
+  $pmond_ceph_file = '/etc/pmon.d/ceph.conf',
 ) { }
 
 
@@ -120,7 +123,15 @@ class platform::ceph
     }
 
     # Remove old, no longer in use, monitor hosts from Ceph's config file
-    $valid_monitors = [ $mon_0_host, $mon_1_host, $mon_2_host ]
+    if $system_type == 'All-in-one' {
+      if $system_mode == 'simplex' {
+        $valid_monitors = [ $mon_0_host ]
+      } else {
+        $valid_monitors = [ $floating_mon_host ]
+      }
+    } else {
+      $valid_monitors = [ $mon_0_host, $mon_1_host, $mon_2_host ]
+    }
 
     $::configured_ceph_monitors.each |Integer $index, String $monitor| {
       if ! ($monitor in $valid_monitors) {
@@ -222,8 +233,42 @@ class platform::ceph::monitor
     }
 
     if $system_type == 'All-in-one' and 'duplex' in $system_mode {
-      # ensure DRBD config is complete before enabling the ceph monitor
-      Drbd::Resource <| |> -> Class['::ceph']
+      # if transition from AIO-SX to AIO-DX has started, we need to
+      # wipe the logical volume before mounting DRBD
+      # and remove the pmon.d managed ceph daemons
+      if ($simplex_to_duplex_migration and str2bool($::is_node_ceph_configured)) {
+        include ::platform::filesystem::params
+        include ::platform::ceph::migration::sx_to_dx::rebuild_mon
+
+        $vg_name = $::platform::filesystem::params::vg_name
+        $device = "/dev/${vg_name}/${mon_lv_name}"
+
+        exec { 'Unmounting cephmon logical volume' :
+          command => "umount ${mon_mountpoint}",
+          onlyif  => "mountpoint -q ${mon_mountpoint}",
+        }
+        -> exec { "Removing auto mounting ${mon_mountpoint} from fstab" :
+          command => "/bin/sed -i '/^.*${mon_lv_name}.*ext4/d' /etc/fstab",
+          onlyif  => "grep -q '^.*${mon_lv_name}.*ext4' /etc/fstab",
+        }
+        -> exec { "wipe start of device ${device}" :
+          command => "dd if=/dev/zero of=${device} bs=512 count=34",
+          onlyif  => "blkid ${device}",
+        }
+        -> exec { "wipe end of device ${device}" :
+          command => "dd if=/dev/zero of=${device} bs=512 seek=$(($(blockdev --getsz ${device}) - 34)) count=34",
+          onlyif  => "blkid ${device}",
+        }
+        -> exec { "remove ${pmond_ceph_file}" :
+          command => "rm -f ${pmond_ceph_file}",
+          onlyif  => "test -f ${pmond_ceph_file}",
+        }
+        -> Drbd::Resource['drbd-cephmon']
+        -> Class['::ceph']
+      } else {
+        # ensure DRBD config is complete before enabling the ceph monitor
+        Drbd::Resource <| |> -> Class['::ceph']
+      }
     } else {
       File['/var/lib/ceph']
       -> platform::filesystem { $mon_lv_name:
@@ -321,6 +366,112 @@ class platform::ceph::monitor
   elsif $::hostname == $mon_1_host {
     ceph_config{
       "mgr.${$::hostname}/public_addr": value => $mon_1_ip;
+    }
+  }
+}
+
+class platform::ceph::migration::sx_to_dx::rebuild_mon
+  inherits platform::ceph::params {
+  # Make sure osds are provisioned
+  Class['::platform::ceph::osds'] -> Class[$name]
+
+  $mon_db_path = "${$mon_mountpoint}/ceph-${floating_mon_host}"
+
+  exec { 'sm-unmanage service ceph-osd to rebuild store.db' :
+    command => 'sm-unmanage service ceph-osd',
+    onlyif  => 'test -f /var/run/goenabled',
+  }
+  -> exec { 'sm-unmanage service ceph-mon to rebuild store.db' :
+    command => 'sm-unmanage service ceph-mon',
+    onlyif  => 'test -f /var/run/goenabled',
+  }
+  -> exec { 'stop Ceph OSDs and Monitor' :
+    command => '/etc/init.d/ceph-init-wrapper stop'
+  }
+  -> exec { 'Remove current ceph-controller store.db' :
+    command => "rm -rf ${mon_db_path}/store.db",
+    onlyif  => "test -d ${mon_db_path}/store.db"
+  }
+
+  $::configured_ceph_osds.each |Integer $index, String $osd| {
+    exec { "Rebuilding monitor storage from OSD ${osd}" :
+      command => "ceph-objectstore-tool --data-path /var/lib/ceph/osd/${osd} --no-mon-config\
+                  --op update-mon-db --mon-store-path ${mon_db_path}",
+      require => Exec['Remove current ceph-controller store.db'],
+    }
+    Exec["Rebuilding monitor storage from OSD ${osd}"] -> Exec['Add monitor information to store.db']
+  }
+
+  exec { 'Add monitor information to store.db' :
+    command => "ceph-monstore-tool ${mon_db_path} rebuild --mon-ids ${floating_mon_host}",
+  }
+  -> exec { 'start Ceph Monitor after rebuilding monitor store' :
+    command => '/etc/init.d/ceph-init-wrapper start mon',
+  }
+  -> exec { 'start other Ceph components after rebuilding monitor store' :
+    command => '/etc/init.d/ceph-init-wrapper start',
+  }
+  -> exec { 'sm-manage service ceph-osd after rebuilding monitor store' :
+    command => 'sm-manage service ceph-osd',
+    onlyif  => 'test -f /var/run/goenabled',
+  }
+  -> exec { 'sm-manage service ceph-mon after rebuilding monitor store' :
+    command => 'sm-manage service ceph-mon',
+    onlyif  => 'test -f /var/run/goenabled',
+  }
+
+  class { 'platform::ceph::migration::sx_to_dx::active_cluster_updates' :
+    stage => post,
+  }
+}
+
+class platform::ceph::migration::sx_to_dx::active_cluster_updates
+  inherits platform::ceph::params {
+
+  exec { 'Ensure Ceph Monitor is running' :
+    command => '/etc/init.d/ceph-init-wrapper start mon',
+  }
+  -> exec { 'Ensure Ceph OSDs are running' :
+    command => '/etc/init.d/ceph-init-wrapper start osd',
+  }
+  -> exec { 'Ensure Ceph mds is stoped':
+    command => '/etc/init.d/ceph-init-wrapper stop mds'
+  }
+
+  $cephfs_filesystems.each |String $fs, Array $pools| {
+    $metadada_pool = $pools[0]
+    $data_pool = $pools[1]
+
+    exec { "Rebuilding cephfs filesystem ${fs}" :
+      command => "ceph fs new ${fs} ${metadada_pool} ${data_pool} --force",
+      require => Exec['Ensure Ceph mds is stoped'],
+    }
+    -> exec { "Reset cephfs filesystem ${fs}" :
+      command => "ceph fs reset ${fs} --yes-i-really-mean-it",
+    }
+
+    Exec["Reset cephfs filesystem ${fs}"] -> Exec['Ensure Ceph mds is re-started']
+  }
+
+  exec { 'Ensure Ceph mds is re-started':
+    command => '/etc/init.d/ceph-init-wrapper start mds'
+  }
+  -> exec { 'Update crushmap to support DX' :
+    command => template('platform/ceph_crushmap_add_controller1_bucket.erb'),
+  }
+}
+
+class platform::ceph::migration::sx_to_dx::update_pvcs
+  inherits ::platform::ceph::params {
+  if $simplex_to_duplex_migration {
+    Class['::platform::config::worker::post'] -> Class[$name]
+
+    exec { 'Update monitor IP in existing K8s PersistentVolumes' :
+      path      => '/usr/bin:/usr/sbin:/bin',
+      command   => template('platform/ceph_k8s_update_monitors.erb'),
+      tries     => 6,
+      try_sleep => 10,
+      logoutput => true,
     }
   }
 }
