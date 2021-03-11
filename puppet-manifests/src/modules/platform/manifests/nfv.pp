@@ -39,6 +39,19 @@ class platform::nfv {
   include ::nfv::event_log
 }
 
+class platform::nfv::webserver::reload {
+  platform::sm::restart {'vim-webserver': }
+}
+
+
+class platform::nfv::webserver::runtime {
+  include ::platform::nfv
+
+  class {'::platform::nfv::webserver::reload':
+    stage => post
+  }
+}
+
 
 class platform::nfv::reload {
   platform::sm::restart {'vim': }
