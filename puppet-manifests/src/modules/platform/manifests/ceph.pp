@@ -325,7 +325,7 @@ class platform::ceph::monitor
   }
 }
 
-class platform::ceph::metadataserver
+class platform::ceph::metadataserver::config
   inherits ::platform::ceph::params {
   if $::hostname == $mon_0_host {
         Class['::ceph']
@@ -346,6 +346,85 @@ class platform::ceph::metadataserver
           }
     }
   }
+
+class platform::ceph::metadataserver::controller::runtime
+  inherits ::platform::ceph::params {
+
+  include ::platform::ceph::metadataserver::config
+
+  if $::personality == 'controller' {
+    include ::platform::sm::ceph::runtime
+
+    # Make sure the metadata config is added before starting services
+    Class['::platform::ceph::metadataserver::config'] -> Class[$name]
+
+    # Make sure the ceph SM services are provisioned
+    Class['::platform::sm::ceph::runtime'] -> Class[$name]
+
+    $system_mode = $::platform::params::system_mode
+    $system_type = $::platform::params::system_type
+
+    if $system_type == 'All-in-one' {
+      if 'duplex' in $system_mode {
+        if str2bool($::is_controller_active) {
+          # Active Duplex Controller
+          exec { 'sm-unmanage service ceph-mon':
+            command => 'sm-unmanage service ceph-mon'
+          }
+          -> exec { 'Ensure Ceph monitor is started':
+            command => '/etc/init.d/ceph-init-wrapper start mon'
+          }
+          -> exec { 'Ensure Ceph metadata server is started':
+            command => '/etc/init.d/ceph-init-wrapper start mds'
+          }
+          -> exec { 'sm-manage service ceph-mon':
+            command => 'sm-manage service ceph-mon'
+          }
+        } else {
+          # Standby Duplex Controller
+          exec { 'Ensure Ceph metadata server is started':
+            command => '/etc/init.d/ceph-init-wrapper start mds'
+          }
+        }
+      }
+    } else {
+      # Simplex/Std Controller
+      exec { 'Ensure Ceph monitor is started':
+        command => '/usr/local/sbin/pmon-restart ceph'
+      }
+      -> exec { 'Ensure Ceph metadata server is started':
+        command => '/etc/init.d/ceph-init-wrapper start mds'
+      }
+    }
+  }
+}
+
+class platform::ceph::metadataserver::worker::runtime
+  inherits ::platform::ceph::params {
+
+  include ::platform::ceph::metadataserver::config
+  if $::personality == 'worker' {
+    if $::hostname == $mon_0_host or $::hostname == $mon_1_host or $::hostname == $mon_2_host {
+      # Worker with a monitor assigned:
+
+      # Make sure the metadata config and monitor is added before starting services
+      Class['::platform::ceph::monitor'] -> Class[$name]
+      Class['::platform::ceph::metadataserver::config'] -> Class[$name]
+
+      exec {'Ensure Ceph monitor is started':
+        command => '/usr/local/sbin/pmon-restart ceph'
+      }
+      -> exec { 'Ensure Ceph metadata server is started':
+        command => '/etc/init.d/ceph-init-wrapper start mds'
+      }
+    }
+  }
+}
+
+class platform::ceph::metadataserver::runtime {
+  include ::platform::ceph::metadataserver::controller::runtime
+  include ::platform::ceph::metadataserver::worker::runtime
+}
 
 define osd_crush_location(
   $osd_id,
@@ -563,14 +642,14 @@ class platform::ceph::worker {
   if $::personality == 'worker' {
     include ::platform::ceph
     include ::platform::ceph::monitor
-    include ::platform::ceph::metadataserver
+    include ::platform::ceph::metadataserver::config
   }
 }
 
 class platform::ceph::storage {
     include ::platform::ceph
     include ::platform::ceph::monitor
-    include ::platform::ceph::metadataserver
+    include ::platform::ceph::metadataserver::config
     include ::platform::ceph::osds
 
     # Ensure partitions update prior to ceph storage configuration
@@ -580,7 +659,7 @@ class platform::ceph::storage {
 class platform::ceph::controller {
     include ::platform::ceph
     include ::platform::ceph::monitor
-    include ::platform::ceph::metadataserver
+    include ::platform::ceph::metadataserver::config
 
     # is_active_controller_found is checking the existence of
     # /var/run/.active_controller_not_found, which will be created
@@ -600,14 +679,16 @@ class platform::ceph::controller {
 
 class platform::ceph::runtime_base {
   include ::platform::ceph::monitor
-  include ::platform::ceph::metadataserver
+  include ::platform::ceph::metadataserver::runtime
   include ::platform::ceph
 
   $system_mode = $::platform::params::system_mode
   $system_type = $::platform::params::system_type
 
-  if $system_type == 'All-in-one' and 'duplex' in $system_mode {
-    Drbd::Resource <| |> -> Class[$name]
+  if $::personality == 'controller' {
+    if $system_type == 'All-in-one' and 'duplex' in $system_mode {
+      Drbd::Resource <| |> -> Class[$name]
+    }
     Class[$name] -> Class['::platform::sm::ceph::runtime']
   }
 }
