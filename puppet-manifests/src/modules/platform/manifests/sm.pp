@@ -1131,6 +1131,7 @@ class platform::sm::rgw::runtime {
 
 class platform::sm::ceph::runtime {
   $ceph_configured = $::platform::ceph::params::service_enabled
+  include ::platform::rook::params
   $rook_configured = $::platform::rook::params::service_enabled
   $system_mode     = $::platform::params::system_mode
   $system_type     = $::platform::params::system_type
