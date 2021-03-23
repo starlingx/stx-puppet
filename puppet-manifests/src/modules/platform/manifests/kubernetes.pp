@@ -28,6 +28,16 @@ class platform::kubernetes::params (
   $etcd_certfile = undef,
   $etcd_keyfile = undef,
   $etcd_servers = undef,
+  $rootca_certfile = '/etc/kubernetes/pki/ca.crt',
+  $rootca_keyfile = '/etc/kubernetes/pki/ca.key',
+  $rootca_cert = undef,
+  $rootca_key = undef,
+  # The file holding the original root CA cert/key before update
+  $rootca_certfile_old = '/etc/kubernetes/pki/ca_old.crt',
+  $rootca_keyfile_old = '/etc/kubernetes/pki/ca_old.key',
+  # The file holding the root CA cert/key to update to
+  $rootca_certfile_new = '/etc/kubernetes/pki/ca_new.crt',
+  $rootca_keyfile_new = '/etc/kubernetes/pki/ca_new.key',
 ) { }
 
 class platform::kubernetes::configuration {
@@ -761,5 +771,109 @@ class platform::kubernetes::duplex_migration::runtime {
 
   class { '::platform::kubernetes::duplex_migration::runtime::post':
     stage => post,
+  }
+}
+
+class platform::kubernetes::master::rootca::trustbothcas::runtime
+  inherits ::platform::kubernetes::params {
+
+  # Backup the original root CA cert
+  file { $rootca_certfile_old:
+    ensure  => file,
+    source  => $rootca_certfile,
+    replace => false,
+  }
+  # Create the new root CA cert file
+  -> file { $rootca_certfile_new:
+    ensure  => file,
+    content => base64('decode', $rootca_cert),
+  }
+  # Create new root CA key file
+  -> file { $rootca_keyfile_new:
+    ensure  => file,
+    content => base64('decode', $rootca_key),
+  }
+  # Append the new cert to the current cert
+  -> exec { 'append_ca_cert':
+    command => "cat ${rootca_certfile_old} ${rootca_certfile_new} > ${rootca_certfile}",
+  }
+  # update admin.conf with both old and new certs
+  -> exec { 'update_admin_conf':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
+    command     => 'kubectl config set-cluster kubernetes --certificate-authority /etc/kubernetes/pki/ca.crt --embed-certs',
+  }
+  # Restart apiserver to trust both old and new certs
+  -> exec { 'restart_apiserver':
+    command => "/usr/bin/kill -s SIGHUP $(pidof kube-apiserver)",
+  }
+  # Update scheduler.conf with both old and new certs
+  -> exec { 'update_scheduler_conf':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/scheduler.conf' ],
+    command     => 'kubectl config set-cluster kubernetes --certificate-authority /etc/kubernetes/pki/ca.crt --embed-certs',
+  }
+  # Restart scheduler to trust both old and new certs
+  -> exec { 'restart_scheduler':
+    command => "/usr/bin/kill -s SIGHUP $(pidof kube-scheduler)"
+  }
+  # Update controller-manager.conf with both old and new certs
+  -> exec { 'update_controller-manager_conf':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/controller-manager.conf' ],
+    command     => 'kubectl config set-cluster kubernetes --certificate-authority /etc/kubernetes/pki/ca.crt --embed-certs',
+  }
+  # Update kube-controller-manager.yaml with new cert and key
+  -> exec { 'update_controller-manager_yaml':
+    command => "/bin/sed -i \\
+                -e 's|cluster-signing-cert-file=.*|cluster-signing-cert-file=/etc/kubernetes/pki/ca_new.crt|' \\
+                -e 's|cluster-signing-key-file=.*|cluster-signing-key-file=/etc/kubernetes/pki/ca_new.key|' \\
+                /etc/kubernetes/manifests/kube-controller-manager.yaml"
+  }
+
+  # Update kubelet.conf with both old and new certs
+  $cluster = generate('/bin/bash', '-c', "/bin/sed -e '/- cluster/,/name:/!d' /etc/kubernetes/kubelet.conf \\
+                      | grep 'name:' | awk '{printf \"%s\", \$2}'")
+  exec { 'update_kubelet_conf':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/kubelet.conf' ],
+    command     => "kubectl config set-cluster ${cluster} --certificate-authority /etc/kubernetes/pki/ca.crt --embed-certs",
+    require     => Exec['append_ca_cert'],
+  }
+  # Restart kubelet to truct both certs
+  -> exec { 'restart_kubelet':
+    command => '/usr/bin/systemctl restart kubelet',
+  }
+}
+
+class platform::kubernetes::worker::rootca::trustbothcas::runtime
+  inherits ::platform::kubernetes::params {
+
+  $cluster = generate('/bin/bash', '-c', "/bin/sed -e '/- cluster/,/name:/!d' /etc/kubernetes/kubelet.conf \\
+  | grep 'name:' | awk '{printf \"%s\", \$2}'")
+  # Backup the original root CA cert
+  file { $rootca_certfile_old:
+    ensure  => file,
+    source  => $rootca_certfile,
+    replace => false,
+  }
+  # Create the new root CA cert file
+  -> file { $rootca_certfile_new:
+    ensure  => file,
+    content => base64('decode', $rootca_cert),
+  }
+  # Create new root CA key file
+  -> file { $rootca_keyfile_new:
+    ensure  => file,
+    content => base64('decode', $rootca_key),
+  }
+  # Append the new cert to the current cert
+  -> exec { 'append_ca_cert':
+    command => "cat ${rootca_certfile_old} ${rootca_certfile_new} > ${rootca_certfile}",
+  }
+  # Update kubelet.conf with both old and new certs
+  -> exec { 'update_kubelet_conf':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/kubelet.conf' ],
+    command     => "kubectl config set-cluster ${cluster} --certificate-authority /etc/kubernetes/pki/ca.crt --embed-certs",
+  }
+  # Restart kubelet to truct both certs
+  -> exec { 'restart_kubelet':
+    command => '/usr/bin/systemctl restart kubelet',
   }
 }
