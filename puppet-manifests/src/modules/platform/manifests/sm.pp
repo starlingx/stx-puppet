@@ -1022,6 +1022,72 @@ class platform::sm
   # lint:endignore:140chars
 }
 
+class platform::sm::update_oam_config::runtime {
+  $system_mode                   = $::platform::params::system_mode
+
+  # lint:ignore:140chars
+  if $system_mode == 'simplex' {
+
+    include ::platform::network::oam::params
+    $oam_my_unit_ip    = $::platform::network::oam::params::controller_address
+    $oam_ip_interface  = $::platform::network::oam::params::interface_name
+    $oam_ip_param_ip   = $::platform::network::oam::params::controller_address
+    $oam_ip_param_mask = $::platform::network::oam::params::subnet_prefixlen
+
+    exec { 'pmon-stop-sm-api':
+      command => 'pmon-stop sm-api',
+    }
+    -> exec { 'pmon-stop-sm':
+      command => 'pmon-stop sm'
+    }
+    # remove previous active DB and its journaling files
+    -> file { '/var/run/sm/sm.db':
+      ensure => absent
+    }
+    -> file { '/var/run/sm/sm.db-shm':
+      ensure => absent
+    }
+    -> file { '/var/run/sm/sm.db-wal':
+      ensure => absent
+    }
+    # will write the config values to /var/lib/sm/sm.db
+    -> exec { 'Configure OAM IP':
+      command => "sm-configure service_instance oam-ip oam-ip \"ip=${oam_ip_param_ip},cidr_netmask=${oam_ip_param_mask},nic=${oam_ip_interface},arp_count=7\"",
+    }
+    -> exec { 'Configure OAM Interface':
+      command => "sm-configure interface controller oam-interface \"\" ${oam_my_unit_ip} 2222 2223 \"\" 2222 2223",
+    }
+    -> exec { 'pmon-start-sm':
+      # will copy /var/lib/sm/sm.db to /var/run/sm/sm.db
+      command => 'pmon-start sm'
+    }
+    -> exec { 'pmon-start-sm-api':
+      command => 'pmon-start sm-api'
+    }
+    # the services below need to be restarted after, but wait for them to reach enabled-active
+    -> exec {'wait-for-haproxy':
+      command   => '[ $(sm-query service haproxy | grep -c ".*enabled-active.*") -eq 1 ]',
+      tries     => 15,
+      try_sleep => 1,
+    }
+    -> exec {'wait-for-vim-webserver':
+      command   => '[ $(sm-query service vim-webserver | grep -c ".*enabled-active.*") -eq 1 ]',
+      tries     => 15,
+      try_sleep => 1,
+    }
+    -> exec {'wait-for-registry-token-server':
+      command   => '[ $(sm-query service registry-token-server | grep -c ".*enabled-active.*") -eq 1 ]',
+      tries     => 15,
+      try_sleep => 1,
+    }
+    -> exec {'wait-for-registry-docker-distribution':
+      command   => '[ $(sm-query service docker-distribution | grep -c ".*enabled-active.*") -eq 1 ]',
+      tries     => 15,
+      try_sleep => 1,
+    }
+  }
+  # lint:endignore:140chars
+}
 
 define platform::sm::restart {
   exec {"sm-restart-${name}":
