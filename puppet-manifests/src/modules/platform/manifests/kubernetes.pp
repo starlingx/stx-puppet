@@ -446,9 +446,6 @@ class platform::kubernetes::worker
     -> Class['::platform::kubernetes::cgroup']
     -> Class['::platform::kubernetes::worker::init']
   } else {
-    # Reconfigure cgroups cpusets on AIO
-    contain ::platform::kubernetes::cgroup
-
     Class['::platform::compute::allocate']
     -> service { 'kubelet':
       enable => true,
@@ -464,6 +461,25 @@ class platform::kubernetes::worker
   }
 
   contain ::platform::kubernetes::worker::pci
+}
+
+class platform::kubernetes::aio
+  inherits ::platform::kubernetes::params {
+
+  include ::platform::kubernetes::master
+  include ::platform::kubernetes::worker
+
+  Class['::platform::kubernetes::master']
+  -> Class['::platform::kubernetes::worker']
+  -> Class[$name]
+}
+
+class platform::kubernetes::gate {
+  if $::platform::params::system_type != 'All-in-one' {
+    Class['::platform::kubernetes::master'] -> Class[$name]
+  } else {
+    Class['::platform::kubernetes::aio'] -> Class[$name]
+  }
 }
 
 class platform::kubernetes::coredns {

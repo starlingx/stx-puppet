@@ -132,16 +132,17 @@ class platform::devices::fpga::fec::params (
   $device_config = {}
 ) { }
 
-class platform::devices::fpga::n3000::reset {
-  # The N3000 FPGA is reset via docker container application by the
-  # sysinv FPGA agent on startup.  This will clear the number of VFs
-  # configured on the FEC device as well as any bound drivers.
-  exec { 'Waiting for n3000 reset before enabling device':
-    command   => 'test -e /var/run/.sysinv_n3000_reset',
-    path      => '/usr/bin/',
+class platform::devices::fpga::n3000::reset
+  inherits ::platform::devices::fpga::fec::params {
+  # To reset N3000 FPGA
+  Class[$name] -> Class['::platform::devices::fpga::fec::config']
+  exec { 'Reset n3000 fpgas':
+    command   => 'sysinv-reset-n3000-fpgas',
+    path      => ['/usr/bin/', '/usr/sbin/'],
     tries     => 60,
     try_sleep => 1,
     require   => Anchor['platform::networking'],
+    unless    => 'test -e /var/run/.sysinv_n3000_reset'
   }
 }
 
@@ -152,6 +153,7 @@ class platform::devices::fpga::fec::config
 }
 
 class platform::devices::fpga::fec {
+  include platform::devices::fpga::n3000::reset
   Class[$name] -> Class['::sysinv::agent']
   require ::platform::devices::fpga::fec::config
 }
