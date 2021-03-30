@@ -187,6 +187,7 @@ define platform::interfaces::sriov_enable (
   if ($num_vfs != undef) and ($num_vfs > 0) {
     exec { "sriov-enable-device: ${title}":
       command   => template('platform/sriov.enable-device.erb'),
+      onlyif    => "[ $(cat /sys/bus/pci/devices/${addr}/${vf_file}) != ${num_vfs} ]",
       logoutput => true,
     }
   }
@@ -258,21 +259,29 @@ define platform::interfaces::sriov_vf_ratelimit (
 }
 
 class platform::interfaces::sriov (
-  $sriov_config = {},
-  $runtime = false
+  $sriov_config = {}
 ) {
-  if $runtime {
-    create_resources('platform::interfaces::sriov_enable', $sriov_config, {})
-  } else {
-    create_resources('platform::interfaces::sriov_vf_bind', $sriov_config, {})
-    create_resources('platform::interfaces::sriov_vf_ratelimit', $sriov_config, {})
-    Platform::Interfaces::Sriov_vf_bind <| |> -> Class['::platform::kubernetes::worker::sriovdp']
-  }
 }
 
+class platform::interfaces::sriov::enable
+  inherits platform::interfaces::sriov {
+  create_resources('platform::interfaces::sriov_enable', $sriov_config, {})
+}
+
+class platform::interfaces::sriov::config
+  inherits platform::interfaces::sriov {
+  include ::platform::kubernetes::worker::sriovdp
+  create_resources('platform::interfaces::sriov_vf_bind', $sriov_config, {})
+  create_resources('platform::interfaces::sriov_vf_ratelimit', $sriov_config, {})
+  Platform::Interfaces::Sriov_vf_bind <| |> -> Class['::platform::kubernetes::worker::sriovdp']
+}
 
 class platform::interfaces::sriov::runtime {
-  class { 'platform::interfaces::sriov': runtime => true }
+  include ::platform::interfaces::sriov::enable
+}
+
+class platform::interfaces::sriov::vf::runtime {
+  include ::platform::interfaces::sriov::config
 }
 
 

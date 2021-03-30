@@ -27,7 +27,7 @@ include ::platform::remotelogging
 include ::platform::mtce
 include ::platform::sysinv
 include ::platform::devices
-include ::platform::interfaces::sriov
+include ::platform::interfaces::sriov::config
 include ::platform::grub
 include ::platform::collectd
 include ::platform::filesystem::compute
