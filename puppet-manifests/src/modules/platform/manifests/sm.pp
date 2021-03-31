@@ -627,19 +627,19 @@ class platform::sm
     }
 
     exec { 'Configure oam-service redundancy model to DX':
-      command => "sm-configure service_group yes controller oam-services 'N + M' 1 1 \"\" directory-services",
+      command => "sm-configure service_group yes controller oam-services 'N + M' 1 1 \"controller-aggregate\" directory-services",
     }
 
     exec { 'Configure controller-services redundancy model to DX':
-      command => "sm-configure service_group yes controller controller-services 'N + M' 1 1 \"\" directory-services",
+      command => "sm-configure service_group yes controller controller-services 'N + M' 1 1 \"controller-aggregate\" directory-services",
     }
 
     exec { 'Configure cloud-services redundancy model to DX':
-      command => "sm-configure service_group yes controller cloud-services 'N + M' 1 1 \"\" directory-services",
+      command => "sm-configure service_group yes controller cloud-services 'N + M' 1 1 \"controller-aggregate\" directory-services",
     }
 
     exec { 'Configure vim-services redundancy model to DX':
-      command => "sm-configure service_group yes controller vim-services 'N + M' 1 1 \"\" directory-services",
+      command => "sm-configure service_group yes controller vim-services 'N + M' 1 1 \"controller-aggregate\" directory-services",
     }
 
     exec { 'Configure patching-services redundancy model to DX':
@@ -664,7 +664,7 @@ class platform::sm
 
     if $::platform::params::distributed_cloud_role == 'subcloud' {
         exec { 'Configure distributed-cloud-services redundancy model to DX':
-            command => "sm-configure service_group yes controller distributed-cloud-services 'N + M' 1 1 \"\" \"\"",
+            command => "sm-configure service_group yes controller distributed-cloud-services 'N + M' 1 1 \"controller-aggregate\" \"\"",
         }
     }
   }
