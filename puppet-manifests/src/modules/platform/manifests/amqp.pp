@@ -48,22 +48,16 @@ class platform::amqp::rabbitmq (
     default_pass          => $auth_password,
     service_ensure        => $service_ensure,
     rabbitmq_home         => $rabbit_dbdir,
+    tcp_keepalive         => true,
+    heartbeat             => 30,
     environment_variables => {
       'RABBITMQ_NODENAME'    => $node,
       'RABBITMQ_MNESIA_BASE' => "${rabbit_dbdir}/mnesia",
       'HOME'                 => $rabbit_dbdir,
+      'LC_ALL'               => 'en_US.UTF-8',
     },
     config_variables      => {
       'disk_free_limit'    => '100000000',
-      'heartbeat'          => '30',
-      'tcp_listen_options' => '[binary,
-                               {packet,raw},
-                               {reuseaddr,true},
-                               {backlog,128},
-                               {nodelay,true},
-                               {linger,{true,0}},
-                               {exit_on_close,false},
-                               {keepalive,true}]',
     }
   }
 }
