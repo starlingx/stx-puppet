@@ -247,6 +247,16 @@ class platform::config::tpm {
 }
 
 
+class platform::config::kdump {
+  file_line { '/etc/kdump.conf dracut_args':
+    path  => '/etc/kdump.conf',
+    line  => 'dracut_args --omit-drivers "ice e1000e i40e ixgbe ixgbevf iavf"',
+    match => '^dracut_args .*--omit-drivers',
+  }
+  ~> service { 'kdump': }
+}
+
+
 class platform::config::certs::ssl_ca
   inherits ::platform::config::certs::params {
 
@@ -353,6 +363,7 @@ class platform::config::pre {
   include ::platform::config::hosts
   include ::platform::config::file
   include ::platform::config::tpm
+  include ::platform::config::kdump
   include ::platform::config::certs::ssl_ca
   if ($::platform::params::distributed_cloud_role =='systemcontroller' and
       $::personality == 'controller') {
