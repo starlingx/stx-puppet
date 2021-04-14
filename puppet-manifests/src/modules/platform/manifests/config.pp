@@ -354,7 +354,8 @@ class platform::config::pre {
   include ::platform::config::file
   include ::platform::config::tpm
   include ::platform::config::certs::ssl_ca
-  if ($::platform::params::distributed_cloud_role =='systemcontroller' and
+  if (($::platform::params::distributed_cloud_role =='systemcontroller' or
+        $::platform::params::distributed_cloud_role =='subcloud') and
       $::personality == 'controller') {
     include ::platform::config::dc_root_ca
   }
