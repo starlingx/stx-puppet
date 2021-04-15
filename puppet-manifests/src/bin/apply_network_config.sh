@@ -263,12 +263,13 @@ function is_eq_sriov_numvfs {
 #
 # Warning:  Only compares against cfg file attributes:
 #            BOOTPROTO DEVICE IPADDR NETMASK GATEWAY MTU BONDING_OPTS SRIOV_NUMVFS
+#            IPV6ADDR IPV6_DEFAULTGW
 #
 function is_eq_ifcfg {
     local cfg_1=$1
     local cfg_2=$2
 
-    for attr in BOOTPROTO DEVICE IPADDR NETMASK GATEWAY MTU BONDING_OPTS; do
+    for attr in BOOTPROTO DEVICE IPADDR NETMASK GATEWAY MTU BONDING_OPTS IPV6ADDR IPV6_DEFAULTGW; do
         local attr_value1
         attr_value1=$(normalized_cfg_attr_value $cfg_1 $attr)
         local attr_value2
