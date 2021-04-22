@@ -214,7 +214,7 @@ class platform::firewall::calico::oam {
   contain ::platform::firewall::calico::oam::endpoints
   contain ::platform::firewall::calico::oam::services
 
-  Class['::platform::kubernetes::master'] -> Class[$name]
+  Class['::platform::kubernetes::gate'] -> Class[$name]
   Class['::platform::firewall::calico::oam::endpoints']
   -> Class['::platform::firewall::calico::oam::services']
 }

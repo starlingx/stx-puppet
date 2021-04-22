@@ -93,8 +93,7 @@ class platform::helm
   if (str2bool($::is_initial_config) and $::personality == 'controller') {
     include ::platform::helm::repositories
 
-    Class['::platform::kubernetes::master']
-
+    Class['::platform::kubernetes::gate']
     -> exec { 'restart lighttpd for helm':
       require   => [File['/etc/lighttpd/lighttpd.conf', $target_helm_repos_base_dir, $source_helm_repos_base_dir]],
       command   => 'systemctl restart lighttpd.service',

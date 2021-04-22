@@ -37,7 +37,7 @@ include ::platform::etcd
 include ::platform::docker::controller
 include ::platform::dockerdistribution
 include ::platform::containerd::controller
-include ::platform::kubernetes::master
+include ::platform::kubernetes::gate
 include ::platform::helm
 include ::platform::armada
 
@@ -103,10 +103,10 @@ include ::platform::compute
 include ::platform::vswitch
 include ::platform::devices
 include ::platform::interfaces::sriov::config
-include ::platform::kubernetes::worker
 include ::platform::worker::storage
 include ::platform::pciirqaffinity
 include ::platform::docker::login
+include ::platform::kubernetes::aio
 
 include ::platform::lvm::compute
 

@@ -48,6 +48,7 @@ include ::platform::docker::controller
 include ::platform::dockerdistribution
 include ::platform::containerd::controller
 include ::platform::kubernetes::master
+include ::platform::kubernetes::gate
 include ::platform::helm
 include ::platform::armada
 
