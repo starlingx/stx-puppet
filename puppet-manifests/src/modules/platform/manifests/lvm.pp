@@ -90,12 +90,12 @@ class platform::lvm::controller::vgs {
 class platform::lvm::controller
   inherits ::platform::lvm::params {
 
-  ::platform::lvm::global_filter { 'transition filter':
+  ::platform::lvm::global_filter { 'transition filter controller':
     filter => $transition_filter,
     before => Class['::platform::lvm::controller::vgs']
   }
 
-  ::platform::lvm::global_filter { 'final filter':
+  ::platform::lvm::global_filter { 'final filter controller':
     filter  => $final_filter,
     require => Class['::platform::lvm::controller::vgs']
   }
@@ -121,12 +121,12 @@ class platform::lvm::compute::vgs {
 class platform::lvm::compute
   inherits ::platform::lvm::params {
 
-  ::platform::lvm::global_filter { 'transition filter':
+  ::platform::lvm::global_filter { 'transition filter compute':
     filter => $transition_filter,
     before => Class['::platform::lvm::compute::vgs']
   }
 
-  ::platform::lvm::global_filter { 'final filter':
+  ::platform::lvm::global_filter { 'final filter compute':
     filter  => $final_filter,
     require => Class['::platform::lvm::compute::vgs']
   }

@@ -15,12 +15,20 @@ done
 
 HIERADATA=$1
 HOST=$2
-PERSONALITY=$3
-MANIFEST=${4:-$PERSONALITY}
+# subfunctions is a list of subfunctions, separated by comma
+SUBFUNCTIONS=$3
+IFS=, read PERSONALITY SUBFUNCTION LL <<< $SUBFUNCTIONS
+if [ "${SUBFUNCTION}" = "worker" ]; then
+    MANIFEST="aio"
+else
+    PERSONALITY=${SUBFUNCTIONS}
+    MANIFEST=${PERSONALITY}
+fi
+MANIFEST=${4:-$MANIFEST}
 RUNTIMEDATA=$5
 
 
-logger -t $0 "puppet-manifest-apply ${HIERADATA} ${HOST} ${PERSONALITY} ${MANIFEST} ${RUNTIMEDATA}"
+logger -t $0 "puppet-manifest-apply ${HIERADATA} ${HOST} ${SUBFUNCTIONS} ${MANIFEST} ${RUNTIMEDATA}"
 
 
 PUPPET_MODULES_PATH=/usr/share/puppet/modules:/usr/share/openstack-puppet/modules
@@ -30,7 +38,7 @@ FILEBUCKET_PATH=/var/lib/puppet/clientbucket
 
 # Setup log directory and file
 DATETIME=$(date -u +"%Y-%m-%d-%H-%M-%S")
-LOGDIR="/var/log/puppet/${DATETIME}_${PERSONALITY}"
+LOGDIR="/var/log/puppet/${DATETIME}_${MANIFEST}"
 LOGFILE=${LOGDIR}/puppet.log
 
 mkdir -p ${LOGDIR}
@@ -56,7 +64,12 @@ fi
 rm -rf ${PUPPET_TMP}
 mkdir -p ${PUPPET_TMP}/hieradata
 cp /etc/puppet/hieradata/global.yaml ${PUPPET_TMP}/hieradata/global.yaml
-cp /etc/puppet/hieradata/${PERSONALITY}.yaml ${PUPPET_TMP}/hieradata/personality.yaml
+
+if [ "${MANIFEST}" = 'aio' ]; then
+    cat /etc/puppet/hieradata/controller.yaml /etc/puppet/hieradata/worker.yaml > ${PUPPET_TMP}/hieradata/personality.yaml
+else
+    cp /etc/puppet/hieradata/${PERSONALITY}.yaml ${PUPPET_TMP}/hieradata/personality.yaml
+fi
 
 # When the worker node is first booted and goes online, sysinv-agent reports
 # host CPU inventory which triggers the first runtime manifest apply that updates

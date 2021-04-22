@@ -2,6 +2,10 @@
 # puppet manifest for worker nodes
 #
 
+# A separated AIO manifest (./aio.pp) is applied to AIO controllers.
+# Changes for workers should also be considered to implement in
+# aio.pp.
+
 Exec {
   timeout => 300,
   path => '/usr/bin:/usr/sbin:/bin:/sbin:/usr/local/bin:/usr/local/sbin'
