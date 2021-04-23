@@ -112,6 +112,10 @@ class platform::ldap::client
   }
 }
 
+class platform::ldap::client::runtime {
+  include ::platform::ldap::client
+}
+
 class platform::ldap::bootstrap
   inherits ::platform::ldap::params {
   include ::platform::params
