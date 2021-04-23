@@ -80,7 +80,7 @@ class platform::dns::dnsmasq::reload {
 }
 
 
-class platform::dns::runtime {
+class platform::dns::dnsmasq::runtime {
   include ::platform::dns::dnsmasq
 
   class {'::platform::dns::dnsmasq::reload':
