@@ -1,4 +1,4 @@
 # hacking pulls in flake8
-hacking
+hacking < 4.0.1
 bashate >= 0.2
 bandit!=1.6.0,>=1.1.0,<2.0.0;python_version>="3.0" # GPLv2
