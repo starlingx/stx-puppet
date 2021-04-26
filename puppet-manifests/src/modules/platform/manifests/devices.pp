@@ -153,7 +153,6 @@ class platform::devices::fpga::fec::config
 }
 
 class platform::devices::fpga::fec {
-  include platform::devices::fpga::n3000::reset
   Class[$name] -> Class['::sysinv::agent']
   require ::platform::devices::fpga::fec::config
 }
