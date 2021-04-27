@@ -212,6 +212,13 @@ function is_vlan {
 }
 
 #
+# returns $(true) if cfg file has the given interface_name as a PHYSDEV
+#
+function has_physdev {
+    cfg_has_property_with_value $1 "PHYSDEV" $2
+}
+
+#
 # returns $(true) if cfg file is configured as an ethernet interface.  For the
 # purposes of this script "ethernet" is considered as any interface that is not
 # a vlan or a slave.  This includes both regular ethernet interfaces and bonded
@@ -382,8 +389,14 @@ function update_routes {
 function update_interfaces {
     upDown=()
     changed=()
+    vlans=()
+
     for cfg_path in $(find /var/run/network-scripts.puppet/ -name "${IFNAME_INCLUDE}"); do
         cfg=$(basename $cfg_path)
+
+        if is_vlan /etc/sysconfig/network-scripts/$cfg; then
+            vlans+=($cfg)
+        fi
 
         diff -I ".*Last generated.*" -q /var/run/network-scripts.puppet/$cfg \
                                         /etc/sysconfig/network-scripts/$cfg >/dev/null 2>&1
@@ -447,6 +460,20 @@ function update_interfaces {
         iface=${r#ifcfg-}
         do_if_down $iface
         do_rm /etc/sysconfig/network-scripts/$r
+    done
+
+    # If a lower ethernet interface is being changed, the upper vlan interface(s) will lose
+    # configuration such as (IPv6) addresses and (IPv4, IPv6) default routes.  If the vlan
+    # interface is not already in the up/down list, then explicitly add it.
+    for cfg in ${upDown[@]}; do
+        for vlan in ${vlans[@]}; do
+            if has_physdev /var/run/network-scripts.puppet/$vlan ${cfg#ifcfg-}; then
+                if [[ ! " ${upDown[@]} " =~ " ${vlan} " ]]; then
+                    log_it "Adding ${vlan} to up/down list since physdev ${cfg#ifcfg-} is changing"
+                    upDown+=($vlan)
+                fi
+            fi
+        done
     done
 
     # now down the changed ifaces by dealing with vlan interfaces first so that
