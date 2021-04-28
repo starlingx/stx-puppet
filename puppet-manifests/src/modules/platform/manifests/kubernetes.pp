@@ -428,6 +428,23 @@ class platform::kubernetes::worker::pci
 
 class platform::kubernetes::worker::pci::runtime {
   include ::platform::kubernetes::worker::pci
+  include ::platform::kubernetes::worker::sriovdp
+}
+
+class platform::kubernetes::worker::sriovdp {
+  include ::platform::kubernetes::params
+  include ::platform::params
+  $host_labels = $::platform::kubernetes::params::host_labels
+  if ($::personality == 'controller') and
+      str2bool($::is_worker_subfunction)
+      and ('sriovdp' in $host_labels) {
+    exec { 'Delete sriov device plugin pod if present':
+      path      => '/usr/bin:/usr/sbin:/bin',
+      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf delete pod -n kube-system --selector=app=sriovdp --field-selector spec.nodeName=$(hostname) --timeout=360s', # lint:ignore:140chars
+      onlyif    => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf get pods -n kube-system --selector=app=sriovdp --field-selector spec.nodeName=$(hostname) | grep kube-sriov-device-plugin', # lint:ignore:140chars
+      logoutput => true,
+    }
+  }
 }
 
 class platform::kubernetes::worker
