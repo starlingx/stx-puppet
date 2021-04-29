@@ -462,11 +462,12 @@ class platform::kubernetes::worker
     -> Class['::platform::kubernetes::kubeadm']
     -> Class['::platform::kubernetes::cgroup']
     -> Class['::platform::kubernetes::worker::init']
-  } else {
-    Class['::platform::compute::allocate']
-    -> service { 'kubelet':
-      enable => true,
-    }
+  }
+
+  # Enable kubelet on AIO and worker nodes.
+  Class['::platform::compute::allocate']
+  -> service { 'kubelet':
+    enable => true,
   }
 
   # TODO: The following exec is a workaround. Once kubernetes becomes the
