@@ -399,9 +399,12 @@ class platform::drbd::cephmon ()
   # If migrating from AIO SX to DX we want to override
   # these properties and handle it as an initial ceph setup
   # so DRBD is properly configured
-  if ($::platform::ceph::params::simplex_to_duplex_migration or
-    ((str2bool($::is_controller_active) or str2bool($::is_standalone_controller))
-    and ! str2bool($::is_node_ceph_configured))) {
+  if $::platform::ceph::params::simplex_to_duplex_migration {
+    $drbd_primary = true
+    $drbd_initial = true
+    $drbd_automount = false
+  } elsif ((str2bool($::is_controller_active) or str2bool($::is_standalone_controller))
+      and ! str2bool($::is_node_ceph_configured)) {
     # Active controller, first time configuration.
     $drbd_primary = true
     $drbd_initial = true
