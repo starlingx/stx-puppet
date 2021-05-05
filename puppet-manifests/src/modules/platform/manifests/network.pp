@@ -365,7 +365,9 @@ class platform::network (
 
 
 class platform::network::runtime {
-  include ::platform::network::apply
+  class {'::platform::network::apply':
+    stage => pre
+  }
 }
 
 

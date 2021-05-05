@@ -460,6 +460,12 @@ class openstack::keystone::endpoint::runtime {
   }
 }
 
+class openstack::keystone::endpoint::runtime::post {
+  class {'openstack::keystone::endpoint::runtime':
+    stage => post
+  }
+}
+
 class openstack::keystone::upgrade (
   $upgrade_token_cmd,
   $upgrade_url = undef,
