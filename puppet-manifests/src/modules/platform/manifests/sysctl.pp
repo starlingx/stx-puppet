@@ -10,11 +10,6 @@ class platform::sysctl
 
   $ip_version = $::platform::network::mgmt::params::subnet_version
 
-  # Increase min_free_kbytes to 128 MiB from 88 MiB, helps prevent OOM
-  sysctl::value { 'vm.min_free_kbytes':
-    value => '131072'
-  }
-
   # Set sched_nr_migrate to standard linux default
   sysctl::value { 'kernel.sched_nr_migrate':
     value => '8',
@@ -119,6 +114,11 @@ class platform::sysctl::controller
   include ::platform::sysctl
   include ::platform::sysctl::controller::reserve_ports
 
+  # Increase min_free_kbytes to 128 MiB from 88 MiB, helps prevent OOM
+  sysctl::value { 'vm.min_free_kbytes':
+    value => '131072'
+  }
+
   # Engineer VM page cache tunables to prevent significant IO delays that may
   # occur if we flush a buildup of dirty pages.  Engineer VM settings to make
   # writebacks more regular. Note that Linux default proportion of page cache that
@@ -164,11 +164,21 @@ class platform::sysctl::controller
 
 class platform::sysctl::compute {
   include ::platform::sysctl
+
+  # Increase min_free_kbytes to 128 MiB from 88 MiB, helps prevent OOM
+  sysctl::value { 'vm.min_free_kbytes':
+    value => '131072'
+  }
 }
 
 
 class platform::sysctl::storage {
   include ::platform::sysctl
+
+  # Increase min_free_kbytes to 256 MiB for storage node, helps prevent OOM
+  sysctl::value { 'vm.min_free_kbytes':
+    value => '262144'
+  }
 }
 
 
