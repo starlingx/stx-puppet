@@ -56,7 +56,7 @@ dhcp-option=option6:224,<%= @install_uuid %>
 #
 dhcp-match=set:efi,option:client-arch,2
 dhcp-match=set:efi,option:client-arch,6
-dhcp-match=set:efi,option:client-arch,7
+dhcp-match=set:uefi,option:client-arch,7
 dhcp-match=set:efi,option:client-arch,8
 dhcp-match=set:efi,option:client-arch,9
 dhcp-match=set:bios,option:client-arch,0
@@ -79,6 +79,9 @@ dhcp-boot=tag:bios,tag:mgmt,pxelinux.0,<%= @mgmt_hostname %>,<%= @mgmt_controlle
 
 dhcp-boot=tag:efi,tag:pxeboot,EFI/grubx64.efi,<%= @pxeboot_hostname %>,<%= @pxeboot_controller_address %>
 dhcp-boot=tag:efi,tag:mgmt,EFI/grubx64.efi,<%= @mgmt_hostname %>,<%= @mgmt_controller_address %>
+
+dhcp-boot=tag:uefi,tag:pxeboot,EFI/shim.efi,<%= @pxeboot_hostname %>,<%= @pxeboot_controller_address %>
+dhcp-boot=tag:uefi,tag:mgmt,EFI/shim.efi,<%= @mgmt_hostname %>,<%= @mgmt_controller_address %>
 
 # Do not forward queries for plain names (no dots)
 domain-needed
