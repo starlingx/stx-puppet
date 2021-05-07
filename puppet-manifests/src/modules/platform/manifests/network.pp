@@ -202,8 +202,7 @@ define platform::interfaces::sriov_bind (
 ) {
   if ($driver != undef) {
     ensure_resource(kmod::load, $driver)
-    Anchor['platform::networking']
-    -> exec { "sriov-vf-bind-device: ${title}":
+    exec { "sriov-vf-bind-device: ${title}":
       command   => template('platform/sriov.bind-device.erb'),
       logoutput => true,
       require   => [ Kmod::Load[$driver] ],
@@ -270,6 +269,7 @@ class platform::interfaces::sriov::enable
 
 class platform::interfaces::sriov::config
   inherits platform::interfaces::sriov {
+  Anchor['platform::networking'] -> Class[$name]
   create_resources('platform::interfaces::sriov_vf_bind', $sriov_config, {})
   create_resources('platform::interfaces::sriov_vf_ratelimit', $sriov_config, {})
 }
