@@ -432,7 +432,6 @@ class platform::config::worker::post
   }
 
   include ::platform::compute::grub::audit
-  include ::platform::ceph::migration::sx_to_dx::update_pvcs
 }
 
 class platform::config::storage::post

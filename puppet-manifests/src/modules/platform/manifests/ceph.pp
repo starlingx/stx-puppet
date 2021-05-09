@@ -237,33 +237,10 @@ class platform::ceph::monitor
       # wipe the logical volume before mounting DRBD
       # and remove the pmon.d managed ceph daemons
       if ($simplex_to_duplex_migration and str2bool($::is_node_ceph_configured)) {
-        include ::platform::filesystem::params
+        contain ::platform::ceph::migration::sx_to_dx::remove_mon
         include ::platform::ceph::migration::sx_to_dx::rebuild_mon
 
-        $vg_name = $::platform::filesystem::params::vg_name
-        $device = "/dev/${vg_name}/${mon_lv_name}"
-
-        exec { 'Unmounting cephmon logical volume' :
-          command => "umount ${mon_mountpoint}",
-          onlyif  => "mountpoint -q ${mon_mountpoint}",
-        }
-        -> exec { "Removing auto mounting ${mon_mountpoint} from fstab" :
-          command => "/bin/sed -i '/^.*${mon_lv_name}.*ext4/d' /etc/fstab",
-          onlyif  => "grep -q '^.*${mon_lv_name}.*ext4' /etc/fstab",
-        }
-        -> exec { "wipe start of device ${device}" :
-          command => "dd if=/dev/zero of=${device} bs=512 count=34",
-          onlyif  => "blkid ${device}",
-        }
-        -> exec { "wipe end of device ${device}" :
-          command => "dd if=/dev/zero of=${device} bs=512 seek=$(($(blockdev --getsz ${device}) - 34)) count=34",
-          onlyif  => "blkid ${device}",
-        }
-        -> exec { "remove ${pmond_ceph_file}" :
-          command => "rm -f ${pmond_ceph_file}",
-          onlyif  => "test -f ${pmond_ceph_file}",
-        }
-        -> Drbd::Resource['drbd-cephmon']
+        Class['::platform::ceph::migration::sx_to_dx::remove_mon']
         -> Class['::ceph']
       } else {
         # ensure DRBD config is complete before enabling the ceph monitor
@@ -370,6 +347,42 @@ class platform::ceph::monitor
   }
 }
 
+class platform::ceph::migration::sx_to_dx::remove_mon
+  inherits platform::ceph::params {
+  include ::platform::filesystem::params
+
+  $vg_name = $::platform::filesystem::params::vg_name
+  $drbd_device = $::platform::drbd::cephmon::params::device
+  $lv_device = "/dev/${vg_name}/${mon_lv_name}"
+
+  exec { 'Unmounting cephmon logical volume' :
+    command => "umount ${mon_mountpoint}",
+    onlyif  => "mountpoint -q ${mon_mountpoint}",
+  }
+  -> exec { "Removing auto mounting ${mon_mountpoint} from fstab" :
+    command => "/bin/sed -i '/^.*${mon_lv_name}.*ext4/d' /etc/fstab",
+    onlyif  => "grep -q '^.*${mon_lv_name}.*ext4' /etc/fstab",
+  }
+  -> exec { "wipe start of device ${lv_device}" :
+    command => "dd if=/dev/zero of=${lv_device} bs=512 count=34",
+    onlyif  => "blkid ${lv_device}",
+  }
+  -> exec { "wipe end of device ${lv_device}" :
+    command => "dd if=/dev/zero of=${lv_device} bs=512 seek=$(($(blockdev --getsz ${lv_device}) - 34)) count=34",
+  }
+  -> exec { "remove ${pmond_ceph_file}" :
+    command => "rm -f ${pmond_ceph_file}",
+    onlyif  => "test -f ${pmond_ceph_file}",
+  }
+  -> Drbd::Resource['drbd-cephmon']
+  -> exec { 'Adding auto mount for drbd-cephmon to fstab' :
+    command => "echo \"${drbd_device} ${mon_mountpoint} auto defaults,noauto 0 0\" | tee -a /etc/fstab",
+  }
+  -> exec { 'Mount drbd-cephmon DRBD device' :
+    command => "/usr/bin/mount ${mon_mountpoint}",
+  }
+}
+
 class platform::ceph::migration::sx_to_dx::rebuild_mon
   inherits platform::ceph::params {
   # Make sure osds are provisioned
@@ -458,21 +471,6 @@ class platform::ceph::migration::sx_to_dx::active_cluster_updates
   }
   -> exec { 'Update crushmap to support DX' :
     command => template('platform/ceph_crushmap_add_controller1_bucket.erb'),
-  }
-}
-
-class platform::ceph::migration::sx_to_dx::update_pvcs
-  inherits ::platform::ceph::params {
-  if $simplex_to_duplex_migration {
-    Class['::platform::config::worker::post'] -> Class[$name]
-
-    exec { 'Update monitor IP in existing K8s PersistentVolumes' :
-      path      => '/usr/bin:/usr/sbin:/bin',
-      command   => template('platform/ceph_k8s_update_monitors.erb'),
-      tries     => 6,
-      try_sleep => 10,
-      logoutput => true,
-    }
   }
 }
 
