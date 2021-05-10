@@ -18,7 +18,7 @@ include ::platform::filesystem::controller
 include ::platform::firewall::calico::oam
 include ::platform::dhclient
 include ::platform::partitions
-include ::platform::lvm::controller
+include ::platform::lvm::aio
 include ::platform::network
 include ::platform::drbd
 include ::platform::exports
@@ -108,7 +108,6 @@ include ::platform::pciirqaffinity
 include ::platform::docker::login
 include ::platform::kubernetes::aio
 
-include ::platform::lvm::compute
 
 class { '::platform::config::aio::post':
   stage => post,

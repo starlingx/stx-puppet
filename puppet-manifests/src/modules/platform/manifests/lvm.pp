@@ -141,6 +141,20 @@ class platform::lvm::compute::runtime {
 }
 
 ###############
+# AIO
+###############
+
+class platform::lvm::aio
+  inherits ::platform::lvm::params {
+    include ::platform::lvm::controller
+    include ::platform::lvm::compute
+    Class['::platform::lvm::controller']
+    -> Class['::platform::lvm::compute']
+    -> Class['::platform::worker::storage']
+}
+
+
+###############
 # Storage Hosts
 ###############
 
