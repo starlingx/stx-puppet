@@ -161,11 +161,21 @@ export CINDER_ENDPOINT_TYPE=internalURL
 # Suppress stdlib deprecation warnings until all puppet modules can be updated
 export STDLIB_LOG_DEPRECATIONS=false
 
+mask_passwd() {
+    sed -i -r 's/(bootstrap-password) (\"[^\"]*\"|'\''[^'"'"']*'"'"'|[^ ]*)/\1 xxxxxx/g;
+            s/(set_keystone_user_option\.sh admin) (\"[^\"]*\"|'\''[^'"'"']*'"'"'|[^ ]*)/\1 xxxxxx/g' \
+            ${LOGFILE}
+}
+
 echo "Applying puppet ${MANIFEST} manifest..."
 flock /var/run/puppet.lock \
     puppet apply --debug --trace --modulepath ${PUPPET_MODULES_PATH} ${PUPPET_MANIFEST} \
         < /dev/null 2>&1 | awk ' { system("date -u +%FT%T.%3N | tr \"\n\" \" \""); print $0; fflush(); } ' > ${LOGFILE}
-if [ $? -ne 0 ]; then
+
+rc = $?
+mask_passwd
+
+if [ rc -ne 0 ]; then
     echo "[FAILED]"
     echo "See ${LOGFILE} for details"
     exit 1
