@@ -877,3 +877,23 @@ class platform::kubernetes::worker::rootca::trustbothcas::runtime
     command => '/usr/bin/systemctl restart kubelet',
   }
 }
+
+class platform::kubernetes::master::rootca::pods::trustbothcas::runtime
+  inherits ::platform::kubernetes::params {
+  exec { 'update_pods_trustbothcas':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
+    provider    => shell,
+    command     => template('platform/kube-rootca-update-pods.erb'),
+    timeout     => 600,
+  }
+}
+
+class platform::kubernetes::master::rootca::pods::trustnewca::runtime
+  inherits ::platform::kubernetes::params {
+  exec { 'update_pods_trustnewca':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
+    provider    => shell,
+    command     => template('platform/kube-rootca-update-pods.erb'),
+    timeout     => 600,
+  }
+}
