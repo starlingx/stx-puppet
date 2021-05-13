@@ -17,6 +17,7 @@ class platform::kubernetes::params (
   $k8s_topology_mgr_policy = 'best-effort',
   $k8s_cni_bin_dir = '/usr/libexec/cni',
   $k8s_vol_plugin_dir = '/usr/libexec/kubernetes/kubelet-plugins/volume/exec/',
+  $k8s_pod_max_pids = '750',
   $join_cmd = undef,
   $oidc_issuer_url = undef,
   $oidc_client_id = undef,
@@ -135,6 +136,7 @@ class platform::kubernetes::kubeadm {
   $k8s_vol_plugin_dir = $::platform::kubernetes::params::k8s_vol_plugin_dir
   $k8s_cpu_mgr_policy = $::platform::kubernetes::params::k8s_cpu_mgr_policy
   $k8s_topology_mgr_policy = $::platform::kubernetes::params::k8s_topology_mgr_policy
+  $k8s_pod_max_pids = $::platform::kubernetes::params::k8s_pod_max_pids
 
   $iptables_file = "net.bridge.bridge-nf-call-ip6tables = 1
     net.bridge.bridge-nf-call-iptables = 1"
