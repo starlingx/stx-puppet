@@ -192,9 +192,8 @@ class platform::etcd::upgrade::runtime
       etcd_servers  => $server_url,
     }
 
-    -> exec { 'restart-etcd':
-      command => '/usr/bin/systemctl restart etcd.service',
-    }
+
+    -> platform::sm::restart {'etcd': }
 
     -> exec { 'create-etcd-root-account':
       command => "etcdctl --cert-file=${etcd_cert} --key-file=${etcd_key} --ca-file=${etcd_ca} --endpoint=${server_url} \
