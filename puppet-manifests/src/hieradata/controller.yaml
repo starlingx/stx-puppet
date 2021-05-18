@@ -81,8 +81,6 @@ platform::influxdb::logrotate::params::log_file_rotate: 10
 # postgresql
 postgresql::globals::needs_initdb: false
 postgresql::server::service_enable: false
-postgresql::server::ip_mask_deny_postgres_user: '0.0.0.0/32'
-postgresql::server::ip_mask_allow_all_users: '0.0.0.0/0'
 postgresql::server::pg_hba_conf_path: "/etc/postgresql/pg_hba.conf"
 postgresql::server::pg_ident_conf_path: "/etc/postgresql/pg_ident.conf"
 postgresql::server::postgresql_conf_path: "/etc/postgresql/postgresql.conf"

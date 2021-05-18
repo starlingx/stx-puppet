@@ -76,6 +76,11 @@ define platform::devices::sriov_bind (
       Class['platform::devices::fpga::n3000::reset']
       -> Exec["sriov-bind-device: ${title}"]
     }
+    if ($device_id != undef) and ($device_id == '0d5c') {
+      include platform::devices::acc100::fec
+      Exec["sriov-enable-device: ${title}"]
+      -> Class['platform::devices::acc100::fec']
+    }
     ensure_resource(kmod::load, $driver)
     exec { "sriov-bind-device: ${title}":
       command   => template('platform/sriov.bind-device.erb'),
@@ -109,10 +114,8 @@ define platform::devices::sriov_pf_enable (
 
 class platform::devices::fpga::fec::vf
   inherits ::platform::devices::fpga::fec::params {
-  include ::platform::kubernetes::worker::sriovdp
   require ::platform::devices::fpga::fec::pf
   create_resources('platform::devices::sriov_vf_bind', $device_config, {})
-  Platform::Devices::Sriov_vf_bind <| |> -> Class['platform::kubernetes::worker::sriovdp']
 }
 
 class platform::devices::fpga::fec::pf
@@ -129,16 +132,17 @@ class platform::devices::fpga::fec::params (
   $device_config = {}
 ) { }
 
-class platform::devices::fpga::n3000::reset {
-  # The N3000 FPGA is reset via docker container application by the
-  # sysinv FPGA agent on startup.  This will clear the number of VFs
-  # configured on the FEC device as well as any bound drivers.
-  exec { 'Waiting for n3000 reset before enabling device':
-    command   => 'test -e /var/run/.sysinv_n3000_reset',
-    path      => '/usr/bin/',
+class platform::devices::fpga::n3000::reset
+  inherits ::platform::devices::fpga::fec::params {
+  # To reset N3000 FPGA
+  Class[$name] -> Class['::platform::devices::fpga::fec::config']
+  exec { 'Reset n3000 fpgas':
+    command   => 'sysinv-reset-n3000-fpgas',
+    path      => ['/usr/bin/', '/usr/sbin/'],
     tries     => 60,
     try_sleep => 1,
     require   => Anchor['platform::networking'],
+    unless    => 'test -e /var/run/.sysinv_n3000_reset'
   }
 }
 
@@ -153,9 +157,19 @@ class platform::devices::fpga::fec {
   require ::platform::devices::fpga::fec::config
 }
 
+class platform::devices::acc100::fec (
+  $enabled = false
+)
+{
+  if $enabled {
+      exec { 'Mt.Bryce: Configuring baseband device':
+        command   => template('platform/processing.accelerator-config.erb'),
+        logoutput => true,
+      }
+  }
+}
 
 class platform::devices {
   include ::platform::devices::qat
   include ::platform::devices::fpga::fec
 }
-

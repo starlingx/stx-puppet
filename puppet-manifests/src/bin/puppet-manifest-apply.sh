@@ -15,9 +15,20 @@ done
 
 HIERADATA=$1
 HOST=$2
-PERSONALITY=$3
-MANIFEST=${4:-$PERSONALITY}
+# subfunctions is a list of subfunctions, separated by comma
+SUBFUNCTIONS=$3
+IFS=, read PERSONALITY SUBFUNCTION LL <<< $SUBFUNCTIONS
+if [ "${SUBFUNCTION}" = "worker" ]; then
+    MANIFEST="aio"
+else
+    PERSONALITY=${SUBFUNCTIONS}
+    MANIFEST=${PERSONALITY}
+fi
+MANIFEST=${4:-$MANIFEST}
 RUNTIMEDATA=$5
+
+
+logger -t $0 "puppet-manifest-apply ${HIERADATA} ${HOST} ${SUBFUNCTIONS} ${MANIFEST} ${RUNTIMEDATA}"
 
 
 PUPPET_MODULES_PATH=/usr/share/puppet/modules:/usr/share/openstack-puppet/modules
@@ -27,7 +38,7 @@ FILEBUCKET_PATH=/var/lib/puppet/clientbucket
 
 # Setup log directory and file
 DATETIME=$(date -u +"%Y-%m-%d-%H-%M-%S")
-LOGDIR="/var/log/puppet/${DATETIME}_${PERSONALITY}"
+LOGDIR="/var/log/puppet/${DATETIME}_${MANIFEST}"
 LOGFILE=${LOGDIR}/puppet.log
 
 mkdir -p ${LOGDIR}
@@ -41,7 +52,7 @@ chmod 600 ${LOGFILE}
 
 # Remove old log directories
 declare -i NUM_DIRS=`ls -d1 /var/log/puppet/[0-9]* 2>/dev/null | wc -l`
-declare -i MAX_DIRS=20
+declare -i MAX_DIRS=50
 if [ ${NUM_DIRS} -gt ${MAX_DIRS} ]; then
     let -i RMDIRS=${NUM_DIRS}-${MAX_DIRS}
     ls -d1 /var/log/puppet/[0-9]* | head -${RMDIRS} | xargs --no-run-if-empty rm -rf
@@ -53,32 +64,77 @@ fi
 rm -rf ${PUPPET_TMP}
 mkdir -p ${PUPPET_TMP}/hieradata
 cp /etc/puppet/hieradata/global.yaml ${PUPPET_TMP}/hieradata/global.yaml
-cp /etc/puppet/hieradata/${PERSONALITY}.yaml ${PUPPET_TMP}/hieradata/personality.yaml
+
+if [ "${MANIFEST}" = 'aio' ]; then
+    cat /etc/puppet/hieradata/controller.yaml /etc/puppet/hieradata/worker.yaml > ${PUPPET_TMP}/hieradata/personality.yaml
+else
+    cp /etc/puppet/hieradata/${PERSONALITY}.yaml ${PUPPET_TMP}/hieradata/personality.yaml
+fi
 
 # When the worker node is first booted and goes online, sysinv-agent reports
 # host CPU inventory which triggers the first runtime manifest apply that updates
 # the grub. At this time, copying the host file failed due to a timing issue that
 # has not yet been fully understood. Subsequent retries worked.
-if [ "${PERSONALITY}" = "worker" ]; then
-    n=0
-    until [ $n -ge 3 ]; do
-        cp -f ${HIERADATA}/${HOST}.yaml ${PUPPET_TMP}/hieradata/host.yaml && break
-        n=$(($n+1))
-        logger -t $0 "Failed to copy /etc/puppet/hieradata/${HOST}.yaml"
-        sleep 15
-    done
+#
+# When back to back runtime manifests (e.g. as on https modify certificate
+# install) are issued, copying of the hieradata file may fail.  Suspect this is due
+# to potential update of hieradata on the controller while the file is being
+# copied. Check rsync status and retry if needed.
+
+declare -i MAX_RETRIES=3
+
+HIERA_HOST=()
+if [ "${MANIFEST}" == 'ansible_bootstrap' ]; then
+    HIERA_SYS=("${HIERADATA}/secure_static.yaml"  "${HIERADATA}/static.yaml")
+elif [ "${MANIFEST}" == 'upgrade' ]; then
+    HIERA_SYS=("${HIERADATA}/secure_static.yaml"  "${HIERADATA}/static.yaml" "${HIERADATA}/system.yaml")
 else
-    cp -f ${HIERADATA}/${HOST}.yaml ${PUPPET_TMP}/hieradata/host.yaml
+    HIERA_SYS=("${HIERADATA}/secure_static.yaml" "${HIERADATA}/static.yaml" "${HIERADATA}/system.yaml" "${HIERADATA}/secure_system.yaml")
+    HIERA_HOST=("${HIERADATA}/${HOST}.yaml")
 fi
-cp -f ${HIERADATA}/system.yaml \
-    ${HIERADATA}/secure_system.yaml \
-    ${HIERADATA}/static.yaml \
-    ${HIERADATA}/secure_static.yaml \
-    ${PUPPET_TMP}/hieradata/
 
 if [ -n "${RUNTIMEDATA}" ]; then
-    cp -f ${RUNTIMEDATA} ${PUPPET_TMP}/hieradata/runtime.yaml
+    HIERA_RUNTIME=("${RUNTIMEDATA}")
+else
+    HIERA_RUNTIME=()
 fi
+
+DELAY_SECS=15
+for (( iter=1; iter<=$MAX_RETRIES; iter++ )); do
+    if [ ${#HIERA_HOST[@]} -ne 0 ]; then
+        rsync -c "${HIERA_HOST[@]}" ${PUPPET_TMP}/hieradata/host.yaml
+        if [ $? -eq 0 ]; then
+            HIERA_HOST=()
+        fi
+    fi
+
+    rsync -c "${HIERA_SYS[@]}" ${PUPPET_TMP}/hieradata
+    if [ $? -eq 0 ]; then
+        HIERA_SYS=()
+    fi
+
+    if [ ${#HIERA_RUNTIME[@]} -ne 0 ]; then
+        rsync -c "${HIERA_RUNTIME[@]}" ${PUPPET_TMP}/hieradata/runtime.yaml
+        if [ $? -eq 0 ]; then
+            HIERA_RUNTIME=()
+        fi
+    fi
+
+    if [ ${#HIERA_HOST[@]} -eq 0 ] && [ ${#HIERA_SYS[@]} -eq 0 ]  && [ ${#HIERA_SYS[@]} -eq 0 ]; then
+        break
+    fi
+
+    logger -t $0 "Failed to copy ${HIERA_HOST[*]}:${HIERA_SYS[*]}:${HIERA_FILES_RUNTIME[*]} iteration: ${iter}."
+    if [ ${iter} -eq ${MAX_RETRIES} ]; then
+        echo "[FAILED]"
+        echo "Exiting, failed to rsync hieradata"
+        logger -t $0 "Exiting, failed to rsync hieradata"
+        exit 1
+    else
+        logger -t $0 "Failed to rsync hieradata iteration: ${iter}. Retry in ${DELAY_SECS} seconds"
+        sleep ${DELAY_SECS}
+    fi
+done
 
 
 # Exit function to save logs from initial apply
@@ -87,6 +143,7 @@ function finish {
     if [ ! -f ${SAVEDLOGS} ]; then
         # Save the logs
         tar czf ${SAVEDLOGS} ${LOGDIR} 2>/dev/null
+        chmod 600 ${SAVEDLOGS}
     fi
 
     # To avoid the ever growing contents of filebucket which may trigger inode

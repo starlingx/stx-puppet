@@ -7,12 +7,20 @@ class platform::postgresql::params
   $data_dir = "${root_dir}/${::platform::params::software_version}"
 
   $password = undef
+
+  include ::platform::network::mgmt::params
+  if $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
+    $ip_mask_allow_all_users = '::0/0'
+    $ip_mask_deny_postgres_user = '::0/128'
+  } else {
+    $ip_mask_allow_all_users = '0.0.0.0/0'
+    $ip_mask_deny_postgres_user = '0.0.0.0/32'
+  }
 }
 
 
-class platform::postgresql::server (
-  $ipv4acl = undef,
-) inherits ::platform::postgresql::params {
+class platform::postgresql::server
+  inherits ::platform::postgresql::params {
 
   include ::platform::params
 
@@ -100,8 +108,9 @@ class platform::postgresql::server (
   }
 
   -> class {'::postgresql::server':
-    ip_mask_allow_all_users => $ipv4acl,
-    service_ensure          => 'stopped',
+    ip_mask_allow_all_users    => $ip_mask_allow_all_users,
+    ip_mask_deny_postgres_user => $ip_mask_deny_postgres_user,
+    service_ensure             => 'stopped',
   }
 }
 
@@ -154,6 +163,8 @@ class platform::postgresql::bootstrap
   }
 
   -> class {'::postgresql::server':
+    ip_mask_allow_all_users    => $ip_mask_allow_all_users,
+    ip_mask_deny_postgres_user => $ip_mask_deny_postgres_user
   }
 
   # Allow local postgres user as trusted for simplex upgrade scripts
@@ -185,12 +196,15 @@ class platform::postgresql::upgrade
   }
 
   -> class {'::postgresql::server':
+    ip_mask_allow_all_users    => $ip_mask_allow_all_users,
+    ip_mask_deny_postgres_user => $ip_mask_deny_postgres_user
   }
 
   include ::barbican::db::postgresql
   include ::sysinv::db::postgresql
   include ::keystone::db::postgresql
   include ::fm::db::postgresql
+  include ::platform::helm::v2::db::postgresql
 }
 
 class platform::postgresql::sc::configured {
@@ -212,6 +226,8 @@ class platform::postgresql::sc::runtime
   }
 
   -> class {'::postgresql::server':
+    ip_mask_allow_all_users    => $ip_mask_allow_all_users,
+    ip_mask_deny_postgres_user => $ip_mask_deny_postgres_user
   }
 
   include ::platform::dcmanager::runtime

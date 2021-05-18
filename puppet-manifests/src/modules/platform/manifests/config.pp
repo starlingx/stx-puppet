@@ -247,6 +247,16 @@ class platform::config::tpm {
 }
 
 
+class platform::config::kdump {
+  file_line { '/etc/kdump.conf dracut_args':
+    path  => '/etc/kdump.conf',
+    line  => 'dracut_args --omit-drivers "ice e1000e i40e ixgbe ixgbevf iavf"',
+    match => '^dracut_args .*--omit-drivers',
+  }
+  ~> service { 'kdump': }
+}
+
+
 class platform::config::certs::ssl_ca
   inherits ::platform::config::certs::params {
 
@@ -353,8 +363,10 @@ class platform::config::pre {
   include ::platform::config::hosts
   include ::platform::config::file
   include ::platform::config::tpm
+  include ::platform::config::kdump
   include ::platform::config::certs::ssl_ca
-  if ($::platform::params::distributed_cloud_role =='systemcontroller' and
+  if (($::platform::params::distributed_cloud_role =='systemcontroller' or
+        $::platform::params::distributed_cloud_role =='subcloud') and
       $::personality == 'controller') {
     include ::platform::config::dc_root_ca
   }
@@ -439,6 +451,18 @@ class platform::config::storage::post
   file { '/var/run/.storage_config_complete':
     ensure => present,
   }
+}
+
+class platform::config::aio::post
+{
+  file { '/etc/platform/.initial_controller_config_complete':
+    ensure => present,
+  }
+
+  file { '/var/run/.controller_config_complete':
+    ensure => present,
+  }
+  include ::platform::config::worker::post
 }
 
 class platform::config::bootstrap {

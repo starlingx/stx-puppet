@@ -93,8 +93,7 @@ class platform::helm
   if (str2bool($::is_initial_config) and $::personality == 'controller') {
     include ::platform::helm::repositories
 
-    Class['::platform::kubernetes::master']
-
+    Class['::platform::kubernetes::gate']
     -> exec { 'restart lighttpd for helm':
       require   => [File['/etc/lighttpd/lighttpd.conf', $target_helm_repos_base_dir, $source_helm_repos_base_dir]],
       command   => 'systemctl restart lighttpd.service',
@@ -110,4 +109,23 @@ class platform::helm::runtime {
   include ::openstack::lighttpd::runtime
 
   Exec['sm-restart-lighttpd'] -> Class['::platform::helm::repositories']
+}
+
+class platform::helm::v2::db::postgresql (
+  $password,
+  $dbname = 'helmv2',
+  $user   = 'helmv2',
+  $encoding   = undef,
+  $privileges = 'ALL',
+) {
+    ::postgresql::server::db { $dbname:
+      user     => $user,
+      password => postgresql_password($user, $password),
+      encoding => $encoding,
+      grant    => $privileges,
+    }
+}
+
+class platform::helm::bootstrap {
+  include ::platform::helm::v2::db::postgresql
 }

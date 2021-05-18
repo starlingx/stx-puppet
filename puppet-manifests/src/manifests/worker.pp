@@ -2,6 +2,10 @@
 # puppet manifest for worker nodes
 #
 
+# A separated AIO manifest (./aio.pp) is applied to AIO controllers.
+# Changes for workers should also be considered to implement in
+# aio.pp.
+
 Exec {
   timeout => 300,
   path => '/usr/bin:/usr/sbin:/bin:/sbin:/usr/local/bin:/usr/local/sbin'
@@ -27,7 +31,7 @@ include ::platform::remotelogging
 include ::platform::mtce
 include ::platform::sysinv
 include ::platform::devices
-include ::platform::interfaces::sriov
+include ::platform::interfaces::sriov::config
 include ::platform::grub
 include ::platform::collectd
 include ::platform::filesystem::compute
@@ -42,6 +46,7 @@ include ::platform::ceph::worker
 include ::platform::worker::storage
 include ::platform::pciirqaffinity
 include ::platform::lmon
+include ::platform::rook
 
 class { '::platform::config::worker::post':
   stage => post,

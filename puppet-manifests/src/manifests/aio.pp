@@ -1,22 +1,12 @@
 #
-# puppet manifest for controller hosts
+# puppet manifest for controller nodes of AIO system
 #
-
-# A separated AIO manifest (./aio.pp) is applied to AIO controllers.
-# Changes for controllers should also be considered to implement in
-# aio.pp.
 
 Exec {
   timeout => 600,
   path => '/usr/bin:/usr/sbin:/bin:/sbin:/usr/local/bin:/usr/local/sbin'
 }
 
-#
-# Disable the firewall to protect against attempted
-# restoration of kubernetes-related iptables rules
-# during puppet apply, as kubernetes may not yet
-# be running and the restore will fail.
-#
 class { '::firewall':
   ensure => stopped
 }
@@ -28,7 +18,7 @@ include ::platform::filesystem::controller
 include ::platform::firewall::calico::oam
 include ::platform::dhclient
 include ::platform::partitions
-include ::platform::lvm::controller
+include ::platform::lvm::aio
 include ::platform::network
 include ::platform::drbd
 include ::platform::exports
@@ -47,7 +37,6 @@ include ::platform::etcd
 include ::platform::docker::controller
 include ::platform::dockerdistribution
 include ::platform::containerd::controller
-include ::platform::kubernetes::master
 include ::platform::kubernetes::gate
 include ::platform::helm
 include ::platform::armada
@@ -108,10 +97,19 @@ include ::platform::sm
 
 include ::platform::lmon
 include ::platform::rook
-
 include ::platform::deviceimage
 
-class { '::platform::config::controller::post':
+include ::platform::compute
+include ::platform::vswitch
+include ::platform::devices
+include ::platform::interfaces::sriov::config
+include ::platform::worker::storage
+include ::platform::pciirqaffinity
+include ::platform::docker::login
+include ::platform::kubernetes::aio
+
+
+class { '::platform::config::aio::post':
   stage => post,
 }
 

@@ -1,7 +1,7 @@
 class platform::patching::params (
   $private_port = 5491,
   $public_port = 15491,
-  $server_timeout = '300s',
+  $server_timeout = '600s',
   $region_name = undef,
   $service_create = false,
 ) { }
@@ -70,6 +70,7 @@ class platform::patching::haproxy
       public_ip_address => $::platform::haproxy::params::private_ip_address,
       public_port       => $private_port + 1,
       private_port      => $private_port,
+      server_timeout    => $server_timeout,
     }
   }
 }

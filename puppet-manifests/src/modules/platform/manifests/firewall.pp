@@ -103,7 +103,6 @@ class platform::firewall::calico::oam::services {
   # udp
   $sm_port = [2222, 2223]
   $ntp_port = [123]
-  $snmp_port = [161, 162]
   $ptp_port = [319, 320]
 
   # tcp
@@ -153,7 +152,7 @@ class platform::firewall::calico::oam::services {
   }
 
   $t_ip_version = $ip_version
-  $t_udp_ports = concat($sm_port, $ntp_port, $snmp_port, $ptp_port)
+  $t_udp_ports = concat($sm_port, $ntp_port, $ptp_port)
   $t_tcp_ports = concat($ssh_port,
                         $fm_port, $nfv_vim_port, $patching_port, $sysinv_port, $sm_api_port,
                         $kube_apiserver_port, $docker_registry_port, $docker_token_port,
@@ -215,7 +214,7 @@ class platform::firewall::calico::oam {
   contain ::platform::firewall::calico::oam::endpoints
   contain ::platform::firewall::calico::oam::services
 
-  Class['::platform::kubernetes::master'] -> Class[$name]
+  Class['::platform::kubernetes::gate'] -> Class[$name]
   Class['::platform::firewall::calico::oam::endpoints']
   -> Class['::platform::firewall::calico::oam::services']
 }

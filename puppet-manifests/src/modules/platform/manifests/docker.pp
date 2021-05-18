@@ -139,7 +139,12 @@ class platform::docker::login
 {
   include ::platform::dockerdistribution::params
 
-  Class['::platform::dockerdistribution::compute'] ~> Class[$name]
+  if $::personality == 'controller' {
+    Class['::platform::dockerdistribution::config'] ~> Class[$name]
+  }
+  else {
+    Class['::platform::dockerdistribution::compute'] ~> Class[$name]
+  }
 
   exec { 'docker-login':
     command => "/usr/local/sbin/run_docker_login \

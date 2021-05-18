@@ -33,13 +33,6 @@ class platform::collectd
       unless  => 'systemctl is-enabled collectd'
   }
 
-  # ensure that collectd is running
-  -> service { 'collectd':
-    ensure   => running,
-    provider => 'systemd',
-    require  => Anchor['platform::networking'],
-  } # now get pmond to monitor the process
-
   # ensure pmon soft link for process monitoring
   -> file { '/etc/pmon.d/collectd.conf':
     ensure => 'link',

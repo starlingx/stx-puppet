@@ -30,7 +30,7 @@ class platform::amqp::rabbitmq (
     ensure => 'directory',
     owner  => 'root',
     group  => 'root',
-    mode   => '0755',
+    mode   => '0750',
   }
 
   if $service_enabled {

@@ -20,6 +20,11 @@ parser.add_argument("--oidc_client_id")
 parser.add_argument("--oidc_username_claim")
 parser.add_argument("--oidc_groups_claim")
 parser.add_argument("--admission_plugins")
+parser.add_argument("--etcd_cafile")
+parser.add_argument("--etcd_certfile")
+parser.add_argument("--etcd_keyfile")
+parser.add_argument("--etcd_servers")
+
 args = parser.parse_args()
 
 if args.configmap_file:
@@ -76,6 +81,24 @@ else:
     plugins = 'enable-admission-plugins'
     if plugins in cluster_config['apiServer']['extraArgs']:
         del cluster_config['apiServer']['extraArgs'][plugins]
+
+# etcd parameters are required to start up kube-apiserver
+# do not remove any existing etcd parameters in the config map
+if args.etcd_cafile:
+    cluster_config['etcd']['external']['caFile'] = \
+        args.etcd_cafile
+
+if args.etcd_certfile:
+    cluster_config['etcd']['external']['certFile'] = \
+        args.etcd_certfile
+
+if args.etcd_keyfile:
+    cluster_config['etcd']['external']['keyFile'] = \
+        args.etcd_keyfile
+
+if args.etcd_servers:
+    cluster_config['etcd']['external']['endpoints'] = \
+        args.etcd_servers.split(',')
 
 cluster_config_string = yaml.dump(cluster_config, Dumper=yaml.RoundTripDumper,
                                   default_flow_style=False)

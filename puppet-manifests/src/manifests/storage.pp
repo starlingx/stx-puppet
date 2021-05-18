@@ -30,6 +30,7 @@ include ::platform::filesystem::storage
 include ::platform::docker::storage
 include ::platform::containerd::storage
 include ::platform::ceph::storage
+include ::platform::rook
 
 class { '::platform::config::storage::post':
   stage => post,

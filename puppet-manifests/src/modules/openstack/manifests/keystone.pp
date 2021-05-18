@@ -460,6 +460,12 @@ class openstack::keystone::endpoint::runtime {
   }
 }
 
+class openstack::keystone::endpoint::runtime::post {
+  class {'openstack::keystone::endpoint::runtime':
+    stage => post
+  }
+}
+
 class openstack::keystone::upgrade (
   $upgrade_token_cmd,
   $upgrade_url = undef,
@@ -478,13 +484,6 @@ class openstack::keystone::upgrade (
     $eng_workers = $::platform::params::eng_workers
 
     $keystone_key_repo = "${::platform::drbd::platform::params::mountpoint}/keystone"
-
-    # TODO(aning): For R5->R6 upgrade, a local keystone fernet keys repository may
-    # need to be setup for the local keystone instance on standby controller to
-    # service specific upgrade operations, since we need to keep the keys repository
-    # in /opt/platform/keystone/fernet-keys intact so that service won't fail on active
-    # controller during upgrade. Once the upgade finishes, the temparary local
-    # fernet keys repository will be deleted.
 
     # Need to create the parent directory for fernet keys repository
     # This is a workaround to a puppet bug.

@@ -88,10 +88,19 @@ class platform::sm
   $helmrepo_fs_source_dir = $::platform::helm::repositories::params::source_helm_repos_base_dir
   $helmrepo_fs_target_dir = $::platform::helm::repositories::params::target_helm_repos_base_dir
 
+  include ::platform::deviceimage::params
+  $deviceimage_fs_source_dir = $::platform::deviceimage::params::source_deviceimage_base_dir
+  $deviceimage_fs_target_dir = $::platform::deviceimage::params::target_deviceimage_base_dir
+
   include ::platform::drbd::cephmon::params
   $cephmon_drbd_resource          = $::platform::drbd::cephmon::params::resource_name
   $cephmon_fs_device              = $::platform::drbd::cephmon::params::device
   $cephmon_fs_directory           = $::platform::drbd::cephmon::params::mountpoint
+
+  include ::platform::rook::params
+  $rookmon_drbd_resource          = $::platform::drbd::rookmon::params::resource_name
+  $rookmon_fs_device              = $::platform::drbd::rookmon::params::device
+  $rookmon_fs_directory           = $::platform::drbd::rookmon::params::mountpoint
 
   include ::openstack::keystone::params
   $keystone_api_version          = $::openstack::keystone::params::api_version
@@ -164,6 +173,7 @@ class platform::sm
   # Ceph-Rados-Gateway
   include ::platform::ceph::params
   $ceph_configured = $::platform::ceph::params::service_enabled
+  $rook_configured = $::platform::rook::params::service_enabled
   $rgw_configured = $::platform::ceph::params::rgw_enabled
 
   if $system_mode == 'simplex' {
@@ -414,6 +424,17 @@ class platform::sm
     command => "sm-configure service_instance etcd-fs etcd-fs \"device=${etcd_fs_device},directory=${etcd_fs_directory},options=noatime,nodiratime,fstype=ext4,check_level=20\"",
   }
 
+  # Configure device image repository
+  exec { 'Provision device-image-fs (service-group-member)':
+    command => 'sm-provision service-group-member controller-services device-image-fs',
+  }
+  -> exec { 'Provision device-image-fs (service)':
+    command => 'sm-provision service device-image-fs',
+  }
+  -> exec { 'Configure Device Image Repository FileSystem':
+    command => "sm-configure service_instance device-image-fs device-image-fs \"device=${deviceimage_fs_source_dir},directory=${deviceimage_fs_target_dir},options=bind,noatime,nodiratime,fstype=ext4,check_level=20\"",
+  }
+
   # TODO: region code needs to be revisited
   if $region_config {
     # In a default Multi-Region configuration, Keystone is running as a
@@ -597,6 +618,55 @@ class platform::sm
             command => "sm-configure service_group yes controller distributed-cloud-services N 1 0 \"\" \"\"",
         }
     }
+  } else {
+    exec { 'Provision oam-ip service group member':
+      command => 'sm-provision service-group-member oam-services oam-ip',
+    }
+    -> exec { 'Provision oam-ip service':
+      command => 'sm-provision service oam-ip',
+    }
+
+    exec { 'Configure oam-service redundancy model to DX':
+      command => "sm-configure service_group yes controller oam-services 'N + M' 1 1 \"controller-aggregate\" directory-services",
+    }
+
+    exec { 'Configure controller-services redundancy model to DX':
+      command => "sm-configure service_group yes controller controller-services 'N + M' 1 1 \"controller-aggregate\" directory-services",
+    }
+
+    exec { 'Configure cloud-services redundancy model to DX':
+      command => "sm-configure service_group yes controller cloud-services 'N + M' 1 1 \"controller-aggregate\" directory-services",
+    }
+
+    exec { 'Configure vim-services redundancy model to DX':
+      command => "sm-configure service_group yes controller vim-services 'N + M' 1 1 \"controller-aggregate\" directory-services",
+    }
+
+    exec { 'Configure patching-services redundancy model to DX':
+      command => "sm-configure service_group yes controller patching-services 'N + M' 1 1 \"\" \"\"",
+    }
+
+    exec { 'Configure directory-services redundancy model to DX':
+      command => "sm-configure service_group yes controller directory-services N 2 0 \"\" \"\"",
+    }
+
+    exec { 'Configure web-services redundancy model to DX':
+      command => "sm-configure service_group yes controller web-services N 2 0 \"\" \"\"",
+    }
+
+    exec { 'Configure storage-services redundancy model to DX':
+      command => "sm-configure service_group yes controller storage-services N 2 0 \"\" \"\"",
+    }
+
+    exec { 'Configure storage-monitoring-services redundancy model to DX':
+      command => "sm-configure service_group yes controller storage-monitoring-services 'N + M' 1 1 \"\" \"\"",
+    }
+
+    if $::platform::params::distributed_cloud_role == 'subcloud' {
+        exec { 'Configure distributed-cloud-services redundancy model to DX':
+            command => "sm-configure service_group yes controller distributed-cloud-services 'N + M' 1 1 \"controller-aggregate\" \"\"",
+        }
+    }
   }
 
   exec { 'Provision extension-fs (service-group-member)':
@@ -725,6 +795,17 @@ class platform::sm
     -> exec { 'Configure ceph-osd':
       command => "sm-configure service_instance ceph-osd ceph-osd \"\"",
     }
+
+    Exec['Provision service-group storage-monitoring-services']
+    -> exec { 'Configure Rookmon DRBD':
+      command => "sm-configure service_instance drbd-rookmon drbd-rookmon:${hostunit} \"drbd_resource=${rookmon_drbd_resource}\"",
+    }
+    -> exec { 'Configure Rookmon FileSystem':
+      command => "sm-configure service_instance rookmon-fs rookmon-fs \"device=${rookmon_fs_device},directory=${rookmon_fs_directory},options=noatime,nodiratime,fstype=ext4,check_level=20\"",
+    }
+    -> exec { 'Configure Rook mon exit':
+      command => "sm-configure service_instance rook-mon-exit rook-mon-exit \"\"",
+    }
   }
 
 
@@ -782,6 +863,20 @@ class platform::sm
     }
   }
 
+  if $rook_configured {
+    if $system_type == 'All-in-one' and 'duplex' in $system_mode {
+      exec { 'Provision Rookmon FS in SM (service-group-member rookmon-fs)':
+        command => 'sm-provision service-group-member controller-services rookmon-fs',
+      }
+      -> exec { 'Provision Rookmon DRBD in SM (service-group-member drbd-rookmon)':
+        command => 'sm-provision service-group-member controller-services drbd-rookmon',
+      }
+      -> exec { 'Provision Rook-mon-exit in SM (service-group-member rook-mon-exit)':
+        command => 'sm-provision service-group-member controller-services rook-mon-exit',
+      }
+    }
+  }
+
   # Ceph-Rados-Gateway
   if $rgw_configured {
     exec {'Provision Ceph-Rados-Gateway (service-group-member ceph-radosgw)':
@@ -831,6 +926,12 @@ class platform::sm
     }
     -> exec { 'Provision DCManager-Audit in SM (service dcmanager-audit)':
       command => 'sm-provision service dcmanager-audit',
+    }
+    -> exec { 'Provision DCManager-Audit-Worker (service-group-member dcmanager-audit-worker)':
+      command => 'sm-provision service-group-member distributed-cloud-services dcmanager-audit-worker',
+    }
+    -> exec { 'Provision DCManager-Audit-Worker in SM (service dcmanager-audit-worker)':
+      command => 'sm-provision service dcmanager-audit-worker',
     }
     -> exec { 'Provision DCManager-Orchestrator (service-group-member dcmanager-orchestrator)':
       command => 'sm-provision service-group-member distributed-cloud-services dcmanager-orchestrator',
@@ -886,6 +987,9 @@ class platform::sm
     -> exec { 'Configure Platform - DCManager-Audit':
       command => "sm-configure service_instance dcmanager-audit dcmanager-audit \"\"",
     }
+    -> exec { 'Configure Platform - DCManager-Audit-Worker':
+      command => "sm-configure service_instance dcmanager-audit-worker dcmanager-audit-worker \"\"",
+    }
     -> exec { 'Configure Platform - DCManager-Orchestrator':
       command => "sm-configure service_instance dcmanager-orchestrator dcmanager-orchestrator \"\"",
     }
@@ -918,6 +1022,72 @@ class platform::sm
   # lint:endignore:140chars
 }
 
+class platform::sm::update_oam_config::runtime {
+  $system_mode                   = $::platform::params::system_mode
+
+  # lint:ignore:140chars
+  if $system_mode == 'simplex' {
+
+    include ::platform::network::oam::params
+    $oam_my_unit_ip    = $::platform::network::oam::params::controller_address
+    $oam_ip_interface  = $::platform::network::oam::params::interface_name
+    $oam_ip_param_ip   = $::platform::network::oam::params::controller_address
+    $oam_ip_param_mask = $::platform::network::oam::params::subnet_prefixlen
+
+    exec { 'pmon-stop-sm-api':
+      command => 'pmon-stop sm-api',
+    }
+    -> exec { 'pmon-stop-sm':
+      command => 'pmon-stop sm'
+    }
+    # remove previous active DB and its journaling files
+    -> file { '/var/run/sm/sm.db':
+      ensure => absent
+    }
+    -> file { '/var/run/sm/sm.db-shm':
+      ensure => absent
+    }
+    -> file { '/var/run/sm/sm.db-wal':
+      ensure => absent
+    }
+    # will write the config values to /var/lib/sm/sm.db
+    -> exec { 'Configure OAM IP':
+      command => "sm-configure service_instance oam-ip oam-ip \"ip=${oam_ip_param_ip},cidr_netmask=${oam_ip_param_mask},nic=${oam_ip_interface},arp_count=7\"",
+    }
+    -> exec { 'Configure OAM Interface':
+      command => "sm-configure interface controller oam-interface \"\" ${oam_my_unit_ip} 2222 2223 \"\" 2222 2223",
+    }
+    -> exec { 'pmon-start-sm':
+      # will copy /var/lib/sm/sm.db to /var/run/sm/sm.db
+      command => 'pmon-start sm'
+    }
+    -> exec { 'pmon-start-sm-api':
+      command => 'pmon-start sm-api'
+    }
+    # the services below need to be restarted after, but wait for them to reach enabled-active
+    -> exec {'wait-for-haproxy':
+      command   => '[ $(sm-query service haproxy | grep -c ".*enabled-active.*") -eq 1 ]',
+      tries     => 15,
+      try_sleep => 1,
+    }
+    -> exec {'wait-for-vim-webserver':
+      command   => '[ $(sm-query service vim-webserver | grep -c ".*enabled-active.*") -eq 1 ]',
+      tries     => 15,
+      try_sleep => 1,
+    }
+    -> exec {'wait-for-registry-token-server':
+      command   => '[ $(sm-query service registry-token-server | grep -c ".*enabled-active.*") -eq 1 ]',
+      tries     => 15,
+      try_sleep => 1,
+    }
+    -> exec {'wait-for-registry-docker-distribution':
+      command   => '[ $(sm-query service docker-distribution | grep -c ".*enabled-active.*") -eq 1 ]',
+      tries     => 15,
+      try_sleep => 1,
+    }
+  }
+  # lint:endignore:140chars
+}
 
 define platform::sm::restart {
   exec {"sm-restart-${name}":
@@ -1027,6 +1197,8 @@ class platform::sm::rgw::runtime {
 
 class platform::sm::ceph::runtime {
   $ceph_configured = $::platform::ceph::params::service_enabled
+  include ::platform::rook::params
+  $rook_configured = $::platform::rook::params::service_enabled
   $system_mode     = $::platform::params::system_mode
   $system_type     = $::platform::params::system_type
 
@@ -1053,6 +1225,20 @@ class platform::sm::ceph::runtime {
     }
     -> exec { 'Provision Ceph-Manager --apply (service-group-member ceph-manager)':
       command => 'sm-provision service-group-member storage-monitoring-services ceph-manager --apply',
+    }
+  }
+
+  if $rook_configured {
+    if $system_type == 'All-in-one' and 'duplex' in $system_mode {
+      exec { 'Provision Cephmon FS in SM (service-group-member cephmon-fs)':
+        command => 'sm-provision service-group-member controller-services rookmon-fs --apply',
+      }
+      -> exec { 'Provision Cephmon DRBD in SM (service-group-member drbd-cephmon':
+        command => 'sm-provision service-group-member controller-services drbd-rookmon --apply',
+      }
+      -> exec { 'Provision Rook-mon-exit in SM (service-group-member rook-mon-exit)':
+        command => 'sm-provision service-group-member controller-services rook-mon-exit --apply',
+      }
     }
   }
 }

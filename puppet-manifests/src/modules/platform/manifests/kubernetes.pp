@@ -17,13 +17,34 @@ class platform::kubernetes::params (
   $k8s_topology_mgr_policy = 'best-effort',
   $k8s_cni_bin_dir = '/usr/libexec/cni',
   $k8s_vol_plugin_dir = '/usr/libexec/kubernetes/kubelet-plugins/volume/exec/',
+  $k8s_pod_max_pids = '750',
   $join_cmd = undef,
   $oidc_issuer_url = undef,
   $oidc_client_id = undef,
   $oidc_username_claim = undef,
   $oidc_groups_claim = undef,
-  $admission_plugins = undef
+  $admission_plugins = undef,
+  $etcd_cafile = undef,
+  $etcd_certfile = undef,
+  $etcd_keyfile = undef,
+  $etcd_servers = undef,
 ) { }
+
+class platform::kubernetes::configuration {
+
+  if 'kube-ignore-isol-cpus' in $::platform::kubernetes::params::host_labels {
+    $ensure = 'present'
+  } else {
+    $ensure = 'absent'
+  }
+
+  file { '/etc/kubernetes/ignore_isolcpus':
+    ensure => $ensure,
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0644',
+  }
+}
 
 class platform::kubernetes::cgroup::params (
   $cgroup_root = '/sys/fs/cgroup',
@@ -115,6 +136,7 @@ class platform::kubernetes::kubeadm {
   $k8s_vol_plugin_dir = $::platform::kubernetes::params::k8s_vol_plugin_dir
   $k8s_cpu_mgr_policy = $::platform::kubernetes::params::k8s_cpu_mgr_policy
   $k8s_topology_mgr_policy = $::platform::kubernetes::params::k8s_topology_mgr_policy
+  $k8s_pod_max_pids = $::platform::kubernetes::params::k8s_pod_max_pids
 
   $iptables_file = "net.bridge.bridge-nf-call-ip6tables = 1
     net.bridge.bridge-nf-call-iptables = 1"
@@ -198,14 +220,17 @@ class platform::kubernetes::kubeadm {
     group  => 'root',
     mode   => '0700',
   }
-  # Start kubelet.
-  -> service { 'kubelet':
-    enable => true,
-  }
   # A seperate enable is required since we have modified the service resource
   # to never enable services.
   -> exec { 'enable-kubelet':
     command => '/usr/bin/systemctl enable kubelet.service',
+  }
+  # Start kubelet if it is standard controller.
+  if !str2bool($::is_worker_subfunction) {
+    File['/etc/kubernetes/manifests']
+    -> service { 'kubelet':
+      enable => true,
+    }
   }
 }
 
@@ -310,6 +335,7 @@ class platform::kubernetes::master
   contain ::platform::kubernetes::master::init
   contain ::platform::kubernetes::coredns
   contain ::platform::kubernetes::firewall
+  contain ::platform::kubernetes::configuration
 
   Class['::platform::sysctl::controller::reserve_ports'] -> Class[$name]
   Class['::platform::etcd'] -> Class[$name]
@@ -318,7 +344,8 @@ class platform::kubernetes::master
   # Ensure DNS is configured as name resolution is required when
   # kubeadm init is run.
   Class['::platform::dns'] -> Class[$name]
-  Class['::platform::kubernetes::kubeadm']
+  Class['::platform::kubernetes::configuration']
+  -> Class['::platform::kubernetes::kubeadm']
   -> Class['::platform::kubernetes::cgroup']
   -> Class['::platform::kubernetes::master::init']
   -> Class['::platform::kubernetes::coredns']
@@ -334,19 +361,16 @@ class platform::kubernetes::worker::init
 
   if str2bool($::is_initial_config) {
     include ::platform::dockerdistribution::params
-
-    # Get the pause image tag from kubeadm required images
-    # list and replace with local registry
-    $get_k8s_pause_img = "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list 2>/dev/null |\
-      awk '/^k8s.gcr.io\\/pause:/{print \$1}' | sed 's#k8s.gcr.io#registry.local:9001\\/k8s.gcr.io#'"
-    $k8s_pause_img = generate('/bin/sh', '-c', $get_k8s_pause_img)
-
-    if k8s_pause_img {
-      exec { 'load k8s pause image by containerd':
-        command   => "crictl pull --creds ${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password} ${k8s_pause_img}", # lint:ignore:140chars
-        logoutput => true,
-        before    => Exec['configure worker node']
-      }
+    # Pull pause image tag from kubeadm required images list for this version
+    # kubeadm config images list does not use the --kubeconfig argument
+    # and admin.conf will not exist on a pure worker, and kubelet.conf will not
+    # exist until after a join.
+    $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
+    exec { 'load k8s pause image by containerd':
+      # splitting this command over multiple lines appears to break puppet-lint
+      command   => "kubeadm config images list --kubernetes-version ${version} --image-repository=registry.local:9001/k8s.gcr.io 2>/dev/null | grep k8s.gcr.io/pause: | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
+      logoutput => true,
+      before    => Exec['configure worker node'],
     }
   }
 
@@ -388,7 +412,6 @@ class platform::kubernetes::worker::pci
   $pcidp_resources = undef,
 ) {
   include ::platform::kubernetes::params
-  include ::platform::kubernetes::worker::sriovdp
 
   file { '/etc/pcidp':
     ensure => 'directory',
@@ -405,6 +428,11 @@ class platform::kubernetes::worker::pci
   }
 }
 
+class platform::kubernetes::worker::pci::runtime {
+  include ::platform::kubernetes::worker::pci
+  include ::platform::kubernetes::worker::sriovdp
+}
+
 class platform::kubernetes::worker::sriovdp {
   include ::platform::kubernetes::params
   include ::platform::params
@@ -412,16 +440,9 @@ class platform::kubernetes::worker::sriovdp {
   if ($::personality == 'controller') and
       str2bool($::is_worker_subfunction)
       and ('sriovdp' in $host_labels) {
-    # In an AIO system, it's possible for the device plugin pods to start
-    # before the device VFs are bound to a driver.  Deleting the device
-    # plugin pods will cause them to be recreated by the daemonset and
-    # allow them to re-scan the set of matching device ids/drivers
-    # specified in the /etc/pcidp/config.json file.
-    # This may be mitigated by moving to helm + configmap for the device
-    # plugin.
     exec { 'Delete sriov device plugin pod if present':
       path      => '/usr/bin:/usr/sbin:/bin',
-      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf delete pod -n kube-system --selector=app=sriovdp --field-selector spec.nodeName=$(hostname) --timeout=60s', # lint:ignore:140chars
+      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf delete pod -n kube-system --selector=app=sriovdp --field-selector spec.nodeName=$(hostname) --timeout=360s', # lint:ignore:140chars
       onlyif    => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf get pods -n kube-system --selector=app=sriovdp --field-selector spec.nodeName=$(hostname) | grep kube-sriov-device-plugin', # lint:ignore:140chars
       logoutput => true,
     }
@@ -437,18 +458,18 @@ class platform::kubernetes::worker
     contain ::platform::kubernetes::kubeadm
     contain ::platform::kubernetes::cgroup
     contain ::platform::kubernetes::worker::init
+    contain ::platform::kubernetes::configuration
 
-    Class['::platform::kubernetes::kubeadm']
+    Class['::platform::kubernetes::configuration']
+    -> Class['::platform::kubernetes::kubeadm']
     -> Class['::platform::kubernetes::cgroup']
     -> Class['::platform::kubernetes::worker::init']
-  } else {
-    # Reconfigure cgroups cpusets on AIO
-    contain ::platform::kubernetes::cgroup
+  }
 
-    # Add refresh dependency for kubelet for hugepage allocation
-    Class['::platform::compute::allocate']
-    ~> service { 'kubelet':
-    }
+  # Enable kubelet on AIO and worker nodes.
+  Class['::platform::compute::allocate']
+  -> service { 'kubelet':
+    enable => true,
   }
 
   # TODO: The following exec is a workaround. Once kubernetes becomes the
@@ -460,6 +481,25 @@ class platform::kubernetes::worker
   }
 
   contain ::platform::kubernetes::worker::pci
+}
+
+class platform::kubernetes::aio
+  inherits ::platform::kubernetes::params {
+
+  include ::platform::kubernetes::master
+  include ::platform::kubernetes::worker
+
+  Class['::platform::kubernetes::master']
+  -> Class['::platform::kubernetes::worker']
+  -> Class[$name]
+}
+
+class platform::kubernetes::gate {
+  if $::platform::params::system_type != 'All-in-one' {
+    Class['::platform::kubernetes::master'] -> Class[$name]
+  } else {
+    Class['::platform::kubernetes::aio'] -> Class[$name]
+  }
 }
 
 class platform::kubernetes::coredns {
@@ -607,6 +647,7 @@ class platform::kubernetes::upgrade_first_control_plane
 class platform::kubernetes::upgrade_control_plane
   inherits ::platform::kubernetes::params {
 
+  # control plane is only upgraded on a controller (which has admin.conf)
   exec { 'upgrade control plane':
     command   => 'kubeadm --kubeconfig=/etc/kubernetes/admin.conf upgrade node',
     logoutput => true,
@@ -626,22 +667,19 @@ class platform::kubernetes::worker::upgrade_kubelet
 
   include ::platform::dockerdistribution::params
 
-  # Get the pause image tag from kubeadm required images
-  # list and replace with local registry
-  $get_k8s_pause_img = "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list 2>/dev/null |\
-    awk '/^k8s.gcr.io\\/pause:/{print \$1}' | sed 's#k8s.gcr.io#registry.local:9001\\/k8s.gcr.io#'"
-  $k8s_pause_img = generate('/bin/sh', '-c', $get_k8s_pause_img)
+  # workers use kubelet.conf rather than admin.conf
+  $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
 
-  if k8s_pause_img {
-    exec { 'load k8s pause image':
-      command   => "crictl pull --creds ${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password} ${k8s_pause_img}", # lint:ignore:140chars
-      logoutput => true,
-      before    => Exec['upgrade kubelet']
-    }
+  # Pull the pause image tag from kubeadm required images list for this version
+  exec { 'pull pause image':
+    # spltting this command over multiple lines will break puppet-lint for later violations
+    command   => "kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf config images list --kubernetes-version ${upgrade_to_version} --image-repository=registry.local:9001/k8s.gcr.io 2>/dev/null | grep k8s.gcr.io/pause: | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
+    logoutput => true,
+    before    => Exec['upgrade kubelet'],
   }
 
   exec { 'upgrade kubelet':
-    command   => 'kubeadm --kubeconfig=/etc/kubernetes/admin.conf upgrade node',
+    command   => 'kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf upgrade node',
     logoutput => true,
   }
 
@@ -650,8 +688,12 @@ class platform::kubernetes::worker::upgrade_kubelet
   }
 }
 
-class platform::kubernetes::master::change_apiserver_parameters
-  inherits ::platform::kubernetes::params {
+class platform::kubernetes::master::change_apiserver_parameters (
+  $etcd_cafile = $platform::kubernetes::params::etcd_cafile,
+  $etcd_certfile = $platform::kubernetes::params::etcd_certfile,
+  $etcd_keyfile = $platform::kubernetes::params::etcd_keyfile,
+  $etcd_servers = $platform::kubernetes::params::etcd_servers,
+) inherits ::platform::kubernetes::params {
 
   $configmap_temp_file = '/tmp/cluster_configmap.yaml'
   $configview_temp_file = '/tmp/kubeadm_config_view.yaml'
@@ -659,7 +701,6 @@ class platform::kubernetes::master::change_apiserver_parameters
   exec { 'update kube-apiserver params':
     command => template('platform/kube-apiserver-change-params.erb')
   }
-
 }
 
 class platform::kubernetes::certsans::runtime
