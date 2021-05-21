@@ -502,28 +502,36 @@ class platform::kubernetes::gate {
   }
 }
 
+class platform::kubernetes::coredns::duplex {
+  # For duplex and multi-node system, restrict the dns pod to master nodes
+  exec { 'restrict coredns to master nodes':
+    command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch deployment coredns -p \'{"spec":{"template":{"spec":{"nodeSelector":{"node-role.kubernetes.io/master":""}}}}}\'', # lint:ignore:140chars
+    logoutput => true,
+  }
+
+  -> exec { 'Use anti-affinity for coredns pods':
+    command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch deployment coredns -p \'{"spec":{"template":{"spec":{"affinity":{"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":{"matchExpressions":[{"key":"k8s-app","operator":"In","values":["kube-dns"]}]},"topologyKey":"kubernetes.io/hostname"}]}}}}}}\'', # lint:ignore:140chars
+    logoutput => true,
+  }
+}
+
+class platform::kubernetes::coredns::simplex {
+  # For simplex system, 1 coredns is enough
+  exec { '1 coredns for simplex mode':
+    command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system scale --replicas=1 deployment coredns',
+    logoutput => true,
+  }
+}
+
 class platform::kubernetes::coredns {
 
   include ::platform::params
 
   if str2bool($::is_initial_k8s_config) {
     if $::platform::params::system_mode != 'simplex' {
-      # For duplex and multi-node system, restrict the dns pod to master nodes
-      exec { 'restrict coredns to master nodes':
-        command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch deployment coredns -p \'{"spec":{"template":{"spec":{"nodeSelector":{"node-role.kubernetes.io/master":""}}}}}\'', # lint:ignore:140chars
-        logoutput => true,
-      }
-
-      -> exec { 'Use anti-affinity for coredns pods':
-        command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch deployment coredns -p \'{"spec":{"template":{"spec":{"affinity":{"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":{"matchExpressions":[{"key":"k8s-app","operator":"In","values":["kube-dns"]}]},"topologyKey":"kubernetes.io/hostname"}]}}}}}}\'', # lint:ignore:140chars
-        logoutput => true,
-      }
+      contain ::platform::kubernetes::coredns::duplex
     } else {
-      # For simplex system, 1 coredns is enough
-      exec { '1 coredns for simplex mode':
-        command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system scale --replicas=1 deployment coredns', # lint:ignore:140chars
-        logoutput => true,
-      }
+      contain ::platform::kubernetes::coredns::simplex
     }
   }
 }
@@ -637,7 +645,7 @@ class platform::kubernetes::upgrade_first_control_plane
   } else {
     # For simplex system, 1 coredns is enough
     exec { '1 coredns for simplex mode':
-      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system scale --replicas=1 deployment coredns', # lint:ignore:140chars
+      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system scale --replicas=1 deployment coredns',
       logoutput => true,
       require   => Exec['upgrade first control plane']
     }
@@ -731,5 +739,27 @@ class platform::kubernetes::certsans::runtime
   exec { 'update kube-apiserver certSANs':
     provider => shell,
     command  => template('platform/kube-apiserver-update-certSANs.erb')
+  }
+}
+
+# The duplex_migration class is applied as part of SX to DX migration
+class platform::kubernetes::duplex_migration::runtime::post {
+  file { '/var/run/.kubernetes_duplex_migration_complete':
+    ensure => present,
+  }
+}
+
+class platform::kubernetes::duplex_migration::runtime {
+  contain ::platform::kubernetes::coredns::duplex
+
+  # Update replicas to 2 for duplex
+  Class['::platform::kubernetes::coredns::duplex']
+  -> exec { '2 coredns for duplex mode':
+    command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system scale --replicas=2 deployment coredns',
+    logoutput => true,
+  }
+
+  class { '::platform::kubernetes::duplex_migration::runtime::post':
+    stage => post,
   }
 }
