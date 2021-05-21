@@ -186,6 +186,17 @@ class platform::ceph::post
 }
 
 
+class platform::ceph::pmond_config {
+  file { '/etc/pmon.d/ceph.conf':
+    ensure => link,
+    target => '/etc/ceph/ceph.conf.pmon',
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0640',
+  }
+}
+
+
 class platform::ceph::monitor
   inherits ::platform::ceph::params {
 
@@ -256,13 +267,7 @@ class platform::ceph::monitor
         fs_options => $mon_fs_options,
       } -> Class['::ceph']
 
-      file { '/etc/pmon.d/ceph.conf':
-        ensure => link,
-        target => '/etc/ceph/ceph.conf.pmon',
-        owner  => 'root',
-        group  => 'root',
-        mode   => '0640',
-      }
+      include ::platform::ceph::pmond_config
     }
 
     # ensure configuration is complete before creating monitors
@@ -800,6 +805,8 @@ class platform::ceph::storage {
     include ::platform::ceph::monitor
     include ::platform::ceph::metadataserver::config
     include ::platform::ceph::osds
+    # Ensure ceph is managed by pmond on all storage nodes
+    include ::platform::ceph::pmond_config
 
     # Ensure partitions update prior to ceph storage configuration
     Class['::platform::partitions'] -> Class['::platform::ceph::osds']
@@ -846,6 +853,7 @@ class platform::ceph::runtime_osds {
   include ::ceph::params
   include ::platform::ceph
   include ::platform::ceph::osds
+  include ::platform::ceph::pmond_config
 
   # Since this is runtime we have to avoid checking status of Ceph while we
   # configure it. On AIO-DX ceph-osd processes are monitored by SM & on other
@@ -872,14 +880,7 @@ class platform::ceph::runtime_osds {
     -> exec { 'start Ceph OSDs':
       command => '/etc/init.d/ceph-init-wrapper start osd'
     }
-    -> file { 'link /etc/pmon.d/ceph.conf':
-      ensure => link,
-      path   => '/etc/pmon.d/ceph.conf',
-      target => '/etc/ceph/ceph.conf.pmon',
-      owner  => 'root',
-      group  => 'root',
-      mode   => '0640',
-    }
+    -> Class['::platform::ceph::pmond_config']
   }
 }
 
