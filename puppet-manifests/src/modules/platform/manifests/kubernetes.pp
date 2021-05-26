@@ -32,6 +32,18 @@ class platform::kubernetes::params (
   $rootca_keyfile = '/etc/kubernetes/pki/ca.key',
   $rootca_cert = undef,
   $rootca_key = undef,
+  $admin_cert = undef,
+  $admin_key = undef,
+  $apiserver_cert = undef,
+  $apiserver_key = undef,
+  $apiserver_kubelet_cert = undef,
+  $apiserver_kubelet_key = undef,
+  $scheduler_cert = undef,
+  $scheduler_key = undef,
+  $controller_manager_cert = undef,
+  $controller_manager_key = undef,
+  $kubelet_cert = undef,
+  $kubelet_key = undef,
   # The file holding the original root CA cert/key before update
   $rootca_certfile_old = '/etc/kubernetes/pki/ca_old.crt',
   $rootca_keyfile_old = '/etc/kubernetes/pki/ca_old.key',
@@ -872,7 +884,7 @@ class platform::kubernetes::worker::rootca::trustbothcas::runtime
     environment => [ 'KUBECONFIG=/etc/kubernetes/kubelet.conf' ],
     command     => "kubectl config set-cluster ${cluster} --certificate-authority /etc/kubernetes/pki/ca.crt --embed-certs",
   }
-  # Restart kubelet to truct both certs
+  # Restart kubelet to trust both certs
   -> exec { 'restart_kubelet':
     command => '/usr/bin/systemctl restart kubelet',
   }
@@ -895,5 +907,241 @@ class platform::kubernetes::master::rootca::pods::trustnewca::runtime
     provider    => shell,
     command     => template('platform/kube-rootca-update-pods.erb'),
     timeout     => 600,
+  }
+}
+
+class platform::kubernetes::master::rootca::updatecerts::runtime
+  inherits ::platform::kubernetes::params {
+
+  # Create directory to use crt and key from secret in kubernetes components configuration
+  file { '/tmp/kube_rootca_update':
+    ensure => directory,
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0640',
+  }
+
+  # Create the new k8s admin cert file
+  -> file { '/tmp/kube_rootca_update/kubernetes-admin.crt':
+    ensure  => file,
+    content => base64('decode', $admin_cert),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0640',
+  }
+
+  # Create the new k8s admin key file
+  -> file { '/tmp/kube_rootca_update/kubernetes-admin.key':
+    ensure  => file,
+    content => base64('decode', $admin_key),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0640',
+  }
+
+  # Update admin.conf with new cert/key
+  -> exec { 'update_admin_conf_credentials':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
+    command     => "kubectl config set-credentials kubernetes-admin --client-key /tmp/kube_rootca_update/kubernetes-admin.key \
+                    --client-certificate /tmp/kube_rootca_update/kubernetes-admin.crt --embed-certs",
+  }
+
+  # Copy the new apiserver.crt, apiserver.key to replace the ones in /etc/kubernetes/pki/ directory
+  # Create the new k8s apiserver cert file
+  -> file { '/etc/kubernetes/pki/apiserver.crt':
+    ensure  => file,
+    content => base64('decode', $apiserver_cert),
+    replace => true,
+  }
+
+  # Create the new k8s apiserver key file
+  -> file { '/etc/kubernetes/pki/apiserver.key':
+    ensure  => file,
+    content => base64('decode', $apiserver_key),
+    replace => true,
+  }
+
+  # Copy the new apiserver-kubelet-client.crt, apiserver-kubelet-client.key to replace the ones in /etc/kubernetes/pki/ directory
+  # Create the new k8s apiserver-kubelet-client cert file
+  -> file { '/etc/kubernetes/pki/apiserver-kubelet-client.crt':
+    ensure  => file,
+    content => base64('decode', $apiserver_kubelet_cert),
+  }
+
+  # Create the new k8s apiserver-kubelet-client key file
+  -> file { '/etc/kubernetes/pki/apiserver-kubelet-client.key':
+    ensure  => file,
+    content => base64('decode', $apiserver_kubelet_key),
+  }
+
+  # Create the new kube scheduler crt file
+  -> file { '/tmp/kube_rootca_update/kube-scheduler.crt':
+    ensure  => file,
+    content => base64('decode', $scheduler_cert),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0640',
+  }
+
+  # Create the new kube scheduler key file
+  -> file { '/tmp/kube_rootca_update/kube-scheduler.key':
+    ensure  => file,
+    content => base64('decode', $scheduler_key),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0640',
+  }
+
+  # Update scheduler.conf with the new client cert
+  -> exec { 'scheduler_conf':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/scheduler.conf' ],
+    command     => "kubectl config set-credentials system:kube-scheduler --client-key /tmp/kube_rootca_update/kube-scheduler.key \
+                    --client-certificate /tmp/kube_rootca_update/kube-scheduler.crt --embed-certs",
+  }
+
+  # Restart scheduler
+  -> exec { 'restart_scheduler':
+    command => "/usr/bin/kill -s SIGHUP $(pidof kube-scheduler)"
+  }
+
+  # Create the new k8s controller-manager crt file
+  -> file { '/tmp/kube_rootca_update/kube-controller-manager.crt':
+    ensure  => file,
+    content => base64('decode', $controller_manager_cert),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0640',
+  }
+
+  # Create the new k8s controller-manager key file
+  -> file { '/tmp/kube_rootca_update/kube-controller-manager.key':
+    ensure  => file,
+    content => base64('decode', $controller_manager_key),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0640',
+  }
+
+  # Update controller-manager.conf with the new client cert/key
+  -> exec { 'controller-manager_conf':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/controller-manager.conf' ],
+    command     => "kubectl config set-credentials system:kube-controller-manager \
+                    --client-key /tmp/kube_rootca_update/kube-controller-manager.key \
+                    --client-certificate  /tmp/kube_rootca_update/kube-controller-manager.crt --embed-certs",
+  }
+
+  # Restart kube-controller-manager
+  -> exec { 'restart_controller-manager':
+    command => "/usr/bin/kill -s SIGHUP $(pidof kube-controller-manager)"
+  }
+
+  # Create the new kubelet client crt file
+  -> file { "/tmp/kube_rootca_update/${::platform::params::hostname}.crt":
+    ensure  => file,
+    content => base64('decode', $kubelet_cert),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0640',
+  }
+
+  # Create the new kubelet client key file
+  -> file { "/tmp/kube_rootca_update/${::platform::params::hostname}.key":
+    ensure  => file,
+    content => base64('decode', $kubelet_key),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0640',
+  }
+
+  # Append the cert and key to a pem file
+  -> exec { 'append_kubelet_client_cert_and_key':
+    command => "cat /tmp/kube_rootca_update/${::platform::params::hostname}.crt \
+                /tmp/kube_rootca_update/${::platform::params::hostname}.key > /tmp/kube_rootca_update/kubelet-client-cert-with-key.pem",
+  }
+
+  # Copy the new apiserver.crt, apiserver.key to replace the ones in /etc/kubernetes/pki/ directory
+  -> file { '/var/lib/kubelet/pki/kubelet-client-cert-with-key.pem':
+    ensure  => file,
+    source  => '/tmp/kube_rootca_update/kubelet-client-cert-with-key.pem',
+    replace => true,
+  }
+
+  # add link to new kubelet client cert
+  -> file { '/var/lib/kubelet/pki/kubelet-client-current.pem':
+    ensure  => 'link',
+    target  => '/var/lib/kubelet/pki/kubelet-client-cert-with-key.pem',
+    replace => true,
+  }
+
+  # Restart kubelet
+  -> exec { 'restart_kubelet-client':
+    command => "/usr/bin/kill -s SIGHUP $(pidof kubelet)"
+  }
+
+  # Removing temporary directory for files along this configuration process
+  -> exec { 'remove_kube_rootca_update_dir':
+    command => '/usr/bin/rm -rf /tmp/kube_rootca_update',
+  }
+}
+
+class platform::kubernetes::worker::rootca::updatecerts::runtime
+  inherits ::platform::kubernetes::params {
+  file { '/tmp/kube_rootca_update':
+    ensure => directory,
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0640',
+  }
+
+  # Create the new k8s kubelet client cert file
+  -> file { "/tmp/kube_rootca_update/${::platform::params::hostname}.crt":
+    ensure  => file,
+    content => base64('decode', $kubelet_cert),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0640',
+  }
+
+  # Create the new k8s kubelet client key file
+  -> file { "/tmp/kube_rootca_update/${::platform::params::hostname}.key":
+    ensure  => file,
+    content => base64('decode', $kubelet_key),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0640',
+  }
+
+  # Append the new cert and key files
+  -> exec { 'append_kubelet_client_cert_and_key':
+    command => "cat /tmp/kube_rootca_update/${::platform::params::hostname}.crt \
+                /tmp/kube_rootca_update/${::platform::params::hostname}.key > /tmp/kube_rootca_update/kubelet-client-cert-with-key.pem",
+  }
+
+  # Copy kubelet cert and key file to replace the one in /var/lib/kubelet/pki/ directory
+  -> file { '/var/lib/kubelet/pki/kubelet-client-cert-with-key.pem':
+    ensure  => file,
+    source  => '/tmp/kube_rootca_update/kubelet-client-cert-with-key.pem',
+    replace => true,
+  }
+
+  # Remove the current kubelet-client reference
+  -> exec { 'remove_current_kubelet_cert_link':
+    command => '/usr/bin/rm -rf /var/lib/kubelet/pki/kubelet-client-current.pem',
+  }
+
+  # add link to new kubelet client cert
+  -> file { '/var/lib/kubelet/pki/kubelet-client-current.pem':
+    ensure => 'link',
+    target => '/var/lib/kubelet/pki/kubelet-client-cert-with-key.pem',
+  }
+
+  # Restart kubelet
+  -> exec { 'restart_kubelet-client':
+    command => "/usr/bin/kill -s SIGHUP $(pidof kubelet)"
+  }
+
+  # Removing temporary directory for files along this configuration process
+  -> exec { 'remove_kube_rootca_update_dir':
+    command => '/usr/bin/rm -rf /tmp/kube_rootca_update',
   }
 }
