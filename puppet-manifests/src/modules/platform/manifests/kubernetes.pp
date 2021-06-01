@@ -890,6 +890,107 @@ class platform::kubernetes::worker::rootca::trustbothcas::runtime
   }
 }
 
+class platform::kubernetes::master::rootca::trustnewca::runtime
+  inherits ::platform::kubernetes::params {
+  # Copy the new root CA cert in place
+  exec { 'put_new_ca_cert_in_place':
+    command => "/bin/cp ${rootca_certfile_new} ${rootca_certfile}",
+  }
+  # Copy the new root CA key in place
+  -> exec { 'put_new_ca_key_in_place':
+    command => "/bin/cp ${rootca_keyfile_new} ${rootca_keyfile}",
+  }
+  # Update admin.conf to remove the old CA cert
+  -> exec { 'update_admin_conf':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
+    command     => "kubectl config set-cluster kubernetes --certificate-authority ${rootca_certfile} --embed-certs",
+  }
+  # Restart sysinv-conductor since it uses admin.conf
+  -> exec { 'restart_sysinv_conductor':
+    command => 'sm-restart-safe service sysinv-conductor',
+  }
+  # Restart cert-mon since it uses admin.conf
+  -> exec { 'restart_cert_mon':
+    command => 'sm-restart-safe service cert-mon',
+  }
+  # Restart kube-apiserver to pick up the new cert
+  -> exec { 'restart_apiserver':
+    command => "/usr/bin/kill -s SIGHUP $(pidof kube-apiserver)",
+  }
+  # Update kube-controller-manager.yaml with the new cert and key,
+  # this also restart controller-manager
+  -> exec { 'update_controller-manager_yaml':
+    command => "/bin/sed -i \\
+                -e 's|cluster-signing-cert-file=.*|cluster-signing-cert-file=${rootca_certfile}|' \\
+                -e 's|cluster-signing-key-file=.*|cluster-signing-key-file=${rootca_keyfile}|' \\
+                /etc/kubernetes/manifests/kube-controller-manager.yaml",
+  }
+  # Update scheduler.conf with the new cert
+  -> exec { 'update_scheduler_conf':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/scheduler.conf' ],
+    command     => "kubectl config set-cluster kubernetes --certificate-authority ${rootca_certfile} --embed-certs",
+  }
+  # Restart scheduler to trust the new cert
+  -> exec { 'restart_scheduler':
+    command => "/usr/bin/kill -s SIGHUP $(pidof kube-scheduler)",
+  }
+  # Update kubelet.conf with the new cert
+  $cluster = generate('/bin/bash', '-c', "/bin/sed -e '/- cluster/,/name:/!d' /etc/kubernetes/kubelet.conf \
+                      | grep 'name:' | awk '{printf \"%s\", \$2}'")
+
+  exec { 'update_kubelet_conf':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/kubelet.conf' ],
+    command     => "kubectl config set-cluster ${cluster} --certificate-authority ${rootca_certfile} --embed-certs",
+    require     => Exec['put_new_ca_key_in_place'],
+  }
+  # Restart kubelet to trust only the new cert
+  -> exec { 'restart_kubelet':
+    command => '/usr/bin/systemctl restart kubelet',
+  }
+  # Remove the new cert file
+  -> exec { 'remove_new_cert_file':
+    command => "/bin/rm -f ${rootca_certfile_new}",
+  }
+  # Remove the new key file
+  -> exec { 'remove_new_key_file':
+    command => "/bin/rm -f ${rootca_keyfile_new}",
+  }
+  # Remove the old cert file
+  -> exec { 'remove_old_cert_file':
+    command => "/bin/rm -f ${rootca_certfile_old}",
+  }
+}
+
+class platform::kubernetes::worker::rootca::trustnewca::runtime
+  inherits ::platform::kubernetes::params {
+
+  $cluster = generate('/bin/bash', '-c', "/bin/sed -e '/- cluster/,/name:/!d' /etc/kubernetes/kubelet.conf \
+                      | grep 'name:' | awk '{printf \"%s\", \$2}'")
+  # Replace the current root CA cert with the new one
+  exec { 'replace_ca_cert_with_new_one':
+    command => "/bin/mv -f ${rootca_certfile_new} ${rootca_certfile}",
+    onlyif  => "/usr/bin/test -e ${rootca_certfile_new}",
+  }
+  # Replace the current root CA key with the new one
+  -> exec { 'replace_ca_key_with_new_one':
+    command => "/bin/mv -f ${rootca_keyfile_new} ${rootca_keyfile}",
+    onlyif  => "/usr/bin/test -e ${rootca_keyfile_new}",
+  }
+  # Remove the old cert file
+  -> exec { 'remove_old_cert_file':
+    command => "/bin/rm -f ${rootca_certfile_old}",
+  }
+  # Update kubelet.conf with the new cert
+  -> exec { 'update_kubelet_conf':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/kubelet.conf' ],
+    command     => "kubectl config set-cluster ${cluster} --certificate-authority ${rootca_certfile} --embed-certs",
+  }
+  # Restart kubelet to trust only the new cert
+  -> exec { 'restart_kubelet':
+    command => '/usr/bin/systemctl restart kubelet',
+  }
+}
+
 class platform::kubernetes::master::rootca::pods::trustbothcas::runtime
   inherits ::platform::kubernetes::params {
   exec { 'update_pods_trustbothcas':
