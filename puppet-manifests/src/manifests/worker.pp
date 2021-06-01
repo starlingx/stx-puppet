@@ -32,6 +32,7 @@ include ::platform::mtce
 include ::platform::sysinv
 include ::platform::devices
 include ::platform::interfaces::sriov::config
+include ::platform::interfaces::fpga::config
 include ::platform::grub
 include ::platform::collectd
 include ::platform::filesystem::compute

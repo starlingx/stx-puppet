@@ -103,6 +103,7 @@ include ::platform::compute
 include ::platform::vswitch
 include ::platform::devices
 include ::platform::interfaces::sriov::config
+include ::platform::interfaces::fpga::config
 include ::platform::worker::storage
 include ::platform::pciirqaffinity
 include ::platform::docker::login
