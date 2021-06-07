@@ -43,14 +43,13 @@ class platform::smapi::haproxy
   }
 }
 
-class platform::smapi
+class platform::smapi::common
   inherits ::platform::smapi::params {
   if ($::platform::params::init_keystone) {
       include ::smapi::keystone::auth
   }
 
   include ::platform::params
-  include ::platform::smapi::haproxy
   $bind_host_name = $::platform::params::hostname
   file { '/etc/sm-api/sm-api.conf':
     ensure  => 'present',
@@ -61,3 +60,17 @@ class platform::smapi
   }
 }
 
+class platform::smapi {
+  include ::platform::smapi::common
+  include ::platform::smapi::haproxy
+}
+
+class platform::smapi::rehome {
+  include ::platform::smapi::common
+
+  File['/etc/sm-api/sm-api.conf']
+  ~> service { 'sm-api.service':
+    ensure => 'running',
+    enable => true,
+  }
+}
