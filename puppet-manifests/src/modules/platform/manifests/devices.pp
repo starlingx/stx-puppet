@@ -42,6 +42,7 @@ class platform::devices::qat (
 
 define platform::devices::sriov_enable (
   $num_vfs,
+  $sriov_vfs,
   $addr,
   $driver,
   $device_id
@@ -68,6 +69,7 @@ define platform::devices::sriov_bind (
   $addr,
   $driver,
   $num_vfs = undef,
+  $sriov_vfs = undef,
   $device_id = undef
 ) {
   if ($driver != undef) and ($addr != undef) {
@@ -125,7 +127,7 @@ class platform::devices::fpga::fec::pf
 }
 
 class platform::devices::fpga::fec::runtime {
-  include ::platform::devices::fpga::fec::config
+  include ::platform::devices::fpga::fec::pf
 }
 
 class platform::devices::fpga::fec::params (
@@ -135,7 +137,7 @@ class platform::devices::fpga::fec::params (
 class platform::devices::fpga::n3000::reset
   inherits ::platform::devices::fpga::fec::params {
   # To reset N3000 FPGA
-  Class[$name] -> Class['::platform::devices::fpga::fec::config']
+  Class[$name] -> Class['::platform::devices::fpga::fec::pf']
   exec { 'Reset n3000 fpgas':
     command   => 'sysinv-reset-n3000-fpgas',
     path      => ['/usr/bin/', '/usr/sbin/'],
