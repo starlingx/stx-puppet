@@ -17,14 +17,9 @@ class platform::docker::params (
   $elastic_registry_secure = true,
 ) { }
 
-class platform::docker::config
+class platform::docker::proxyconfig
   inherits ::platform::docker::params {
-
-  # Docker restarts will trigger a containerd restart and containerd needs a
-  # default route present for it's CRI plugin to load correctly. Since we are
-  # defering containerd restart until after the network config is applied, do
-  # the same here to align config/restart times for both containerd and docker.
-  Anchor['platform::networking'] -> Class[$name]
+  include ::platform::docker::install
 
   if $http_proxy or $https_proxy {
     file { '/etc/systemd/system/docker.service.d':
@@ -47,14 +42,28 @@ class platform::docker::config
     } ~> Service['docker']
   }
 
-  Class['::platform::filesystem::docker'] ~> Class[$name]
-
   service { 'docker':
     ensure  => 'running',
     name    => 'docker',
     enable  => true,
     require => Package['docker']
   }
+}
+
+class platform::docker::config
+  inherits ::platform::docker::params {
+
+  include ::platform::docker::proxyconfig
+
+  # Docker restarts will trigger a containerd restart and containerd needs a
+  # default route present for it's CRI plugin to load correctly. Since we are
+  # defering containerd restart until after the network config is applied, do
+  # the same here to align config/restart times for both containerd and docker.
+  Anchor['platform::networking'] -> Class[$name]
+
+  Class['::platform::filesystem::docker'] ~> Class[$name]
+
+  Service['docker']
   -> exec { 'enable-docker':
     command => '/usr/bin/systemctl enable docker.service',
   }
@@ -150,5 +159,22 @@ class platform::docker::login
     command => "/usr/local/sbin/run_docker_login \
 ${::platform::dockerdistribution::params::registry_username} \
 ${::platform::dockerdistribution::params::registry_password}&"
+  }
+}
+
+class platform::docker::runtime
+{
+  include ::platform::docker::proxyconfig
+
+  if str2bool($::is_initial_config) {
+    $containerd_restart_cmd = 'systemctl restart containerd'
+  }
+  else {
+    $containerd_restart_cmd = 'pmon-restart containerd'
+  }
+
+  # Restart containerd also cause docker to restart.
+  exec { 'restart containerd for proxy changes':
+    command     => $containerd_restart_cmd,
   }
 }
