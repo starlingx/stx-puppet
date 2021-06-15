@@ -20,6 +20,10 @@ gid ldap
 #
 uri ldap://<%= @ldapserver_host %>
 
+# Specifies the number of threads to start that can handle requests
+# and perform LDAP queries. The default is to start 5 threads.
+threads <%= @nslcd_threads %>
+
 # The distinguished name of the search base.
 base dc=cgcs,dc=local
 
@@ -58,7 +62,8 @@ rootpwmoddn cn=ldapadmin,dc=cgcs,dc=local
 
 # Idle timelimit. nslcd will close connections if the
 # server has not been contacted for the number of seconds.
-#idle_timelimit 3600
+#idle_timelimit 600
+idle_timelimit <%= @nslcd_idle_timelimit %>
 
 # Use StartTLS without verifying the server certificate.
 #ssl start_tls
