@@ -57,10 +57,10 @@ class platform::etcd::init (
     $key_file = '/etc/etcd/etcd-server.key'
     $trusted_ca_file = '/etc/etcd/ca.crt'
     if $bind_address_version == $::platform::params::ipv6 {
-      $client_url = "https://[${bind_address}]:${port}"
+      $client_url = "https://[${bind_address}]:${port},https://[127.0.0.1]:${port}"
     }
     else {
-      $client_url = "https://${bind_address}:${port}"
+      $client_url = "https://${bind_address}:${port},https://127.0.0.1:${port}"
     }
   }
   else {

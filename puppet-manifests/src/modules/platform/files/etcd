@@ -20,11 +20,31 @@ DESC="ETCD highly-available key value database"
 SERVICE="etcd.service"
 PIDFILE="/var/run/etcd.pid"
 UPGRADE_SWACT_FILE="/opt/etcd/.upgrade_etcd"
+ETCD_CONFIG_FILE="/etc/etcd/etcd.conf"
+
+if [ ! -f "$ETCD_CONFIG_FILE" ]; then
+    logger "$ETCD_CONFIG_FILE: file does not exist"
+    exit 1
+fi
+
+IFS=', ' read -r -a URLS <<< $(awk -F '=' '/^ETCD_LISTEN_CLIENT_URLS/ {print $2}' ${ETCD_CONFIG_FILE} | tr -d '"')
+if [ ${#URLS[@]} -le 0 ]; then
+    logger "$0: ETCD_LISTEN_CLIENT_URLS not configured"
+    exit 1
+fi
+
+ETCD_LISTEN_CLIENT_URL="${URLS[-1]}"
 
 
 status()
 {
-    if [ "`systemctl is-active etcd.service`" = "active" ]; then
+    if [[ $ETCD_LISTEN_CLIENT_URL =~ "https" ]]; then
+        etcd_health="$(etcdctl --ca-file /etc/etcd/ca.crt -cert-file /etc/etcd/etcd-server.crt --key-file /etc/etcd/etcd-server.key --endpoints="$ETCD_LISTEN_CLIENT_URL" cluster-health 2>&1 | head -n 1)"
+    else
+        etcd_health="$(etcdctl --endpoints="$ETCD_LISTEN_CLIENT_URL" cluster-health 2>&1 | head -n 1)"
+    fi
+
+    if [[ $etcd_health =~ "is healthy" ]]; then
         RETVAL=0
         echo "$DESC is running"
         return
@@ -33,6 +53,7 @@ status()
         RETVAL=1
     fi
 }
+
 
 start()
 {
