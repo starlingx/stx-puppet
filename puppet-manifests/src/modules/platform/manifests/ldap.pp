@@ -6,6 +6,8 @@ class platform::ldap::params (
   $ldapserver_remote = false,
   $ldapserver_host = undef,
   $bind_anonymous = false,
+  $nslcd_threads = 2,
+  $nslcd_idle_timelimit = 600,
 ) {}
 
 class platform::ldap::server
