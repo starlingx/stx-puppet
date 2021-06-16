@@ -52,16 +52,15 @@ define platform::devices::sriov_enable (
   } else {
     $vf_file = 'sriov_numvfs'
   }
-  if ($num_vfs > 0) {
-    if ($device_id == '0d8f') {
-      include platform::devices::fpga::n3000::reset
-      Class['platform::devices::fpga::n3000::reset']
-      -> Exec["sriov-enable-device: ${title}"]
-    }
-    exec { "sriov-enable-device: ${title}":
-      command   => template('platform/sriov.enable-device.erb'),
-      logoutput => true,
-    }
+  if ($device_id != undef) and ($device_id == '0d8f') {
+    include platform::devices::fpga::n3000::reset
+    Class['platform::devices::fpga::n3000::reset']
+    -> Exec["sriov-enable-device: ${title}"]
+  }
+  exec { "sriov-enable-device: ${title}":
+    command   => template('platform/sriov.enable-device.erb'),
+    onlyif    => ["test -d /sys/bus/pci/devices/${addr}", "egrep -wvq ^${num_vfs} /sys/bus/pci/devices/${addr}/${vf_file}"],
+    logoutput => true,
   }
 }
 
