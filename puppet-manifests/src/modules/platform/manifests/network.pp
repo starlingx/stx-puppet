@@ -217,15 +217,6 @@ define platform::interfaces::sriov_vf_bind (
   $port_name,
   $vf_config
 ) {
-  if ($device_id == '0d58') {
-    include ::platform::devices::fpga::n3000::reset
-    exec { "Restarting n3000 NICs for interface: ${title}":
-      command => "ifdown ${port_name}; ifup ${port_name}",
-      path    => '/usr/sbin/',
-      require => Class['::platform::devices::fpga::n3000::reset']
-    }
-    -> Platform::Interfaces::Sriov_bind <| |>
-  }
   create_resources('platform::interfaces::sriov_bind', $vf_config, {})
 }
 
@@ -280,6 +271,31 @@ class platform::interfaces::sriov::runtime {
 
 class platform::interfaces::sriov::vf::runtime {
   include ::platform::interfaces::sriov::config
+}
+
+define platform::interfaces::fpga::n3000 (
+  $device_id,
+  $used_by
+) {
+  if ($device_id != undef) and ($device_id == '0d58') {
+    include ::platform::devices::fpga::n3000::reset
+    exec { "ifdown/up: ${title}":
+      command   => template('platform/interface.ifup.erb'),
+      logoutput => true,
+    }
+    -> Platform::Interfaces::Sriov_bind <| |>
+  }
+}
+
+class platform::interfaces::fpga (
+  $fpga_config = {}
+) {
+}
+
+class platform::interfaces::fpga::config
+  inherits platform::interfaces::fpga {
+  Anchor['platform::networking'] -> Class[$name]
+  create_resources('platform::interfaces::fpga::n3000', $fpga_config, {})
 }
 
 
