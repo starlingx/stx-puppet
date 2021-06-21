@@ -51,30 +51,15 @@ class platform::etcd::init (
     $service_ensure = 'stopped'
   }
 
-  if $security_enabled {
-    $client_cert_auth = true
-    $cert_file = '/etc/etcd/etcd-server.crt'
-    $key_file = '/etc/etcd/etcd-server.key'
-    $trusted_ca_file = '/etc/etcd/ca.crt'
-    if $bind_address_version == $::platform::params::ipv6 {
-      $client_url = "https://[${bind_address}]:${port},https://[127.0.0.1]:${port}"
-    }
-    else {
-      $client_url = "https://${bind_address}:${port},https://127.0.0.1:${port}"
-    }
+  $client_cert_auth = true
+  $cert_file = '/etc/etcd/etcd-server.crt'
+  $key_file = '/etc/etcd/etcd-server.key'
+  $trusted_ca_file = '/etc/etcd/ca.crt'
+  if $bind_address_version == $::platform::params::ipv6 {
+    $client_url = "https://[${bind_address}]:${port},https://[127.0.0.1]:${port}"
   }
   else {
-    # This else part can be removed after STX5.0
-    $client_cert_auth = false
-    $cert_file = undef
-    $key_file = undef
-    $trusted_ca_file = undef
-    if $bind_address_version == $::platform::params::ipv6 {
-      $client_url = "http://[${bind_address}]:${port}"
-    }
-    else {
-      $client_url = "http://${bind_address}:${port}"
-    }
+    $client_url = "https://${bind_address}:${port},https://[127.0.0.1]:${port}"
   }
 
   class { 'etcd':
