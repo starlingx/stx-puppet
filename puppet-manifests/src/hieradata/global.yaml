@@ -28,7 +28,7 @@ sysinv::log_facility: 'local6'
 platform::collectd::params::interval: 30
 platform::collectd::params::timeout: 2
 platform::collectd::params::read_threads: 5
-platform::collectd::params::write_threads: 5
+platform::collectd::params::write_threads: 1
 platform::collectd::params::max_read_interval: 86400
 platform::collectd::params::write_queue_limit_high: 1000000
 platform::collectd::params::write_queue_limit_low: 800000
