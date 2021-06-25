@@ -52,11 +52,6 @@ define platform::devices::sriov_enable (
   } else {
     $vf_file = 'sriov_numvfs'
   }
-  if ($device_id != undef) and ($device_id == '0d8f') {
-    include platform::devices::fpga::n3000::reset
-    Class['platform::devices::fpga::n3000::reset']
-    -> Exec["sriov-enable-device: ${title}"]
-  }
   exec { "sriov-enable-device: ${title}":
     command   => template('platform/sriov.enable-device.erb'),
     onlyif    => ["test -d /sys/bus/pci/devices/${addr}", "egrep -wvq ^${num_vfs} /sys/bus/pci/devices/${addr}/${vf_file}"],
@@ -149,6 +144,10 @@ class platform::devices::fpga::n3000::reset
 
 class platform::devices::fpga::fec::config
   inherits ::platform::devices::fpga::fec::params {
+  notice('Looking for N3000 device to reset...')
+  if $::is_n3000_present {
+    include platform::devices::fpga::n3000::reset
+  }
   include platform::devices::fpga::fec::pf
   include platform::devices::fpga::fec::vf
 }
