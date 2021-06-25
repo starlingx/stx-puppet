@@ -206,21 +206,21 @@ platform::client::params::identity_auth_url: 'http://localhost:5000/v3'
 
 # Dcorch
 dcorch::use_syslog: true
-dcorch::log_facility: 'local2'
+dcorch::log_facility: 'local4'
 dcorch::debug: false
 
 # Dcmanager
 dcmanager::use_syslog: true
-dcmanager::log_facility: 'local2'
+dcmanager::log_facility: 'local4'
 dcmanager::debug: false
 
 # Dcdbsync instance for platform services
 dcdbsync::use_syslog: true
-dcdbsync::log_facility: 'local2'
+dcdbsync::log_facility: 'local4'
 dcdbsync::debug: false
 # Dcdbsync instance for containerized openstack services
 dcdbsync::openstack_init::use_syslog: true
-dcdbsync::openstack_init::log_facility: 'local3'
+dcdbsync::openstack_init::log_facility: 'local4'
 dcdbsync::openstack_init::debug: false
 
 # FM
