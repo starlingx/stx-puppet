@@ -73,9 +73,11 @@ define platform::devices::sriov_bind (
       -> Exec["sriov-bind-device: ${title}"]
     }
     if ($device_id != undef) and ($device_id == '0d5c') {
-      include platform::devices::acc100::fec
+      class { platform::devices::acc100::config :
+        num_vf_bundles => $num_vfs
+      }
       Exec["sriov-enable-device: ${title}"]
-      -> Class['platform::devices::acc100::fec']
+      -> Class['platform::devices::acc100::config']
     }
     ensure_resource(kmod::load, $driver)
     exec { "sriov-bind-device: ${title}":
@@ -159,10 +161,13 @@ class platform::devices::fpga::fec {
 
 class platform::devices::acc100::fec (
   $enabled = false
-)
-{
+) {}
+
+class platform::devices::acc100::config (
+  $num_vf_bundles
+) inherits ::platform::devices::acc100::fec {
   if $enabled {
-      exec { 'Mt.Bryce: Configuring baseband device':
+      exec { "Configure ACC100 device with ${num_vf_bundles} VF bundles":
         command   => template('platform/processing.accelerator-config.erb'),
         logoutput => true,
       }
