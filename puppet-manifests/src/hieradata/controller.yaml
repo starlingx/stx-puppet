@@ -64,20 +64,6 @@ platform::mtce::agent::params::mnfa_threshold: 2
 platform::mtce::agent::params::mnfa_timeout: 0
 platform::mtce::agent::params::bmc_access_method: 'learn'
 
-# influxdb configuration for collectd
-platform::influxdb::params::bind_address: ':25826'
-platform::influxdb::params::database: 'collectd'
-platform::influxdb::params::typesdb: '/usr/share/collectd/types.db'
-platform::influxdb::params::batch_size: 1000
-platform::influxdb::params::batch_pending: 5
-platform::influxdb::params::batch_timeout: '2s'
-platform::influxdb::params::read_buffer: 0
-
-# influxdb log ratation file
-platform::influxdb::logrotate::params::log_file_name: '/var/log/influxdb/influxd.log'
-platform::influxdb::logrotate::params::log_file_size: '20M'
-platform::influxdb::logrotate::params::log_file_rotate: 10
-
 # postgresql
 postgresql::globals::needs_initdb: false
 postgresql::server::service_enable: false
