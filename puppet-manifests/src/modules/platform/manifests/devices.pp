@@ -71,6 +71,10 @@ define platform::devices::sriov_bind (
       include platform::devices::fpga::n3000::reset
       Class['platform::devices::fpga::n3000::reset']
       -> Exec["sriov-bind-device: ${title}"]
+
+      include platform::devices::n3000::config
+      Exec["sriov-enable-device: ${title}"]
+      -> Class['platform::devices::n3000::config']
     }
     if ($device_id != undef) and ($device_id == '0d5c') {
       class { platform::devices::acc100::config :
@@ -159,6 +163,20 @@ class platform::devices::fpga::fec {
   require ::platform::devices::fpga::fec::config
 }
 
+class platform::devices::n3000::fec (
+  $enabled = false
+) {}
+
+class platform::devices::n3000::config
+  inherits ::platform::devices::n3000::fec {
+  if $enabled {
+    exec { 'Configure N3000 FPGA 5GNR device':
+      command   => template('platform/n3000-config.erb'),
+      logoutput => true,
+    }
+  }
+}
+
 class platform::devices::acc100::fec (
   $enabled = false
 ) {}
@@ -168,7 +186,7 @@ class platform::devices::acc100::config (
 ) inherits ::platform::devices::acc100::fec {
   if $enabled {
       exec { "Configure ACC100 device with ${num_vf_bundles} VF bundles":
-        command   => template('platform/processing.accelerator-config.erb'),
+        command   => template('platform/acc100-config.erb'),
         logoutput => true,
       }
   }
