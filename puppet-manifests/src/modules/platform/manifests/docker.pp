@@ -165,6 +165,7 @@ ${::platform::dockerdistribution::params::registry_password}&"
 class platform::docker::runtime
 {
   include ::platform::docker::proxyconfig
+  include ::platform::containerd::proxyconfig
 
   if str2bool($::is_initial_config) {
     $containerd_restart_cmd = 'systemctl restart containerd'

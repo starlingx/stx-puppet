@@ -10,21 +10,10 @@ class platform::containerd::params (
   $custom_container_runtime = undef,
 ) { }
 
-class platform::containerd::config
-  inherits ::platform::containerd::params {
+class platform::containerd::proxyconfig{
 
   include ::platform::docker::params
-  include ::platform::dockerdistribution::params
-  include ::platform::kubernetes::params
-  include ::platform::dockerdistribution::registries
-  include ::platform::params
-  include ::platform::mtce::params
-
-  # If containerd is started prior to networking providing a default route, the
-  # containerd cri plugin will fail to load and the status of the cri plugin
-  # will be in 'error'. This will prevent any crictl image pulls from working as
-  # containerd is not automatically restarted when plugins fail to load.
-  Anchor['platform::networking'] -> Class[$name]
+  include ::platform::containerd::install
 
   # inherit the proxy setting from docker
   $http_proxy = $::platform::docker::params::http_proxy
@@ -35,11 +24,6 @@ class platform::containerd::config
     # remove the square brackets
     $no_proxy = regsubst($::platform::docker::params::no_proxy, '\\[|\\]', '', 'G')
   }
-  $insecure_registries = $::platform::dockerdistribution::registries::insecure_registries
-  $distributed_cloud_role = $::platform::params::distributed_cloud_role
-
-  # grab custom cri class entries
-  $custom_container_runtime = $::platform::containerd::params::custom_container_runtime
 
   if $http_proxy or $https_proxy {
     file { '/etc/systemd/system/containerd.service.d':
@@ -62,6 +46,38 @@ class platform::containerd::config
       refreshonly => true,
     } ~> Service['containerd']
   }
+
+  service { 'containerd':
+    ensure  => 'running',
+    name    => 'containerd',
+    enable  => true,
+    require => Package['containerd']
+  }
+
+}
+
+class platform::containerd::config
+  inherits ::platform::containerd::params {
+
+  include ::platform::containerd::proxyconfig
+  include ::platform::docker::params
+  include ::platform::dockerdistribution::params
+  include ::platform::kubernetes::params
+  include ::platform::dockerdistribution::registries
+  include ::platform::params
+  include ::platform::mtce::params
+
+  # If containerd is started prior to networking providing a default route, the
+  # containerd cri plugin will fail to load and the status of the cri plugin
+  # will be in 'error'. This will prevent any crictl image pulls from working as
+  # containerd is not automatically restarted when plugins fail to load.
+  Anchor['platform::networking'] -> Class[$name]
+
+  $insecure_registries = $::platform::dockerdistribution::registries::insecure_registries
+  $distributed_cloud_role = $::platform::params::distributed_cloud_role
+
+  # grab custom cri class entries
+  $custom_container_runtime = $::platform::containerd::params::custom_container_runtime
 
   Class['::platform::filesystem::docker'] ~> Class[$name]
 
@@ -93,12 +109,7 @@ class platform::containerd::config
     mode    => '0600',
     content => template('platform/config.toml.erb'),
   }
-  -> service { 'containerd':
-    ensure  => 'running',
-    name    => 'containerd',
-    enable  => true,
-    require => Package['containerd']
-  }
+  -> Service['containerd']
   -> exec { 'enable-containerd':
     command => '/usr/bin/systemctl enable containerd.service',
   }
