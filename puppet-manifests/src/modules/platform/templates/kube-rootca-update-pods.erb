@@ -1,0 +1,22 @@
+# Rolling restart pods for them to pickup the new cluster root CA certs
+
+# Trigger rollout restart for all deployments and daemonsets so that they
+# restart in parallel.
+for namespace in $(kubectl get namespace -o jsonpath='{.items[*].metadata.name}'); do
+    for name in $(kubectl get deployments -n $namespace -o jsonpath='{.items[*].metadata.name}'); do
+        kubectl rollout restart deployment ${name} -n ${namespace}
+    done
+    for name in $(kubectl get daemonsets -n $namespace -o jsonpath='{.items[*].metadata.name}'); do
+        kubectl rollout restart daemonsets ${name} -n ${namespace}
+    done
+done
+
+# Check the rollout status.
+for namespace in $(kubectl get namespace -o jsonpath='{.items[*].metadata.name}'); do
+    for name in $(kubectl get deployments -n $namespace -o jsonpath='{.items[*].metadata.name}'); do
+        kubectl rollout status deployment ${name} -n ${namespace}
+    done
+    for name in $(kubectl get daemonsets -n $namespace -o jsonpath='{.items[*].metadata.name}'); do
+        kubectl rollout status daemonsets ${name} -n ${namespace}
+    done
+done
