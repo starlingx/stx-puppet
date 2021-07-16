@@ -62,8 +62,6 @@ include ::platform::nfv::api
 include ::platform::ceph::controller
 include ::platform::ceph::rgw
 
-include ::platform::influxdb
-include ::platform::influxdb::logrotate
 include ::platform::collectd
 
 include ::platform::fm
