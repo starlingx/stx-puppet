@@ -162,6 +162,10 @@ sysinv::certmon::use_syslog: true
 sysinv::certmon::log_facility: 'local6'
 sysinv::certmon::debug: false
 
+# cert-alarm
+sysinv::certalarm::use_syslog: true
+sysinv::certalarm::log_facility: 'local6'
+sysinv::certalarm::debug: false
 
 # nfvi
 nfv::nfvi::infrastructure_rest_api_data_port_fault_handling_enabled: false
