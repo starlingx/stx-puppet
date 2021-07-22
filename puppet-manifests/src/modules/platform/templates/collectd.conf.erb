@@ -81,12 +81,15 @@ WriteQueueLimitLow <%= @write_queue_limit_low %>
 #    LogLevel info
 #</Plugin>
 
+<% if @server_ips != [] -%>
 # Have collectd send to these servers on server_port
 <Plugin network>
-<%- @server_addrs.each do |server_addr| -%>
-    Server "<%= server_addr %>" "<%= @server_port %>"
+<%- @server_ips.each_with_index do |ip, index| -%>
+    Server "<%= ip %>" "<%= @server_ports[index] %>"
 <%- end -%>
 </Plugin>
+<% end -%>
+
 
 LoadPlugin python
 <Plugin python>
