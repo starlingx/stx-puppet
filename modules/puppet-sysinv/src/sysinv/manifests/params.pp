@@ -1,7 +1,7 @@
 #
 # Files in this package are licensed under Apache; see LICENSE file.
 #
-# Copyright (c) 2013-2016 Wind River Systems, Inc.
+# Copyright (c) 2013-2021 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -19,6 +19,7 @@ class sysinv::params {
   $sysinv_dir = '/etc/sysinv'
   $sysinv_conf = '/etc/sysinv/sysinv.conf'
   $certmon_conf = '/etc/sysinv/cert-mon.conf'
+  $certalarm_conf = '/etc/sysinv/cert-alarm.conf'
   $sysinv_paste_api_ini = '/etc/sysinv/api-paste.ini'
 
   if $::osfamily == 'Debian' {
@@ -31,6 +32,7 @@ class sysinv::params {
     $agent_package      = 'sysinv'
     $agent_service      = 'sysinv-agent'
     $certmon_package    = 'cert-mon'
+    $certalarm_package  = 'cert-alarm'
     $db_sync_command    = 'sysinv-dbsync'
 
   } elsif($::osfamily == 'RedHat') {
@@ -44,6 +46,7 @@ class sysinv::params {
     $agent_package      = false
     $agent_service      = 'sysinv-agent'
     $certmon_package    = false
+    $certalarm_package  = false
     $db_sync_command    = 'sysinv-dbsync'
 
   } elsif($::osfamily == 'WRLinux') {
@@ -57,6 +60,7 @@ class sysinv::params {
     $agent_package      = false
     $agent_service      = 'sysinv-agent'
     $certmon_package    = false
+    $certalarm_package  = false
     $db_sync_command    = 'sysinv-dbsync'
 
   } else {

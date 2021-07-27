@@ -82,6 +82,7 @@ include ::platform::dcorch::engine
 include ::platform::dcorch::api_proxy
 include ::platform::dcmanager::api
 include ::platform::certmon
+include ::platform::certalarm
 
 include ::platform::dcdbsync
 include ::platform::dcdbsync::api

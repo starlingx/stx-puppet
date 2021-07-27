@@ -776,6 +776,9 @@ class platform::sm
   -> exec { 'Provision cert-mon service in controller-services group':
     command => 'sm-provision service-group-member controller-services cert-mon'
   }
+  -> exec { 'Provision cert-alarm service in controller-services group':
+    command => 'sm-provision service-group-member controller-services cert-alarm'
+  }
 
 
   # On an AIO-DX system, cephmon DRBD must always be configured, even

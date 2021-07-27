@@ -1,7 +1,7 @@
 #
 # Files in this package are licensed under Apache; see LICENSE file.
 #
-# Copyright (c) 2013-2019 Wind River Systems, Inc.
+# Copyright (c) 2013-2021 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -73,6 +73,7 @@ class sysinv (
   Package['sysinv'] -> Sysinv_config<||>
   Package['sysinv'] -> Sysinv_api_paste_ini<||>
   Package['sysinv'] -> Certmon_config<||>
+  Package['sysinv'] -> Certalarm_config<||>
 
   # this anchor is used to simplify the graph between sysinv components by
   # allowing a resource to serve as a point where the configuration of sysinv begins
