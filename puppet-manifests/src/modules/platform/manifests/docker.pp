@@ -10,11 +10,13 @@ class platform::docker::params (
   $quay_registry    = undef,
   $docker_registry  = undef,
   $elastic_registry = undef,
+  $ghcr_registry = undef,
   $k8s_registry_secure     = true,
   $quay_registry_secure    = true,
   $gcr_registry_secure     = true,
   $docker_registry_secure  = true,
   $elastic_registry_secure = true,
+  $ghcr_registry_secure = true,
 ) { }
 
 class platform::docker::config
