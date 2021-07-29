@@ -32,8 +32,7 @@ platform::collectd::params::write_threads: 1
 platform::collectd::params::max_read_interval: 86400
 platform::collectd::params::write_queue_limit_high: 1000000
 platform::collectd::params::write_queue_limit_low: 800000
-platform::collectd::params::server_addrs: []
-platform::collectd::params::server_port: 25826
+platform::collectd::params::default_server_port: 25826
 platform::collectd::params::collectd_d_dir: '/etc/collectd.d/starlingx'
 
 # collectd: module named plugins

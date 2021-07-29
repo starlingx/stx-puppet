@@ -5,9 +5,10 @@ class platform::collectd::params (
   $write_threads = undef,
   $write_queue_limit_high = undef,
   $write_queue_limit_low = undef,
-  $server_addrs = [],
-  $server_port = undef,
   $max_read_interval = undef,
+
+  $network_servers = [],
+  $default_server_port = undef,
 
   # python plugin controls
   $module_path = undef,
@@ -21,6 +22,27 @@ class platform::collectd::params (
 
 class platform::collectd
   inherits ::platform::collectd::params {
+
+  #Get port or set default one
+  $server_ports = $network_servers.map |$elem| {
+    if(split($elem, ':').size() > 2) {
+      if(']:' in $elem) {
+        split($elem, ':')[-1]
+      } else {
+        $default_server_port
+      }
+    } else {
+      if(':' in $elem) {
+        split($elem, ':')[-1]
+      } else {
+        $default_server_port
+      }
+    }
+  }
+  #Get address
+  $server_ips = $network_servers.map | $i, $elem| {
+    $address = regsubst($elem.delete(":${server_ports[$i]}"),'[\[\]]','','G')
+  }
 
   file { '/etc/collectd.conf':
     ensure  => 'present',
