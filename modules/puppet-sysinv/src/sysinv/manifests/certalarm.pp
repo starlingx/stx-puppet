@@ -8,7 +8,6 @@
 #
 class sysinv::certalarm (
   $local_keystone_password,
-  $dc_keystone_password,
   $local_keystone_auth_uri     = false,
   $local_keystone_identity_uri = false,
   $local_keystone_project_domain = 'Default',
