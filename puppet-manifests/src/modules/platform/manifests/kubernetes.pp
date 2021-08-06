@@ -4,6 +4,8 @@ class platform::kubernetes::params (
   $upgrade_to_version = undef,
   # K8S version running on a host
   $version = undef,
+  $kubeadm_version = undef,
+  $kubelet_version = undef,
   $node_ip = undef,
   $service_domain = undef,
   $dns_service_ip = undef,
@@ -65,6 +67,38 @@ class platform::kubernetes::configuration {
     owner  => 'root',
     group  => 'root',
     mode   => '0644',
+  }
+}
+
+class platform::kubernetes::bindmounts {
+  include ::platform::kubernetes::params
+
+  $kubeadm_version = $::platform::kubernetes::params::kubeadm_version
+  $kubelet_version = $::platform::kubernetes::params::kubelet_version
+
+  # In the following two bind mounts, the "remounts" option *must* be
+  # set to 'false' otherwise it doesn't work reliably.  In my testing
+  # (as of July 2021) it will update /etc/fstab but any existing
+  # mounts will be left untouched.  This sort of makes sense, as
+  # the mount man page specifies that the "remount" option does not
+  # change device or mount point and we may want to change the device.
+
+  notice("setting stage1 bind mount, kubeadm_version is ${kubeadm_version}")
+  mount { '/usr/local/kubernetes/current/stage1':
+    ensure   => mounted,
+    device   => "/usr/local/kubernetes/${kubeadm_version}/stage1",
+    fstype   => 'none',
+    options  => 'rw,bind',
+    remounts => false,
+  }
+
+  notice("setting stage2 bind mount, kubelet_version is ${kubelet_version}")
+  mount { '/usr/local/kubernetes/current/stage2':
+    ensure   => mounted,
+    device   => "/usr/local/kubernetes/${kubelet_version}/stage2",
+    fstype   => 'none',
+    options  => 'rw,bind',
+    remounts => false,
   }
 }
 
@@ -148,6 +182,9 @@ class platform::kubernetes::kubeadm {
   include ::platform::docker::params
   include ::platform::kubernetes::params
   include ::platform::params
+
+  # Update kubeadm/kubelet bindmounts if needed.
+  require platform::kubernetes::bindmounts
 
   $node_ip = $::platform::kubernetes::params::node_ip
   $host_labels = $::platform::kubernetes::params::host_labels
@@ -634,6 +671,9 @@ class platform::kubernetes::pre_pull_control_plane_images
 
   include ::platform::dockerdistribution::params
 
+  # Update kubeadm bindmount if needed
+  require platform::kubernetes::bindmounts
+
   $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
 
   exec { 'pre pull images':
@@ -646,6 +686,9 @@ class platform::kubernetes::upgrade_first_control_plane
   inherits ::platform::kubernetes::params {
 
   include ::platform::params
+
+  # Update kubeadm bindmount if needed.
+  require platform::kubernetes::bindmounts
 
   # The --allow-*-upgrades options allow us to upgrade to any k8s release if necessary
   exec { 'upgrade first control plane':
@@ -677,6 +720,9 @@ class platform::kubernetes::upgrade_first_control_plane
 class platform::kubernetes::upgrade_control_plane
   inherits ::platform::kubernetes::params {
 
+  # Update kubeadm bindmount if needed.
+  require platform::kubernetes::bindmounts
+
   # control plane is only upgraded on a controller (which has admin.conf)
   exec { 'upgrade control plane':
     command   => 'kubeadm --kubeconfig=/etc/kubernetes/admin.conf upgrade node',
@@ -687,6 +733,9 @@ class platform::kubernetes::upgrade_control_plane
 class platform::kubernetes::master::upgrade_kubelet
   inherits ::platform::kubernetes::params {
 
+  # Update kubeadm/kubelet bindmounts if needed.
+  require platform::kubernetes::bindmounts
+
   exec { 'restart kubelet':
       command => '/usr/local/sbin/pmon-restart kubelet'
   }
@@ -696,6 +745,9 @@ class platform::kubernetes::worker::upgrade_kubelet
   inherits ::platform::kubernetes::params {
 
   include ::platform::dockerdistribution::params
+
+  # Update kubeadm/kubelet bindmounts if needed.
+  require platform::kubernetes::bindmounts
 
   # workers use kubelet.conf rather than admin.conf
   $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
