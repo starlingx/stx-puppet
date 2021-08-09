@@ -74,6 +74,7 @@ class sysinv::certalarm (
     'certalarm/retry_interval': value => 600;
     'certalarm/max_retry': value => 14;
     'certalarm/audit_interval': value => 86400;
+    'certalarm/active_alarm_audit_interval': value => 3600;
   }
 
   if $keystone_enabled {
