@@ -54,7 +54,7 @@ class platform::kubernetes::params (
 
 class platform::kubernetes::configuration {
 
-  if 'kube-ignore-isol-cpus' in $::platform::kubernetes::params::host_labels {
+  if 'kube-ignore-isol-cpus=enabled' in $::platform::kubernetes::params::host_labels {
     $ensure = 'present'
   } else {
     $ensure = 'absent'
@@ -175,7 +175,7 @@ class platform::kubernetes::kubeadm {
   } else {
     if !$::platform::params::virtual_system {
       if str2bool($::is_worker_subfunction)
-        and !('openstack-compute-node' in $host_labels) {
+        and !('openstack-compute-node=enabled' in $host_labels) {
         # Enable TopologyManager for hosts with the worker subfunction.
         # Exceptions are:
         #   - DC System controllers
@@ -461,7 +461,7 @@ class platform::kubernetes::worker::sriovdp {
   $host_labels = $::platform::kubernetes::params::host_labels
   if ($::personality == 'controller') and
       str2bool($::is_worker_subfunction)
-      and ('sriovdp' in $host_labels) {
+      and ('sriovdp=enabled' in $host_labels) {
     exec { 'Delete sriov device plugin pod if present':
       path      => '/usr/bin:/usr/sbin:/bin',
       command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf delete pod -n kube-system --selector=app=sriovdp --field-selector spec.nodeName=$(hostname) --timeout=360s', # lint:ignore:140chars
