@@ -1,6 +1,6 @@
 class platform::helm::repositories::params(
   $source_helm_repos_base_dir = '/opt/platform/helm_charts',
-  $target_helm_repos_base_dir = '/www/pages/helm_charts',
+  $target_helm_repos_base_dir = '/var/www/pages/helm_charts',
   $helm_repositories = [ 'stx-platform', 'starlingx' ],
 ) {}
 

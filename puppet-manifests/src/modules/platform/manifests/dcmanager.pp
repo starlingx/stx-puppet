@@ -9,7 +9,7 @@ class platform::dcmanager::params (
   $service_create = false,
   $deploy_base_dir = '/opt/platform/deploy',
   $iso_base_dir_source = '/opt/platform/iso',
-  $iso_base_dir_target = '/www/pages/iso',
+  $iso_base_dir_target = '/var/www/pages/iso',
 ) {
   include ::platform::params
 
