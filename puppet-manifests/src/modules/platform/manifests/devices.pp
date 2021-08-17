@@ -164,7 +164,7 @@ class platform::devices::fpga::fec {
 }
 
 class platform::devices::n3000::fec (
-  $enabled = false
+  $enabled = true
 ) {}
 
 class platform::devices::n3000::config
@@ -178,7 +178,7 @@ class platform::devices::n3000::config
 }
 
 class platform::devices::acc100::fec (
-  $enabled = false
+  $enabled = true
 ) {}
 
 class platform::devices::acc100::config (
