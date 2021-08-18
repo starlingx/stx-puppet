@@ -42,6 +42,9 @@ class platform::dockerdistribution::registries {
 
     {url => $::platform::docker::params::elastic_registry,
     secure => $::platform::docker::params::elastic_registry_secure},
+
+    {url => $::platform::docker::params::ghcr_registry,
+    secure => $::platform::docker::params::ghcr_registry_secure},
   ]
 
   $insecure_registries_list = $registries.filter |$registry| { !$registry['secure'] }
