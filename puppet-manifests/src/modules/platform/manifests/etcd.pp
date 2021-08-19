@@ -150,6 +150,12 @@ class platform::etcd::upgrade::runtime
       source  => "/var/run/platform/config/${sw_version}/etcd/ca.crt",
     }
 
+    -> file { '/etc/etcd/ca.key':
+      ensure  => 'present',
+      replace => true,
+      source  => "/var/run/platform/config/${sw_version}/etcd/ca.key",
+    }
+
     -> file { '/etc/kubernetes/pki/apiserver-etcd-client.crt':
       ensure  => 'present',
       replace => true,
