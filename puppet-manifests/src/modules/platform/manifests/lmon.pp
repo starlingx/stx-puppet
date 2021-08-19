@@ -18,7 +18,7 @@ class platform::lmon
   $host_labels = $::platform::kubernetes::params::host_labels
 
   $data_interface = length($data_iface_devices) > 0
-                        and !('openstack-compute-node'
+                        and !('openstack-compute-node=enabled'
                             in $host_labels)
   $data_interface_str = join($data_iface_devices,',')
 
