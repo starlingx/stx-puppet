@@ -2,6 +2,19 @@ class platform::sysctl::params (
   $low_latency = false,
 ) inherits ::platform::params {}
 
+class platform::sysctl::vm_min_free_kbytes (
+  $minimum_kb = 131072,
+  $per_every_gb = 25,
+  $reserve_mb = 128,
+) inherits ::platform::sysctl::params {
+
+  # Try to keep reserve_mb free per_every_gb of memory
+  $want_min_free_kbytes = (floor($::memorysize_mb) / ($per_every_gb * 1024)) * $reserve_mb * 1024
+  $min_free_kbytes = max($want_min_free_kbytes, $minimum_kb)
+  sysctl::value { 'vm.min_free_kbytes':
+    value => String($min_free_kbytes)
+  }
+}
 
 class platform::sysctl
   inherits ::platform::sysctl::params {
@@ -118,11 +131,7 @@ class platform::sysctl::controller
 
   include ::platform::sysctl
   include ::platform::sysctl::controller::reserve_ports
-
-  # Increase min_free_kbytes to 128 MiB from 88 MiB, helps prevent OOM
-  sysctl::value { 'vm.min_free_kbytes':
-    value => '131072'
-  }
+  include ::platform::sysctl::vm_min_free_kbytes
 
   # Engineer VM page cache tunables to prevent significant IO delays that may
   # occur if we flush a buildup of dirty pages.  Engineer VM settings to make
@@ -170,11 +179,8 @@ class platform::sysctl::controller
 class platform::sysctl::compute {
   include ::platform::sysctl
   include ::platform::sysctl::compute::reserve_ports
+  include ::platform::sysctl::vm_min_free_kbytes
 
-  # Increase min_free_kbytes to 128 MiB from 88 MiB, helps prevent OOM
-  sysctl::value { 'vm.min_free_kbytes':
-    value => '131072'
-  }
 }
 
 class platform::sysctl::compute::reserve_ports
@@ -194,9 +200,8 @@ class platform::sysctl::compute::reserve_ports
 class platform::sysctl::storage {
   include ::platform::sysctl
 
-  # Increase min_free_kbytes to 256 MiB for storage node, helps prevent OOM
-  sysctl::value { 'vm.min_free_kbytes':
-    value => '262144'
+  class { 'platform::sysctl::vm_min_free_kbytes':
+    minimum_kb => 262144
   }
 }
 
