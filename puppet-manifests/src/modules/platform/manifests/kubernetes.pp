@@ -46,9 +46,6 @@ class platform::kubernetes::params (
   $controller_manager_key = undef,
   $kubelet_cert = undef,
   $kubelet_key = undef,
-  # The file holding the original root CA cert/key before update
-  $rootca_certfile_old = '/etc/kubernetes/pki/ca_old.crt',
-  $rootca_keyfile_old = '/etc/kubernetes/pki/ca_old.key',
   # The file holding the root CA cert/key to update to
   $rootca_certfile_new = '/etc/kubernetes/pki/ca_new.crt',
   $rootca_keyfile_new = '/etc/kubernetes/pki/ca_new.key',
@@ -841,14 +838,8 @@ class platform::kubernetes::duplex_migration::runtime {
 class platform::kubernetes::master::rootca::trustbothcas::runtime
   inherits ::platform::kubernetes::params {
 
-  # Backup the original root CA cert
-  file { $rootca_certfile_old:
-    ensure  => file,
-    source  => $rootca_certfile,
-    replace => false,
-  }
   # Create the new root CA cert file
-  -> file { $rootca_certfile_new:
+  file { $rootca_certfile_new:
     ensure  => file,
     content => base64('decode', $rootca_cert),
   }
@@ -859,7 +850,7 @@ class platform::kubernetes::master::rootca::trustbothcas::runtime
   }
   # Append the new cert to the current cert
   -> exec { 'append_ca_cert':
-    command => "cat ${rootca_certfile_old} ${rootca_certfile_new} > ${rootca_certfile}",
+    command => "cat ${rootca_certfile_new} >> ${rootca_certfile}",
   }
   # update admin.conf with both old and new certs
   -> exec { 'update_admin_conf':
@@ -909,16 +900,10 @@ class platform::kubernetes::master::rootca::trustbothcas::runtime
 class platform::kubernetes::worker::rootca::trustbothcas::runtime
   inherits ::platform::kubernetes::params {
 
-  $cluster = generate('/bin/bash', '-c', "/bin/sed -e '/- cluster/,/name:/!d' /etc/kubernetes/kubelet.conf \\
-  | grep 'name:' | awk '{printf \"%s\", \$2}'")
-  # Backup the original root CA cert
-  file { $rootca_certfile_old:
-    ensure  => file,
-    source  => $rootca_certfile,
-    replace => false,
-  }
+  $cluster = generate('/bin/bash', '-c', "/bin/sed -e '/- cluster/,/name:/!d' /etc/kubernetes/kubelet.conf \
+                      | grep 'name:' | awk '{printf \"%s\", \$2}'")
   # Create the new root CA cert file
-  -> file { $rootca_certfile_new:
+  file { $rootca_certfile_new:
     ensure  => file,
     content => base64('decode', $rootca_cert),
   }
@@ -929,7 +914,8 @@ class platform::kubernetes::worker::rootca::trustbothcas::runtime
   }
   # Append the new cert to the current cert
   -> exec { 'append_ca_cert':
-    command => "cat ${rootca_certfile_old} ${rootca_certfile_new} > ${rootca_certfile}",
+    command => "cat ${rootca_certfile_new} >> ${rootca_certfile}",
+    unless  => "grep -v '[BEGIN|END] CERTIFICATE' ${rootca_certfile_new} | awk /./ | grep -f ${rootca_certfile} &>/dev/null"
   }
   # Update kubelet.conf with both old and new certs
   -> exec { 'update_kubelet_conf':
@@ -1007,10 +993,6 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
   -> exec { 'remove_new_key_file':
     command => "/bin/rm -f ${rootca_keyfile_new}",
   }
-  # Remove the old cert file
-  -> exec { 'remove_old_cert_file':
-    command => "/bin/rm -f ${rootca_certfile_old}",
-  }
 }
 
 class platform::kubernetes::worker::rootca::trustnewca::runtime
@@ -1027,10 +1009,6 @@ class platform::kubernetes::worker::rootca::trustnewca::runtime
   -> exec { 'replace_ca_key_with_new_one':
     command => "/bin/mv -f ${rootca_keyfile_new} ${rootca_keyfile}",
     onlyif  => "/usr/bin/test -e ${rootca_keyfile_new}",
-  }
-  # Remove the old cert file
-  -> exec { 'remove_old_cert_file':
-    command => "/bin/rm -f ${rootca_certfile_old}",
   }
   # Update kubelet.conf with the new cert
   -> exec { 'update_kubelet_conf':
@@ -1229,6 +1207,25 @@ class platform::kubernetes::master::rootca::updatecerts::runtime
   # Restart kubelet
   -> exec { 'restart_kubelet-client':
     command => "/usr/bin/kill -s SIGHUP $(pidof kubelet)"
+  }
+
+  # Moving the signing ca cert in ca.crt and admin.conf to be the first in the bundle.
+  # This is neccessary for cert-mon, since it only uses the first ca cert in admin.conf
+  # to verify server certificate from apiserver.
+  # Remove the new ca cert from the bundle first
+  -> exec { 'remove_new_ca_cert_from_bottom':
+    command => "tac ${rootca_certfile} | sed '0,/-----BEGIN CERTIFICATE-----/d' | tac -  > /tmp/kube_rootca_update/ca_tmp.crt"
+  }
+
+  # Create the ca.crt with the new ca cert at the top of the bundle
+  -> exec { 'prepend_new_ca_cert_at_top':
+    command => "cat ${rootca_certfile_new} /tmp/kube_rootca_update/ca_tmp.crt > ${rootca_certfile}"
+  }
+
+  # Update admin.conf with the newly create ca.crt
+  -> exec { 'update_admin_conf_with_new_cert_at_top':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
+    command     => "kubectl config set-cluster kubernetes --certificate-authority ${rootca_certfile} --embed-certs",
   }
 
   # Removing temporary directory for files along this configuration process
