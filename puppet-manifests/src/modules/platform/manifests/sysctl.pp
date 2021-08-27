@@ -102,8 +102,13 @@ class platform::sysctl::controller::reserve_ports
   # from the ephemeral port range. This will avoid potential port conflicts
   # that will cause the tiller pod to crash when the port is assigned to
   # another client/server
+  #
+  # libvirt v4.7.0 hardcodes the ports 49152-49215 as its default port range
+  # for migrations (qemu.conf). Reserve them from the ephemeral port range.
+  # This will avoid potential port conflicts that will cause migration
+  # failures when the port is assigned to another service
   sysctl::value { 'net.ipv4.ip_local_reserved_ports':
-    value => '35357,44134-44136'
+    value => '35357,44134-44136,49152-49215'
   }
 }
 
@@ -164,6 +169,7 @@ class platform::sysctl::controller
 
 class platform::sysctl::compute {
   include ::platform::sysctl
+  include ::platform::sysctl::compute::reserve_ports
 
   # Increase min_free_kbytes to 128 MiB from 88 MiB, helps prevent OOM
   sysctl::value { 'vm.min_free_kbytes':
@@ -171,6 +177,19 @@ class platform::sysctl::compute {
   }
 }
 
+class platform::sysctl::compute::reserve_ports
+  inherits ::platform::sysctl::params {
+
+  # Reserve ports in the ephemeral port range:
+  #
+  # libvirt v4.7.0 hardcodes the ports 49152-49215 as its default port range
+  # for migrations (qemu.conf). Reserve them from the ephemeral port range.
+  # This will avoid potential port conflicts that will cause migration
+  # failures when the port is assigned to another service
+  sysctl::value { 'net.ipv4.ip_local_reserved_ports':
+    value => '49152-49215'
+  }
+}
 
 class platform::sysctl::storage {
   include ::platform::sysctl
