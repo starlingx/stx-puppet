@@ -943,9 +943,10 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
     environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
     command     => "kubectl config set-cluster kubernetes --certificate-authority ${rootca_certfile} --embed-certs",
   }
-  # Restart sysinv-conductor since it uses admin.conf
+  # Restart sysinv-conductor and sysinv-inv since they cache clients with
+  # credentials from admin.conf
   -> exec { 'restart_sysinv_conductor':
-    command => 'sm-restart-safe service sysinv-conductor',
+    command => 'sm-restart service sysinv-conductor',
   }
   # Restart cert-mon since it uses admin.conf
   -> exec { 'restart_cert_mon':
