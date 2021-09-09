@@ -42,10 +42,10 @@ class platform::devices::qat (
 
 define platform::devices::sriov_enable (
   $num_vfs,
-  $sriov_vfs,
   $addr,
   $driver,
-  $device_id
+  $device_id,
+  $sriov_vfs = undef
 ) {
   if ($driver == 'igb_uio') {
     $vf_file = 'max_vfs'
