@@ -1,0 +1,7 @@
+---
+name: puppet-smapi
+debver: 1.0.0-1
+src_path: src
+revision:
+    dist: $STX_DIST
+    PKG_GITREVCOUNT: true
