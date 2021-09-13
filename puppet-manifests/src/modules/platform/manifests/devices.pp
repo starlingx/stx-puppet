@@ -44,8 +44,7 @@ define platform::devices::sriov_enable (
   $num_vfs,
   $addr,
   $driver,
-  $device_id,
-  $sriov_vfs = undef
+  $device_id
 ) {
   if ($driver == 'igb_uio') {
     $vf_file = 'max_vfs'
@@ -63,7 +62,6 @@ define platform::devices::sriov_bind (
   $addr,
   $driver,
   $num_vfs = undef,
-  $sriov_vfs = undef,
   $device_id = undef
 ) {
   if ($driver != undef) and ($addr != undef) {
