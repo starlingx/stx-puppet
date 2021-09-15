@@ -83,6 +83,8 @@ class sysinv::certmon (
     'certmon/max_retry': value => 14;
     'certmon/audit_interval': value => 86400;
     'certmon/startup_audit_all': value => false;
+    'certmon/network_retry_interval': value => 180;
+    'certmon/network_max_retry': value => 5;
     'certmon/audit_batch_size': value => 10;
     'certmon/audit_greenpool_size': value => 4;
   }
