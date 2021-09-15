@@ -82,6 +82,9 @@ class sysinv::certmon (
     'certmon/retry_interval': value => 600;
     'certmon/max_retry': value => 14;
     'certmon/audit_interval': value => 86400;
+    'certmon/startup_audit_all': value => false;
+    'certmon/audit_batch_size': value => 10;
+    'certmon/audit_greenpool_size': value => 4;
   }
 
   if $keystone_enabled {
