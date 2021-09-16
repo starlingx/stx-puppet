@@ -731,10 +731,25 @@ class platform::kubernetes::master::upgrade_kubelet
   inherits ::platform::kubernetes::params {
 
   # Update kubeadm/kubelet bindmounts if needed.
-  require platform::kubernetes::bindmounts
+  include platform::kubernetes::bindmounts
 
-  exec { 'restart kubelet':
-      command => '/usr/local/sbin/pmon-restart kubelet'
+  # Tell pmon to stop kubelet so it doesn't try to restart it
+  exec { 'stop kubelet':
+      command => '/usr/local/sbin/pmon-stop kubelet'
+  }
+  # Mask restarting kubelet and stop it now so that we can unmount
+  # and re-mount the bind mount.
+  -> exec { 'mask kubelet':
+      command => '/usr/bin/systemctl mask --now kubelet',
+      before  => Mount['/usr/local/kubernetes/current/stage2'],
+  }
+  # Unmask and restart kubelet after the bind mount is updated.
+  -> exec { 'unmask kubelet':
+      command => '/usr/bin/systemctl unmask kubelet',
+      require => Mount['/usr/local/kubernetes/current/stage2'],
+  }
+  -> exec { 'restart kubelet':
+      command => '/usr/local/sbin/pmon-start kubelet'
   }
 }
 
@@ -744,7 +759,7 @@ class platform::kubernetes::worker::upgrade_kubelet
   include ::platform::dockerdistribution::params
 
   # Update kubeadm/kubelet bindmounts if needed.
-  require platform::kubernetes::bindmounts
+  include platform::kubernetes::bindmounts
 
   # workers use kubelet.conf rather than admin.conf
   $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
@@ -762,6 +777,21 @@ class platform::kubernetes::worker::upgrade_kubelet
     logoutput => true,
   }
 
+  # Tell pmon to stop kubelet so it doesn't try to restart it
+  -> exec { 'stop kubelet':
+      command => '/usr/local/sbin/pmon-stop kubelet'
+  }
+  # Mask restarting kubelet and stop it now so that we can unmount
+  # and re-mount the bind mount.
+  -> exec { 'mask kubelet':
+      command => '/usr/bin/systemctl mask --now kubelet',
+      before  => Mount['/usr/local/kubernetes/current/stage2'],
+  }
+  # Unmask and restart kubelet after the bind mount is updated.
+  -> exec { 'unmask kubelet':
+      command => '/usr/bin/systemctl unmask kubelet',
+      require => Mount['/usr/local/kubernetes/current/stage2'],
+  }
   -> exec { 'restart kubelet':
       command => '/usr/local/sbin/pmon-restart kubelet'
   }
