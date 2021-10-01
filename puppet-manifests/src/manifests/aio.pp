@@ -105,7 +105,6 @@ include ::platform::interfaces::sriov::config
 include ::platform::interfaces::fpga::config
 include ::platform::worker::storage
 include ::platform::pciirqaffinity
-include ::platform::docker::login
 include ::platform::kubernetes::aio
 
 
