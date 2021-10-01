@@ -525,3 +525,25 @@ class openstack::keystone::upgrade (
   }
 
 }
+
+class openstack::keystone::password::runtime {
+
+  if $::platform::params::distributed_cloud_role == 'systemcontroller' {
+
+    class { '::dcmanager::api':
+      sync_db => str2bool($::is_standalone_controller),
+    }
+
+    class { '::dcorch::api_proxy':
+      sync_db => str2bool($::is_standalone_controller),
+    }
+
+    platform::sm::restart {'dcorch-engine': }
+    platform::sm::restart {'dcmanager-manager': }
+    platform::sm::restart {'vim': }
+  }
+  else {
+    platform::sm::restart {'vim': }
+  }
+
+}
