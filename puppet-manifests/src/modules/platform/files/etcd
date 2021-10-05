@@ -39,9 +39,9 @@ ETCD_LISTEN_CLIENT_URL="${URLS[-1]}"
 status()
 {
     if [[ $ETCD_LISTEN_CLIENT_URL =~ "https" ]]; then
-        etcd_health="$(etcdctl --ca-file /etc/etcd/ca.crt -cert-file /etc/etcd/etcd-server.crt --key-file /etc/etcd/etcd-server.key --endpoints="$ETCD_LISTEN_CLIENT_URL" cluster-health 2>&1 | head -n 1)"
+        etcd_health="$(etcdctl --timeout 5s --ca-file /etc/etcd/ca.crt -cert-file /etc/etcd/etcd-server.crt --key-file /etc/etcd/etcd-server.key --endpoints="$ETCD_LISTEN_CLIENT_URL" cluster-health 2>&1 | head -n 1)"
     else
-        etcd_health="$(etcdctl --endpoints="$ETCD_LISTEN_CLIENT_URL" cluster-health 2>&1 | head -n 1)"
+        etcd_health="$(etcdctl --timeout 5s --endpoints="$ETCD_LISTEN_CLIENT_URL" cluster-health 2>&1 | head -n 1)"
     fi
 
     if [[ $etcd_health =~ "is healthy" ]]; then
