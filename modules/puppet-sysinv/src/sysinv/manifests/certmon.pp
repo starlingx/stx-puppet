@@ -87,6 +87,7 @@ class sysinv::certmon (
     'certmon/network_max_retry': value => 5;
     'certmon/audit_batch_size': value => 10;
     'certmon/audit_greenpool_size': value => 4;
+    'certmon/certificate_timeout_secs': value => 10;
   }
 
   if $keystone_enabled {
