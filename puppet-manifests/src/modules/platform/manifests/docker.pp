@@ -146,24 +146,6 @@ class platform::docker::haproxy
   }
 }
 
-class platform::docker::login
-{
-  include ::platform::dockerdistribution::params
-
-  if $::personality == 'controller' {
-    Class['::platform::dockerdistribution::config'] ~> Class[$name]
-  }
-  else {
-    Class['::platform::dockerdistribution::compute'] ~> Class[$name]
-  }
-
-  exec { 'docker-login':
-    command => "/usr/local/sbin/run_docker_login \
-${::platform::dockerdistribution::params::registry_username} \
-${::platform::dockerdistribution::params::registry_password}&"
-  }
-}
-
 class platform::docker::runtime
 {
   include ::platform::docker::proxyconfig
