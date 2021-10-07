@@ -183,8 +183,13 @@ class platform::etcd::upgrade::runtime
       etcd_servers  => $server_url,
     }
 
-
     -> platform::sm::restart {'etcd': }
+
+    -> exec { 'wait for etcd start':
+      command   => '/etc/init.d/etcd status',
+      tries     => 5,
+      try_sleep => 3,
+    }
 
     -> exec { 'create-etcd-root-account':
       command => "etcdctl --cert-file=${etcd_cert} --key-file=${etcd_key} --ca-file=${etcd_ca} --endpoint=${server_url} \
