@@ -65,6 +65,19 @@ class platform::kubernetes::configuration {
     group  => 'root',
     mode   => '0644',
   }
+
+  if ($::personality == 'controller') {
+    # Cron job to cleanup stale CNI cache files that are more than
+    # 1 day old and are not associated with any currently running pod.
+    cron { 'k8s-cni-cache-cleanup':
+      ensure      => 'present',
+      command     => '/usr/local/sbin/k8s-cni-cache-cleanup -o 24 -d',
+      environment => 'PATH=/bin:/usr/bin:/usr/sbin:/usr/local/sbin',
+      minute      => '30',
+      hour        => '*/24',
+      user        => 'root',
+    }
+  }
 }
 
 class platform::kubernetes::bindmounts {
