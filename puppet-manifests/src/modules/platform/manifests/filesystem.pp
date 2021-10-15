@@ -377,6 +377,9 @@ class platform::filesystem::kubelet::runtime {
     lv_size   => $lv_size,
     devmapper => $devmapper,
   }
+  -> exec { "restart kubelet after ${lv_name} resize ${lv_size}":
+      command => '/usr/local/sbin/pmon-restart kubelet'
+  }
 }
 
 
