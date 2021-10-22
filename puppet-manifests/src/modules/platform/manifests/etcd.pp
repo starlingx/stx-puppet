@@ -3,7 +3,6 @@ class platform::etcd::params (
   $bind_address_version = 4,
   $port    = 2379,
   $node   = 'controller',
-  $security_enabled = undef,
 )
 {
   include ::platform::params
@@ -11,6 +10,13 @@ class platform::etcd::params (
   $sw_version = $::platform::params::software_version
   $etcd_basedir = '/opt/etcd'
   $etcd_versioned_dir = "${etcd_basedir}/${sw_version}"
+
+  if $bind_address_version == $::platform::params::ipv6 {
+    $client_url = "https://[${bind_address}]:${port},https://[127.0.0.1]:${port}"
+  }
+  else {
+    $client_url = "https://${bind_address}:${port},https://[127.0.0.1]:${port}"
+  }
 }
 
 # Modify the systemd service file for etcd and
@@ -55,12 +61,6 @@ class platform::etcd::init (
   $cert_file = '/etc/etcd/etcd-server.crt'
   $key_file = '/etc/etcd/etcd-server.key'
   $trusted_ca_file = '/etc/etcd/ca.crt'
-  if $bind_address_version == $::platform::params::ipv6 {
-    $client_url = "https://[${bind_address}]:${port},https://[127.0.0.1]:${port}"
-  }
-  else {
-    $client_url = "https://${bind_address}:${port},https://[127.0.0.1]:${port}"
-  }
 
   class { 'etcd':
     ensure                => 'present',
@@ -112,9 +112,7 @@ class platform::etcd::datadir
 class platform::etcd::upgrade::runtime
   inherits ::platform::etcd::params {
 
-  include ::platform::etcd::init
-
-  $server_url = $::platform::etcd::init::client_url
+  $server_url = $client_url
   $etcd_cert = '/etc/etcd/etcd-client.crt'
   $etcd_key = '/etc/etcd/etcd-client.key'
   $etcd_ca = '/etc/etcd/ca.crt'
@@ -169,7 +167,7 @@ class platform::etcd::upgrade::runtime
     }
 
     -> class { '::platform::kubernetes::master::change_apiserver_parameters':
-      etcd_cafile   => '/etc/kubernetes/pki/ca.crt',
+      etcd_cafile   => '/etc/etcd/ca.crt',
       etcd_certfile => '/etc/kubernetes/pki/apiserver-etcd-client.crt',
       etcd_keyfile  => '/etc/kubernetes/pki/apiserver-etcd-client.key',
       etcd_servers  => $server_url,
@@ -177,7 +175,7 @@ class platform::etcd::upgrade::runtime
   }
   else {
     class { '::platform::kubernetes::master::change_apiserver_parameters':
-      etcd_cafile   => '/etc/kubernetes/pki/ca.crt',
+      etcd_cafile   => '/etc/etcd/ca.crt',
       etcd_certfile => '/etc/kubernetes/pki/apiserver-etcd-client.crt',
       etcd_keyfile  => '/etc/kubernetes/pki/apiserver-etcd-client.key',
       etcd_servers  => $server_url,
