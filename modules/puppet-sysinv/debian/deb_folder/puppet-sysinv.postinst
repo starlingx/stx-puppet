@@ -1,0 +1,13 @@
+#1/bin/sh
+
+set -e
+
+if [ "${1}" = "configure" ] ; then
+        update-alternatives --install \
+            /usr/share/puppet/modules/sysinv puppet-module-starlingx-sysinv \
+            /usr/share/puppet/modules.available/sysinv 500
+fi
+
+#DEBHELPER#
+
+exit 0
