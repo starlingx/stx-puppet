@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+if [ "${1}" = "remove" ] || [ "${1}" = "upgrade" ] || [ "${1}" = "deconfigure" ] ; then
+        update-alternatives --remove puppet-module-starlingx-dcmanager /usr/share/puppet/modules.available/dcmanager
+fi
+
+#DEBHELPER#
+
+exit 0
