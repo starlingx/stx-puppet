@@ -1,0 +1,12 @@
+#!/bin/sh
+
+set -e
+
+if [ "${1}" = "remove" ] || [ "${1}" = "upgrade" ] || [ "${1}" = "deconfigure" ] ; then
+            update-alternatives --remove puppet-module-starlingx-patching \
+                /usr/share/puppet/modules.available/patching
+fi
+
+#DEBHELPER#
+
+exit 0
