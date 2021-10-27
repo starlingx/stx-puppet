@@ -58,15 +58,22 @@ class platform::ceph
         # 1 node configuration, a single monitor is available
         $mon_initial_members = $mon_0_host
         $osd_pool_default_size = 1
+        $mon_host = $mon_0_addr
       } else {
         # 2 node configuration, we have a floating monitor
         $mon_initial_members = $floating_mon_host
         $osd_pool_default_size = 2
+        $mon_host = $floating_mon_addr
       }
     } else {
       # Multinode & standard, any 2 monitors form a cluster
       $mon_initial_members = undef
       $osd_pool_default_size = 2
+      if $mon_2_host {
+        $mon_host = "${mon_0_addr},${mon_1_addr},${mon_2_addr}"
+      } else {
+        $mon_host = "${mon_0_addr},${mon_1_addr}"
+      }
     }
 
     # Update ownership/permissions for /etc/ceph/ceph.conf file.
@@ -82,7 +89,8 @@ class platform::ceph
       authentication_type       => $authentication_type,
       mon_initial_members       => $mon_initial_members,
       osd_pool_default_size     => $osd_pool_default_size,
-      osd_pool_default_min_size => 1
+      osd_pool_default_min_size => 1,
+      mon_host                  => $mon_host
     }
     -> ceph_config {
       'mon/mon clock drift allowed': value => '.1';
@@ -94,14 +102,13 @@ class platform::ceph
         Class['::ceph']
         -> ceph_config {
           "mon.${floating_mon_host}/host":      value => $floating_mon_host;
-          "mon.${floating_mon_host}/mon_addr":  value => $floating_mon_addr;
         }
       } else {
         # Simplex case, a single monitor binded to the controller.
         Class['::ceph']
         -> ceph_config {
+          'mon/mon_warn_on_pool_no_redundancy':     value => false;
           "mon.${mon_0_host}/host":     value => $mon_0_host;
-          "mon.${mon_0_host}/mon_addr": value => $mon_0_addr;
         }
       }
     } else {
@@ -109,15 +116,12 @@ class platform::ceph
       Class['::ceph']
       -> ceph_config {
         "mon.${mon_0_host}/host":      value => $mon_0_host;
-        "mon.${mon_0_host}/mon_addr":  value => $mon_0_addr;
         "mon.${mon_1_host}/host":      value => $mon_1_host;
-        "mon.${mon_1_host}/mon_addr":  value => $mon_1_addr;
       }
       if $mon_2_host {
         Class['::ceph']
         -> ceph_config {
           "mon.${mon_2_host}/host":      value => $mon_2_host;
-          "mon.${mon_2_host}/mon_addr":  value => $mon_2_addr;
         }
       }
     }
