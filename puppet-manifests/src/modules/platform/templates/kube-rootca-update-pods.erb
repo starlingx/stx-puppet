@@ -9,6 +9,9 @@ for namespace in $(kubectl get namespace -o jsonpath='{.items[*].metadata.name}'
     for name in $(kubectl get daemonsets -n $namespace -o jsonpath='{.items[*].metadata.name}'); do
         kubectl rollout restart daemonsets ${name} -n ${namespace}
     done
+    for name in $(kubectl get statefulsets -n $namespace -o jsonpath='{.items[*].metadata.name}'); do
+        kubectl rollout restart statefulsets ${name} -n ${namespace}
+    done
 done
 
 # Check the rollout status.
@@ -18,5 +21,8 @@ for namespace in $(kubectl get namespace -o jsonpath='{.items[*].metadata.name}'
     done
     for name in $(kubectl get daemonsets -n $namespace -o jsonpath='{.items[*].metadata.name}'); do
         kubectl rollout status daemonsets ${name} -n ${namespace}
+    done
+    for name in $(kubectl get statefulsets -n $namespace -o jsonpath='{.items[*].metadata.name}'); do
+        kubectl rollout status statefulsets ${name} -n ${namespace}
     done
 done
