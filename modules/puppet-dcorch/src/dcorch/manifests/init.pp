@@ -1,7 +1,7 @@
 #
 # Files in this package are licensed under Apache; see LICENSE file.
 #
-# Copyright (c) 2013-2020 Wind River Systems, Inc.
+# Copyright (c) 2013-2021 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -160,7 +160,8 @@ class dcorch (
   }
 
   dcorch_api_paste_ini {
-    'pipeline:dcorch-api-proxy/pipeline': value => 'filter version authtoken acceptor proxyapp';
+    'pipeline:dcorch-api-proxy/pipeline': value => 'parser filter version authtoken acceptor proxyapp';
+    'filter:parser/paste.filter_factory': value => 'dcorch.api.proxy.apps.parser:ParseError.factory';
     'filter:filter/paste.filter_factory': value => 'dcorch.api.proxy.apps.filter:ApiFiller.factory';
     'filter:version/paste.filter_factory': value => 'dcorch.api.proxy.apps.acceptor:VersionAcceptor.factory';
     'filter:authtoken/paste.filter_factory': value =>  'keystonemiddleware.auth_token:filter_factory';
