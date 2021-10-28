@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+#export DH_VERBOSE = 1
+
+%:
+	dh $@
+
+override_dh_auto_build:
+override_dh_auto_install:
+override_dh_usrlocal:
+	echo "Do Nothing"
+
+override_dh_install:
+	$(MAKE) install \
+		BINDIR=$(CURDIR)/debian/tmp/usr/local/bin \
+		CONFIGDIR=$(CURDIR)/debian/tmp/etc/puppet \
+		MODULEDIR=$(CURDIR)/debian/tmp/usr/share/puppet/modules
+	dh_install

@@ -1,0 +1,56 @@
+Source: puppet-manifests
+Section: admin
+Priority: optional
+Maintainer: StarlingX Developers <starlingx-discuss@lists.starlingx.io>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.4.1
+Homepage: https://www.starlingx.io
+
+Package: puppet-manifests
+Architecture: any
+Depends: ${misc:Depends}, puppet,
+ puppet-dcorch,
+ puppet-dcmanager,
+ puppet-mtce,
+ puppet-nfv,
+ puppet-patching,
+ puppet-sysinv,
+ puppet-sshd,
+ puppet-smapi,
+ puppet-fm,
+ puppet-dcdbsync,
+ puppet-module-barbican,
+ puppet-module-ceph,
+ puppet-module-horizon,
+ puppet-module-keystone,
+ puppet-module-openstacklib,
+ puppet-module-vswitch,
+ puppet-module-saz-memcached,
+ puppet-module-puppetlabs-concat,
+ puppet-module-puppetlabs-haproxy,
+ puppet-module-puppetlabs-inifile,
+ puppet-lvm,
+ puppet-module-puppetlabs-postgresql,
+ puppet-module-puppetlabs-rabbitmq,
+ puppet-module-puppetlabs-stdlib,
+ puppet-module-duritong-sysctl,
+ puppet-module-cristifalcas-etcd,
+ puppet-drbd,
+ puppet-boolean,
+ puppet-dnsmasq,
+ puppet-puppi,
+ puppet-module-puppetlabs-firewall,
+ puppet-module-adrienthebo-filemapper,
+ puppet-module-camptocamp-kmod,
+ puppet-ldap,
+ puppet-network,
+ puppet-nslcd,
+ puppet-module-voxpupuli-collectd,
+ python3-ruamel.yaml
+Description: Puppet configuration and manifests
+ Puppet lets you centrally manage every important aspect of your system using a
+ cross-platform specification language that manages all the separate elements
+ normally aggregated in different files, like users, cron jobs, and hosts,
+ along with obviously discrete elements like packages, services, and files.
+ .
+ Puppet configuration and manifests.
