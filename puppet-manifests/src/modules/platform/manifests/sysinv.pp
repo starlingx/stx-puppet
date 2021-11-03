@@ -109,11 +109,10 @@ class platform::sysinv::api
 
   include ::platform::params
   include ::sysinv::api
-  include ::sysinv::keystone::auth
-  include ::platform::client::params
 
   if ($::platform::sysinv::params::service_create and
       $::platform::params::init_keystone) {
+    include ::sysinv::keystone::auth
 
     # Cleanup the endpoints created at bootstrap if they are not in
     # the subcloud region.
@@ -130,17 +129,6 @@ class platform::sysinv::api
         internal_url => 'http://127.0.0.1:6385/v1'
       }
     }
-  }
-
-  # set sysinv ignore_lockout_failure_attempts option to true to
-  # exempt it from auth fail lockout.
-  openstack::keystone::user::option { 'Set sysinv user option':
-    admin_username => $::platform::client::params::admin_username,
-    admin_password => $::platform::client::params::admin_password,
-    auth_url       => $::platform::client::params::identity_auth_url,
-    username       => $::sysinv::keystone::auth::auth_name,
-    option         => 'ignore_lockout_failure_attempts',
-    option_value   => bool2str(true),
   }
 
   # TODO(mpeters): move to sysinv puppet module parameters
