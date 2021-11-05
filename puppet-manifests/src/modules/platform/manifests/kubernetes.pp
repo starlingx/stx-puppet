@@ -925,6 +925,14 @@ class platform::kubernetes::master::rootca::trustbothcas::runtime
                 -e 's|cluster-signing-key-file=.*|cluster-signing-key-file=/etc/kubernetes/pki/ca_new.key|' \\
                 /etc/kubernetes/manifests/kube-controller-manager.yaml"
   }
+  # Wait for kube-apiserver to be up before executing next steps
+  # Uses a k8s API health endpoint for that: https://kubernetes.io/docs/reference/using-api/health-checks/
+  -> exec { 'wait_for_kube_apiserver':
+    command   => '/usr/bin/curl -k https://localhost:6443/readyz',
+    timeout   => 10,
+    tries     => 18,
+    try_sleep => 5,
+  }
 
   # Update kubelet.conf with both old and new certs
   $cluster = generate('/bin/bash', '-c', "/bin/sed -e '/- cluster/,/name:/!d' /etc/kubernetes/kubelet.conf \\
@@ -1016,6 +1024,15 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
   -> exec { 'restart_scheduler':
     command => "/usr/bin/kill -s SIGHUP $(pidof kube-scheduler)",
   }
+  # Wait for kube-apiserver to be up before executing next steps
+  # Uses a k8s API health endpoint for that: https://kubernetes.io/docs/reference/using-api/health-checks/
+  -> exec { 'wait_for_kube_apiserver':
+    command   => '/usr/bin/curl -k https://localhost:6443/readyz',
+    timeout   => 10,
+    tries     => 18,
+    try_sleep => 5,
+  }
+
   # Update kubelet.conf with the new cert
   $cluster = generate('/bin/bash', '-c', "/bin/sed -e '/- cluster/,/name:/!d' /etc/kubernetes/kubelet.conf \
                       | grep 'name:' | awk '{printf \"%s\", \$2}'")
