@@ -145,6 +145,7 @@ class platform::sysinv::bootstrap (
 ) {
   include ::sysinv::db::postgresql
   include ::sysinv::keystone::auth
+  include ::platform::client::params
 
   if $dc_sysinv_user_id {
     exec { 'update keystone sysinv assignment actor_id to match system controller':
@@ -168,5 +169,17 @@ class platform::sysinv::bootstrap (
 
   class { '::sysinv::conductor':
     enabled => true
+  }
+
+  # set sysinv ignore_lockout_failure_attempts option to true to
+  # exempt it from auth fail lockout.
+  Class['::sysinv::keystone::auth']
+  -> openstack::keystone::user::option { 'Set sysinv user option':
+    admin_username => $::platform::client::params::admin_username,
+    admin_password => $::platform::client::params::admin_password,
+    auth_url       => $::platform::client::params::identity_auth_url,
+    username       => $::sysinv::keystone::auth::auth_name,
+    option         => 'ignore_lockout_failure_attempts',
+    option_value   => bool2str(true),
   }
 }
