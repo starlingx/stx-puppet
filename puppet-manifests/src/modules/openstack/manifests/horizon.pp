@@ -3,8 +3,6 @@ class openstack::horizon::params (
   $openstack_host,
 
   $enable_https = false,
-  $lockout_period = 300,
-  $lockout_retries = 3,
 
   $horizon_ssl = false,
   $horizon_cert = undef,

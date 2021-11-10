@@ -16,6 +16,8 @@ class openstack::keystone::params(
   $fernet_keys_rotation_month = '*/1',
   $fernet_keys_rotation_monthday = '1',
   $fernet_keys_rotation_weekday = '*',
+  $lockout_period = 1800,
+  $lockout_retries = 5,
 ) {}
 
 class openstack::keystone (
@@ -61,8 +63,8 @@ class openstack::keystone (
     }
 
     keystone_config {
-        'security_compliance/lockout_duration': value => 1800;
-        'security_compliance/lockout_failure_attempts': value => 5;
+        'security_compliance/lockout_duration': value => $lockout_period;
+        'security_compliance/lockout_failure_attempts': value => $lockout_retries;
     }
 
     file { '/etc/keystone/keystone-extra.conf':
