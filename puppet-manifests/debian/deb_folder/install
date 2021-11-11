@@ -1,4 +1,3 @@
-usr/share/puppet-manifests/config/hiera.yaml
 etc/puppet/*
 usr/share/puppet/*
 usr/local/bin/*
