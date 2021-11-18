@@ -700,10 +700,17 @@ class platform::kubernetes::upgrade_first_control_plane
   # Update kubeadm bindmount if needed.
   require platform::kubernetes::bindmounts
 
+  # Update apiserver and kubelet config to configure cgroupDriver and RemoveSelfLink feature-gates
+  exec { 'update kubeadm-config':
+    command   => '/usr/local/sbin/upgrade_k8s_config.sh',
+    logoutput => true
+  }
+
   # The --allow-*-upgrades options allow us to upgrade to any k8s release if necessary
   exec { 'upgrade first control plane':
-    command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf upgrade apply ${version} --allow-experimental-upgrades --allow-release-candidate-upgrades -y", # lint:ignore:140chars
+    command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf upgrade apply ${version} --config /etc/kubernetes/kubelet_override.yaml --allow-experimental-upgrades --allow-release-candidate-upgrades -y", # lint:ignore:140chars
     logoutput => true,
+    require   => Exec['update kubeadm-config']
   }
 
   if $::platform::params::system_mode != 'simplex' {
