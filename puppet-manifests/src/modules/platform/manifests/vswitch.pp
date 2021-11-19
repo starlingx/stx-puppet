@@ -1,8 +1,9 @@
 class platform::vswitch::params(
+  $enabled = true,
   $iommu_enabled = true,
   $hugepage_dir = '/mnt/huge-1048576kB',
   $driver_type = 'vfio-pci',
-  $vswitch_class = ::platform::vswitch::ovs,
+  $vswitch_class = ::platform::vswitch::ovs_dpdk,
 ) { }
 
 
@@ -18,7 +19,6 @@ class platform::vswitch
       require => Kmod::Load[$driver_type],
     }
   }
-
   include $vswitch_class
 }
 
@@ -83,27 +83,26 @@ define platform::vswitch::ovs::flow(
 }
 
 
-class platform::vswitch::ovs(
+class platform::vswitch::ovs_dpdk(
   $devices = {},
   $bridges = {},
   $ports = {},
   $addresses = {},
   $flows = {},
 ) inherits ::platform::vswitch::params {
-
-  if $::platform::params::vswitch_type == 'ovs' {
-    include ::vswitch::ovs
-  } elsif $::platform::params::vswitch_type == 'ovs-dpdk' {
+  if $enabled {
     include ::vswitch::dpdk
-
+    $pmon_ensure = link
     # Since OVS socket memory is configurable, it is required to start the
     # ovsdb server and disable DPDK initialization before the openvswitch
     # service runs to prevent any previously stored OVSDB configuration from
     # being used before the new Vs_config gets applied.
+
     service { 'ovsdb-server':
       ensure => 'running',
       before => Service['openvswitch'],
     }
+
     exec { 'disable dpdk initialization':
       command  => template('platform/ovs.disable-dpdk-init.erb'),
       provider => shell,
@@ -134,13 +133,35 @@ class platform::vswitch::ovs(
     create_resources ('vs_config', $dpdk_configs, $dpdk_dependencies)
 
     Vs_config<||> -> Platform::Vswitch::Ovs::Bridge<||>
-  }
 
-  if $::platform::params::vswitch_type == 'ovs-dpdk' {
-    $pmon_ensure = link
-  } else {
-    $pmon_ensure = absent
-  }
+    exec { 'ovs-clean':
+      command  => template('platform/ovs.clean.erb'),
+      provider => shell,
+      require  => Service['openvswitch']
+    }
+
+    -> Platform::Vswitch::Ovs::Bridge<||> -> Platform::Vswitch::Ovs::Port<||>
+    Platform::Vswitch::Ovs::Bridge<||> -> Platform::Vswitch::Ovs::Address<||>
+    Platform::Vswitch::Ovs::Port<||> -> Platform::Vswitch::Ovs::Flow<||>
+
+    create_resources('platform::vswitch::ovs::bridge', $bridges, {
+      require => Service['openvswitch']
+    })
+
+    create_resources('platform::vswitch::ovs::port', $ports, {
+      require => Service['openvswitch']
+    })
+
+    create_resources('platform::vswitch::ovs::address', $addresses, {
+      require => Service['openvswitch']
+    })
+
+    create_resources('platform::vswitch::ovs::flow', $flows, {
+      require => Service['openvswitch']
+    })
+} else {
+  $pmon_ensure = absent
+}
 
   file { '/etc/pmon.d/ovsdb-server.conf':
     ensure => $pmon_ensure,
@@ -157,34 +178,4 @@ class platform::vswitch::ovs(
     group  => 'root',
     mode   => '0644',
   }
-
-  if $::platform::params::vswitch_type =~ '^ovs' {
-
-    # clean bridges and ports before applying current configuration
-    exec { 'ovs-clean':
-      command  => template('platform/ovs.clean.erb'),
-      provider => shell,
-      require  => Service['openvswitch']
-    }
-
-    -> Platform::Vswitch::Ovs::Bridge<||> -> Platform::Vswitch::Ovs::Port<||>
-    Platform::Vswitch::Ovs::Bridge<||> -> Platform::Vswitch::Ovs::Address<||>
-    Platform::Vswitch::Ovs::Port<||> -> Platform::Vswitch::Ovs::Flow<||>
-  }
-
-  create_resources('platform::vswitch::ovs::bridge', $bridges, {
-    require => Service['openvswitch']
-  })
-
-  create_resources('platform::vswitch::ovs::port', $ports, {
-    require => Service['openvswitch']
-  })
-
-  create_resources('platform::vswitch::ovs::address', $addresses, {
-    require => Service['openvswitch']
-  })
-
-  create_resources('platform::vswitch::ovs::flow', $flows, {
-    require => Service['openvswitch']
-  })
 }
