@@ -11,16 +11,12 @@ class platform::ceph::params(
   $mon_fs_options = ' ',
   $mon_mountpoint = '/var/lib/ceph/mon',
   $floating_mon_host = undef,
-  $floating_mon_ip = undef,
   $floating_mon_addr = undef,
   $mon_0_host = undef,
-  $mon_0_ip = undef,
   $mon_0_addr = undef,
   $mon_1_host = undef,
-  $mon_1_ip = undef,
   $mon_1_addr = undef,
   $mon_2_host = undef,
-  $mon_2_ip = undef,
   $mon_2_addr = undef,
   $rgw_enabled = false,
   $rgw_client_name = 'radosgw.gateway',
@@ -316,7 +312,7 @@ class platform::ceph::monitor
 
     if $system_type == 'All-in-one' and 'duplex' in $system_mode {
       ceph::mon { $floating_mon_host:
-        public_addr => $floating_mon_ip,
+        public_addr => $floating_mon_addr,
       }
 
       # On AIO-DX there is a single, floating, Ceph monitor backed by DRBD.
@@ -326,17 +322,17 @@ class platform::ceph::monitor
     } else {
       if $::hostname == $mon_0_host {
         ceph::mon { $mon_0_host:
-          public_addr => $mon_0_ip,
+          public_addr => $mon_0_addr,
         }
       }
       elsif $::hostname == $mon_1_host {
         ceph::mon { $mon_1_host:
-          public_addr => $mon_1_ip,
+          public_addr => $mon_1_addr,
         }
       }
       elsif $::hostname == $mon_2_host {
         ceph::mon { $mon_2_host:
-          public_addr => $mon_2_ip,
+          public_addr => $mon_2_addr,
         }
       }
     }
@@ -346,12 +342,12 @@ class platform::ceph::monitor
   # to avoid automatic binding of floating address
   if $::hostname == $mon_0_host {
     ceph_config{
-      "mgr.${$::hostname}/public_addr": value => $mon_0_ip;
+      "mgr.${$::hostname}/public_addr": value => $mon_0_addr;
     }
   }
   elsif $::hostname == $mon_1_host {
     ceph_config{
-      "mgr.${$::hostname}/public_addr": value => $mon_1_ip;
+      "mgr.${$::hostname}/public_addr": value => $mon_1_addr;
     }
   }
 }
