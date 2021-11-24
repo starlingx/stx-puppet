@@ -39,7 +39,11 @@ class openstack::keystone (
     include ::platform::drbd::platform::params
 
     $keystone_key_repo_path = "${::platform::drbd::platform::params::mountpoint}/keystone"
-    $eng_workers = $::platform::params::eng_workers
+    if $::platform::params::distributed_cloud_role =='systemcontroller' {
+      $eng_workers = min($::platform::params::eng_workers, 10)
+    } else {
+      $eng_workers = $::platform::params::eng_workers
+    }
     $enabled = false
     $bind_host = $::platform::network::mgmt::params::controller_address_url
 
@@ -235,7 +239,11 @@ class openstack::keystone::bootstrap(
   include ::platform::client::params
 
   $keystone_key_repo_path = "${::platform::drbd::platform::params::mountpoint}/keystone"
-  $eng_workers = $::platform::params::eng_workers
+  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+    $eng_workers = min($::platform::params::eng_workers, 10)
+  } else {
+    $eng_workers = $::platform::params::eng_workers
+  }
   $bind_host = '[::]'
 
   # In the case of a classical Multi-Region deployment, apply the Keystone
@@ -483,8 +491,11 @@ class openstack::keystone::upgrade (
 
     # the unit address is actually the configured default of the loopback address.
     $bind_host = $::platform::network::mgmt::params::controller0_address
-    $eng_workers = $::platform::params::eng_workers
-
+    if $::platform::params::distributed_cloud_role =='systemcontroller' {
+      $eng_workers = min($::platform::params::eng_workers, 10)
+    } else {
+      $eng_workers = $::platform::params::eng_workers
+    }
     $keystone_key_repo = "${::platform::drbd::platform::params::mountpoint}/keystone"
 
     # Need to create the parent directory for fernet keys repository

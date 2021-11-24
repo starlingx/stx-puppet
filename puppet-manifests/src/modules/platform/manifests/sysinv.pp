@@ -131,11 +131,16 @@ class platform::sysinv::api
     }
   }
 
+  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+    sysinv_config{
+      'DEFAULT/sysinv_api_workers': value => min($::platform::params::eng_workers_by_5, 6);
+    }
+  } else {
   # TODO(mpeters): move to sysinv puppet module parameters
-  sysinv_config {
-    'DEFAULT/sysinv_api_workers': value => $::platform::params::eng_workers_by_5;
+    sysinv_config {
+      'DEFAULT/sysinv_api_workers': value => $::platform::params::eng_workers_by_5;
+    }
   }
-
   include ::platform::sysinv::haproxy
 }
 

@@ -75,6 +75,13 @@ class platform::fm::api
 
   include ::platform::params
 
+  # Assign up to 6 workers for system controllers
+  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+    $assigned_workers = min($::platform::params::eng_workers, 6)
+  } else {
+    $assigned_workers = $::platform::params::eng_workers
+  }
+
   if $service_enabled {
     if ($::platform::fm::service_create and
         $::platform::params::init_keystone) {
@@ -85,7 +92,7 @@ class platform::fm::api
 
     class { '::fm::api':
       host    => $api_host,
-      workers => $::platform::params::eng_workers,
+      workers => $assigned_workers,
       sync_db => $::platform::params::init_database,
     }
 
