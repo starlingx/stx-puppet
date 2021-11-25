@@ -1363,3 +1363,10 @@ class platform::kubernetes::worker::rootca::updatecerts::runtime
     command => '/usr/bin/rm -rf /tmp/kube_rootca_update',
   }
 }
+
+class platform::kubernetes::master::apiserver::runtime{
+  # Restart apiserver (to trust a new ca)
+  exec { 'restart_kube_apiserver':
+    command => "/usr/bin/kill -s SIGHUP $(pidof kube-apiserver)",
+  }
+}
