@@ -935,7 +935,11 @@ class platform::ceph::upgrade::runtime
           'mon/mon warn on insecure global id reclaim allowed': value => false;
           'mon/auth allow insecure global id reclaim':          value => true;
           'mon.controller-0/mon_addr':                          ensure => absent;
-        } -> Exec['Restart Ceph Monitor']
+        } -> exec { 'Removing ceph warnings':
+                    command => 'ceph config set mon mon_warn_on_insecure_global_id_reclaim false;\
+                                ceph config set mon mon_warn_on_insecure_global_id_reclaim_allowed false;\
+                                ceph config set mon auth_allow_insecure_global_id_reclaim false'
+        }
       } else {
         # 2 node configuration, we have a floating monitor
         $mon_host = $floating_mon_addr
@@ -951,10 +955,6 @@ class platform::ceph::upgrade::runtime
 
     ceph_config {
       'global/mon_host': value => $mon_host;
-    } -> Exec['Restart Ceph Monitor']
-
-    exec { 'Restart Ceph Monitor' :
-      command => '/etc/init.d/ceph restart mon',
     }
   }
 }
