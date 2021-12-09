@@ -2,27 +2,102 @@
 
 # Trigger rollout restart for all deployments and daemonsets so that they
 # restart in parallel.
-for namespace in $(kubectl get namespace -o jsonpath='{.items[*].metadata.name}'); do
-    for name in $(kubectl get deployments -n $namespace -o jsonpath='{.items[*].metadata.name}'); do
-        kubectl rollout restart deployment ${name} -n ${namespace}
+
+declare -A namespaces=()
+declare -A deployments=()
+declare -A daemonsets=()
+declare -A statefullsets=()
+
+namespaces=$(kubectl get namespace -o jsonpath='{.items[*].metadata.name}')
+
+for namespace in $namespaces; do
+    sets=$(kubectl get deployments -n $namespace -o jsonpath='{.items[*].metadata.name}')
+    sets=${sets//[$'\t\r\n']}
+    if [ ! -z "$sets" ]; then
+        deployments["$namespace"]="$sets"
+    fi
+
+    sets=$(kubectl get daemonsets -n $namespace -o jsonpath='{.items[*].metadata.name}')
+    sets=${sets//[$'\t\r\n']}
+    if [ ! -z "$sets" ]; then
+        daemonsets["$namespace"]="$sets"
+    fi
+
+    sets=$(kubectl get statefulsets -n $namespace -o jsonpath='{.items[*].metadata.name}')
+    sets=${sets//[$'\t\r\n']}
+    if [ ! -z "$sets" ]; then
+        statefulsets["$namespace"]="$sets"
+    fi
+done
+
+# Trigger rollout restart
+for namespace in ${!deployments[@]}; do
+    for name in ${deployments[$namespace]}; do
+        kubectl rollout restart deployment $name -n $namespace
     done
-    for name in $(kubectl get daemonsets -n $namespace -o jsonpath='{.items[*].metadata.name}'); do
-        kubectl rollout restart daemonsets ${name} -n ${namespace}
+done
+for namespace in ${!daemonsets[@]}; do
+    for name in ${daemonsets[$namespace]}; do
+        kubectl rollout restart daemonset $name -n $namespace
     done
-    for name in $(kubectl get statefulsets -n $namespace -o jsonpath='{.items[*].metadata.name}'); do
-        kubectl rollout restart statefulsets ${name} -n ${namespace}
+done
+for namespace in ${!statefulsets[@]}; do
+    for name in ${statefulsets[$namespace]}; do
+        kubectl rollout restart statefulset $name -n $namespace
     done
 done
 
-# Check the rollout status.
-for namespace in $(kubectl get namespace -o jsonpath='{.items[*].metadata.name}'); do
-    for name in $(kubectl get deployments -n $namespace -o jsonpath='{.items[*].metadata.name}'); do
-        kubectl rollout status deployment ${name} -n ${namespace}
+# Check the rollout status. Check every 15 seconds for 8 mins
+max_retries=32
+retry_interval=15
+max_retry_time=$(($max_retries*$retry_interval))
+
+function check_status () {
+    local retry=$1
+    local kind=$2
+    local namespace=$3
+    local sets=$4
+    local ret=0
+    for name in $sets; do
+        output=$( (kubectl rollout status --watch=false $kind $name -n $namespace) )
+        echo $output | grep -q "successfully"
+        if [ $? -ne 0 ]; then
+            ret=1
+            if [ $retry -eq $max_retries ]; then
+                echo "ATTENTION $kind: $name in ns: $namespace not complete rollout restart in $max_retry_time seconds."
+            fi
+        fi
     done
-    for name in $(kubectl get daemonsets -n $namespace -o jsonpath='{.items[*].metadata.name}'); do
-        kubectl rollout status daemonsets ${name} -n ${namespace}
+    return $ret
+}
+
+for (( retry=1; retry<=$max_retries; retry++ )); do
+    sleep $retry_interval
+    notcomplete=0
+    # Deployments
+    for namespace in ${!deployments[@]}; do
+        check_status $retry "deployment" $namespace "${deployments[$namespace]}"
+        if [ $? -ne 0 ]; then
+            notcomplete=1
+        fi
     done
-    for name in $(kubectl get statefulsets -n $namespace -o jsonpath='{.items[*].metadata.name}'); do
-        kubectl rollout status statefulsets ${name} -n ${namespace}
+    # Daemonsets
+    for namespace in ${!daemonsets[@]}; do
+        check_status $retry "daemonset" $namespace "${daemonsets[$namespace]}"
+        if [ $? -ne 0 ]; then
+            notcomplete=1
+        fi
     done
+    # Statefulsets
+    for namespace in ${!statefulsets[@]}; do
+        check_status $retry "statefulset" $namespace "${statefulsets[$namespace]}"
+        if [ $? -ne 0 ]; then
+            notcomplete=1
+        fi
+    done
+
+    # Exit earlier if all restart completed
+    if [ $notcomplete -eq 0 ]; then
+        break
+    fi
 done
