@@ -830,6 +830,14 @@ class platform::kubernetes::master::change_apiserver_parameters (
   exec { 'update kube-apiserver params':
     command => template('platform/kube-apiserver-change-params.erb')
   }
+  # Wait for kube-apiserver to be up before executing next steps
+  # Uses a k8s API health endpoint for that: https://kubernetes.io/docs/reference/using-api/health-checks/
+  -> exec { 'wait_for_kube_apiserver':
+    command   => '/usr/bin/curl -k -f https://localhost:6443/readyz',
+    timeout   => 10,
+    tries     => 18,
+    try_sleep => 5,
+  }
 }
 
 class platform::kubernetes::certsans::runtime
@@ -935,7 +943,7 @@ class platform::kubernetes::master::rootca::trustbothcas::runtime
   # Wait for kube-apiserver to be up before executing next steps
   # Uses a k8s API health endpoint for that: https://kubernetes.io/docs/reference/using-api/health-checks/
   -> exec { 'wait_for_kube_apiserver':
-    command   => '/usr/bin/curl -k https://localhost:6443/readyz',
+    command   => '/usr/bin/curl -k -f https://localhost:6443/readyz',
     timeout   => 10,
     tries     => 18,
     try_sleep => 5,
@@ -1034,7 +1042,7 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
   # Wait for kube-apiserver to be up before executing next steps
   # Uses a k8s API health endpoint for that: https://kubernetes.io/docs/reference/using-api/health-checks/
   -> exec { 'wait_for_kube_apiserver':
-    command   => '/usr/bin/curl -k https://localhost:6443/readyz',
+    command   => '/usr/bin/curl -k -f https://localhost:6443/readyz',
     timeout   => 10,
     tries     => 18,
     try_sleep => 5,

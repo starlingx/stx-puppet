@@ -174,14 +174,7 @@ class platform::etcd::upgrade::runtime
     }
   }
   else {
-    class { '::platform::kubernetes::master::change_apiserver_parameters':
-      etcd_cafile   => '/etc/etcd/ca.crt',
-      etcd_certfile => '/etc/kubernetes/pki/apiserver-etcd-client.crt',
-      etcd_keyfile  => '/etc/kubernetes/pki/apiserver-etcd-client.key',
-      etcd_servers  => $server_url,
-    }
-
-    -> platform::sm::restart {'etcd': }
+    platform::sm::restart {'etcd': }
 
     -> exec { 'wait for etcd start':
       command   => '/etc/init.d/etcd status',
@@ -203,6 +196,13 @@ class platform::etcd::upgrade::runtime
       command => "etcdctl --cert-file=${etcd_cert} --key-file=${etcd_key} --ca-file=${etcd_ca} --endpoint=${server_url} \
                   auth enable",
       returns => [0,1]
+    }
+
+    -> class { '::platform::kubernetes::master::change_apiserver_parameters':
+      etcd_cafile   => '/etc/etcd/ca.crt',
+      etcd_certfile => '/etc/kubernetes/pki/apiserver-etcd-client.crt',
+      etcd_keyfile  => '/etc/kubernetes/pki/apiserver-etcd-client.key',
+      etcd_servers  => $server_url,
     }
   }
 }
