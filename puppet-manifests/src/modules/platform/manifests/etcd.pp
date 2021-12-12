@@ -167,14 +167,23 @@ class platform::etcd::upgrade::runtime
     }
 
     -> class { '::platform::kubernetes::master::change_apiserver_parameters':
-      etcd_cafile   => '/etc/etcd/ca.crt',
-      etcd_certfile => '/etc/kubernetes/pki/apiserver-etcd-client.crt',
-      etcd_keyfile  => '/etc/kubernetes/pki/apiserver-etcd-client.key',
-      etcd_servers  => $server_url,
+      etcd_cafile        => '/etc/etcd/ca.crt',
+      etcd_certfile      => '/etc/kubernetes/pki/apiserver-etcd-client.crt',
+      etcd_keyfile       => '/etc/kubernetes/pki/apiserver-etcd-client.key',
+      etcd_servers       => $server_url,
+      wait_for_apiserver => false,
     }
   }
   else {
-    platform::sm::restart {'etcd': }
+    class { '::platform::kubernetes::master::change_apiserver_parameters':
+      etcd_cafile        => '/etc/etcd/ca.crt',
+      etcd_certfile      => '/etc/kubernetes/pki/apiserver-etcd-client.crt',
+      etcd_keyfile       => '/etc/kubernetes/pki/apiserver-etcd-client.key',
+      etcd_servers       => $server_url,
+      wait_for_apiserver => false,
+    }
+
+    -> platform::sm::restart {'etcd': }
 
     -> exec { 'wait for etcd start':
       command   => '/etc/init.d/etcd status',
@@ -197,12 +206,12 @@ class platform::etcd::upgrade::runtime
                   auth enable",
       returns => [0,1]
     }
-
-    -> class { '::platform::kubernetes::master::change_apiserver_parameters':
-      etcd_cafile   => '/etc/etcd/ca.crt',
-      etcd_certfile => '/etc/kubernetes/pki/apiserver-etcd-client.crt',
-      etcd_keyfile  => '/etc/kubernetes/pki/apiserver-etcd-client.key',
-      etcd_servers  => $server_url,
+    # Wait for kube-apiserver to be up to ensure the system is ready
+    -> exec { 'wait_for_kube_apiserver':
+      command   => '/usr/bin/curl -k -f -m 15 https://localhost:6443/readyz',
+      timeout   => 30,
+      tries     => 18,
+      try_sleep => 5,
     }
   }
 }
