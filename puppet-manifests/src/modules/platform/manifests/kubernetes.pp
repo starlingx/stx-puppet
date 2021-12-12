@@ -822,6 +822,7 @@ class platform::kubernetes::master::change_apiserver_parameters (
   $etcd_certfile = $platform::kubernetes::params::etcd_certfile,
   $etcd_keyfile = $platform::kubernetes::params::etcd_keyfile,
   $etcd_servers = $platform::kubernetes::params::etcd_servers,
+  $wait_for_apiserver = true,
 ) inherits ::platform::kubernetes::params {
 
   $configmap_temp_file = '/tmp/cluster_configmap.yaml'
@@ -830,13 +831,16 @@ class platform::kubernetes::master::change_apiserver_parameters (
   exec { 'update kube-apiserver params':
     command => template('platform/kube-apiserver-change-params.erb')
   }
-  # Wait for kube-apiserver to be up before executing next steps
-  # Uses a k8s API health endpoint for that: https://kubernetes.io/docs/reference/using-api/health-checks/
-  -> exec { 'wait_for_kube_apiserver':
-    command   => '/usr/bin/curl -k -f https://localhost:6443/readyz',
-    timeout   => 10,
-    tries     => 18,
-    try_sleep => 5,
+  if $wait_for_apiserver {
+    # Wait for kube-apiserver to be up before executing next steps
+    # Uses a k8s API health endpoint for that: https://kubernetes.io/docs/reference/using-api/health-checks/
+    exec { 'wait_for_kube_api_server':
+      command   => '/usr/bin/curl -k -f -m 15 https://localhost:6443/readyz',
+      timeout   => 30,
+      tries     => 18,
+      try_sleep => 5,
+      require   => Exec['update kube-apiserver params'],
+    }
   }
 }
 
@@ -943,8 +947,8 @@ class platform::kubernetes::master::rootca::trustbothcas::runtime
   # Wait for kube-apiserver to be up before executing next steps
   # Uses a k8s API health endpoint for that: https://kubernetes.io/docs/reference/using-api/health-checks/
   -> exec { 'wait_for_kube_apiserver':
-    command   => '/usr/bin/curl -k -f https://localhost:6443/readyz',
-    timeout   => 10,
+    command   => '/usr/bin/curl -k -f -m 15 https://localhost:6443/readyz',
+    timeout   => 30,
     tries     => 18,
     try_sleep => 5,
   }
@@ -1042,8 +1046,8 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
   # Wait for kube-apiserver to be up before executing next steps
   # Uses a k8s API health endpoint for that: https://kubernetes.io/docs/reference/using-api/health-checks/
   -> exec { 'wait_for_kube_apiserver':
-    command   => '/usr/bin/curl -k -f https://localhost:6443/readyz',
-    timeout   => 10,
+    command   => '/usr/bin/curl -k -f -m 15 https://localhost:6443/readyz',
+    timeout   => 30,
     tries     => 18,
     try_sleep => 5,
   }
