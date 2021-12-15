@@ -1,6 +1,6 @@
 class platform::deviceimage::params(
   $source_deviceimage_base_dir = '/opt/platform/device_images',
-  $target_deviceimage_base_dir = '/www/pages/device_images',
+  $target_deviceimage_base_dir = '/var/www/pages/device_images',
 ) {}
 
 class platform::deviceimage

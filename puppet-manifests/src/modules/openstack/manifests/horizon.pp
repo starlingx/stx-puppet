@@ -39,7 +39,7 @@ class openstack::horizon
   $keystone_auth_uri        = $::openstack::keystone::params::auth_uri
   $keystone_host_url        = $::openstack::keystone::params::host_url
 
-  #The intention here is to set up /www as a chroot'ed
+  #The intention here is to set up /var/www as a chroot'ed
   #environment for lighttpd so that it will remain in a jail under /www.
   #The uid and gid for www match the uid and gid in the setup package.
 
@@ -56,22 +56,22 @@ class openstack::horizon
     uid    => '1877',
   }
 
-  file { '/www/tmp':
+  file { '/var/www/tmp':
       ensure => directory,
-      path   => '/www/tmp',
+      path   => '/var/www/tmp',
       mode   => '1700',
   }
 
-  file {'/www/var':
+  file {'/var/www/var':
       ensure  => directory,
-      path    => '/www/var',
+      path    => '/var/www/var',
       owner   => 'www',
       require => User['www']
   }
 
-  file {'/www/var/log':
+  file {'/var/www/var/log':
       ensure  => directory,
-      path    => '/www/var/log',
+      path    => '/var/www/var/log',
       owner   => 'www',
       require => User['www']
   }
