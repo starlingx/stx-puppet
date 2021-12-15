@@ -4,13 +4,23 @@ define ptp_config_files(
   $global_parameters,
   $interfaces,
   $ensure,
-  $enable
+  $enable,
+  $cmdline_opts,
+  $id
 ) {
   file { $_name:
     ensure  => file,
-    path    => "/etc/${service}-${_name}.conf",
+    path    => "/etc/ptpinstance/${service}-${_name}.conf",
     mode    => '0644',
-    content => template('platform/ptpinstance.conf.erb')
+    content => template('platform/ptpinstance.conf.erb'),
+    require => File['/etc/ptpinstance']
+  }
+  -> file { "${_name}-sysconfig":
+    ensure  => file,
+    path    => "/etc/sysconfig/ptpinstance/${service}-instance-${_name}",
+    mode    => '0644',
+    content => template("platform/${service}-instance.erb"),
+    require => File['/etc/sysconfig/ptpinstance']
   }
   -> service { $_name:
     ensure     => $ensure,
@@ -57,17 +67,19 @@ class platform::ptpinstance (
     $phc2sys_cmd_opts = ''
   }
 
-  file { 'ptp4l_service':
+  file {'/etc/ptpinstance':
+    ensure =>  directory,
+    mode   =>  '0755',
+  }
+  -> file{'/etc/sysconfig/ptpinstance':
+    ensure =>  directory,
+    mode   =>  '0755',
+  }
+  -> file { 'ptp4l_service':
     ensure  => file,
     path    => '/etc/systemd/system/ptp4l@.service',
     mode    => '0644',
     content => template('platform/ptp4l-instance.service.erb')
-  }
-  -> file { 'ptp4l_sysconfig':
-    ensure  => file,
-    path    => '/etc/sysconfig/ptp4l-instance',
-    mode    => '0644',
-    content => template('platform/ptp4l-instance.erb'),
   }
   -> file { 'phc2sys_service':
     ensure  => file,
@@ -75,24 +87,12 @@ class platform::ptpinstance (
     mode    => '0644',
     content => template('platform/phc2sys-instance.service.erb'),
     }
-  -> file { 'phc2sys_sysconfig':
-    ensure  => file,
-    path    => '/etc/sysconfig/phc2sys-instance',
-    mode    => '0644',
-    content => template('platform/phc2sys-instance.erb'),
-  }
   -> file { 'ts2phc_service':
     ensure  => file,
     path    => '/etc/systemd/system/ts2phc@.service',
     mode    => '0644',
     content => template('platform/ts2phc-instance.service.erb'),
     }
-  -> file { 'ts2phc_sysconfig':
-    ensure  => file,
-    path    => '/etc/sysconfig/ts2phc-instance',
-    mode    => '0644',
-    content => template('platform/ts2phc-instance.erb'),
-  }
   -> exec { 'systemctl-daemon-reload':
     command => '/usr/bin/systemctl daemon-reload',
   }

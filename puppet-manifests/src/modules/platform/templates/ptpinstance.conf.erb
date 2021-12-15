@@ -13,7 +13,7 @@
 <%- interface['port_names'].each do |port| -%>
 [<%= port %>]
 ##
-## Associated interface: <%= interface['_ifname'] %>
+## Associated interface: <%= interface['ifname'] %>
 ##
 <%- interface['parameters'].each do |key,value| -%>
 <%= key %> <%= value %>
