@@ -1108,6 +1108,7 @@ class platform::kubernetes::master::rootca::pods::trustbothcas::runtime
     provider    => shell,
     command     => template('platform/kube-rootca-update-pods.erb'),
     timeout     => 600,
+    logoutput   => true,
   }
 }
 
@@ -1118,6 +1119,7 @@ class platform::kubernetes::master::rootca::pods::trustnewca::runtime
     provider    => shell,
     command     => template('platform/kube-rootca-update-pods.erb'),
     timeout     => 600,
+    logoutput   => true,
   }
 }
 
