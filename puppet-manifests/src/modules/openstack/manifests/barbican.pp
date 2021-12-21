@@ -29,7 +29,11 @@ class openstack::barbican
     group  => 'barbican',
   }
 
-  $api_workers = $::platform::params::eng_workers_by_4
+  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+    $api_workers = min($::platform::params::eng_workers_by_4, 3)
+  } else {
+    $api_workers = $::platform::params::eng_workers_by_4
+  }
 
   file_line { 'Modify workers in gunicorn-config.py':
     path  => '/etc/barbican/gunicorn-config.py',

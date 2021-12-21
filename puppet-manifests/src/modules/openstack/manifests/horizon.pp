@@ -86,8 +86,11 @@ class openstack::horizon
       content => template('openstack/lighttpd-inc.conf.erb')
   }
 
-  $workers = $::platform::params::eng_workers_by_2
-
+  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+    $workers = min($::platform::params::eng_workers_by_2, 6)
+  } else {
+    $workers = $::platform::params::eng_workers_by_2
+  }
   if str2bool($::is_initial_config) {
     exec { 'Stop lighttpd':
       command => 'systemctl stop lighttpd; systemctl disable lighttpd',
