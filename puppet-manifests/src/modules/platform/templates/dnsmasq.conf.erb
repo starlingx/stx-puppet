@@ -69,9 +69,9 @@ dhcp-match=set:bios,option:client-arch,5
 enable-tftp
 tftp-max=200
 <%- if @pxeboot_interface != nil -%>
-tftp-root=/pxeboot,<%= @pxeboot_interface %>
+tftp-root=/var/pxeboot,<%= @pxeboot_interface %>
 <%- else -%>
-tftp-root=/pxeboot,<%= @mgmt_interface %>
+tftp-root=/var/pxeboot,<%= @mgmt_interface %>
 <%- end -%>
 
 dhcp-boot=tag:bios,tag:pxeboot,pxelinux.0,<%= @pxeboot_hostname %>,<%= @pxeboot_controller_address %>
