@@ -5,7 +5,7 @@ class platform::containerd::params (
   $no_proxy     = undef,
   $k8s_registry    = undef,
   $insecure_registries = undef,
-  $k8s_cni_bin_dir = '/usr/libexec/cni',
+  $k8s_cni_bin_dir = '/opt/cni/bin',
   $stream_server_address = 'localhost',
   $custom_container_runtime = undef,
 ) { }

@@ -46,7 +46,7 @@ SASLAUTH=""
 
 <%- if @bind_anonymous != true -%>
 BINDDN="cn=ldapadmin,dc=cgcs,dc=local"
-BINDPWDFILE="/usr/local/etc/ldapscripts/ldapscripts.passwd"
+BINDPWDFILE="/etc/ldapscripts/ldapscripts.passwd"
 <%- end -%>
 
 # For older versions of OpenLDAP, it is still possible to use

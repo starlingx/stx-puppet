@@ -24,13 +24,6 @@ class platform::users
     password_max_age => $sysadmin_password_max_age,
     shell            => '/bin/sh',
   }
-
-  # Keyring should only be executable by 'sys_protected'.
-  -> file { '/usr/bin/keyring':
-    owner => 'root',
-    group =>  $::platform::params::protected_group_name,
-    mode  => '0750',
-  }
 }
 
 
