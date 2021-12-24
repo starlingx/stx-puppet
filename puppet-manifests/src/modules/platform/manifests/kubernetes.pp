@@ -1026,6 +1026,11 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
   -> exec { 'restart_apiserver':
     command => "/usr/bin/kill -s SIGHUP $(pidof kube-apiserver)",
   }
+  # Update controller-manager.conf with the new cert
+  -> exec { 'update_controller-manager_conf':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/controller-manager.conf' ],
+    command     => 'kubectl config set-cluster kubernetes --certificate-authority /etc/kubernetes/pki/ca.crt --embed-certs',
+  }
   # Update kube-controller-manager.yaml with the new cert and key,
   # this also restart controller-manager
   -> exec { 'update_controller-manager_yaml':
