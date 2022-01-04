@@ -1,7 +1,7 @@
 <%# Kubeadm stores the cluster configuration as a configmap in the cluster. -%>
 <%# We will update that configmap to have the new apiserver cert SANs. -%>
 <%# In order to restart kube-apiserver, we will use the "kubeadm init phase" -%>
-<%# command and feed it with the output of "kubeadm config view". -%>
+<%# command and feed it with the current ClusterConfiguration from "kubectl get cm -n kube-system kubeadm-config". -%>
 <%# This keeps the configmap consistent and keeps kube-apiserver managed by kubeadm. -%>
 
 s_exit() {
@@ -35,7 +35,7 @@ if [ $? -ne 0 ]; then
     s_exit 1
 fi
 
-kubeadm --kubeconfig=/etc/kubernetes/admin.conf config view > "$config_temp_file"
+kubectl --kubeconfig=/etc/kubernetes/admin.conf get cm -n kube-system kubeadm-config -o=jsonpath='{.data.ClusterConfiguration}' > "$config_temp_file"
 if [ $? -ne 0 ]; then
     echo "Dump cluster config failed."
     s_exit 1
