@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ################################################################################
-# Copyright (c) 2016-2020 Wind River Systems, Inc.
+# Copyright (c) 2016-2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -291,6 +291,22 @@ function is_eq_ifcfg {
     return $?
 }
 
+#
+# returns $(true) if vlan device is configured in the kernel
+#
+function is_vlan_device_present_on_kernel {
+    local cfg=$1
+    local device_value=''
+    if [ -f $cfg ]; then
+        device_value=$(cat $cfg | grep DEVICE= | awk -F "=" {'print $2'})
+        /usr/sbin/ip link show dev $device_value > /dev/null 2>&1
+        if [[ $? -eq 0 ]]; then
+            return $(true)
+        fi
+    fi
+    return $(false)
+}
+
 # Synchronize with sysinv-agent audit (ifup/down to query link speed).
 function sysinv_agent_lock {
     case $1 in
@@ -390,6 +406,21 @@ function update_interfaces {
     upDown=()
     changed=()
     vlans=()
+
+    for cfg_path in $(find /etc/sysconfig/network-scripts/ -name "${IFNAME_INCLUDE}"); do
+        cfg=$(basename $cfg_path)
+        if is_vlan /etc/sysconfig/network-scripts/$cfg; then
+            # in DOR scenarios systemd might timeout to configure some interfaces since DHCP server
+            # might not be ready yet on the controller. If this happens the next interfaces in
+            # /etc/sysconfig/network-scripts/ will not be configured, as the timeout will interrupt
+            # the network service.
+            is_vlan_device_present_on_kernel $cfg_path
+            if [ $? -ne 0 ] ; then
+                log_it "$cfg - not present on the kernel, bring up before proceeding"
+                do_if_up $cfg_path
+            fi
+        fi
+    done
 
     for cfg_path in $(find /var/run/network-scripts.puppet/ -name "${IFNAME_INCLUDE}"); do
         cfg=$(basename $cfg_path)
