@@ -207,6 +207,7 @@ define platform::interfaces::sriov_bind (
       logoutput => true,
       require   => [ Kmod::Load[$driver] ],
     }
+    -> Platform::Interfaces::Sriov_ratelimit <| addr == $addr |>
   }
 }
 
