@@ -12,7 +12,7 @@ class platform::vswitch
 
   Class[$name] -> Class['::platform::network']
 
-  if $::platform::params::vswitch_type != 'none' {
+  if $::platform::params::vswitch_type != 'none' and $enabled {
     $enable_unsafe_noiommu_mode = bool2num(!$iommu_enabled)
     exec {'vfio-iommu-mode':
       command => "echo ${enable_unsafe_noiommu_mode} > /sys/module/vfio/parameters/enable_unsafe_noiommu_mode",
