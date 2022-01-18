@@ -191,21 +191,6 @@ class platform::etcd::upgrade::runtime
       try_sleep => 3,
     }
 
-    -> exec { 'create-etcd-root-account':
-      command => "etcdctl --cert-file=${etcd_cert} --key-file=${etcd_key} --ca-file=${etcd_ca} --endpoint=${server_url} \
-                  user add root:sysadmin",
-    }
-
-    -> exec { 'create-etcd-user-account':
-      command => "etcdctl --cert-file=${etcd_cert} --key-file=${etcd_key} --ca-file=${etcd_ca} --endpoint=${server_url} \
-                  user add apiserver-etcd-client:sysadmin",
-    }
-
-    -> exec { 'enable-etcd-auth':
-      command => "etcdctl --cert-file=${etcd_cert} --key-file=${etcd_key} --ca-file=${etcd_ca} --endpoint=${server_url} \
-                  auth enable",
-      returns => [0,1]
-    }
     # Wait for kube-apiserver to be up to ensure the system is ready
     -> exec { 'wait_for_kube_apiserver':
       command   => '/usr/bin/curl -k -f -m 15 https://localhost:6443/readyz',
