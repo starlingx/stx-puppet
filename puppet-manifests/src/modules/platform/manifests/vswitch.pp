@@ -3,7 +3,7 @@ class platform::vswitch::params(
   $iommu_enabled = true,
   $hugepage_dir = '/mnt/huge-1048576kB',
   $driver_type = 'vfio-pci',
-  $vswitch_class = ::platform::vswitch::ovs_dpdk,
+  $vswitch_class = ::platform::vswitch::ovs,
 ) { }
 
 
@@ -83,7 +83,7 @@ define platform::vswitch::ovs::flow(
 }
 
 
-class platform::vswitch::ovs_dpdk(
+class platform::vswitch::ovs(
   $devices = {},
   $bridges = {},
   $ports = {},
