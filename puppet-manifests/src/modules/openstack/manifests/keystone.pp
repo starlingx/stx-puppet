@@ -275,27 +275,61 @@ class openstack::keystone::bootstrap(
       group   => 'keystone',
       mode    => '0640',
       content => template('openstack/keystone-extra.conf.erb'),
-    }
-    -> class { '::keystone':
-      enabled               => true,
-      enable_bootstrap      => true,
-      fernet_key_repository => "${keystone_key_repo_path}/fernet-keys",
-      sync_db               => true,
-      default_domain        => $default_domain,
-      default_transport_url => $::platform::amqp::params::transport_url,
+      before  => Class['::keystone']
     }
 
-    include ::keystone::client
-    include ::keystone::endpoint
-    include ::keystone::roles::admin
+    case $::osfamily {
+        'RedHat': {
+            class { '::keystone':
+              enabled               => true,
+              enable_bootstrap      => true,
+              fernet_key_repository => "${keystone_key_repo_path}/fernet-keys",
+              sync_db               => true,
+              default_domain        => $default_domain,
+              default_transport_url => $::platform::amqp::params::transport_url,
+            }
+            include ::keystone::client
+            include ::keystone::endpoint
+            include ::keystone::roles::admin
+            # disabling the admin token per openstack recommendation
+            include ::keystone::disable_admin_token_auth
+            $dc_required_classes = [ Class['::keystone::roles::admin'],
+                    Class['::openstack::barbican::bootstrap'],
+                    Class['::platform::sysinv::bootstrap'],
+                    Class['::platform::mtce::bootstrap'],
+                    Class['::platform::fm::bootstrap'],
+                    Class['::platform::dcmanager::bootstrap']]
+        }
+
+        default: {
+            # overrides keystone class, including hieradata service_name
+            #  service_name          => 'keystone',
+
+            class { '::keystone':
+              enabled               => true,
+              service_name          => 'keystone',
+              fernet_key_repository => "${keystone_key_repo_path}/fernet-keys",
+              sync_db               => true,
+              default_domain        => $default_domain,
+              default_transport_url => $::platform::amqp::params::transport_url,
+            }
+
+            class { '::keystone::bootstrap':
+              password => lookup('keystone::roles::admin::password'),
+            }
+            $dc_required_classes = [ Class['::keystone::bootstrap'],
+                    Class['::openstack::barbican::bootstrap'],
+                    Class['::platform::sysinv::bootstrap'],
+                    Class['::platform::mtce::bootstrap'],
+                    Class['::platform::fm::bootstrap'],
+                    Class['::platform::dcmanager::bootstrap']]
+        }
+    }
 
     # Ensure the default _member_ role is present
     keystone_role { '_member_':
       ensure => present,
     }
-
-    # disabling the admin token per openstack recommendation
-    include ::keystone::disable_admin_token_auth
 
     if $dc_services_project_id {
       exec { 'update keystone assignment target id for services to match system controller':
@@ -304,12 +338,7 @@ class openstack::keystone::bootstrap(
         user    => 'postgres',
         # keystone interleaves creation of users, projects, roles and assignments and internally caches ids so we have to wait until all the
         # users of services project are completed before we can manipulate the database entries
-        require => [ Class['::keystone::roles::admin'],
-                    Class['::openstack::barbican::bootstrap'],
-                    Class['::platform::sysinv::bootstrap'],
-                    Class['::platform::mtce::bootstrap'],
-                    Class['::platform::fm::bootstrap'],
-                    Class['::platform::dcmanager::bootstrap']],
+        require => $dc_required_classes,
       }
       -> exec { 'update keystone services project id to match system controller':
         command => "psql -d keystone -c \"update public.project set id='${dc_services_project_id}' where name='services'\"",
@@ -403,7 +432,17 @@ class openstack::keystone::server::runtime {
 class openstack::keystone::endpoint::runtime {
 
   if str2bool($::is_controller_active) {
-    include ::keystone::endpoint
+    case $::osfamily {
+        'RedHat': {
+            include ::keystone::endpoint
+        }
+
+        default: {
+            class { '::keystone::bootstrap':
+              password => lookup('keystone::roles::admin::password'),
+            }
+        }
+    }
 
     include ::sysinv::keystone::auth
     include ::patching::keystone::auth
@@ -512,16 +551,35 @@ class openstack::keystone::upgrade (
       group   => 'keystone',
       mode    => '0640',
       content => template('openstack/keystone-extra.conf.erb'),
+      before  => Class['::keystone']
     }
-    -> class { '::keystone':
-      upgrade_token_cmd     => $upgrade_token_cmd,
-      upgrade_token_file    => $upgrade_token_file,
-      enable_fernet_setup   => true,
-      enable_bootstrap      => false,
-      fernet_key_repository => "${keystone_key_repo}/fernet-keys",
-      sync_db               => false,
-      default_domain        => undef,
-      default_transport_url => $::platform::amqp::params::transport_url,
+
+    case $::osfamily {
+        'RedHat': {
+            class { '::keystone':
+              upgrade_token_cmd     => $upgrade_token_cmd,
+              upgrade_token_file    => $upgrade_token_file,
+              enable_fernet_setup   => true,
+              enable_bootstrap      => false,
+              fernet_key_repository => "${keystone_key_repo}/fernet-keys",
+              sync_db               => false,
+              default_domain        => undef,
+              default_transport_url => $::platform::amqp::params::transport_url,
+            }
+        }
+
+        default: {
+            class { '::keystone':
+              service_name          => 'keystone',
+              upgrade_token_cmd     => $upgrade_token_cmd,
+              upgrade_token_file    => $upgrade_token_file,
+              enable_fernet_setup   => true,
+              fernet_key_repository => "${keystone_key_repo}/fernet-keys",
+              sync_db               => false,
+              default_domain        => undef,
+              default_transport_url => $::platform::amqp::params::transport_url,
+            }
+        }
     }
 
     # Add service account and endpoints for any new R6 services...
