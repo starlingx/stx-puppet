@@ -36,6 +36,111 @@ define ptp_config_files(
   }
 }
 
+
+define nic_clock_handler (
+  $ifname,
+  $parameters,
+  $port_name,
+  $port_names,
+  $uuid,
+  $base_port,
+  $wpc_commands = {
+    'sma1' => {
+        'input' => "1 1 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1",
+        'output' => "2 1 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1"
+    },
+    'sma2' => {
+        'input' => "1 2 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2",
+        'output' => "2 2 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2"
+    },
+    'u.fl1' => {
+        'output' => "2 1 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL1"
+    },
+    'u.fl2' => {
+        'input' => "1 2 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2"
+    },
+    'synce_rclka' => {
+        'enabled' => "1 0 > /sys/class/net/${base_port}/device/phy/synce"
+    },
+    'synce_rclkb' => {
+        'enabled' => "1 0 > /sys/class/net/${base_port}/device/phy/synce"
+    }
+  }
+) {
+  $parameters.each |String $parm, String $value| {
+    exec { "${ifname}_${parm}":
+      command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
+        echo ${wpc_commands[$parm][$value]}",
+      provider => shell,
+      onlyif   => "grep 000e /sys/class/net/${base_port}/device/subsystem_device"
+    }
+  }
+}
+
+define nic_clock_reset (
+  $ifname,
+  $parameters,
+  $port_name,
+  $port_names,
+  $uuid,
+  $base_port,
+) {
+  exec { "${ifname}_clear_UFL1":
+    command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
+      echo 0 1 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL1",
+    provider => shell,
+    onlyif   => "grep 000e /sys/class/net/${base_port}/device/subsystem_device"
+  }
+  exec { "${ifname}_clear_UFL2":
+    command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
+      echo 0 2 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2",
+    provider => shell,
+    onlyif   => "grep 000e /sys/class/net/${base_port}/device/subsystem_device"
+  }
+  exec { "${ifname}_clear_SMA1":
+    command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
+      echo 0 1 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1",
+    provider => shell,
+    onlyif   => "grep 000e /sys/class/net/${base_port}/device/subsystem_device"
+  }
+  exec { "${ifname}_clear_SMA2":
+    command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
+      echo 0 2 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2",
+    provider => shell,
+    onlyif   => "grep 000e /sys/class/net/${base_port}/device/subsystem_device"
+  }
+  exec { "${ifname}_clear_rclka":
+    command  => "echo 0 0 > /sys/class/net/${base_port}/device/phy/synce",
+    provider => shell,
+    onlyif   => "grep 000e /sys/class/net/${base_port}/device/subsystem_device"
+  }
+  exec { "${ifname}_clear_rclkb":
+    command  => "echo 0 1 > /sys/class/net/${base_port}/device/phy/synce",
+    provider => shell,
+    onlyif   => "grep 000e /sys/class/net/${base_port}/device/subsystem_device"
+  }
+}
+
+class platform::ptpinstance::nic_clock (
+  $nic_clock_config = {},
+  $nic_clock_enabled = false,
+) {
+  require ::platform::ptpinstance::nic_reset
+
+  if $nic_clock_enabled {
+    create_resources('nic_clock_handler', $nic_clock_config)
+  }
+}
+
+class platform::ptpinstance::nic_reset (
+  $nic_clock_config = {},
+  $nic_clock_enabled = false,
+) {
+  if $nic_clock_enabled {
+    create_resources('nic_clock_reset', $nic_clock_config)
+  }
+}
+
 class platform::ptpinstance (
   $enabled = false,
   $runtime = false,
@@ -116,5 +221,6 @@ class platform::ptpinstance (
 
 class platform::ptpinstance::runtime {
   class { 'platform::ptpinstance': runtime => true }
+  class { 'platform::ptpinstance::nic_clock': }
 }
 
