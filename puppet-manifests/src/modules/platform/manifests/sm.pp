@@ -924,6 +924,12 @@ class platform::sm
     -> exec { 'Provision DCManager-Manager in SM (service dcmanager-manager)':
       command => 'sm-provision service dcmanager-manager',
     }
+    -> exec { 'Provision DCManager-State (service-group-member dcmanager-state)':
+      command => 'sm-provision service-group-member distributed-cloud-services dcmanager-state',
+    }
+    -> exec { 'Provision DCManager-State in SM (service dcmanager-state)':
+      command => 'sm-provision service dcmanager-state',
+    }
     -> exec { 'Provision DCManager-Audit (service-group-member dcmanager-audit)':
       command => 'sm-provision service-group-member distributed-cloud-services dcmanager-audit',
     }
@@ -986,6 +992,9 @@ class platform::sm
     }
     -> exec { 'Configure Platform - DCManager-Manager':
       command => "sm-configure service_instance dcmanager-manager dcmanager-manager \"\"",
+    }
+    -> exec { 'Configure Platform - DCManager-State':
+      command => "sm-configure service_instance dcmanager-state dcmanager-state \"\"",
     }
     -> exec { 'Configure Platform - DCManager-Audit':
       command => "sm-configure service_instance dcmanager-audit dcmanager-audit \"\"",
