@@ -36,11 +36,9 @@ define ptp_config_files(
   }
 }
 
-
 define nic_clock_handler (
   $ifname,
   $parameters,
-  $port_name,
   $port_names,
   $uuid,
   $base_port,
@@ -63,16 +61,29 @@ define nic_clock_handler (
         'enabled' => "1 0 > /sys/class/net/${base_port}/device/phy/synce"
     },
     'synce_rclkb' => {
-        'enabled' => "1 0 > /sys/class/net/${base_port}/device/phy/synce"
+        'enabled' => "1 1 > /sys/class/net/${base_port}/device/phy/synce"
     }
   }
 ) {
+  file { "${ifname}-clock":
+    ensure  => file,
+    path    => '/etc/ptpinstance/clock-conf.conf',
+    mode    => '0644',
+    require => File['/etc/ptpinstance']
+  }
+  -> exec { "${ifname}_heading":
+    command  => "echo [${base_port}] >> /etc/ptpinstance/clock-conf.conf",
+  }
   $parameters.each |String $parm, String $value| {
     exec { "${ifname}_${parm}":
       command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
         echo ${wpc_commands[$parm][$value]}",
       provider => shell,
-      onlyif   => "grep 000e /sys/class/net/${base_port}/device/subsystem_device"
+      onlyif   => "grep 000e /sys/class/net/${base_port}/device/subsystem_device",
+      require  => Exec["${ifname}_heading"]
+    }
+    -> exec { "${ifname}_${parm}_to_file":
+      command  => "echo ${parm} ${value} >> /etc/ptpinstance/clock-conf.conf"
     }
   }
 }
@@ -80,7 +91,6 @@ define nic_clock_handler (
 define nic_clock_reset (
   $ifname,
   $parameters,
-  $port_name,
   $port_names,
   $uuid,
   $base_port,
@@ -110,14 +120,12 @@ define nic_clock_reset (
     onlyif   => "grep 000e /sys/class/net/${base_port}/device/subsystem_device"
   }
   exec { "${ifname}_clear_rclka":
-    command  => "echo 0 0 > /sys/class/net/${base_port}/device/phy/synce",
-    provider => shell,
-    onlyif   => "grep 000e /sys/class/net/${base_port}/device/subsystem_device"
+    command => "echo 0 0 > /sys/class/net/${base_port}/device/phy/synce",
+    onlyif  => "grep 000e /sys/class/net/${base_port}/device/subsystem_device"
   }
   exec { "${ifname}_clear_rclkb":
-    command  => "echo 0 1 > /sys/class/net/${base_port}/device/phy/synce",
-    provider => shell,
-    onlyif   => "grep 000e /sys/class/net/${base_port}/device/subsystem_device"
+    command => "echo 0 1 > /sys/class/net/${base_port}/device/phy/synce",
+    onlyif  => "grep 000e /sys/class/net/${base_port}/device/subsystem_device"
   }
 }
 
@@ -125,19 +133,23 @@ class platform::ptpinstance::nic_clock (
   $nic_clock_config = {},
   $nic_clock_enabled = false,
 ) {
-  require ::platform::ptpinstance::nic_reset
+  require ::platform::ptpinstance::nic_clock::nic_reset
 
   if $nic_clock_enabled {
     create_resources('nic_clock_handler', $nic_clock_config)
   }
 }
 
-class platform::ptpinstance::nic_reset (
-  $nic_clock_config = {},
-  $nic_clock_enabled = false,
+class platform::ptpinstance::nic_clock::nic_reset (
+  $nic_clock_config = $platform::ptpinstance::nic_clock::nic_clock_config,
+  $nic_clock_enabled = $platform::ptpinstance::nic_clock::nic_clock_enabled
 ) {
   if $nic_clock_enabled {
     create_resources('nic_clock_reset', $nic_clock_config)
+  }
+  exec { 'clear_clock_conf_file':
+    command => 'echo "" > /etc/ptpinstance/clock-conf.conf',
+    onlyif  => 'stat /etc/ptpinstance/clock-conf.conf'
   }
 }
 
