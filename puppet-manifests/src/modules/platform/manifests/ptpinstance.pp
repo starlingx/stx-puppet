@@ -18,6 +18,7 @@ define ptp_config_files(
   }
   -> file { "${_name}-sysconfig":
     ensure  => file,
+    notify  => Service["instance-${_name}"],
     path    => "/etc/sysconfig/ptpinstance/${service}-instance-${_name}",
     mode    => '0644',
     content => template("platform/${service}-instance.erb"),
@@ -58,21 +59,19 @@ define nic_clock_handler (
         'input' => "1 2 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2"
     },
     'synce_rclka' => {
-        'enabled' => "1 0 > /sys/class/net/${base_port}/device/phy/synce"
+        'enabled' => "1 0 > /sys/class/net/${name}/device/phy/synce"
     },
     'synce_rclkb' => {
-        'enabled' => "1 1 > /sys/class/net/${base_port}/device/phy/synce"
+        'enabled' => "1 1 > /sys/class/net/${name}/device/phy/synce"
     }
   }
 ) {
-  file { "${ifname}-clock":
-    ensure  => file,
-    path    => '/etc/ptpinstance/clock-conf.conf',
-    mode    => '0644',
-    require => File['/etc/ptpinstance']
+  exec { "${ifname}_heading":
+    command => "echo ifname [${name}] >> /etc/ptpinstance/clock-conf.conf",
+    require => File['ensure_clock_conf_present']
   }
-  -> exec { "${ifname}_heading":
-    command  => "echo [${base_port}] >> /etc/ptpinstance/clock-conf.conf",
+  -> exec { "${ifname}_${base_port}_heading":
+    command  => "echo base_port [${base_port}] >> /etc/ptpinstance/clock-conf.conf",
   }
   $parameters.each |String $parm, String $value| {
     exec { "${ifname}_${parm}":
@@ -120,12 +119,12 @@ define nic_clock_reset (
     onlyif   => "grep 000e /sys/class/net/${base_port}/device/subsystem_device"
   }
   exec { "${ifname}_clear_rclka":
-    command => "echo 0 0 > /sys/class/net/${base_port}/device/phy/synce",
-    onlyif  => "grep 000e /sys/class/net/${base_port}/device/subsystem_device"
+    command => "echo 0 0 > /sys/class/net/${name}/device/phy/synce",
+    onlyif  => "grep 000e /sys/class/net/${name}/device/subsystem_device"
   }
   exec { "${ifname}_clear_rclkb":
-    command => "echo 0 1 > /sys/class/net/${base_port}/device/phy/synce",
-    onlyif  => "grep 000e /sys/class/net/${base_port}/device/subsystem_device"
+    command => "echo 0 1 > /sys/class/net/${name}/device/phy/synce",
+    onlyif  => "grep 000e /sys/class/net/${name}/device/subsystem_device"
   }
 }
 
@@ -135,6 +134,12 @@ class platform::ptpinstance::nic_clock (
 ) {
   require ::platform::ptpinstance::nic_clock::nic_reset
 
+  file { 'ensure_clock_conf_present':
+    ensure  => present,
+    path    => '/etc/ptpinstance/clock-conf.conf',
+    mode    => '0644',
+    require => File['/etc/ptpinstance']
+  }
   if $nic_clock_enabled {
     create_resources('nic_clock_handler', $nic_clock_config)
   }
