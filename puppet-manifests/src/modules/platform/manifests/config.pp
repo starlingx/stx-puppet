@@ -260,7 +260,17 @@ class platform::config::kdump {
 class platform::config::certs::ssl_ca
   inherits ::platform::config::certs::params {
 
-  $ssl_ca_file = '/etc/pki/ca-trust/source/anchors/ca-cert.pem'
+  case $::osfamily {
+    'RedHat': {
+      $ssl_ca_file = '/etc/pki/ca-trust/source/anchors/ca-cert.pem'
+      $ca_update_cmd = 'update-ca-trust'
+    }
+    default: {
+      $ssl_ca_file = '/usr/local/share/ca-certificates/ca-cert.crt'
+      $ca_update_cmd = 'update-ca-certificates'
+    }
+  }
+
   if str2bool($::is_initial_config) {
     $containerd_restart_cmd = 'systemctl restart containerd'
   }
@@ -284,8 +294,8 @@ class platform::config::certs::ssl_ca
       path   => $ssl_ca_file
     }
   }
-  exec { 'update-ca-trust ':
-    command     => 'update-ca-trust',
+  exec { 'update-ca-certificates':
+    command     => $ca_update_cmd,
     subscribe   => File[$ssl_ca_file],
     refreshonly => true
   }
