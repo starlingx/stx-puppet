@@ -30,6 +30,7 @@ define ptp_config_files(
     name       => "${service}@${_name}",
     hasstatus  => true,
     hasrestart => true,
+    require    => Exec['ptpinstance-systemctl-daemon-reload']
   }
   -> exec { "enable-${_name}":
     command => "/usr/bin/systemctl enable \
@@ -182,9 +183,21 @@ class platform::ptpinstance (
     ensure =>  directory,
     mode   =>  '0755',
   }
+  -> tidy { 'purge_conf':
+    path    => '/etc/ptpinstance',
+    matches => [ '[^clock]*.conf' ],
+    recurse => true,
+    rmdirs  => false
+  }
   -> file{'/etc/sysconfig/ptpinstance':
     ensure =>  directory,
     mode   =>  '0755',
+  }
+  -> tidy { 'purge_sysconf':
+    path    => '/etc/sysconfig/ptpinstance/',
+    matches => [ '*-instance-*' ],
+    recurse => true,
+    rmdirs  => false
   }
   -> file { 'ptp4l_service_instance':
     ensure  => file,
@@ -197,42 +210,49 @@ class platform::ptpinstance (
     path    => '/etc/systemd/system/phc2sys@.service',
     mode    => '0644',
     content => template('platform/phc2sys-instance.service.erb'),
-    }
+  }
   -> file { 'ts2phc_service_instance':
     ensure  => file,
     path    => '/etc/systemd/system/ts2phc@.service',
     mode    => '0644',
     content => template('platform/ts2phc-instance.service.erb'),
-    }
+  }
+  -> exec { 'stop-ptp4l-instance':
+    command => '/usr/bin/systemctl stop ptp4l@*',
+  }
+  -> exec { 'disable-ptp4l-instance':
+    command => '/usr/bin/systemctl disable ptp4l@*',
+    onlyif  => 'test -f /etc/systemd/system/ptp4l@.service',
+  }
+  -> exec { 'stop-phc2sys-instance':
+    command => '/usr/bin/systemctl stop phc2sys@*',
+  }
+  -> exec { 'disable-phc2sys-instance':
+    command => '/usr/bin/systemctl disable phc2sys@*',
+    onlyif  => 'test -f /etc/systemd/system/phc2sys@.service',
+  }
+  -> exec { 'stop-ts2phc-instance':
+    command => '/usr/bin/systemctl stop ts2phc@*',
+  }
+  -> exec { 'disable-ts2phc-instance':
+    command => '/usr/bin/systemctl disable ts2phc@*',
+    onlyif  => 'test -f /etc/systemd/system/ts2phc@.service',
+  }
   -> exec { 'ptpinstance-systemctl-daemon-reload':
     command => '/usr/bin/systemctl daemon-reload',
+  }
+  -> exec { 'ptpinstance-systemctl-reset-failed-ptp4l':
+    command => '/usr/bin/systemctl reset-failed ptp4l@*',
+  }
+  -> exec { 'ptpinstance-systemctl-reset-failed-phc2sys':
+    command => '/usr/bin/systemctl reset-failed phc2sys@*',
+  }
+  -> exec { 'ptpinstance-systemctl-reset-failed-ts2phc':
+    command => '/usr/bin/systemctl reset-failed ts2phc@*',
   }
 
   if $enabled {
     create_resources('ptp_config_files', $config, $ptp_state)
-  } else {
-    exec { 'disable-ptp4l-instance':
-      command => '/usr/bin/systemctl disable ptp4l@*',
-      onlyif  => 'test -f /etc/systemd/system/ptp4l@.service',
-      require => Exec['ptpinstance-systemctl-daemon-reload'],
-    }
-    -> exec { 'disable-phc2sys-instance':
-      command => '/usr/bin/systemctl disable phc2sys@*',
-      onlyif  => 'test -f /etc/systemd/system/phc2sys@.service',
-    }
-    -> exec { 'disable-ts2phc-instance':
-      command => '/usr/bin/systemctl disable ts2phc@*',
-      onlyif  => 'test -f /etc/systemd/system/ts2phc@.service',
-    }
-    -> exec { 'stop-ptp4l-instance':
-      command => '/usr/bin/systemctl stop ptp4l@*',
-    }
-    -> exec { 'stop-phc2sys-instance':
-      command => '/usr/bin/systemctl stop phc2sys@*',
-    }
-    -> exec { 'stop-ts2phc-instance':
-      command => '/usr/bin/systemctl stop ts2phc@*',
-    }
   }
 }
 
