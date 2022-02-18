@@ -80,7 +80,7 @@ define nic_clock_handler (
         echo ${wpc_commands[$parm][$value]}",
       provider => shell,
       onlyif   => "grep 000e /sys/class/net/${base_port}/device/subsystem_device",
-      require  => Exec["${ifname}_heading"]
+      require  => [ Exec["${ifname}_heading"], Exec["${ifname}_${base_port}_heading"] ]
     }
     -> exec { "${ifname}_${parm}_to_file":
       command  => "echo ${parm} ${value} >> /etc/ptpinstance/clock-conf.conf"
