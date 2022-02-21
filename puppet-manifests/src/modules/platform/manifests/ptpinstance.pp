@@ -217,17 +217,25 @@ class platform::ptpinstance (
     mode    => '0644',
     content => template('platform/ts2phc-instance.service.erb'),
   }
-  -> exec { 'stop-ptp4l-instance':
-    command => '/usr/bin/systemctl stop ptp4l@*',
+  -> exec { 'stop-ptp4l-instances':
+    command => '/usr/bin/systemctl stop ptp4l*',
   }
-  -> exec { 'disable-ptp4l-instance':
+  -> exec { 'disable-ptp4l-single-instance':
+    command => '/usr/bin/systemctl disable ptp4l.service',
+    onlyif  => 'test -f /etc/systemd/system/ptp4l.service',
+  }
+  -> exec { 'disable-ptp4l-multi-instances':
     command => '/usr/bin/systemctl disable ptp4l@*',
     onlyif  => 'test -f /etc/systemd/system/ptp4l@.service',
   }
-  -> exec { 'stop-phc2sys-instance':
-    command => '/usr/bin/systemctl stop phc2sys@*',
+  -> exec { 'stop-phc2sys-instances':
+    command => '/usr/bin/systemctl stop phc2sys*',
   }
-  -> exec { 'disable-phc2sys-instance':
+  -> exec { 'disable-phc2sys-single-instance':
+    command => '/usr/bin/systemctl disable phc2sys.service',
+    onlyif  => 'test -f /etc/systemd/system/phc2sys.service',
+  }
+  -> exec { 'disable-phc2sys-multi-instances':
     command => '/usr/bin/systemctl disable phc2sys@*',
     onlyif  => 'test -f /etc/systemd/system/phc2sys@.service',
   }
@@ -242,10 +250,10 @@ class platform::ptpinstance (
     command => '/usr/bin/systemctl daemon-reload',
   }
   -> exec { 'ptpinstance-systemctl-reset-failed-ptp4l':
-    command => '/usr/bin/systemctl reset-failed ptp4l@*',
+    command => '/usr/bin/systemctl reset-failed ptp4l*',
   }
   -> exec { 'ptpinstance-systemctl-reset-failed-phc2sys':
-    command => '/usr/bin/systemctl reset-failed phc2sys@*',
+    command => '/usr/bin/systemctl reset-failed phc2sys*',
   }
   -> exec { 'ptpinstance-systemctl-reset-failed-ts2phc':
     command => '/usr/bin/systemctl reset-failed ts2phc@*',
