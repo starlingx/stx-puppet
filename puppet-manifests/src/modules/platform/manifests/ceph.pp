@@ -43,6 +43,7 @@ class platform::ceph::params(
   $ceph_config_ready_path = '/var/run/.ceph_started',
   $node_ceph_configured_flag = '/etc/platform/.node_ceph_configured',
   $pmond_ceph_file = '/etc/pmon.d/ceph.conf',
+  $auth_id_reclaim = false,
 ) { }
 
 
@@ -959,6 +960,23 @@ class platform::ceph::upgrade::runtime
 
     ceph_config {
       'global/mon_host': value => $mon_host;
+    }
+  }
+}
+
+class platform::ceph::mon::runtime
+  inherits ::platform::ceph::params {
+
+  if $service_enabled {
+
+    ceph_config {
+      'mon/mon warn on insecure global id reclaim':         value => !$auth_id_reclaim;
+      'mon/mon warn on insecure global id reclaim allowed': value => !$auth_id_reclaim;
+      'mon/auth allow insecure global id reclaim':          value => $auth_id_reclaim;
+    } -> exec { "Change allow insecure global id reclaim to ${auth_id_reclaim}":
+          command => "ceph tell mon.* injectargs '--mon_warn_on_insecure_global_id_reclaim=${!$auth_id_reclaim}';\
+                      ceph tell mon.* injectargs '--mon_warn_on_insecure_global_id_reclaim_allowed=${!$auth_id_reclaim}';\
+                      ceph tell mon.* injectargs '--auth_allow_insecure_global_id_reclaim=${auth_id_reclaim}'"
     }
   }
 }
