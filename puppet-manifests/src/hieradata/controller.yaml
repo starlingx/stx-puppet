@@ -14,6 +14,8 @@ platform::params::hostname: 'controller-0'
 #       The IPv6 entry is required for LDAP clients to connect to the LDAP
 #       server when there are no IPv4 addresses configured, which occurs
 #       during the bootstrap phase.
+#       The IPv6 entries for controller-0 and controller-1 are required for
+#       LDAP syncrepl bind during bootstrap.
 platform::config::params::hosts:
   localhost:
     ip: '127.0.0.1'
@@ -21,6 +23,10 @@ platform::config::params::hosts:
       - localhost.localdomain
       - controller
   controller:
+    ip: '::1'
+  controller-0:
+    ip: '::1'
+  controller-1:
     ip: '::1'
 
 # default parameters, runtime management network configured will override
