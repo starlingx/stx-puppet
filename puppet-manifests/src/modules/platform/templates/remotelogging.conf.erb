@@ -22,6 +22,7 @@ rewrite r_rewrite_set{
   set("<%= @system_name %> daemon-ocf.log ${HOST}", value("HOST") condition(filter(f_daemon_ocf)));
   set("<%= @system_name %> debug ${HOST}", value("HOST") condition(filter(f_err)));
   set("<%= @system_name %> error ${HOST}", value("HOST") condition(filter(f_error)));
+  set("<%= @system_name %> fm-api.log ${HOST}", value("HOST") condition(filter(f_fm_api)));
   set("<%= @system_name %> fm-event.log ${HOST}", value("HOST") condition(filter(f_fm_event)));
   set("<%= @system_name %> fm-manager.log ${HOST}", value("HOST") condition(filter(f_fm_manager)));
   set("<%= @system_name %> ima.log ${HOST}", value("HOST") condition(filter(f_ima)));
