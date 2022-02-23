@@ -1,7 +1,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-# Copyright (C) 2019 Intel Corporation
+# Copyright (C) 2019-2022 Intel Corporation
 #
 
 BINDIR ?= /usr/local/bin
@@ -11,6 +11,8 @@ MODULEDIR ?= /usr/share/puppet/modules
 install:
 	install -m 755 -D bin/puppet-manifest-apply.sh $(BINDIR)/puppet-manifest-apply.sh
 	install -m 755 -D bin/apply_network_config.sh $(BINDIR)/apply_network_config.sh
+	install -m 755 -D bin/network_ifupdown.sh $(BINDIR)/network_ifupdown.sh
+	install -m 755 -D bin/network_sysconfig.sh $(BINDIR)/network_sysconfig.sh
 	install -m 755 -D bin/puppet-update-default-grub.sh $(BINDIR)/puppet-update-default-grub.sh
 	install -d -m 0755 $(CONFIGDIR)
 	install -m 640 etc/hiera.yaml $(CONFIGDIR)/
