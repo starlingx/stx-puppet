@@ -96,14 +96,7 @@ class platform::containerd::config
     $stream_server_address = '127.0.0.1'
   }
 
-  # The full path to kubeadm is used so we do not rely on bindmounts.
-  # NOTE: resources are put together before manifest is applied, so including
-  # bindmounts and require on Mount stage1 will not not work.
   $kubeadm_version = $::platform::kubernetes::params::kubeadm_version
-  $pause_image = chomp(
-    generate('/bin/bash', '-c',
-      "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm config images list --image-repository registry.local:9001/k8s.gcr.io 2>/dev/null | grep pause:")) # lint:ignore:140chars
-  notice("pause_image is ${pause_image}")
 
   file { '/etc/containerd':
     ensure => 'directory',
@@ -117,6 +110,12 @@ class platform::containerd::config
     group   => 'root',
     mode    => '0600',
     content => template('platform/config.toml.erb'),
+  }
+  -> exec { 'set containerd sandbox pause image':
+    # The full path to kubeadm is used so we do not rely on bindmounts.
+    # Determine the appropriate sandbox image.
+    command   => "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm config images list --kubernetes-version ${kubeadm_version} --image-repository=registry.local:9001/k8s.gcr.io 2>/dev/null | grep pause: | xargs -I '{}' sed -i -e '/sandbox_image =/ s|= .*|= \"{}\"|' /etc/containerd/config.toml", # lint:ignore:140chars
+    logoutput => true,
   }
   -> Service['containerd']
   -> exec { 'enable-containerd':
