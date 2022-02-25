@@ -101,7 +101,7 @@ class platform::network::ironic::params(
   $mtu = 1500,
 ) { }
 
-define network_address (
+define platform::network::network_address (
   $address,
   $ifname,
 ) {
@@ -133,14 +133,14 @@ define network_address (
 class platform::network::addresses (
   $address_config = {},
 ) {
-  create_resources('network_address', $address_config, {})
+  create_resources('platform::network::network_address', $address_config, {})
 }
 
 
 # Defines a single route resource for an interface.
 # If multiple are required in the future, then this will need to
 # iterate over a hash to create multiple entries per file.
-define network_route6 (
+define platform::network::network_route6 (
   $prefix,
   $gateway,
   $ifname,
@@ -166,7 +166,7 @@ class platform::network::routes (
   # Add static IPv6 default route since DHCPv6 does not support the router option
   if $::personality != 'controller' {
     if $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
-      network_route6 { 'ipv6 default route':
+      platform::network::network_route6 { 'ipv6 default route':
         prefix  => 'default',
         gateway => $::platform::network::mgmt::params::controller_address,
         ifname  => $::platform::network::mgmt::params::interface_name
@@ -176,7 +176,7 @@ class platform::network::routes (
 }
 
 
-define platform::interfaces::sriov_enable (
+define platform::network::interfaces::sriov_enable (
   $addr,
   $device_id,
   $num_vfs,
@@ -194,7 +194,7 @@ define platform::interfaces::sriov_enable (
 }
 
 
-define platform::interfaces::sriov_bind (
+define platform::network::interfaces::sriov_bind (
   $addr,
   $driver,
   $vfnumber = undef,
@@ -207,22 +207,22 @@ define platform::interfaces::sriov_bind (
       logoutput => true,
       require   => [ Kmod::Load[$driver] ],
     }
-    -> Platform::Interfaces::Sriov_ratelimit <| addr == $addr |>
+    -> Platform::Network::Interfaces::Sriov_ratelimit <| addr == $addr |>
   }
 }
 
-define platform::interfaces::sriov_vf_bind (
+define platform::network::interfaces::sriov_vf_bind (
   $addr,
   $device_id,
   $num_vfs,
   $port_name,
   $vf_config
 ) {
-  create_resources('platform::interfaces::sriov_bind', $vf_config, {})
+  create_resources('platform::network::interfaces::sriov_bind', $vf_config, {})
 }
 
 
-define platform::interfaces::sriov_ratelimit (
+define platform::network::interfaces::sriov_ratelimit (
   $addr,
   $driver,
   $port_name,
@@ -239,42 +239,44 @@ define platform::interfaces::sriov_ratelimit (
   }
 }
 
-define platform::interfaces::sriov_vf_ratelimit (
+define platform::network::interfaces::sriov_vf_ratelimit (
   $addr,
   $device_id,
   $num_vfs,
   $port_name,
   $vf_config
 ) {
-  create_resources('platform::interfaces::sriov_ratelimit', $vf_config, {port_name => $port_name})
+  create_resources('platform::network::interfaces::sriov_ratelimit', $vf_config, {
+    port_name => $port_name
+  })
 }
 
-class platform::interfaces::sriov (
+class platform::network::interfaces::sriov (
   $sriov_config = {}
 ) {
 }
 
-class platform::interfaces::sriov::enable
-  inherits platform::interfaces::sriov {
-  create_resources('platform::interfaces::sriov_enable', $sriov_config, {})
+class platform::network::interfaces::sriov::enable
+  inherits platform::network::interfaces::sriov {
+  create_resources('platform::network::interfaces::sriov_enable', $sriov_config, {})
 }
 
-class platform::interfaces::sriov::config
-  inherits platform::interfaces::sriov {
+class platform::network::interfaces::sriov::config
+  inherits platform::network::interfaces::sriov {
   Anchor['platform::networking'] -> Class[$name]
-  create_resources('platform::interfaces::sriov_vf_bind', $sriov_config, {})
-  create_resources('platform::interfaces::sriov_vf_ratelimit', $sriov_config, {})
+  create_resources('platform::network::interfaces::sriov_vf_bind', $sriov_config, {})
+  create_resources('platform::network::interfaces::sriov_vf_ratelimit', $sriov_config, {})
 }
 
-class platform::interfaces::sriov::runtime {
-  include ::platform::interfaces::sriov::enable
+class platform::network::interfaces::sriov::runtime {
+  include ::platform::network::interfaces::sriov::enable
 }
 
-class platform::interfaces::sriov::vf::runtime {
-  include ::platform::interfaces::sriov::config
+class platform::network::interfaces::sriov::vf::runtime {
+  include ::platform::network::interfaces::sriov::config
 }
 
-define platform::interfaces::fpga::n3000 (
+define platform::network::interfaces::fpga::n3000 (
   $device_id,
   $used_by
 ) {
@@ -284,23 +286,23 @@ define platform::interfaces::fpga::n3000 (
       command   => template('platform/interface.ifup.erb'),
       logoutput => true,
     }
-    -> Platform::Interfaces::Sriov_bind <| |>
+    -> Platform::Network::Interfaces::Sriov_bind <| |>
   }
 }
 
-class platform::interfaces::fpga (
+class platform::network::interfaces::fpga (
   $fpga_config = {}
 ) {
 }
 
-class platform::interfaces::fpga::config
-  inherits platform::interfaces::fpga {
+class platform::network::interfaces::fpga::config
+  inherits platform::network::interfaces::fpga {
   Anchor['platform::networking'] -> Class[$name]
-  create_resources('platform::interfaces::fpga::n3000', $fpga_config, {})
+  create_resources('platform::network::interfaces::fpga::n3000', $fpga_config, {})
 }
 
 
-class platform::interfaces (
+class platform::network::interfaces (
   $network_config = {},
 ) {
   create_resources('network_config', $network_config, {})
@@ -308,13 +310,13 @@ class platform::interfaces (
 
 
 class platform::network::apply {
-  include ::platform::interfaces
+  include ::platform::network::interfaces
   include ::platform::network::addresses
   include ::platform::network::routes
 
   Network_config <| |>
   -> Exec['apply-network-config']
-  -> Network_address <| |>
+  -> Platform::Network::Network_address <| |>
   -> Exec['wait-for-tentative']
   -> Anchor['platform::networking']
 
@@ -327,7 +329,7 @@ class platform::network::apply {
   -> Exec['apply-network-config']
 
   Network_config <| |>
-  -> Network_route6 <| |>
+  -> Platform::Network::Network_route6 <| |>
   -> Exec['apply-network-config']
 
   exec {'apply-network-config':
@@ -394,7 +396,7 @@ class platform::network::routes::runtime {
   # Network_route is empty. See below.
   # https://projects.puppetlabs.com/issues/18399
   Network_route <| |> -> Exec['apply-network-config route setup']
-  Network_route6 <| |> -> Exec['apply-network-config route setup']
+  Platform::Network::Network_route6 <| |> -> Exec['apply-network-config route setup']
 
   exec {'apply-network-config route setup':
     command => 'apply_network_config.sh --routes',
