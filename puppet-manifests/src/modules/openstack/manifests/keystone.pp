@@ -165,7 +165,7 @@ class openstack::keystone::haproxy
   }
 }
 
-define delete_endpoints (
+define openstack::keystone::delete_endpoints (
   $region,
   $service,
   $interfaces,
@@ -217,7 +217,7 @@ class openstack::keystone::api
       $interfaces = [ 'public', 'internal', 'admin' ]
       Keystone_endpoint<||> -> Class['::platform::client']
       # clean up the bootstrap endpoints
-      -> delete_endpoints { 'Start delete endpoints':
+      -> openstack::keystone::delete_endpoints { 'Start delete endpoints':
         region     => 'RegionOne',
         service    => 'keystone',
         interfaces => $interfaces,
@@ -470,22 +470,22 @@ class openstack::keystone::endpoint::runtime {
       # the subcloud region.
       Keystone::Resource::Service_identity <||>
       -> Class['::platform::client']
-      -> delete_endpoints { 'Delete keystone endpoints':
+      -> openstack::keystone::delete_endpoints { 'Delete keystone endpoints':
         region     => 'RegionOne',
         service    => 'keystone',
         interfaces => $interfaces,
       }
-      -> delete_endpoints { 'Delete sysinv endpoints':
+      -> openstack::keystone::delete_endpoints { 'Delete sysinv endpoints':
         region     => 'RegionOne',
         service    => 'sysinv',
         interfaces => $interfaces,
       }
-      -> delete_endpoints { 'Delete barbican endpoints':
+      -> openstack::keystone::delete_endpoints { 'Delete barbican endpoints':
         region     => 'RegionOne',
         service    => 'barbican',
         interfaces => $interfaces,
       }
-      -> delete_endpoints { 'Delete fm endpoints':
+      -> openstack::keystone::delete_endpoints { 'Delete fm endpoints':
         region     => 'RegionOne',
         service    => 'fm',
         interfaces => $interfaces,
