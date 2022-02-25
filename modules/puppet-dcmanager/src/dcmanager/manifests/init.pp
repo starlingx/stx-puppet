@@ -42,7 +42,7 @@ class dcmanager (
   $dcmanager_api_port          = 8119,
   $dcmanager_mtc_inv_label     = '/v1/',
   $region_name                 = 'RegionOne',
-  $keystoneauth_log_level      = 'keystoneauth=ERROR'
+  $log_levels                  = 'keystoneauth=ERROR,eventlet.wsgi.server=WARN'
 ) {
 
   include dcmanager::params
@@ -87,7 +87,7 @@ class dcmanager (
     dcmanager_config {
       'DEFAULT/use_syslog':           value => true;
       'DEFAULT/syslog_log_facility':  value => $log_facility;
-      'DEFAULT/default_log_levels':   value => $keystoneauth_log_level;
+      'DEFAULT/default_log_levels':   value => $log_levels;
     }
   } else {
     dcmanager_config {
