@@ -8,6 +8,14 @@ class platform::ldap::params (
   $bind_anonymous = false,
   $nslcd_threads = 2,
   $nslcd_idle_timelimit = 600,
+  $slapd_etc_path = $::osfamily ? {
+    'RedHat' => '/etc/openldap',
+    default   => '/etc/ldap',
+  },
+  $slapd_mod_path = $::osfamily ? {
+    'RedHat' => '/usr/lib64/openldap',
+    default   => '/usr/lib/ldap',
+  },
 ) {}
 
 class platform::ldap::server
@@ -20,13 +28,13 @@ class platform::ldap::server
 class platform::ldap::server::local
   inherits ::platform::ldap::params {
   exec { 'slapd-convert-config':
-    command => '/usr/sbin/slaptest -f /etc/openldap/slapd.conf -F /etc/openldap/schema/',
-    onlyif  => '/usr/bin/test -e /etc/openldap/slapd.conf'
+    command => "/usr/sbin/slaptest -f ${slapd_etc_path}/slapd.conf -F ${slapd_etc_path}/schema/",
+    onlyif  => "/usr/bin/test -e ${slapd_etc_path}/slapd.conf"
   }
 
   exec { 'slapd-conf-move-backup':
-    command => '/bin/mv -f /etc/openldap/slapd.conf /etc/openldap/slapd.conf.backup',
-    onlyif  => '/usr/bin/test -e /etc/openldap/slapd.conf'
+    command => "/bin/mv -f ${slapd_etc_path}/slapd.conf ${slapd_etc_path}/slapd.conf.backup",
+    onlyif  => "/usr/bin/test -e ${slapd_etc_path}/slapd.conf"
   }
 
   service { 'nscd':
@@ -55,9 +63,9 @@ class platform::ldap::server::local
                           -e 's:serverID.*:serverID ${server_id}:' \\
                           -e 's:credentials.*:credentials=${admin_pw}:' \\
                           -e 's:^rootpw .*:rootpw ${admin_hashed_pw}:' \\
-                          -e 's:modulepath .*:modulepath /usr/lib64/openldap:' \\
-                          /etc/openldap/slapd.conf",
-    onlyif  => '/usr/bin/test -e /etc/openldap/slapd.conf'
+                          -e 's:modulepath .*:modulepath ${slapd_mod_path}:' \\
+                          ${slapd_etc_path}/slapd.conf",
+    onlyif  => "/usr/bin/test -e ${slapd_etc_path}/slapd.conf"
   }
 
   # don't populate the adminpw if binding anonymously
@@ -67,9 +75,11 @@ class platform::ldap::server::local
     }
   }
 
-  file { '/usr/share/cracklib/cracklib-small':
-    ensure => link,
-    target => '/usr/share/cracklib/cracklib-small.pwd',
+  if $::osfamily == 'RedHat' {
+    file { '/usr/share/cracklib/cracklib-small':
+      ensure => link,
+      target => '/usr/share/cracklib/cracklib-small.pwd',
+    }
   }
 
   # start openldap with updated config and updated nsswitch
@@ -81,12 +91,15 @@ class platform::ldap::server::local
   -> Service['openldap']
   -> Exec['slapd-convert-config']
   -> Exec['slapd-conf-move-backup']
+  -> exec { 'restart-openldap':
+    command => '/usr/bin/systemctl restart slapd.service',
+  }
 }
 
 
 class platform::ldap::client
   inherits ::platform::ldap::params {
-  file { '/etc/openldap/ldap.conf':
+  file { "${slapd_etc_path}/ldap.conf":
       ensure  => 'present',
       replace => true,
       content => template('platform/ldap.conf.erb'),
@@ -132,7 +145,7 @@ class platform::ldap::bootstrap
   $dn = 'cn=ldapadmin,dc=cgcs,dc=local'
 
   exec { 'populate initial ldap configuration':
-    command => "ldapadd -D ${dn} -w \"${admin_pw}\" -f /etc/openldap/initial_config.ldif"
+    command => "ldapadd -D ${dn} -w \"${admin_pw}\" -f ${slapd_etc_path}/initial_config.ldif"
   }
   -> exec { 'create ldap admin user':
     command => 'ldapadduser admin root'
