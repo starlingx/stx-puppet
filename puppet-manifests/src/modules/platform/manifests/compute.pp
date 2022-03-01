@@ -290,38 +290,6 @@ class platform::compute::resctrl {
   }
 }
 
-# Set Power Management QoS resume latency constraints for CPUs.
-# The PM QoS resume latency limit is set to shallow C-state for vswitch CPUs.
-# All other CPUs are allowed to go to the deepest C-state available.
-class platform::compute::pmqos (
-  $low_wakeup_cpus = '',
-  $hight_wakeup_cpus = '',
-) {
-
-  if str2bool($::is_worker_subfunction) and str2bool($::is_lowlatency_subfunction) {
-
-    $script = '/usr/bin/set-cpu-wakeup-latency.sh'
-
-    if $low_wakeup_cpus != '""' {
-      # Set low wakeup latency (shallow C-state) for vswitch CPUs using PM QoS interface
-      exec { 'low-wakeup-latency':
-        command   => "${script} low ${low_wakeup_cpus}",
-        onlyif    => "test -f ${script}",
-        logoutput => true,
-      }
-    }
-
-    if $hight_wakeup_cpus != '""' {
-      #Set high wakeup latency (deep C-state) for non-vswitch CPUs using PM QoS interface
-      exec { 'high-wakeup-latency':
-        command   => "${script} high ${hight_wakeup_cpus}",
-        onlyif    => "test -f ${script}",
-        logoutput => true,
-      }
-    }
-  }
-}
-
 # Set systemd machine.slice cgroup cpuset to be used with VMs,
 # and configure this cpuset to span all logical cpus and numa nodes.
 # NOTES:
@@ -391,7 +359,6 @@ class platform::compute {
 
   require ::platform::compute::hugetlbf
   require ::platform::compute::allocate
-  require ::platform::compute::pmqos
   require ::platform::compute::resctrl
   require ::platform::compute::machine
   require ::platform::compute::config
