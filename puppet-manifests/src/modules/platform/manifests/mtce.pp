@@ -35,7 +35,7 @@ class platform::mtce
     content => template('mtce/mtc_ini.erb'),
   }
 
-  $boot_device = $::boot_disk_device_path
+  $boot_device = $::boot_disk_persistent_name
 }
 
 
