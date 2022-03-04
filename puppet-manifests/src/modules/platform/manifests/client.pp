@@ -16,6 +16,11 @@ class platform::client
   include ::platform::client::credentials::params
   $keyring_file = $::platform::client::credentials::params::keyring_file
 
+  $openstack_bash_completion = $::osfamily ? {
+    'Debian' => '/usr/share/bash-completion/completions/openstack',
+    default  => '/etc/bash_completion.d/openstack',
+  }
+
   file {'/etc/platform/openrc':
     ensure  => 'present',
     mode    => '0640',
@@ -23,7 +28,7 @@ class platform::client
     group   => 'root',
     content => template('platform/openrc.admin.erb'),
   }
-  -> file {'/etc/bash_completion.d/openstack':
+  -> file {$openstack_bash_completion:
     ensure  => 'present',
     mode    => '0644',
     content => generate('/usr/bin/openstack', 'complete'),
