@@ -342,9 +342,7 @@ class platform::network::apply {
 }
 
 
-class platform::network (
-  $mlx4_core_options = undef,
-) {
+class platform::network {
   include ::platform::params
   include ::platform::network::mgmt::params
   include ::platform::network::cluster_host::params
@@ -362,18 +360,6 @@ class platform::network (
         require => Anchor['platform::networking'],
         onlyif  => 'test ! -f /etc/platform/simplex',
       }
-    }
-  }
-
-  if $mlx4_core_options {
-    exec { 'mlx4-core-config':
-      command     => '/usr/bin/mlx4_core_config.sh',
-      subscribe   => File['/etc/modprobe.d/mlx4_sriov.conf'],
-      refreshonly => true
-    }
-
-    file {'/etc/modprobe.d/mlx4_sriov.conf':
-      content => "options mlx4_core ${mlx4_core_options}"
     }
   }
 }
