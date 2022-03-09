@@ -240,6 +240,13 @@ function verify_all_vlans_created {
     done
 }
 
+# If in CentOS, remove alias portion in the interface name if any.
+function get_search_ifname {
+    cfg=$1
+    base_cfg=${cfg/:*/}
+    echo ${base_cfg}
+}
+
 function update_routes {
     # First thing to do is deal with the case of there being no routes left on an interface.
     # In this case, there will be no route-<if> in the puppet directory.

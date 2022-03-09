@@ -352,6 +352,12 @@ function iftype_filter {
     return $(false)
 }
 
+# If in Debian, return interface name, with or without label
+function get_search_ifname {
+    cfg=$1
+    base_cfg=${cfg}
+    echo ${base_cfg}
+}
 
 #
 # Process static routes
@@ -359,4 +365,3 @@ function iftype_filter {
 function update_routes {
     log_it "to be implemented: update_routes"
 }
-

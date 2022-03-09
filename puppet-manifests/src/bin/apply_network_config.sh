@@ -166,11 +166,12 @@ function update_interfaces {
                 is_eq_ifcfg ${PUPPET_DIR}/${cfg} ${ETC_DIR}/${cfg}
                 if [ $? -ne 0 ] ; then
                     log_it "${cfg} changed"
-                    # Remove alias portion in the interface name if any.
                     # Check if the base interface is already on the list for
                     # restart. If not, add it to the list.
-                    # The alias interface does not need to be restarted.
-                    base_cfg=${cfg/:*/}
+                    # If in CentOS, remove alias portion in the interface name if any.
+                    #               The alias interface does not need to be restarted.
+                    # If in Debian, use the interface name, with or without label
+                    base_cfg=$(get_search_ifname ${cfg})
                     found=0
                     for chk in ${upDown[@]}; do
                         if [ "${base_cfg}" = "${chk}" ]; then
