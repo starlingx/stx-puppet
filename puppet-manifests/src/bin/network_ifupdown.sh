@@ -12,6 +12,8 @@
 
 export IFNAME_INCLUDE="ifcfg-*"
 export PUPPET_FILE="/var/run/network-scripts.puppet/interfaces"
+export PUPPET_ROUTES_FILE="/var/run/network-scripts.puppet/routes"
+export ETC_ROUTES_FILE="/etc/network/routes"
 export ETC_DIR="/etc/network/interfaces.d/"
 
 #
@@ -250,7 +252,7 @@ function is_eq_ifcfg {
     local puppet_data
     local etc_data
 
-    if [ ! -f $etc_cfg ]; then
+    if [ ! -f ${etc_cfg} ]; then
         return $(false)
     fi
 
@@ -359,9 +361,109 @@ function get_search_ifname {
     echo ${base_cfg}
 }
 
+function get_prefix_length {
+    netmask=$1
+    awk -F. '{
+    split($0, octets)
+    for (i in octets) {
+        mask += 8 - log(2**8 - octets[i])/log(2);
+    }
+    print "/" mask
+    }' <<< ${netmask}
+}
+
 #
 # Process static routes
 #
 function update_routes {
-    log_it "to be implemented: update_routes"
+    local etc_data
+    local puppet_data
+
+    if [ ! -f ${PUPPET_ROUTES_FILE} ] ; then
+        log_it "no routes to process, return"
+        return $(true)
+    fi
+
+    if [ -f ${ETC_ROUTES_FILE} ]; then
+
+        # There is an existing route file.  Check if there are changes.
+        diff -I ".*Last generated.*" -q ${PUPPET_ROUTES_FILE} \
+                                        ${ETC_ROUTES_FILE} >/dev/null 2>&1
+        if [ $? -ne 0 ] ; then
+            log_it "diff found between ${PUPPET_ROUTES_FILE} and ${ETC_ROUTES_FILE}"
+
+            # process deleted routes
+            etc_data=$(grep -v -E '(HEADER)|(^#)' ${ETC_ROUTES_FILE})
+            while read etcRouteLine; do
+                grepCmd="grep -q '${etcRouteLine}' ${PUPPET_ROUTES_FILE} > /dev/null"
+                eval ${grepCmd}
+                if [ $? -ne 0 ] ; then
+                    local route
+                    local netmask
+                    local nexthop
+                    local ifname
+
+                    route=$( echo "${etcRouteLine}" | awk '{print $1}' )
+                    netmask=$( echo "${etcRouteLine}" | awk '{print $2}' )
+                    nexthop=$( echo "${etcRouteLine}" | awk '{print $3}' )
+                    ifname=$( echo "${etcRouteLine}" | awk '{print $4}' )
+                    prefix=$(get_prefix_length ${netmask})
+
+                    log_it "Removing route: ${route}${prefix} via ${nexthop} dev ${ifname}"
+                    $(/usr/sbin/ip route del ${route}${prefix} via ${nexthop} dev ${ifname})
+                fi
+            done <<< ${etc_data}
+
+            # process added routes
+            puppet_data=$(grep -v -E '(HEADER)|(^#)' ${PUPPET_ROUTES_FILE})
+            while read puppetRouteLine; do
+                grepCmd="grep -q '${puppetRouteLine}' ${ETC_ROUTES_FILE} > /dev/null"
+                eval ${grepCmd}
+                if [ $? -ne 0 ] ; then
+                    local route
+                    local netmask
+                    local nexthop
+                    local ifname
+                    local prefix
+
+                    route=$( echo "${puppetRouteLine}" | awk '{print $1}' )
+                    netmask=$( echo "${puppetRouteLine}" | awk '{print $2}' )
+                    nexthop=$( echo "${puppetRouteLine}" | awk '{print $3}' )
+                    ifname=$( echo "${puppetRouteLine}" | awk '{print $4}' )
+                    prefix=$(get_prefix_length ${netmask})
+
+                    log_it "Adding route: ${route}${prefix} via ${nexthop} dev ${ifname}"
+                    $(/usr/sbin/ip route add ${route}${prefix} via ${nexthop} dev ${ifname})
+                fi
+            done <<< ${puppet_data}
+
+            do_rm ${ETC_ROUTES_FILE}
+            do_cp ${PUPPET_ROUTES_FILE} ${ETC_ROUTES_FILE}
+        fi
+
+    else
+
+        # process added routes
+        puppet_data=$(grep -v -E '(HEADER)|(^#)' ${PUPPET_ROUTES_FILE})
+        while read newRouteLine; do
+            local route
+            local netmask
+            local nexthop
+            local ifname
+            local prefix
+
+            route=$( echo "${newRouteLine}" | awk '{print $1}' )
+            netmask=$( echo "${newRouteLine}" | awk '{print $2}' )
+            nexthop=$( echo "${newRouteLine}" | awk '{print $3}' )
+            ifname=$( echo "${newRouteLine}" | awk '{print $4}' )
+            prefix=$(get_prefix_length ${netmask})
+
+            log_it "Adding route: ${route}${prefix} via ${nexthop} dev ${ifname}"
+            $(/usr/sbin/ip route add ${route}${prefix} via ${nexthop} dev ${ifname})
+        done <<< ${puppet_data}
+
+        do_cp ${PUPPET_ROUTES_FILE} ${ETC_ROUTES_FILE}
+
+    fi
+
 }
