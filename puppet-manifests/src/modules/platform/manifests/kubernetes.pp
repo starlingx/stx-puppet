@@ -349,10 +349,11 @@ class platform::kubernetes::master::init
       source => "puppet:///modules/${module_name}/kubeconfig.sh"
     }
 
-    # Remove the taint from the master node
+    # Remove the taint from AIO master nodes
     -> exec { 'remove taint from master node':
       command   => "kubectl --kubeconfig=/etc/kubernetes/admin.conf taint node ${::platform::params::hostname} node-role.kubernetes.io/master- || true", # lint:ignore:140chars
       logoutput => true,
+      onlyif    => "test '${::platform::params::system_type }' == 'All-in-one'",
     }
 
     # Add kubelet service override
