@@ -7,7 +7,7 @@
 # The user and group nslcd should run as.
 #
 uid nslcd
-gid ldap
+gid <%= @nslcd_gid %>
 
 # The uri pointing to the LDAP server to use for name lookups.
 # Multiple entries may be specified. The address that is used
