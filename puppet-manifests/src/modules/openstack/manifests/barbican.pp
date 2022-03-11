@@ -35,20 +35,10 @@ class openstack::barbican
     $api_workers = $::platform::params::eng_workers_by_4
   }
 
-  case $::osfamily {
-    'RedHat': {
-      $worker_config_file = '/etc/barbican/gunicorn-config.py'
-      $match_keyword = 'workers'
-    }
-    default: {
-      $worker_config_file = '/etc/barbican/barbican-api-uwsgi.ini'
-      $match_keyword = 'processes'
-    }
-  }
-  file_line { 'Modify number of Barbican workers':
-    path  => $worker_config_file,
-    line  => "${match_keyword} = ${api_workers}",
-    match => ".*${match_keyword} = .*",
+  file_line { 'Modify workers in gunicorn-config.py':
+    path  => '/etc/barbican/gunicorn-config.py',
+    line  => "workers = ${api_workers}",
+    match => '.*workers = .*',
     tag   => 'modify-workers',
   }
 
