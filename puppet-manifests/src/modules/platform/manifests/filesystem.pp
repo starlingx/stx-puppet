@@ -13,6 +13,7 @@ define platform::filesystem (
   $ensure = present,
   $group = 'root',
   $mode = '0750',
+  $ensure_mount = 'mounted',
 ) {
   include ::platform::filesystem::params
   $vg_name = $::platform::filesystem::params::vg_name
@@ -98,8 +99,20 @@ define platform::filesystem (
       mode   => $mode,
     }
 
+    # The mount resource below will try to remount devices that were already
+    # present in /etc/fstab but were unmounted during manifest application,
+    # but will fail if the device is not mounted. So, it will try to mount them
+    # in this step if they are not mounted, tolerating failure if they aren't
+    # in fstab yet, as they will be added to it and mounted in the following
+    # mount resource
+    -> exec { "mount ${device}":
+      unless  => "mount | awk '{print \$3}' | grep -Fxq ${mountpoint}",
+      command => "mount ${mountpoint} || true",
+      path    => '/usr/bin',
+    }
+
     -> mount { $name:
-      ensure  => 'mounted',
+      ensure  => $ensure_mount,
       atboot  => 'yes',
       name    => $mountpoint,
       device  => $device,
@@ -107,14 +120,6 @@ define platform::filesystem (
       fstype  => $fs_type,
     }
 
-    # The above mount resource doesn't actually remount devices that were already present in /etc/fstab, but were
-    # unmounted during manifest application. To get around this, we attempt to mount them again, if they are not
-    # already mounted.
-    -> exec { "mount ${device}":
-      unless  => "mount | awk '{print \$3}' | grep -Fxq ${mountpoint}",
-      command => "mount ${mountpoint}",
-      path    => '/usr/bin'
-    }
     -> exec {"Change ${mountpoint} dir permissions":
       command => "chmod ${mode} ${mountpoint}",
     }
@@ -198,20 +203,22 @@ class platform::filesystem::scratch::params (
   $fs_type = 'ext4',
   $fs_options = ' ',
   $group = 'sys_protected',
-  $mode = '0770'
+  $mode = '0770',
+  $ensure_mount = 'present',
 ) { }
 
 class platform::filesystem::scratch
   inherits ::platform::filesystem::scratch::params {
 
   platform::filesystem { $lv_name:
-    lv_name    => $lv_name,
-    lv_size    => $lv_size,
-    mountpoint => $mountpoint,
-    fs_type    => $fs_type,
-    fs_options => $fs_options,
-    group      => $group,
-    mode       => $mode
+    lv_name      => $lv_name,
+    lv_size      => $lv_size,
+    mountpoint   => $mountpoint,
+    fs_type      => $fs_type,
+    fs_options   => $fs_options,
+    group        => $group,
+    mode         => $mode,
+    ensure_mount => $ensure_mount,
   }
 }
 
