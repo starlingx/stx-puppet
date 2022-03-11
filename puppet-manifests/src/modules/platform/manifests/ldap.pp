@@ -16,6 +16,10 @@ class platform::ldap::params (
     'RedHat' => '/usr/lib64/openldap',
     default   => '/usr/lib/ldap',
   },
+  $nslcd_gid = $::osfamily ? {
+    'RedHat' => 'ldap',
+    default   => 'openldap',
+  },
 ) {}
 
 class platform::ldap::server
