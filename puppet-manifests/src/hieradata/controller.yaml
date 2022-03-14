@@ -168,8 +168,6 @@ keystone::service::enabled: false
 keystone::token_provider: 'fernet'
 keystone::max_token_size: 255,
 keystone::debug: false
-keystone::service_name: 'openstack-keystone'
-keystone::params::service_name: 'openstack-keystone'
 keystone::enable_ssl: false
 keystone::use_syslog: true
 keystone::log_facility: 'local2'
