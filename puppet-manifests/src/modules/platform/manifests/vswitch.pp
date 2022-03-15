@@ -1,5 +1,5 @@
 class platform::vswitch::params(
-  $enabled = true,
+  $enabled = undef,
   $iommu_enabled = true,
   $hugepage_dir = '/mnt/huge-1048576kB',
   $driver_type = 'vfio-pci',
@@ -11,6 +11,10 @@ class platform::vswitch
   inherits ::platform::vswitch::params {
 
   Class[$name] -> Class['::platform::network']
+
+  if $enabled == undef {
+    $enabled = $::platform::params::vswitch_type != 'none'
+  }
 
   if $::platform::params::vswitch_type != 'none' and $enabled {
     $enable_unsafe_noiommu_mode = bool2num(!$iommu_enabled)
