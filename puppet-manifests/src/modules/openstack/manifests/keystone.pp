@@ -8,7 +8,10 @@ class openstack::keystone::params(
   $admin_port = 5000,
   $region_name = undef,
   $system_controller_region = undef,
-  $service_name = 'openstack-keystone',
+  $service_name = $::osfamily ? {
+    'RedHat' => 'openstack-keystone',
+    default  => 'keystone',
+  },
   $token_expiration = 3600,
   $service_create = false,
   $fernet_keys_rotation_minute = '25',
@@ -66,9 +69,14 @@ class openstack::keystone (
         'token/allow_expired_window': value => 0;
     }
 
-    keystone_config {
-        'security_compliance/lockout_duration': value => $lockout_period;
-        'security_compliance/lockout_failure_attempts': value => $lockout_retries;
+    # These two params are included in ::keystone::security_compliance
+    # in newer version of keystone puppet module (this is the case for
+    # Debian 11)
+    if $::osfamily == 'RedHat' {
+      keystone_config {
+          'security_compliance/lockout_duration': value => $lockout_period;
+          'security_compliance/lockout_failure_attempts': value => $lockout_retries;
+      }
     }
 
     file { '/etc/keystone/keystone-extra.conf':
