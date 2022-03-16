@@ -38,9 +38,8 @@ class platform::params (
   $protected_group_name = 'sys_protected'
   $protected_group_id = '345'
 
-  # PUPPET 4 treats custom facts as strings. We convert to int by adding zero.
-  $phys_core_count = 0 + $::physical_core_count
-  $plat_res_mem = 0 + $::platform_res_mem
+  $phys_core_count = Integer($::physical_core_count)
+  $plat_res_mem = Integer($::platform_res_mem)
 
   # Engineering parameters common to openstack services:
 
