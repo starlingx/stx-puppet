@@ -250,7 +250,7 @@ class platform::config::tpm {
 class platform::config::kdump {
   file_line { '/etc/kdump.conf dracut_args':
     path  => '/etc/kdump.conf',
-    line  => 'dracut_args --omit-drivers "ice e1000e i40e ixgbe ixgbevf iavf mlx4_ib mlx4_core mlx5_ib mlx5_core"',
+    line  => 'dracut_args --omit-drivers "ice e1000e i40e ixgbe ixgbevf iavf mlx5_ib mlx5_core"',
     match => '^dracut_args .*--omit-drivers',
   }
   ~> service { 'kdump': }
