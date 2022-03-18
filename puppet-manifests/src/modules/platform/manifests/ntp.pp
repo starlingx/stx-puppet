@@ -3,7 +3,7 @@ class platform::ntp (
   $servers = [],
   $enabled = true,
 ) {
-  if $enabled or ($::personality == 'controller'){
+  if $enabled {
     $pmon_ensure = 'link'
   } else {
     $pmon_ensure = 'absent'
@@ -48,7 +48,7 @@ class platform::ntp (
     mode   => '0600',
   }
 
-  if $enabled or ($::personality == 'controller') {
+  if $enabled {
     exec { 'enable-ntpdate':
       command => '/usr/bin/systemctl enable ntpdate.service',
       require => File['ntp_pmon_link'],
