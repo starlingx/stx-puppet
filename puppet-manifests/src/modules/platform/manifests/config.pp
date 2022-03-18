@@ -388,7 +388,19 @@ class platform::config::post
 
   include ::platform::params
 
-  service { 'crond':
+  case $::osfamily {
+    'RedHat': {
+      $cronservice = 'crond'
+    }
+    'Debian': {
+      $cronservice = 'cron'
+    }
+    default: {
+      fail("unsuported osfamily ${::osfamily}, currently Debian and Redhat are the only supported platforms")
+    }
+  } # Case $::osfamily
+
+  service { $cronservice:
     ensure => 'running',
     enable => true,
   }
