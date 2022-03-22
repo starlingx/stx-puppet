@@ -15,7 +15,11 @@ install:
 	install -m 755 -D bin/network_sysconfig.sh $(BINDIR)/network_sysconfig.sh
 	install -m 755 -D bin/puppet-update-default-grub.sh $(BINDIR)/puppet-update-default-grub.sh
 	install -d -m 0755 $(CONFIGDIR)
-	install -m 640 etc/hiera.yaml $(CONFIGDIR)/
+ifdef hiera_v5
+	install -m 640 etc/hiera_v5.yaml $(CONFIGDIR)/hiera.yaml
+else
+	install -m 640 etc/hiera.yaml $(CONFIGDIR)
+endif
 	cp -R hieradata $(CONFIGDIR)/
 	cp -R manifests $(CONFIGDIR)/
 	install -d -m 0755 $(MODULEDIR)

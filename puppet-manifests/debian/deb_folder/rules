@@ -10,7 +10,7 @@ override_dh_usrlocal:
 	echo "Do Nothing"
 
 override_dh_install:
-	$(MAKE) install \
+	$(MAKE) install hiera_v5=true \
 		BINDIR=$(CURDIR)/debian/tmp/usr/local/bin \
 		CONFIGDIR=$(CURDIR)/debian/tmp/etc/puppet \
 		MODULEDIR=$(CURDIR)/debian/tmp/usr/share/puppet/modules
