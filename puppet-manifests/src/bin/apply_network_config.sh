@@ -265,6 +265,25 @@ function update_interfaces {
 }
 
 if [ ${ROUTES_ONLY} = "yes" ]; then
+    if [ -d /etc/sysconfig/network-scripts/ ] ; then
+
+        log_it "process CentOS route config"
+
+        # shellcheck disable=SC1091
+        source /usr/local/bin/network_sysconfig.sh
+
+    elif [ -d /etc/network/interfaces.d/ ] ; then
+
+        log_it "process Debian route config"
+
+        # shellcheck disable=SC1091
+        source /usr/local/bin/network_ifupdown.sh
+
+    else
+        log_it "Not using sysconfig or ifupdown, cannot go further! Aborting..."
+        exit 1
+    fi
+
     update_routes
 else
 
