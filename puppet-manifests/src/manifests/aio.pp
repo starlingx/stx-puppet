@@ -23,9 +23,9 @@ include ::platform::network
 include ::platform::drbd
 include ::platform::exports
 include ::platform::dns
+include ::platform::password
 include ::platform::ldap::server
 include ::platform::ldap::client
-include ::platform::password
 include ::platform::ntp::server
 include ::platform::ptp
 include ::platform::ptpinstance

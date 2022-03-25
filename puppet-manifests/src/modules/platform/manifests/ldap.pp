@@ -24,6 +24,8 @@ class platform::ldap::params (
 
 class platform::ldap::server
   inherits ::platform::ldap::params {
+  Class['platform::password'] -> Class[$name]
+
   if ! $ldapserver_remote {
     include ::platform::ldap::server::local
   }
