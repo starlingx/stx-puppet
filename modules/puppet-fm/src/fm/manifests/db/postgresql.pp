@@ -42,12 +42,22 @@ class fm::db::postgresql(
 
   include ::fm::deps
 
-  ::openstacklib::db::postgresql { 'fm':
-    password_hash => postgresql_password($user, $password),
-    dbname        => $dbname,
-    user          => $user,
-    encoding      => $encoding,
-    privileges    => $privileges,
+  if $::osfamily == 'Debian' {
+    ::openstacklib::db::postgresql { 'fm':
+      password   => $password,
+      dbname     => $dbname,
+      user       => $user,
+      encoding   => $encoding,
+      privileges => $privileges,
+    }
+  } else {
+    ::openstacklib::db::postgresql { 'fm':
+      password_hash => postgresql_password($user, $password),
+      dbname        => $dbname,
+      user          => $user,
+      encoding      => $encoding,
+      privileges    => $privileges,
+    }
   }
 
   Anchor['fm::db::begin']
