@@ -139,8 +139,8 @@ class platform::ldap::bootstrap
   inherits ::platform::ldap::params {
   include ::platform::params
   # Local ldap server is configured during bootstrap. It is later
-  # replaced by remote ldapserver configuration (if needed) during
-  # application of controller / compute / storage manifest.
+  # replaced by remote ldap server configuration (if needed) during
+  # application of controller manifest.
   include ::platform::ldap::server::local
   include ::platform::ldap::client
 
@@ -176,5 +176,33 @@ class platform::ldap::bootstrap
   -> exec { 'ldap cgcs-cli shell update':
     command =>
       "ldapmodify -D ${dn} -w \"${admin_pw}\" -f /tmp/ldap.cgcs-shell.ldif"
+  }
+}
+
+class platform::ldap::secure::runtime
+  inherits ::platform::ldap::params {
+  include ::platform::params
+  # Local ldap server configuration with SSL certificate.
+  # It is applied when an openldap certificate is created or updated, during
+  # application of controller manifest.
+
+  $dn = 'cn=config'
+  $openldap_cert_name = 'system-openldap-local-certificate'
+  $certs_etc_path = '/etc/openldap/certs'
+
+  exec { 'populate openldap certificate':
+    command => "kubectl get secret ${openldap_cert_name} -n deployment --kubeconfig=/etc/kubernetes/admin.conf \
+    --template='{{ index .data \"tls.crt\" }}'|base64 -d > ${certs_etc_path}/openldap-cert.crt"
+  }
+  -> exec { 'populate openldap certificate key':
+    command => "kubectl get secret ${openldap_cert_name} -n deployment --kubeconfig=/etc/kubernetes/admin.conf \
+    --template='{{ index .data \"tls.key\" }}'|base64 -d > ${certs_etc_path}/openldap-cert.key"
+  }
+  -> exec { 'Set the owner and group for openldap crt and key files':
+    command => "chown -R ldap:ldap ${certs_etc_path}/openldap*",
+  }
+  -> exec { 'ldap configuration update to enable TLS/SSL':
+    command =>
+      "ldapmodify -D ${dn} -w \"${admin_pw}\" -f ${slapd_etc_path}/certs.ldif"
   }
 }
