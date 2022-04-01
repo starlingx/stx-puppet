@@ -106,7 +106,7 @@ define platform::filesystem (
     # in fstab yet, as they will be added to it and mounted in the following
     # mount resource
     -> exec { "mount ${device}":
-      unless  => "mount | awk '{print \$3}' | grep -Fxq ${mountpoint}",
+      unless  => "mount | awk '{print \$3}' | grep -Fxq \$(realpath ${mountpoint})",
       command => "mount ${mountpoint} || true",
       path    => '/usr/bin',
     }
