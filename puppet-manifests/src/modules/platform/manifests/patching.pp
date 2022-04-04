@@ -13,17 +13,20 @@ class platform::patching
   include ::platform::params
   include ::openstack::horizon::params
 
-  $http_port        = $::openstack::horizon::params::http_port
-  $software_version = $::platform::params::software_version
-  $base_url         = "http://controller:${http_port}/feed/rel-${software_version}"
-  $updates_url      = "http://controller:${http_port}/updates/rel-${software_version}"
+  if $::osfamily == 'RedHat' {
+    # Centos sets up a yum repo.
+    $http_port        = $::openstack::horizon::params::http_port
+    $software_version = $::platform::params::software_version
+    $base_url         = "http://controller:${http_port}/feed/rel-${software_version}"
+    $updates_url      = "http://controller:${http_port}/updates/rel-${software_version}"
 
-  file { '/etc/yum.repos.d/platform.repo':
-    ensure  => present,
-    owner   => 'root',
-    group   => 'root',
-    mode    => '0644',
-    content => template('platform/platform.yum.repo.erb'),
+    file { '/etc/yum.repos.d/platform.repo':
+      ensure  => present,
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0644',
+      content => template('platform/platform.yum.repo.erb'),
+    }
   }
 
   group { 'patching':
