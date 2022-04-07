@@ -181,12 +181,14 @@ define platform::interfaces::sriov_enable (
   $device_id,
   $num_vfs,
   $port_name,
+  $up_requirement,
   $vf_config = undef
 ) {
   $vf_file = 'sriov_numvfs'
   if ($num_vfs != undef) and ($num_vfs > 0) {
     exec { "sriov-enable-device: ${title}":
       command   => template('platform/sriov.enable-device.erb'),
+      provider  => shell,
       onlyif    => "[ $(cat /sys/bus/pci/devices/${addr}/${vf_file}) != ${num_vfs} ]",
       logoutput => true,
     }
@@ -216,6 +218,7 @@ define platform::interfaces::sriov_vf_bind (
   $device_id,
   $num_vfs,
   $port_name,
+  $up_requirement,
   $vf_config
 ) {
   create_resources('platform::interfaces::sriov_bind', $vf_config, {})
@@ -244,6 +247,7 @@ define platform::interfaces::sriov_vf_ratelimit (
   $device_id,
   $num_vfs,
   $port_name,
+  $up_requirement,
   $vf_config
 ) {
   create_resources('platform::interfaces::sriov_ratelimit', $vf_config, {port_name => $port_name})

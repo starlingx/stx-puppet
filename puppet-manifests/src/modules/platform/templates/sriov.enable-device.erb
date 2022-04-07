@@ -1,1 +1,37 @@
-echo 0 > /sys/bus/pci/devices/<%= @addr %>/<%= @vf_file %>; echo <%= @num_vfs -%> > /sys/bus/pci/devices/<%= @addr %>/<%= @vf_file %>
+<% if @up_requirement %>
+# Try to ensure that the port is administratively up
+
+for port_dir in "/sys/bus/pci/devices/<%= @addr %>/net/"*; do
+    if ! [ -d "${port_dir}" ]; then
+        continue
+    fi
+
+    port_name="$(basename -- "${port_dir}")"
+
+    if ip link show dev "${port_name}" | grep -q -e "<.*\bUP\b.*>"; then
+        # Already up
+        continue
+    fi
+
+    set -x
+    ip link set dev "${port_name}" up
+    set +x
+
+    port_is_up=false
+
+    for iter in $(seq 10); do
+        sleep 0.2
+        if ip link show dev "${port_name}" | grep -q -e "<.*\bUP\b.*>"; then
+            port_is_up=true
+            break
+        fi
+    done
+
+    if ! ${port_is_up}; then
+        echo "${port_name} did not go up in the allotted time"
+    fi
+done
+<% end %>
+
+echo 0 > "/sys/bus/pci/devices/<%= @addr %>/<%= @vf_file %>"
+echo "<%= @num_vfs -%>" > "/sys/bus/pci/devices/<%= @addr %>/<%= @vf_file %>"

@@ -44,7 +44,8 @@ define platform::devices::sriov_enable (
   $num_vfs,
   $addr,
   $driver,
-  $device_id
+  $device_id,
+  $up_requirement = false
 ) {
   if ($driver == 'igb_uio') {
     $vf_file = 'max_vfs'
@@ -53,6 +54,7 @@ define platform::devices::sriov_enable (
   }
   exec { "sriov-enable-device: ${title}":
     command   => template('platform/sriov.enable-device.erb'),
+    provider  => shell,
     onlyif    => ["test -d /sys/bus/pci/devices/${addr}", "egrep -wvq ^${num_vfs} /sys/bus/pci/devices/${addr}/${vf_file}"],
     logoutput => true,
   }
