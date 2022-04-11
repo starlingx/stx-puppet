@@ -38,6 +38,9 @@ python /usr/share/puppet/modules/platform/files/change_kube_apiserver_params.py 
 <%- if @etcd_servers -%>
 --etcd_servers <%= @etcd_servers %>
 <%- end -%>
+<%- if @audit_policy_file -%>
+--audit_policy_file <%= @audit_policy_file %>
+<%- end -%>
 
 APISERVER_ADVERTISE_ADDRESS=$(grep 'advertise-address=' /etc/kubernetes/manifests/kube-apiserver.yaml  | cut -d "=" -f2)
 kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch configmap kubeadm-config -p "$(cat <%= @configmap_temp_file %>)"

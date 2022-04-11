@@ -26,6 +26,7 @@ class platform::kubernetes::params (
   $oidc_username_claim = undef,
   $oidc_groups_claim = undef,
   $admission_plugins = undef,
+  $audit_policy_file = undef,
   $etcd_cafile = undef,
   $etcd_certfile = undef,
   $etcd_keyfile = undef,
