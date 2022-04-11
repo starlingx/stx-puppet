@@ -16,11 +16,11 @@ class dcorch::params {
   if $::osfamily == 'Debian' {
     $package_name          = 'distributedcloud-dcorch'
     $client_package        = 'distributedcloud-client-dcorchclient'
-    $api_package           = 'distributedcloud-dcorch'
+    $api_package           = false
     $api_service           = 'dcorch-api'
-    $engine_package        = 'distributedcloud-dcorch'
+    $engine_package        = false
     $engine_service        = 'dcorch-engine'
-    $api_proxy_package      = 'distributedcloud-dcorch'
+    $api_proxy_package      = false
     $api_proxy_service      = 'dcorch-api-proxy'
 
     $db_sync_command       = 'dcorch-manage db_sync'

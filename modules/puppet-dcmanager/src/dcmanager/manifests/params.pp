@@ -15,9 +15,9 @@ class dcmanager::params {
   if $::osfamily == 'Debian' {
     $package_name       = 'distributedcloud-dcmanager'
     $client_package     = 'distributedcloud-client-dcmanagerclient'
-    $api_package        = 'distributedcloud-dcmanager'
+    $api_package        = false
     $api_service        = 'dcmanager-api'
-    $manager_package     = 'distributedcloud-dcmanager'
+    $manager_package     = false
     $manager_service     = 'dcmanager-manager'
     $db_sync_command    = 'dcmanager-manage db_sync'
 

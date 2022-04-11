@@ -25,14 +25,14 @@ class sysinv::params {
   if $::osfamily == 'Debian' {
     $package_name       = 'sysinv'
     $client_package     = 'cgtsclient'
-    $api_package        = 'sysinv'
+    $api_package        = false
     $api_service        = 'sysinv-api'
-    $conductor_package  = 'sysinv'
+    $conductor_package  = false
     $conductor_service  = 'sysinv-conductor'
-    $agent_package      = 'sysinv'
+    $agent_package      = false
     $agent_service      = 'sysinv-agent'
-    $certmon_package    = 'cert-mon'
-    $certalarm_package  = 'cert-alarm'
+    $certmon_package    = false
+    $certalarm_package  = false
     $db_sync_command    = 'sysinv-dbsync'
 
   } elsif($::osfamily == 'RedHat') {

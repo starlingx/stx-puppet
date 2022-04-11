@@ -15,7 +15,7 @@ class dcdbsync::params {
 
   if $::osfamily == 'Debian' {
     $package_name           = 'distributedcloud-dcdbsync'
-    $api_package            = 'distributedcloud-dcdbsync'
+    $api_package            = false
     $api_service            = 'dcdbsync-api'
     $api_openstack_service  = 'dcdbsync-openstack-api'
 
