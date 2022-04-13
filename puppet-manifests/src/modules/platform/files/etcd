@@ -20,7 +20,12 @@ DESC="ETCD highly-available key value database"
 SERVICE="etcd.service"
 PIDFILE="/var/run/etcd.pid"
 UPGRADE_SWACT_FILE="/opt/etcd/.upgrade_etcd"
-ETCD_CONFIG_FILE="/etc/etcd/etcd.conf"
+
+if grep -q "Debian" /etc/os-release; then
+    ETCD_CONFIG_FILE="/etc/default/etcd"
+elif grep -q "CentOS" /etc/os-release; then
+    ETCD_CONFIG_FILE="/etc/etcd/etcd.conf"
+fi
 
 if [ ! -f "$ETCD_CONFIG_FILE" ]; then
     logger "$ETCD_CONFIG_FILE: file does not exist"
