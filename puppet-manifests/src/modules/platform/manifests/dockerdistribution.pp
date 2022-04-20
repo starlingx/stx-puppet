@@ -76,6 +76,13 @@ class platform::dockerdistribution::config
   }
   $runtime_config = '/etc/docker-distribution/registry/runtime_config.yml'
   $used_config = '/etc/docker-distribution/registry/config.yml'
+  $open_file_limit = 4096
+
+  if $::osfamily == 'Debian' {
+    $service_name = 'docker-registry.service'
+  } else {
+    $service_name = 'docker-distribution.service'
+  }
 
   # for external docker registry running insecure mode
   file { '/etc/docker':
@@ -131,6 +138,21 @@ class platform::dockerdistribution::config
     path   => '/etc/init.d/registry-token-server',
     mode   => '0755',
     source => "puppet:///modules/${module_name}/registry-token-server"
+  }
+
+  # override the configuration of docker-distribution.service
+  file { "/etc/systemd/system/${service_name}.d":
+    ensure => 'directory',
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0755',
+  }
+  -> file { "/etc/systemd/system/${service_name}.d/override.conf":
+    ensure  => 'present',
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+    content => template('platform/docker-distribution-override.conf.erb'),
   }
 }
 
