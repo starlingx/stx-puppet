@@ -26,6 +26,14 @@ class platform::docker::proxyconfig
   inherits ::platform::docker::params {
   include ::platform::docker::install
 
+  if $::osfamily == 'Debian' {
+    if $::platform::docker::params::no_proxy {
+      # Docker on Debian doesn't work with the NO_PROXY environment variable if it
+      # has IPv6 addresses with square brackets, thus remove the square brackets
+      $no_proxy = regsubst($::platform::docker::params::no_proxy, '\\[|\\]', '', 'G')
+    }
+  }
+
   if $http_proxy or $https_proxy {
     file { '/etc/systemd/system/docker.service.d':
       ensure => 'directory',
