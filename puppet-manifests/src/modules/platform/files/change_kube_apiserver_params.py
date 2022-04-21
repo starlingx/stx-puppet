@@ -65,22 +65,37 @@ else:
     if 'oidc-groups-claim' in cluster_config['apiServer']['extraArgs']:
         del cluster_config['apiServer']['extraArgs']['oidc-groups-claim']
 
+# there are some plugins required by the system
+# if the plugins is specified manually, these ones might
+# be missed. We will add these automatically so the user
+# does not need to keep track of them
+required_plugins = ['NodeRestriction']
+# Current relase only supports configuring PodSecurityPolicy plugin
+# at runtime, this script needs it to track what is the plugin
+# removed at runtime and doesn't remove the plugins configured
+# at bootstrap.
+supported_plugins = ['PodSecurityPolicy']
+admission_plugins = set()
+if 'enable-admission-plugins' in cluster_config['apiServer']['extraArgs']:
+    admission_plugins = set(cluster_config['apiServer']['extraArgs']['enable-admission-plugins']
+                            .split(','))
 if args.admission_plugins:
     all_plugins = args.admission_plugins
-    # there are some plugins required by the system
-    # if the plugins is specified manually, these ones might
-    # be missed. We will add these automatically so the user
-    # does not need to keep track of them
-    required_plugins = ['NodeRestriction']
+    admission_plugins |= set(all_plugins.split(','))
+    plugins_to_add = set()
+    plugins_to_remove = set()
     for plugin in required_plugins:
         if plugin not in all_plugins:
-            all_plugins = all_plugins + "," + plugin
-    cluster_config['apiServer']['extraArgs']['enable-admission-plugins'] = \
-        all_plugins
+            plugins_to_add.add(plugin)
+    for plugin in supported_plugins:
+        if plugin not in all_plugins:
+            plugins_to_remove.add(plugin)
+    admission_plugins = (admission_plugins - plugins_to_remove) | plugins_to_add
 else:
-    plugins = 'enable-admission-plugins'
-    if plugins in cluster_config['apiServer']['extraArgs']:
-        del cluster_config['apiServer']['extraArgs'][plugins]
+    admission_plugins = (admission_plugins - set(supported_plugins)) | set(required_plugins)
+
+cluster_config['apiServer']['extraArgs']['enable-admission-plugins'] = \
+    ",".join(admission_plugins)
 
 # etcd parameters are required to start up kube-apiserver
 # do not remove any existing etcd parameters in the config map
