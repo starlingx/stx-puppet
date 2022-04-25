@@ -207,4 +207,11 @@ class platform::ldap::secure::runtime
     command =>
       "ldapmodify -D ${dn} -w \"${admin_pw}\" -f ${slapd_etc_path}/certs.ldif"
   }
+    -> exec { 'add ldaps to slapd configuration':
+    command =>
+      "/bin/sed -i 's,\"ldap:///\",\"ldap:/// ldaps:///\",' /etc/rc.d/init.d/openldap"
+  }
+    -> exec { 'restart-openldap':
+    command => '/usr/bin/systemctl restart slapd.service'
+  }
 }
