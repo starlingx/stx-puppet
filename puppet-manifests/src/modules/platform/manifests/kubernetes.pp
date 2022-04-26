@@ -868,6 +868,8 @@ class platform::kubernetes::certsans::runtime
                    ${platform::network::oam::params::controller_address}\""
   } else {
     $certsans = "\"${platform::network::cluster_host::params::controller_address}, \
+                   ${platform::network::cluster_host::params::controller0_address}, \
+                   ${platform::network::cluster_host::params::controller1_address}, \
                    ${localhost_address}, \
                    ${platform::network::oam::params::controller_address}, \
                    ${platform::network::oam::params::controller0_address}, \
