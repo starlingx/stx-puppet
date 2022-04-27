@@ -52,7 +52,7 @@ class platform::sysctl
 
     # Disable RT throttling
     sysctl::value { 'kernel.sched_rt_runtime_us':
-      value => '1000000',
+      value => '-1',
     }
 
     # Enable check for raising timer interrupt only if one is pending.
