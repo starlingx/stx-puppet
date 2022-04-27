@@ -5,6 +5,7 @@ class platform::compute::params (
   $reserved_platform_cores = '',
   $worker_base_reserved = '',
   $compute_vswitch_reserved = '',
+  $max_cpu_frequency = undef
 ) { }
 
 class platform::compute::config
@@ -22,6 +23,13 @@ class platform::compute::config
         ensure  => 'present',
         replace => true,
         content => template('platform/systemd-system-cpuaffinity.conf.erb')
+    }
+  }
+
+  if $max_cpu_frequency != undef {
+    exec { 'Update host max CPU frequency':
+      command   => "/usr/bin/cpupower frequency-set -u ${max_cpu_frequency}MHz",
+      logoutput => true,
     }
   }
 }
