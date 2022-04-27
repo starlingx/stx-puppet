@@ -107,6 +107,24 @@ function parse_interface_stanzas {
             fi
         fi
     done <<< ${puppet_data}
+
+    # sysinv generates the stanza "allow-[master] [slave]" as part of options due
+    # to the lack of support in puppet-network module. To not break ifup parsing
+    # we move the stanza to the end of the file.
+    for cfg_path in $(find ${PUPPET_DIR} -name "${IFNAME_INCLUDE}"); do
+        local allow_bond
+        local iface_file
+        iface_file=$(basename ${cfg_path})
+        iface_name=${iface_file#ifcfg-}
+        allow_bond=$( grep -E "allow-.*${iface_name}" ${cfg_path} )
+        if [ -n "${allow_bond}" ]; then
+            awk -v search="${allow_bond}" \
+                '$0==search{lastline=$0;next}{print $0}END{print lastline}' \
+                ${cfg_path} > ${cfg_path}.tmp
+            mv -f ${cfg_path}.tmp ${cfg_path}
+        fi
+    done
+
 }
 
 #
@@ -363,13 +381,26 @@ function get_search_ifname {
 
 function get_prefix_length {
     netmask=$1
-    awk -F. '{
-    split($0, octets)
-    for (i in octets) {
-        mask += 8 - log(2**8 - octets[i])/log(2);
-    }
-    print "/" mask
-    }' <<< ${netmask}
+    if [[ ${netmask} =~ .*:.* ]]; then
+        # IPv6
+        awk -F: '{
+            split($0, octets)
+                for (i in octets) {
+                    decval = strtonum("0x"octets[i])
+                    mask += 16 - log(2**16 - decval)/log(2);
+                }
+            print "/" mask
+        }' <<< ${netmask}
+    else
+        # IPv4
+        awk -F. '{
+            split($0, octets)
+            for (i in octets) {
+                mask += 8 - log(2**8 - octets[i])/log(2);
+            }
+            print "/" mask
+        }' <<< ${netmask}
+    fi
 }
 
 #
@@ -409,7 +440,7 @@ function update_routes {
                     ifname=$( echo "${etcRouteLine}" | awk '{print $4}' )
                     prefix=$(get_prefix_length ${netmask})
 
-                    log_it "Removing route: ${route}${prefix} via ${nexthop} dev ${ifname}"
+                    log_it "Removing route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask}"
                     $(/usr/sbin/ip route del ${route}${prefix} via ${nexthop} dev ${ifname})
                 fi
             done <<< ${etc_data}
@@ -432,7 +463,7 @@ function update_routes {
                     ifname=$( echo "${puppetRouteLine}" | awk '{print $4}' )
                     prefix=$(get_prefix_length ${netmask})
 
-                    log_it "Adding route: ${route}${prefix} via ${nexthop} dev ${ifname}"
+                    log_it "Adding route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask}"
                     $(/usr/sbin/ip route add ${route}${prefix} via ${nexthop} dev ${ifname})
                 fi
             done <<< ${puppet_data}
@@ -442,7 +473,6 @@ function update_routes {
         fi
 
     else
-
         # process added routes
         puppet_data=$(grep -v -E '(HEADER)|(^#)' ${PUPPET_ROUTES_FILE})
         while read newRouteLine; do
@@ -458,12 +488,10 @@ function update_routes {
             ifname=$( echo "${newRouteLine}" | awk '{print $4}' )
             prefix=$(get_prefix_length ${netmask})
 
-            log_it "Adding route: ${route}${prefix} via ${nexthop} dev ${ifname}"
+            log_it "Adding route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask}"
             $(/usr/sbin/ip route add ${route}${prefix} via ${nexthop} dev ${ifname})
         done <<< ${puppet_data}
 
         do_cp ${PUPPET_ROUTES_FILE} ${ETC_ROUTES_FILE}
-
     fi
-
 }
