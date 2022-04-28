@@ -1,0 +1,16 @@
+---
+version: 5
+hierarchy:
+- name: "yaml"
+  datadir: /tmp/puppet/hieradata
+  # data is staged to a local directory by the puppet-manifest-apply.sh script
+  data_hash: yaml_data
+  paths:
+    - runtime.yaml
+    - host.yaml
+    - secure_system.yaml
+    - system.yaml
+    - secure_static.yaml
+    - static.yaml
+    - personality.yaml
+    - global.yaml
