@@ -85,19 +85,50 @@ define platform::haproxy::proxy (
     $real_client_timeout = undef
   }
 
-  haproxy::frontend { $name:
-    collect_exported => false,
-    name             => $name,
-    bind             => {
-      "${public_ip}:${public_port}" => $ssl_option,
-    },
-    options          => {
-      'default_backend' => "${name}-internal",
-      'reqadd'          => $proto,
-      'timeout'         => $real_client_timeout,
-      'rspadd'          => $hsts_option,
-      'mode'            => $mode_option,
-    },
+  if $::osfamily == 'Debian' {
+    if $proto != undef {
+      $header = regsubst($proto, ':\\\ ', ' ')
+      $proto_header = "add-header ${header}"
+    } else {
+      $proto_header = undef
+    }
+
+    if $hsts_option != undef {
+      $htst_header = regsubst($hsts_option, ':\\\ ', ' ')
+      $hsts_option_header = "add-header ${htst_header}"
+    } else {
+      $hsts_option_header = undef
+    }
+
+    haproxy::frontend { $name:
+      collect_exported => false,
+      name             => $name,
+      bind             => {
+        "${public_ip}:${public_port}" => $ssl_option,
+      },
+      options          => {
+        'default_backend' => "${name}-internal",
+        'timeout'         => $real_client_timeout,
+        'mode'            => $mode_option,
+        'http-request'    => $proto_header,
+        'http-response'   => $hsts_option_header,
+      }
+    }
+  } else {
+    haproxy::frontend { $name:
+      collect_exported => false,
+      name             => $name,
+      bind             => {
+        "${public_ip}:${public_port}" => $ssl_option,
+      },
+      options          => {
+        'default_backend' => "${name}-internal",
+        'reqadd'          => $proto,
+        'timeout'         => $real_client_timeout,
+        'rspadd'          => $hsts_option,
+        'mode'            => $mode_option,
+      },
+    }
   }
 
   if $server_timeout {
