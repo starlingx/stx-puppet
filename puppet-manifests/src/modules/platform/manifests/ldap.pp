@@ -76,13 +76,17 @@ class platform::ldap::server::local
 
   # don't populate the adminpw if binding anonymously
   if ! $bind_anonymous {
-    file { '/usr/local/etc/ldapscripts/ldapscripts.passwd':
+    file { '/etc/ldapscripts/ldapscripts.passwd':
       content => $admin_pw,
     }
   }
 
   if $::osfamily == 'RedHat' {
-    file { '/usr/share/cracklib/cracklib-small':
+    file { '/var/cracklib':
+      ensure  => 'directory',
+      recurse => true,
+    }
+    -> file { '/var/cracklib/cracklib-small':
       ensure => link,
       target => '/usr/share/cracklib/cracklib-small.pwd',
     }
@@ -125,7 +129,7 @@ class platform::ldap::client
   }
 
   if $::personality == 'controller' {
-    file { '/usr/local/etc/ldapscripts/ldapscripts.conf':
+    file { '/etc/ldapscripts/ldapscripts.conf':
       ensure  => 'present',
       replace => true,
       content => template('platform/ldapscripts.conf.erb'),
