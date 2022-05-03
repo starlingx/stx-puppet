@@ -30,7 +30,8 @@ define ptp_config_files(
     name       => "${service}@${_name}",
     hasstatus  => true,
     hasrestart => true,
-    require    => Exec['ptpinstance-systemctl-daemon-reload']
+    require    => Exec['ptpinstance-systemctl-daemon-reload'],
+    before     => Exec['set-ice-gnss-thread-niceness']
   }
   -> exec { "enable-${_name}":
     command => "/usr/bin/systemctl enable \
@@ -261,6 +262,13 @@ class platform::ptpinstance (
 
   if $enabled {
     create_resources('ptp_config_files', $config, $ptp_state)
+  }
+
+  exec { 'set-ice-gnss-thread-niceness':
+  # The niceness value of -10 should match what is being set in affine-platform.sh
+  command  => "renice -n -10 -p \$(ps -e -p 2 | grep \"ice-gnss-\" \
+             | awk '{ printf \$1; printf \" \" }')",
+  provider => shell,
   }
 }
 
