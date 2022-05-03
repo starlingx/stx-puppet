@@ -65,6 +65,14 @@ class platform::postgresql::server
     value => '1000',
   }
 
+  # turn jit 'off' on Debian (it is on by default) since it negatively impacts performance
+  if $::osfamily == 'Debian' {
+    postgresql::server::config_entry { 'jit':
+      value => 'off',
+    }
+  }
+
+
   # Set large values for postgres in standard or system controller.
   # In AIO or virtual box, use reduced settings.
   #
