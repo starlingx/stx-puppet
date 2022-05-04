@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2020 Wind River Systems, Inc.
+# Copyright (c) 2020 - 2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -24,6 +24,7 @@ parser.add_argument("--etcd_cafile")
 parser.add_argument("--etcd_certfile")
 parser.add_argument("--etcd_keyfile")
 parser.add_argument("--etcd_servers")
+parser.add_argument("--audit_policy_file")
 
 args = parser.parse_args()
 
@@ -66,14 +67,13 @@ else:
         del cluster_config['apiServer']['extraArgs']['oidc-groups-claim']
 
 # there are some plugins required by the system
-# if the plugins is specified manually, these ones might
+# if the plugins are specified manually, these ones might
 # be missed. We will add these automatically so the user
 # does not need to keep track of them
 required_plugins = ['NodeRestriction']
-# Current relase only supports configuring PodSecurityPolicy plugin
-# at runtime, this script needs it to track what is the plugin
-# removed at runtime and doesn't remove the plugins configured
-# at bootstrap.
+# Current release only supports configuring PodSecurityPolicy plugin
+# at runtime, this script needs to track which plugins are removed
+# at runtime and not remove the plugins configured at bootstrap.
 supported_plugins = ['PodSecurityPolicy']
 admission_plugins = set()
 if 'enable-admission-plugins' in cluster_config['apiServer']['extraArgs']:
@@ -96,6 +96,13 @@ else:
 
 cluster_config['apiServer']['extraArgs']['enable-admission-plugins'] = \
     ",".join(admission_plugins)
+
+if args.audit_policy_file:
+    cluster_config['apiServer']['extraArgs']['audit-policy-file'] = \
+        args.audit_policy_file
+else:
+    if 'audit-policy-file' in cluster_config['apiServer']['extraArgs']:
+        del cluster_config['apiServer']['extraArgs']['audit-policy-file']
 
 # etcd parameters are required to start up kube-apiserver
 # do not remove any existing etcd parameters in the config map
