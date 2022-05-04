@@ -73,9 +73,6 @@ platform::mtce::agent::params::bmc_access_method: 'learn'
 # postgresql
 postgresql::globals::needs_initdb: false
 postgresql::server::service_enable: false
-postgresql::server::pg_hba_conf_path: "/etc/postgresql/pg_hba.conf"
-postgresql::server::pg_ident_conf_path: "/etc/postgresql/pg_ident.conf"
-postgresql::server::postgresql_conf_path: "/etc/postgresql/postgresql.conf"
 postgresql::server::listen_addresses: "*"
 postgresql::server::ipv4acls: ['host all all samenet md5']
 postgresql::server::log_line_prefix: 'db=%d,user=%u '

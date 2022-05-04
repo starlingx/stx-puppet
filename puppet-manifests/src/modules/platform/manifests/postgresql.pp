@@ -2,7 +2,10 @@ class platform::postgresql::params
   inherits ::platform::params {
 
   $root_dir = '/var/lib/postgresql'
-  $config_dir = '/etc/postgresql'
+  $config_dir = $::osfamily ? {
+    'RedHat' => '/etc/postgresql',
+    default => '/etc/postgresql/13/main',
+  }
 
   $data_dir = "${root_dir}/${::platform::params::software_version}"
 
@@ -128,8 +131,14 @@ class platform::postgresql::post {
   # however, it needs to be stopped/disabled to allow SM to manage the service.
   # To allow for the transition it must be explicitely stopped. Once puppet
   # can directly handle SM managed services, then this can be removed.
-  exec { 'stop postgresql service':
-    command => 'systemctl stop postgresql; systemctl disable postgresql',
+  if $::osfamily == 'RedHat' {
+    exec { 'stop postgresql service':
+        command => 'systemctl stop postgresql; systemctl disable postgresql',
+    }
+  } else {
+    exec { 'stop postgresql service':
+        command => 'systemctl stop postgresql@*.service; systemctl disable postgresql',
+    }
   }
 }
 
@@ -139,32 +148,53 @@ class platform::postgresql::bootstrap
 
   Class['::platform::drbd::pgsql'] -> Class[$name]
 
-  exec { 'Empty pg dir':
-    command => "rm -fR ${root_dir}/*",
-  }
+  if $::osfamily == 'RedHat' {
+    exec { 'Empty pg dir':
+        command => "rm -fR ${root_dir}/*",
+    }
 
-  -> exec { 'Create pg datadir':
-    command => "mkdir -p ${data_dir}",
-  }
+    -> exec { 'Create pg datadir':
+        command => "mkdir -p ${data_dir}",
+    }
 
-  -> exec { 'Change pg dir permissions':
-    command => "chown -R postgres:postgres ${root_dir}",
-  }
+    -> exec { 'Change pg dir permissions':
+        command => "chown -R postgres:postgres ${root_dir}",
+    }
 
-  -> file_line { 'allow sudo with no tty':
-    path  => '/etc/sudoers',
-    match => '^Defaults *requiretty',
-    line  => '#Defaults    requiretty',
-  }
+    -> file_line { 'allow sudo with no tty':
+        path  => '/etc/sudoers',
+        match => '^Defaults *requiretty',
+        line  => '#Defaults    requiretty',
+    }
 
-  -> exec { 'Create pg database':
-    command => "sudo -u postgres initdb -D ${data_dir}",
-  }
+    -> exec { 'Create pg database':
+        command => "sudo -u postgres initdb -D ${data_dir}",
+    }
 
-  -> exec { 'Move Config files':
-    command => "mkdir -p ${config_dir} && mv ${data_dir}/*.conf ${config_dir}/ && ln -s ${config_dir}/*.conf ${data_dir}/",
-  }
+    -> exec { 'Move Config files':
+        command => "mkdir -p ${config_dir} && mv ${data_dir}/*.conf ${config_dir}/ && ln -s ${config_dir}/*.conf ${data_dir}/",
+    }
+  } else {
+    exec { 'Drop pg database':
+        command => 'pg_dropcluster 13 main',
+    }
 
+    -> exec { 'Create pg database':
+        command => "pg_createcluster -d ${data_dir} 13 main",
+    }
+
+    -> exec { 'Set up symbolic links to config files':
+        command => "ln -s ${config_dir}/*.conf /etc/postgresql/",
+    }
+
+    -> exec { 'Explicitly turn off jit':
+        command => 'pg_conftool 13 main set jit off',
+    }
+
+    -> exec { 'Disable include_dir':
+        command => 'pg_conftool 13 main remove include_dir',
+    }
+  }
   -> class {'::postgresql::globals':
     datadir => $data_dir,
     confdir => $config_dir,
@@ -173,6 +203,13 @@ class platform::postgresql::bootstrap
   -> class {'::postgresql::server':
     ip_mask_allow_all_users    => $ip_mask_allow_all_users,
     ip_mask_deny_postgres_user => $ip_mask_deny_postgres_user
+  }
+
+  if $::osfamily == 'Debian' {
+    exec { 'Disable systemd from starting postgresql':
+        command => 'echo manual > /etc/postgresql/13/main/start.conf ; systemctl daemon-reload',
+    }
+    Class['::postgresql::server'] -> Exec['Disable systemd from starting postgresql']
   }
 
   # Allow local postgres user as trusted for simplex upgrade scripts
@@ -193,8 +230,14 @@ class platform::postgresql::bootstrap
 class platform::postgresql::upgrade
   inherits ::platform::postgresql::params {
 
-  exec { 'Move Config files':
-    command => "mkdir -p ${config_dir} && mv ${data_dir}/*.conf ${config_dir}/ && ln -s ${config_dir}/*.conf ${data_dir}/",
+  if $::osfamily == 'RedHat' {
+    exec { 'Move Config files':
+        command => "mkdir -p ${config_dir} && mv ${data_dir}/*.conf ${config_dir}/ && ln -s ${config_dir}/*.conf ${data_dir}/",
+    }
+  } else {
+    exec { 'Set up symbolic links to config files':
+        command => "ln -s ${config_dir}/*.conf /etc/postgresql/",
+    }
   }
 
   -> class {'::postgresql::globals':
