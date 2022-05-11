@@ -52,6 +52,10 @@ class platform::sm
   $pg_fs_device                  = $::platform::drbd::pgsql::params::device
   $pg_fs_directory               = $::platform::drbd::pgsql::params::mountpoint
   $pg_data_dir                   = "${pg_fs_directory}/${platform_sw_version}"
+  $pg_ctl_bin                    = $::osfamily ? {
+    'RedHat' => '/usr/bin/pg_ctl',
+    default => '/usr/lib/postgresql/13/bin/pg_ctl'
+  }
 
   include ::platform::drbd::platform::params
   $platform_drbd_resource        = $::platform::drbd::platform::params::resource_name
@@ -349,7 +353,7 @@ class platform::sm
   }
 
   exec { 'Configure Postgres':
-    command => "sm-configure service_instance postgres postgres \"pgctl=/usr/bin/pg_ctl,pgdata=${pg_data_dir}\"",
+    command => "sm-configure service_instance postgres postgres \"pgctl=${pg_ctl_bin},pgdata=${pg_data_dir}\"",
   }
 
   exec { 'Configure Rabbit DRBD':
