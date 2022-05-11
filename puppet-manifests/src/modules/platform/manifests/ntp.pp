@@ -2,7 +2,21 @@ class platform::ntp (
   $ntpdate_timeout,
   $servers = [],
   $enabled = true,
-) {
+)
+{
+  # Setting ntp service name
+  case $::osfamily {
+    'RedHat': {
+      $ntp_service_name = 'ntpd'
+    }
+    'Debian': {
+      $ntp_service_name = 'ntp'
+    }
+    default: {
+      fail("unsuported osfamily ${::osfamily}, currently Debian and Redhat are the only supported platforms")
+    }
+  }
+
   if $enabled {
     $pmon_ensure = 'link'
   } else {
@@ -11,17 +25,6 @@ class platform::ntp (
 
   File['ntp_config']
   -> File['ntp_config_initial']
-  -> file {'ntpdate_override_dir':
-    ensure => directory,
-    path   => '/etc/systemd/system/ntpdate.service.d',
-    mode   => '0755',
-  }
-  -> file { 'ntpdate_tis_override':
-    ensure  => file,
-    path    => '/etc/systemd/system/ntpdate.service.d/tis_override.conf',
-    mode    => '0644',
-    content => template('platform/ntp.override.erb'),
-  }
   -> file { 'ntp_pmon_config':
     ensure  => file,
     path    => '/etc/ntp.pmon.conf',
@@ -31,17 +34,13 @@ class platform::ntp (
   -> exec { 'systemd-daemon-reload':
     command => '/usr/bin/systemctl daemon-reload',
   }
-  -> exec { 'stop-ntpdate':
-    command => '/usr/bin/systemctl stop ntpdate.service',
-    returns => [ 0, 1 ],
-  }
-  -> exec { 'stop-ntpd':
-    command => '/usr/bin/systemctl stop ntpd.service',
+  -> exec { "stop-${ntp_service_name}":
+    command => "/usr/bin/systemctl stop ${ntp_service_name}.service",
     returns => [ 0, 1 ],
   }
   -> file { 'ntp_pmon_link':
     ensure => $pmon_ensure,
-    path   => '/etc/pmon.d/ntpd.conf',
+    path   => "/etc/pmon.d/${ntp_service_name}.conf",
     target => '/etc/ntp.pmon.conf',
     owner  => 'root',
     group  => 'root',
@@ -49,40 +48,36 @@ class platform::ntp (
   }
 
   if $enabled {
-    exec { 'enable-ntpdate':
-      command => '/usr/bin/systemctl enable ntpdate.service',
+    exec { "enable-${ntp_service_name}":
       require => File['ntp_pmon_link'],
+      command => "/usr/bin/systemctl enable ${ntp_service_name}.service",
     }
-    -> exec { 'enable-ntpd':
-      command => '/usr/bin/systemctl enable ntpd.service',
-    }
-    -> exec { 'start-ntpdate':
-      command => '/usr/bin/systemctl start ntpdate.service',
+    -> exec { 'ntp-initial-config':
+      command => '/usr/sbin/ntpd -g -q -n -c /etc/ntp_initial.conf',
       returns => [ 0, 1 ],
+      timeout => $ntpdate_timeout,
       onlyif  => "test ! -f /etc/platform/simplex || grep -q '^server' /etc/ntp.conf",
     }
-    -> service { 'ntpd':
+    -> service { $ntp_service_name:
       ensure     => 'running',
       enable     => true,
-      name       => 'ntpd',
+      name       => $ntp_service_name,
       hasstatus  => true,
       hasrestart => true,
     }
 
     if $::personality == 'controller' {
       Class['::platform::dns']
-      -> Exec['enable-ntpdate']
+      -> Exec["enable-${ntp_service_name}"]
     } else {
       Anchor['platform::networking']
-      -> Exec['enable-ntpdate']
+      -> Exec["enable-${ntp_service_name}"]
     }
+
   } else {
-    exec { 'disable-ntpdate':
-      command => '/usr/bin/systemctl disable ntpdate.service',
+    exec { "disable-${ntp_service_name}":
       require => File['ntp_pmon_link'],
-    }
-    -> exec { 'disable-ntpd':
-      command => '/usr/bin/systemctl disable ntpd.service',
+      command => "/usr/bin/systemctl disable ${ntp_service_name}.service",
     }
   }
 }
@@ -101,6 +96,7 @@ class platform::ntp::server {
       mode    => '0640',
       content => template('platform/ntp.conf.server.erb'),
     }
+
     file { 'ntp_config_initial':
       ensure  => file,
       path    => '/etc/ntp_initial.conf',
@@ -121,6 +117,7 @@ class platform::ntp::client {
       mode    => '0644',
       content => template('platform/ntp.conf.client.erb'),
     }
+
     file { 'ntp_config_initial':
       ensure  => file,
       path    => '/etc/ntp_initial.conf',
