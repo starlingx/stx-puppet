@@ -59,9 +59,18 @@ class openstack::barbican
     }
   }
 
-  file { '/etc/logrotate.d/barbican-api':
-    ensure  => present,
-    content => template('openstack/barbican-api-logrotate.erb')
+  # On Debian barbican uses barbican-common to configure logrotate
+  if $::osfamily == 'Debian' {
+    file { '/etc/logrotate.d/barbican-common':
+      ensure  => present,
+      content => template('openstack/barbican-api-logrotate.erb')
+    }
+  }
+  else {
+    file { '/etc/logrotate.d/barbican-api':
+      ensure  => present,
+      content => template('openstack/barbican-api-logrotate.erb')
+    }
   }
 
   # Limit configuration file permission
