@@ -321,6 +321,22 @@ class platform::filesystem::controller {
   include ::platform::filesystem::conversion
   include ::platform::filesystem::docker
   include ::platform::filesystem::kubelet
+  include ::platform::filesystem::log_bind
+}
+
+class platform::filesystem::log_bind {
+  file {'/var/lib/systemd/coredump/':
+    ensure  => directory,
+  }
+  -> file {'/var/log/coredump/':
+    ensure  => directory,
+  }
+  -> mount { '/var/lib/systemd/coredump':
+    ensure  => mounted,
+    device  => '/var/log/coredump',
+    fstype  => 'none',
+    options => 'rw,bind',
+  }
 }
 
 
