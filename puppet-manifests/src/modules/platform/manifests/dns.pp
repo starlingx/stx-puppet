@@ -1,4 +1,16 @@
-class platform::dns::dnsmasq {
+class platform::dns::dnsmasq::params (
+  $efi_bootloader = $::osfamily ? {
+    'RedHat' => 'EFI/grubx64.efi',
+    default => 'EFI/BOOT/bootx64-nosig.efi'
+  },
+  $uefi_bootloader = $::osfamily ? {
+    'RedHat' => 'EFI/shim.efi',
+    default => 'EFI/BOOT/bootx64-nosig.efi'
+  }
+) {}
+
+class platform::dns::dnsmasq
+  inherits ::platform::dns::dnsmasq::params {
 
   # dependent template variables
   $install_uuid = $::install_uuid
