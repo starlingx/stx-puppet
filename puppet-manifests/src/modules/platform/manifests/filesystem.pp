@@ -429,3 +429,38 @@ class platform::filesystem::docker::bootstrap
     mode       => '0711',
   }
 }
+
+class platform::filesystem::log::params (
+  $lv_name = 'log-lv',
+  $lv_size = '8',
+  $mountpoint = '/var/log',
+  $devmapper = '/dev/mapper/cgts--vg-log--lv',
+  $fs_type = 'ext4',
+  $fs_options = ' '
+) {}
+
+class platform::filesystem::log
+  inherits ::platform::filesystem::log::params {
+
+  platform::filesystem { $lv_name:
+      lv_name    => $lv_name,
+      lv_size    => $lv_size,
+      mountpoint => $mountpoint,
+      fs_type    => $fs_type,
+      fs_options => $fs_options
+  }
+}
+
+class platform::filesystem::log::runtime {
+
+  include ::platform::filesystem::log::params
+  $lv_name = $::platform::filesystem::log::params::lv_name
+  $lv_size = $::platform::filesystem::log::params::lv_size
+  $devmapper = $::platform::filesystem::log::params::devmapper
+
+  platform::filesystem::resize { $lv_name:
+      lv_name   => $lv_name,
+      lv_size   => $lv_size,
+      devmapper => $devmapper,
+  }
+}
