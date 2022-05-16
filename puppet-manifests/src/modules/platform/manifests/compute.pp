@@ -378,5 +378,9 @@ class platform::compute {
   require ::platform::compute::resctrl
   require ::platform::compute::machine
   require ::platform::compute::config
-  require ::platform::compute::kvm_timer_advance
+
+  # Not included in Debian until libvirt gets included
+  if $::osfamily == 'RedHat' {
+    require ::platform::compute::kvm_timer_advance
+  }
 }
