@@ -318,12 +318,6 @@ else
         exit 1
     fi
 
-    if [ ! -f /var/run/network-scripts.puppet/ifcfg-lo ] ; then
-        # Something has gone horribly wrong
-        log_it "No /var/run/network-scripts.puppet/ifcfg-lo found! Aborting..."
-        exit 1
-    fi
-
     update_routes
     update_interfaces
 fi
