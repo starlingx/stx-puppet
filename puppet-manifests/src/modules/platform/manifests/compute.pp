@@ -46,6 +46,7 @@ class platform::compute::grub::params (
   $default_pgsz = '',
   $g_audit = '',
   $g_audit_backlog_limit = 'audit_backlog_limit=8192',
+  $bios_cstates = false,
   $keys = [
     'kvm-intel.eptad',
     'default_hugepagesz',
@@ -67,8 +68,15 @@ class platform::compute::grub::params (
     $eptad = ''
   }
 
+  if $bios_cstates {
+    $intel_idle_cstate = 'intel_idle.max_cstate=0'
+  } else {
+    $intel_idle_cstate = ''
+  }
   $updated_audit = "audit=${g_audit}"
-  $grub_updates = strip("${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit}")
+  $grub_updates = strip(
+    "${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit} ${intel_idle_cstate}"
+    )
 }
 
 class platform::compute::grub::update
