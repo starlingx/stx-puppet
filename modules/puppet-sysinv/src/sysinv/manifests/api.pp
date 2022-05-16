@@ -336,19 +336,36 @@ class sysinv::api (
   }
   Keystone_endpoint<||> -> Service['sysinv-api']
 
-  exec { 'sysinv-dbsync':
-    command     => $::sysinv::params::db_sync_command,
-    path        => '/usr/bin',
-    user        => 'sysinv',
-    refreshonly => true,
-    logoutput   => 'on_failure',
-    require     => Package['sysinv'],
-    # Only do the db sync if both controllers are running the same software
-    # version. Avoids impacting mate controller during an upgrade.
-    onlyif      => [
-      "test ${::controller_sw_versions_match} = true",
-      'systemctl status postgresql'
-    ]
+  if $::osfamily == 'Redhat' {
+    exec { 'sysinv-dbsync':
+      command     => $::sysinv::params::db_sync_command,
+      path        => '/usr/bin',
+      user        => 'sysinv',
+      refreshonly => true,
+      logoutput   => 'on_failure',
+      require     => Package['sysinv'],
+      # Only do the db sync if both controllers are running the same software
+      # version. Avoids impacting mate controller during an upgrade.
+      onlyif      => [
+        "test ${::controller_sw_versions_match} = true",
+        'systemctl status postgresql'
+      ]
+    }
+  } elsif($::osfamily == 'Debian') {
+    exec { 'sysinv-dbsync':
+      command     => $::sysinv::params::db_sync_command,
+      path        => '/usr/bin',
+      user        => 'sysinv',
+      refreshonly => true,
+      logoutput   => 'on_failure',
+      require     => Package['sysinv'],
+      # Only do the db sync if both controllers are running the same software
+      # version. Avoids impacting mate controller during an upgrade.
+      onlyif      => [
+        "test ${::controller_sw_versions_match} = true",
+        'systemctl status postgresql@13-main'
+      ]
+    }
   }
 
 }
