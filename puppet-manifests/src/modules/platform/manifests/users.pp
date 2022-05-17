@@ -22,7 +22,7 @@ class platform::users
     home             => '/home/sysadmin',
     password         => $sysadmin_password,
     password_max_age => $sysadmin_password_max_age,
-    shell            => '/bin/sh',
+    shell            => '/bin/bash',
   }
 }
 
@@ -42,7 +42,7 @@ class platform::users::bootstrap
     groups           => ['root', $::platform::params::protected_group_name],
     home             => '/home/sysadmin',
     password_max_age => $sysadmin_password_max_age,
-    shell            => '/bin/sh',
+    shell            => '/bin/bash',
   }
 }
 
