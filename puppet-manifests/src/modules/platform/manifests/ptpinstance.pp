@@ -6,7 +6,8 @@ define ptp_config_files(
   $ensure,
   $enable,
   $cmdline_opts,
-  $id
+  $id,
+  $pmc_gm_settings
 ) {
   file { $_name:
     ensure  => file,
@@ -36,6 +37,39 @@ define ptp_config_files(
   -> exec { "enable-${_name}":
     command => "/usr/bin/systemctl enable \
     ${service}@${_name}",
+  }
+}
+
+define set_ptp4l_pmc_parameters(
+  $_name,
+  $service,
+  $global_parameters,
+  $interfaces,
+  $ensure,
+  $enable,
+  $cmdline_opts,
+  $id,
+  $pmc_gm_settings
+) {
+  if ($service == 'ptp4l') and ($pmc_gm_settings != '') {
+    exec { "${_name}_set_initial_pmc_paramters":
+      # This command always returns 0 even if it fails, but it is always running the same
+      # valid command so failure is not expected.
+      command => "/sbin/pmc -u -b 0 -f /etc/ptpinstance/${service}-${_name}.conf \
+                  'set GRANDMASTER_SETTINGS_NP \
+                  clockClass ${pmc_gm_settings['clockClass']} \
+                  clockAccuracy ${pmc_gm_settings['clockAccuracy']} \
+                  offsetScaledLogVariance ${pmc_gm_settings['offsetScaledLogVariance']} \
+                  currentUtcOffset ${pmc_gm_settings['currentUtcOffset']} \
+                  leap61 ${pmc_gm_settings['leap61']} \
+                  leap59 ${pmc_gm_settings['leap59']} \
+                  currentUtcOffsetValid ${pmc_gm_settings['currentUtcOffsetValid']} \
+                  ptpTimescale ${pmc_gm_settings['ptpTimescale']} \
+                  timeTraceable ${pmc_gm_settings['timeTraceable']} \
+                  frequencyTraceable ${pmc_gm_settings['frequencyTraceable']} \
+                  timeSource ${pmc_gm_settings['timeSource']}'",
+      require => Service["instance-${_name}"]
+    }
   }
 }
 
@@ -262,6 +296,7 @@ class platform::ptpinstance (
 
   if $enabled {
     create_resources('ptp_config_files', $config, $ptp_state)
+    create_resources('set_ptp4l_pmc_parameters', $config, $ptp_state)
   }
 
   exec { 'set-ice-gnss-thread-niceness':
@@ -279,4 +314,3 @@ class platform::ptpinstance::runtime {
     command => '/usr/local/sbin/pmon-restart collectd'
   }
 }
-
