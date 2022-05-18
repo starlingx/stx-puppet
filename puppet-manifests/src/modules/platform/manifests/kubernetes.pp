@@ -50,6 +50,9 @@ class platform::kubernetes::params (
   # The file holding the root CA cert/key to update to
   $rootca_certfile_new = '/etc/kubernetes/pki/ca_new.crt',
   $rootca_keyfile_new = '/etc/kubernetes/pki/ca_new.key',
+  $kubelet_image_gc_low_threshold_percent = 75,
+  $kubelet_image_gc_high_threshold_percent = 79,
+  $kubelet_eviction_hard_imagefs_available = '2Gi',
 ) { }
 
 class platform::kubernetes::configuration {
@@ -1395,5 +1398,45 @@ class platform::kubernetes::master::apiserver::runtime{
   # Restart apiserver (to trust a new ca)
   exec { 'restart_kube_apiserver':
     command => "/usr/bin/kill -s SIGHUP $(pidof kube-apiserver)",
+  }
+}
+
+class platform::kubernetes::master::update_kubelet_params::runtime
+  inherits ::platform::kubernetes::params {
+
+  # Update kubeadm bindmount if needed.
+  require platform::kubernetes::bindmounts
+
+  $kubelet_image_gc_low_threshold_percent = $::platform::kubernetes::params::kubelet_image_gc_low_threshold_percent
+  $kubelet_image_gc_high_threshold_percent = $::platform::kubernetes::params::kubelet_image_gc_high_threshold_percent
+  $kubelet_eviction_hard_imagefs_available = $::platform::kubernetes::params::kubelet_eviction_hard_imagefs_available
+
+  # Update kubelet parameters in kubelet-config Configmap.
+  exec { 'update kubelet config parameters':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
+    provider    => shell,
+    command     => template('platform/kube-config-kubelet.erb'),
+    timeout     => 60,
+    logoutput   => true,
+  }
+}
+
+class platform::kubernetes::update_kubelet_config::runtime
+  inherits ::platform::kubernetes::params {
+
+  # Update kubeadm/kubelet bindmounts if needed.
+  include platform::kubernetes::bindmounts
+
+  # Regenerate /var/lib/kubelet/config.yaml based on current kubelet-config
+  # ConfigMap. This does not regenerate /var/lib/kubelet/kubeadm-flags.env.
+  exec { 'update kubelet config':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf:/etc/kubernetes/kubelet.conf' ],
+    provider    => shell,
+    command     => 'kubeadm upgrade node phase kubelet-config',
+    timeout     => 60,
+    logoutput   => true,
+  }
+  -> exec { 'restart kubelet':
+      command => '/usr/local/sbin/pmon-restart kubelet'
   }
 }

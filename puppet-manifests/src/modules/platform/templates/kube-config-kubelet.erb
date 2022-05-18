@@ -1,0 +1,61 @@
+<%# kubeadm stores cluster configuration and kubelet-config -%>
+<%# configuration as a configmaps in the cluster. This procedure -%>
+<%# keeps the configmap consistent and keeps kubelet managed by -%>
+<%# kubeadm. -%>
+
+<%# The kubelet-config configmap will be patched with updated kubelet -%>
+<%# parameters provided by the script update_kubelet-config.py. -%>
+
+s_exit() {
+    rm -v -f ${cm_kubelet_tempfile}
+    exit "${1:-0}"
+}
+
+# Temporary configuration file
+cm_kubelet_tempfile=$(mktemp)
+
+<% if @is_controller_active.to_s == 'true' or @system_mode == 'simplex' -%>
+# Get current kubelet-config versioned configmap name
+cm_name=$(kubectl -n kube-system get configmaps -oname 2>/dev/null | \
+          awk '/kubelet-config/ {print $1}')
+if [ $? -ne 0 ]; then
+    echo "Get configmaps failed."
+    s_exit 1
+fi
+echo "Got configmap: ${cm_name}"
+
+# Get pre-patched kubelet-config configmap
+kubectl -n kube-system get ${cm_name} -oyaml 2>/dev/null > ${cm_kubelet_tempfile}
+if [ $? -ne 0 ]; then
+    echo "Get ${cm_name} failed."
+    s_exit 1
+fi
+
+# Read and overwrite the kubelet-config YAML file with updated values.
+python /usr/share/puppet/modules/platform/files/update_kubelet-config.py \
+--configmap_file ${cm_kubelet_tempfile} \
+<%- if @kubelet_image_gc_low_threshold_percent -%>
+--image_gc_low_threshold_percent <%= @kubelet_image_gc_low_threshold_percent %> \
+<%- end -%>
+<%- if @kubelet_image_gc_high_threshold_percent -%>
+--image_gc_high_threshold_percent <%= @kubelet_image_gc_high_threshold_percent %> \
+<%- end -%>
+<%- if @kubelet_eviction_hard_imagefs_available -%>
+--eviction_hard_imagefs_available <%= @kubelet_eviction_hard_imagefs_available %>
+<%- end -%>
+
+if [ $? -ne 0 ]; then
+    echo "Update kubelet-config tempfile failed."
+    s_exit 1
+fi
+
+# Patch kubelet-config configmap with updated values.
+kubectl -n kube-system patch ${cm_name} -p "$(cat ${cm_kubelet_tempfile})"
+if [ $? -ne 0 ]; then
+    echo "Patch ${cm_name} failed."
+    s_exit 1
+fi
+<% end -%>
+
+# Success path exit and cleanup
+s_exit
