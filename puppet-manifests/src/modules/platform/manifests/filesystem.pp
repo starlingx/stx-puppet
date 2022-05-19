@@ -165,7 +165,7 @@ define platform::filesystem::resize(
 class platform::filesystem::backup::params (
   $lv_name = 'backup-lv',
   $lv_size = '1',
-  $mountpoint = '/opt/backups',
+  $mountpoint = $::osfamily ? { 'Debian' => '/var/rootdirs/opt/backups', default => '/opt/backups' },
   $devmapper = '/dev/mapper/cgts--vg-backup--lv',
   $fs_type = 'ext4',
   $fs_options = ' '
