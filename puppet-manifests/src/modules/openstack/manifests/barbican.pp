@@ -42,23 +42,6 @@ class openstack::barbican
     tag   => 'modify-workers',
   }
 
-  # On Debian barbican is set to run by UWSGI by default so
-  # it doesn't update gunicorn-config.py. Update it in order
-  # to run by gunicorn.
-  if $::osfamily == 'Debian' {
-    include ::platform::network::mgmt::params
-    $api_host = $::platform::network::mgmt::params::subnet_version ? {
-      6       => "[${::platform::network::mgmt::params::controller_address}]",
-      default => $::platform::network::mgmt::params::controller_address,
-    }
-    file_line { 'Modify bind_port in gunicorn-config.py':
-      path  => '/etc/barbican/gunicorn-config.py',
-      line  => "bind = '${api_host}:${api_port}'",
-      match => '.*bind = .*',
-      tag   => 'modify-bind-port',
-    }
-  }
-
   # On Debian barbican uses barbican-common to configure logrotate
   if $::osfamily == 'Debian' {
     file { '/etc/logrotate.d/barbican-common':
@@ -98,6 +81,19 @@ class openstack::barbican::service (
         default => $::platform::network::mgmt::params::controller_address,
       }
   }
+
+  # On Debian barbican is set to run by UWSGI by default so
+  # it doesn't update gunicorn-config.py. Update it in order
+  # to run by gunicorn.
+  if $::osfamily == 'Debian' {
+    file_line { 'Modify bind_port in gunicorn-config.py':
+      path  => '/etc/barbican/gunicorn-config.py',
+      line  => "bind = '${api_host}:${api_port}'",
+      match => '.*bind = .*',
+      tag   => 'modify-bind-port',
+    }
+  }
+
   include ::platform::amqp::params
 
   class { '::barbican::api':
