@@ -103,8 +103,8 @@ include ::platform::deviceimage
 include ::platform::compute
 include ::platform::vswitch
 include ::platform::devices
-include ::platform::interfaces::sriov::config
-include ::platform::interfaces::fpga::config
+include ::platform::network::interfaces::sriov::config
+include ::platform::network::interfaces::fpga::config
 include ::platform::worker::storage
 include ::platform::kubernetes::aio
 
