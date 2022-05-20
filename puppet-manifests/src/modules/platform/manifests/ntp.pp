@@ -53,9 +53,8 @@ class platform::ntp (
       command => "/usr/bin/systemctl enable ${ntp_service_name}.service",
     }
     -> exec { 'ntp-initial-config':
-      command => '/usr/sbin/ntpd -g -q -n -c /etc/ntp_initial.conf',
-      returns => [ 0, 1 ],
-      timeout => $ntpdate_timeout,
+      command => "timeout ${ntpdate_timeout} /usr/sbin/ntpd -g -q -n -c /etc/ntp_initial.conf",
+      returns => [ 0, 1, 124 ],
       onlyif  => "test ! -f /etc/platform/simplex || grep -q '^server' /etc/ntp.conf",
     }
     -> service { $ntp_service_name:
