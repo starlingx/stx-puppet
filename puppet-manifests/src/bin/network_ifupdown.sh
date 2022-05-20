@@ -379,6 +379,8 @@ function get_search_ifname {
     echo ${base_cfg}
 }
 
+# Note: any change on this function need to be mirrored on
+# the patch for ifupdown-extra in the integ repo
 function get_prefix_length {
     netmask=$1
     if [[ ${netmask} =~ .*:.* ]]; then
@@ -391,7 +393,7 @@ function get_prefix_length {
                 }
             print "/" mask
         }' <<< ${netmask}
-    else
+    elif [[ ${netmask} =~ .*\..* ]]; then
         # IPv4
         awk -F. '{
             split($0, octets)
@@ -400,6 +402,8 @@ function get_prefix_length {
             }
             print "/" mask
         }' <<< ${netmask}
+    elif [[ ${netmask} =~ ^[0-9]+$ ]]; then
+        echo "/${netmask}"
     fi
 }
 
