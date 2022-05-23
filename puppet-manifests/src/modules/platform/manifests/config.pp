@@ -230,7 +230,11 @@ class platform::config::timezone
 
 
 class platform::config::tpm {
-  $tpm_certs = hiera_hash('platform::tpm::tpm_data', undef)
+  if $::osfamily == 'Debian' {
+    $tpm_certs = lookup({'name'  => 'platform::tpm::tpm_data', 'merge' => 'hash', 'default_value' => undef})
+  } else {
+    $tpm_certs = hiera_hash('platform::tpm::tpm_data', undef)
+  }
   if $tpm_certs != undef {
     # iterate through each tpm_cert creating it if it doesn't exist
     $tpm_certs.each |String $key, String $value| {

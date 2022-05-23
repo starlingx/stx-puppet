@@ -116,4 +116,8 @@ class { '::platform::config::controller::post':
   stage => post,
 }
 
-hiera_include('classes')
+if $::osfamily == 'Debian' {
+  lookup('classes', {merge => unique}).include
+} else {
+  hiera_include('classes')
+}
