@@ -46,7 +46,7 @@ class platform::compute::grub::params (
   $default_pgsz = '',
   $g_audit = '',
   $g_audit_backlog_limit = 'audit_backlog_limit=8192',
-  $bios_cstates = false,
+  $bios_cstate = false,
   $keys = [
     'kvm-intel.eptad',
     'default_hugepagesz',
@@ -68,7 +68,7 @@ class platform::compute::grub::params (
     $eptad = ''
   }
 
-  if $bios_cstates {
+  if $bios_cstate {
     $intel_idle_cstate = 'intel_idle.max_cstate=0'
   } else {
     $intel_idle_cstate = ''
