@@ -37,7 +37,7 @@ define platform::lvm::global_filter($filter) {
   file_line { "${name}: update lvm global_filter":
     path  => '/etc/lvm/lvm.conf',
     line  => "    global_filter = ${filter}",
-    match => '^[ ]*global_filter =',
+    match => '^[\s]*#? global_filter =',
   }
 }
 
