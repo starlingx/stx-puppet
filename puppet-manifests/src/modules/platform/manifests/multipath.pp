@@ -1,5 +1,5 @@
 class platform::multipath::params (
-  $enabled = false,
+  $enabled = true,
 ) {
 }
 

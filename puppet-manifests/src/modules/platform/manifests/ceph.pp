@@ -629,6 +629,11 @@ define platform_ceph_osd(
   # request journal path as argument for ceph osd initializaiton
   if $disk_path in $journal_path {
     $journal = ''
+  } elsif 'mpath-' in $disk_path {
+    $disk_path_array = split($disk_path, 'mpath-')
+    if $disk_path_array[1] in $journal_path {
+      $journal = ''
+    }
   } else {
     $journal = $journal_path
   }
