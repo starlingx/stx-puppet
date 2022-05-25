@@ -1,7 +1,7 @@
 #
 # Files in this package are licensed under Apache; see LICENSE file.
 #
-# Copyright (c) 2013-2020 Wind River Systems, Inc.
+# Copyright (c) 2013-2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -19,6 +19,8 @@
 #   Syslog facility to receive log lines.
 #   (Optional) Defaults to LOG_USER.
 
+# TODO(kmacleod): playbook_timeout should be exposed to persist and modify
+#                 via 'system service-parameter...'
 class dcmanager (
   $database_connection         = '',
   $database_idle_timeout       = 3600,
@@ -42,7 +44,13 @@ class dcmanager (
   $dcmanager_api_port          = 8119,
   $dcmanager_mtc_inv_label     = '/v1/',
   $region_name                 = 'RegionOne',
-  $log_levels                  = 'keystoneauth=ERROR,eventlet.wsgi.server=WARN'
+  $log_levels                  = 'keystoneauth=ERROR,eventlet.wsgi.server=WARN',
+  $workers                     = 1,
+  $orch_workers                = 1,
+  $state_workers               = 4,
+  $audit_workers               = 1,
+  $audit_worker_workers        = 4,
+  $playbook_timeout            = 3600
 ) {
 
   include dcmanager::params
@@ -100,6 +108,15 @@ class dcmanager (
 
   dcmanager_config {
     'keystone_authtoken/region_name':  value => $region_name;
+  }
+
+  dcmanager_config {
+    'DEFAULT/workers':                   value => $workers;
+    'DEFAULT/orch_workers':              value => $orch_workers;
+    'DEFAULT/state_workers':             value => $state_workers;
+    'DEFAULT/audit_workers':             value => $audit_workers;
+    'DEFAULT/audit_worker_workers':      value => $audit_worker_workers;
+    'DEFAULT/playbook_timeout':          value => $playbook_timeout;
   }
 
   file {'/etc/bash_completion.d/dcmanager.bash_completion':
