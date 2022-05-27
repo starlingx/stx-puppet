@@ -7,7 +7,7 @@ define ptp_config_files(
   $enable,
   $cmdline_opts,
   $id,
-  $pmc_gm_settings
+  $pmc_gm_settings = ''
 ) {
   file { $_name:
     ensure  => file,
@@ -49,7 +49,7 @@ define set_ptp4l_pmc_parameters(
   $enable,
   $cmdline_opts,
   $id,
-  $pmc_gm_settings
+  $pmc_gm_settings = ''
 ) {
   if ($service == 'ptp4l') and ($pmc_gm_settings != '') {
     exec { "${_name}_set_initial_pmc_paramters":
