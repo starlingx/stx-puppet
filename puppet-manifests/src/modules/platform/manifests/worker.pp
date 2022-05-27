@@ -55,7 +55,7 @@ class platform::worker::storage (
   file_line { 'enable_new_lvg_disks':
       path  => '/etc/lvm/lvm.conf',
       line  => "    global_filter = ${lvm_update_filter}",
-      match => '^[ ]*global_filter =',
+      match => '^[\s]*#? global_filter =',
   }
   -> exec { 'umount /var/lib/nova/instances':
     command => 'umount /var/lib/nova/instances; true',
@@ -76,7 +76,7 @@ class platform::worker::storage (
   -> file_line { 'disable_old_lvg_disks':
       path  => '/etc/lvm/lvm.conf',
       line  => "    global_filter = ${lvm_global_filter}",
-      match => '^[ ]*global_filter =',
+      match => '^[\s]*#? global_filter =',
   }
   if ! empty($::platform::lvm::vg::nova_local::physical_volumes) {
     File_line['disable_old_lvg_disks']
