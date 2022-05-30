@@ -5,7 +5,7 @@ class platform::compute::params (
   $reserved_platform_cores = '',
   $worker_base_reserved = '',
   $compute_vswitch_reserved = '',
-  $max_cpu_frequency = undef
+  $max_cpu_mhz_configured = undef
 ) { }
 
 class platform::compute::config
@@ -26,9 +26,9 @@ class platform::compute::config
     }
   }
 
-  if $max_cpu_frequency != undef {
+  if $max_cpu_mhz_configured != undef {
     exec { 'Update host max CPU frequency':
-      command   => "/usr/bin/cpupower frequency-set -u ${max_cpu_frequency}MHz",
+      command   => "/usr/bin/cpupower frequency-set -u ${max_cpu_mhz_configured}MHz",
       logoutput => true,
     }
   }
