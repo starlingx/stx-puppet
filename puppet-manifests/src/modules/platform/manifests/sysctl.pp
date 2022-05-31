@@ -55,6 +55,10 @@ class platform::sysctl
       value => '-1',
     }
 
+    exec { 'Set low-latency tuned profile for low-latency worker':
+      command => 'tuned-adm profile starlingx-realtime'
+    }
+
     # Enable check for raising timer interrupt only if one is pending.
     # This allows nohz full mode to operate properly on isolated cores.
     # Without it, ktimersoftd interferes with only one job being
