@@ -252,12 +252,21 @@ class platform::config::tpm {
 
 
 class platform::config::kdump {
-  file_line { '/etc/kdump.conf dracut_args':
-    path  => '/etc/kdump.conf',
-    line  => 'dracut_args --omit-drivers "ice e1000e i40e ixgbe ixgbevf iavf mlx5_ib mlx5_core bnxt_en bnxt_re"',
-    match => '^dracut_args .*--omit-drivers',
+  if $::osfamily == 'RedHat' {
+    file_line { '/etc/kdump.conf dracut_args':
+      path  => '/etc/kdump.conf',
+      line  => 'dracut_args --omit-drivers "ice e1000e i40e ixgbe ixgbevf iavf mlx5_ib mlx5_core bnxt_en bnxt_re"',
+      match => '^dracut_args .*--omit-drivers',
+    }
+    ~> service { 'kdump': }
+  } else {
+    exec { 'enable-kdump-tools':
+      command => '/usr/bin/systemctl enable kdump-tools.service',
+    }
+    -> service{ 'kdump-tools':
+      enable => true,
+    }
   }
-  ~> service { 'kdump': }
 }
 
 
