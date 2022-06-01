@@ -9,7 +9,11 @@ CONFIGDIR ?= /etc/puppet
 MODULEDIR ?= /usr/share/puppet/modules
 
 install:
+ifdef ignore_puppet_warnings
+	install -m 755 -D bin/puppet-manifest-apply-ignore-warnings.sh $(BINDIR)/puppet-manifest-apply.sh
+else
 	install -m 755 -D bin/puppet-manifest-apply.sh $(BINDIR)/puppet-manifest-apply.sh
+endif
 	install -m 755 -D bin/apply_network_config.sh $(BINDIR)/apply_network_config.sh
 	install -m 755 -D bin/network_ifupdown.sh $(BINDIR)/network_ifupdown.sh
 	install -m 755 -D bin/network_sysconfig.sh $(BINDIR)/network_sysconfig.sh
