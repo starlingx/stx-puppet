@@ -18,6 +18,7 @@ endif
 	install -m 755 -D bin/network_ifupdown.sh $(BINDIR)/network_ifupdown.sh
 	install -m 755 -D bin/network_sysconfig.sh $(BINDIR)/network_sysconfig.sh
 	install -m 755 -D bin/puppet-update-default-grub.sh $(BINDIR)/puppet-update-default-grub.sh
+	install -m 755 -D bin/puppet-update-grub-env.py $(BINDIR)/puppet-update-grub-env.py
 	install -d -m 0755 $(CONFIGDIR)
 ifdef hiera_v5
 	install -m 640 etc/hiera_v5.yaml $(CONFIGDIR)/hiera.yaml

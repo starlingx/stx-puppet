@@ -85,19 +85,28 @@ class platform::compute::grub::update
   notice('Updating grub configuration')
 
   $to_be_removed = join($keys, ' ')
-  exec { 'Remove the cpu arguments':
-    command => "grubby --update-kernel=ALL --remove-args='${to_be_removed}'",
-  }
-  -> exec { 'Remove the cpu arguments from /etc/default/grub':
-    command   => "/usr/local/bin/puppet-update-default-grub.sh --remove ${to_be_removed}",
-    logoutput => true,
-  }
-  -> exec { 'Add the cpu arguments':
-    command => "grubby --update-kernel=ALL --args='${grub_updates}'",
-  }
-  -> exec { 'Add the cpu arguments to /etc/default/grub':
-    command   => "/usr/local/bin/puppet-update-default-grub.sh --add ${grub_updates}",
-    logoutput => true,
+  if $::osfamily == 'RedHat' {
+    exec { 'Remove the cpu arguments':
+      command => "grubby --update-kernel=ALL --remove-args='${to_be_removed}'",
+    }
+    -> exec { 'Remove the cpu arguments from /etc/default/grub':
+      command   => "/usr/local/bin/puppet-update-default-grub.sh --remove ${to_be_removed}",
+      logoutput => true,
+    }
+    -> exec { 'Add the cpu arguments':
+      command => "grubby --update-kernel=ALL --args='${grub_updates}'",
+    }
+    -> exec { 'Add the cpu arguments to /etc/default/grub':
+      command   => "/usr/local/bin/puppet-update-default-grub.sh --add ${grub_updates}",
+      logoutput => true,
+    }
+  } elsif($::osfamily == 'Debian') {
+    exec { 'Remove the cpu arguments from /boot/efi/EFI/BOOT/boot.env':
+      command   => "/usr/local/bin/puppet-update-grub-env.py --remove-kernelparams '${to_be_removed}'",
+    }
+    -> exec { 'Add the cpu arguments to /boot/efi/EFI/BOOT/boot.env':
+      command   => "/usr/local/bin/puppet-update-grub-env.py --add-kernelparams '${grub_updates}'",
+    }
   }
 }
 
