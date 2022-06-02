@@ -74,11 +74,11 @@ define platform::filesystem (
     # of each LV in cgts-vg to prevent problems caused
     # by stale data on the disk
     -> exec { "wipe start of device ${lv_name}":
-      command => "dd if=/dev/zero of=${lv_name} bs=1M count=10",
+      command => "dd if=/dev/zero of=${device} bs=1M count=10",
       onlyif  => "test ! -e /etc/platform/.${lv_name}"
     }
     -> exec { "wipe end of device ${lv_name}":
-      command => "dd if=/dev/zero of=${lv_name} bs=1M seek=$(($(blockdev --getsz ${lv_name})/2048 - 10)) count=10",
+      command => "dd if=/dev/zero of=${device} bs=1M seek=$(($(blockdev --getsz ${device})/2048 - 10)) count=10",
       onlyif  => "test ! -e /etc/platform/.${lv_name}"
     }
     -> exec { "mark lv as wiped ${lv_name}:":
