@@ -198,7 +198,10 @@ class platform::filesystem::conversion::params (
 class platform::filesystem::scratch::params (
   $lv_size = '2',
   $lv_name = 'scratch-lv',
-  $mountpoint = '/scratch',
+  $mountpoint = $::osfamily ? {
+    'Debian' => '/var/rootdirs/scratch',
+    default => '/scratch',
+  },
   $devmapper = '/dev/mapper/cgts--vg-scratch--lv',
   $fs_type = 'ext4',
   $fs_options = ' ',
