@@ -4,8 +4,8 @@ After=ptp4l.service
 
 [Service]
 Type=simple
-EnvironmentFile=-/etc/sysconfig/ptpinstance/phc2sys-instance-%i
-ExecStart=/usr/sbin/phc2sys -f /etc/ptpinstance/phc2sys-%i.conf $OPTIONS
+EnvironmentFile=-<%= @ptp_options_dir %>/ptpinstance/phc2sys-instance-%i
+ExecStart=/usr/sbin/phc2sys -f <%= @ptp_conf_dir %>/ptpinstance/phc2sys-%i.conf $OPTIONS
 ExecStartPost=/bin/bash -c 'echo $MAINPID > /var/run/phc2sys-%i.pid'
 ExecStopPost=/bin/rm -f /var/run/phc2sys-%i.pid
 Restart=on-failure

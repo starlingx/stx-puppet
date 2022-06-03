@@ -7,23 +7,25 @@ define ptp_config_files(
   $enable,
   $cmdline_opts,
   $id,
+  $ptp_conf_dir,
+  $ptp_options_dir,
   $pmc_gm_settings = ''
 ) {
   file { $_name:
     ensure  => file,
     notify  => Service["instance-${_name}"],
-    path    => "/etc/ptpinstance/${service}-${_name}.conf",
+    path    => "${ptp_conf_dir}/ptpinstance/${service}-${_name}.conf",
     mode    => '0644',
     content => template('platform/ptpinstance.conf.erb'),
-    require => File['/etc/ptpinstance']
+    require => File["${ptp_conf_dir}/ptpinstance"]
   }
   -> file { "${_name}-sysconfig":
     ensure  => file,
     notify  => Service["instance-${_name}"],
-    path    => "/etc/sysconfig/ptpinstance/${service}-instance-${_name}",
+    path    => "${ptp_options_dir}/ptpinstance/${service}-instance-${_name}",
     mode    => '0644',
     content => template("platform/${service}-instance.erb"),
-    require => File['/etc/sysconfig/ptpinstance']
+    require => File["${ptp_options_dir}/ptpinstance"]
   }
   -> service { "instance-${_name}":
     ensure     => $ensure,
@@ -49,13 +51,16 @@ define set_ptp4l_pmc_parameters(
   $enable,
   $cmdline_opts,
   $id,
+  $ptp_conf_dir,
+  $ptp_options_dir,
   $pmc_gm_settings = ''
 ) {
   if ($service == 'ptp4l') and ($pmc_gm_settings != '') {
     exec { "${_name}_set_initial_pmc_paramters":
       # This command always returns 0 even if it fails, but it is always running the same
       # valid command so failure is not expected.
-      command => "/sbin/pmc -u -b 0 -f /etc/ptpinstance/${service}-${_name}.conf \
+      command => "/sbin/pmc -u -b 0 \
+                  -f ${ptp_conf_dir}/ptpinstance/${service}-${_name}.conf \
                   'set GRANDMASTER_SETTINGS_NP \
                   clockClass ${pmc_gm_settings['clockClass']} \
                   clockAccuracy ${pmc_gm_settings['clockAccuracy']} \
@@ -79,6 +84,7 @@ define nic_clock_handler (
   $port_names,
   $uuid,
   $base_port,
+  $ptp_conf_dir,
   $wpc_commands = {
     'sma1' => {
         'input' => "1 1 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1",
@@ -103,11 +109,11 @@ define nic_clock_handler (
   }
 ) {
   exec { "${ifname}_heading":
-    command => "echo ifname [${name}] >> /etc/ptpinstance/clock-conf.conf",
+    command => "echo ifname [${name}] >> ${ptp_conf_dir}/ptpinstance/clock-conf.conf",
     require => File['ensure_clock_conf_present']
   }
   -> exec { "${ifname}_${base_port}_heading":
-    command  => "echo base_port [${base_port}] >> /etc/ptpinstance/clock-conf.conf",
+    command  => "echo base_port [${base_port}] >> ${ptp_conf_dir}/ptpinstance/clock-conf.conf",
   }
   $parameters.each |String $parm, String $value| {
     exec { "${ifname}_${parm}":
@@ -118,7 +124,7 @@ define nic_clock_handler (
       require  => [ Exec["${ifname}_heading"], Exec["${ifname}_${base_port}_heading"] ]
     }
     -> exec { "${ifname}_${parm}_to_file":
-      command  => "echo ${parm} ${value} >> /etc/ptpinstance/clock-conf.conf"
+      command  => "echo ${parm} ${value} >> ${ptp_conf_dir}/ptpinstance/clock-conf.conf"
     }
   }
 }
@@ -164,20 +170,35 @@ define nic_clock_reset (
   }
 }
 
+class platform::ptpinstance::params {
+  if $::osfamily == 'Debian' {
+    $ptp_conf_dir = '/etc/linuxptp'
+    $ptp_options_dir = '/etc/default'
+  }
+  else {
+    $ptp_conf_dir = '/etc'
+    $ptp_options_dir = '/etc/sysconfig'
+  }
+}
+
 class platform::ptpinstance::nic_clock (
   $nic_clock_config = {},
   $nic_clock_enabled = false,
 ) {
+  include ::platform::ptpinstance::params
+  $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
+  $ptp_options_dir = $::platform::ptpinstance::params::ptp_options_dir
+
   require ::platform::ptpinstance::nic_clock::nic_reset
 
   file { 'ensure_clock_conf_present':
     ensure  => present,
-    path    => '/etc/ptpinstance/clock-conf.conf',
+    path    => "${ptp_conf_dir}/ptpinstance/clock-conf.conf",
     mode    => '0644',
-    require => File['/etc/ptpinstance']
+    require => File["${ptp_conf_dir}/ptpinstance"]
   }
   if $nic_clock_enabled {
-    create_resources('nic_clock_handler', $nic_clock_config)
+    create_resources('nic_clock_handler', $nic_clock_config, {'ptp_conf_dir' => $ptp_conf_dir})
   }
 }
 
@@ -185,12 +206,15 @@ class platform::ptpinstance::nic_clock::nic_reset (
   $nic_clock_config = $platform::ptpinstance::nic_clock::nic_clock_config,
   $nic_clock_enabled = $platform::ptpinstance::nic_clock::nic_clock_enabled
 ) {
+  include ::platform::ptpinstance::params
+  $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
+
   if $nic_clock_enabled {
     create_resources('nic_clock_reset', $nic_clock_config)
   }
   exec { 'clear_clock_conf_file':
-    command => 'echo "" > /etc/ptpinstance/clock-conf.conf',
-    onlyif  => 'stat /etc/ptpinstance/clock-conf.conf'
+    command => "echo \"\" > ${ptp_conf_dir}/ptpinstance/clock-conf.conf",
+    onlyif  => "stat ${ptp_conf_dir}/ptpinstance/clock-conf.conf"
   }
 }
 
@@ -199,10 +223,16 @@ class platform::ptpinstance (
   $runtime = false,
   $config = []
 ) {
+  include ::platform::ptpinstance::params
+  $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
+  $ptp_options_dir = $::platform::ptpinstance::params::ptp_options_dir
+
   if $enabled {
     $ptp_state = {
       'ensure' => 'running',
-      'enable' => true
+      'enable' => true,
+      'ptp_conf_dir' => $ptp_conf_dir,
+      'ptp_options_dir' => $ptp_options_dir
     }
   }
 
@@ -214,22 +244,22 @@ class platform::ptpinstance (
     $phc2sys_cmd_opts = ''
   }
 
-  file {'/etc/ptpinstance':
+  file {"${ptp_conf_dir}/ptpinstance":
     ensure =>  directory,
     mode   =>  '0755',
   }
   -> tidy { 'purge_conf':
-    path    => '/etc/ptpinstance',
+    path    => "${ptp_conf_dir}/ptpinstance",
     matches => [ '[^clock]*.conf' ],
     recurse => true,
     rmdirs  => false
   }
-  -> file{'/etc/sysconfig/ptpinstance':
+  -> file{"${ptp_options_dir}/ptpinstance":
     ensure =>  directory,
     mode   =>  '0755',
   }
   -> tidy { 'purge_sysconf':
-    path    => '/etc/sysconfig/ptpinstance/',
+    path    => "${ptp_options_dir}/ptpinstance/",
     matches => [ '*-instance-*' ],
     recurse => true,
     rmdirs  => false

@@ -5,8 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-EnvironmentFile=-/etc/sysconfig/ptpinstance/ptp4l-instance-%i
-ExecStart=/usr/sbin/ptp4l -f /etc/ptpinstance/ptp4l-%i.conf $OPTIONS
+EnvironmentFile=-<%= @ptp_options_dir %>/ptpinstance/ptp4l-instance-%i
+ExecStart=/usr/sbin/ptp4l -f <%= @ptp_conf_dir %>/ptpinstance/ptp4l-%i.conf $OPTIONS
 ExecStartPost=/bin/bash -c 'echo $MAINPID > /var/run/ptp4l-%i.pid'
 ExecStopPost=/bin/rm -f /var/run/ptp4l-%i.pid
 Restart=on-failure

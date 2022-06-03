@@ -37,7 +37,6 @@ include ::platform::password
 include ::platform::ldap::server
 include ::platform::ldap::client
 include ::platform::ntp::server
-include ::platform::ptp
 include ::platform::ptpinstance
 include ::platform::ptpinstance::nic_clock
 include ::platform::lldp
