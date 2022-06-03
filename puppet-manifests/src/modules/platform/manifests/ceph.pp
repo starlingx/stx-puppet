@@ -302,7 +302,7 @@ class platform::ceph::monitor
         unless    => 'ceph osd crush rule list --format plain | grep -e "storage_tier_ruleset"',
         logoutput => true,
       }
-      -> Platform_ceph_osd <| |>
+      -> Platform::Ceph::Platform_ceph_osd <| |>
     }
 
     # Ensure networking is up before Monitors are configured
@@ -585,7 +585,7 @@ class platform::ceph::metadataserver::runtime {
   include ::platform::ceph::metadataserver::worker::runtime
 }
 
-define osd_crush_location(
+define platform::ceph::osd_crush_location(
   $osd_id,
   $osd_uuid,
   $disk_path,
@@ -602,7 +602,7 @@ define osd_crush_location(
   }
 }
 
-define osd_location(
+define platform::ceph::osd_location(
   $osd_id,
   $osd_uuid,
   $disk_path,
@@ -615,7 +615,7 @@ define osd_location(
   }
 }
 
-define platform_ceph_osd(
+define platform::ceph::platform_ceph_osd(
   $osd_id,
   $osd_uuid,
   $disk_path,
@@ -661,7 +661,7 @@ define platform_ceph_osd(
 }
 
 
-define platform_ceph_journal(
+define platform::ceph::platform_ceph_journal(
   $disk_path,
   $journal_sizes,
 ) {
@@ -690,12 +690,12 @@ class platform::ceph::osds(
     }
 
     # Ensure ceph.conf is complete before configuring OSDs
-    Class['::ceph'] -> Platform_ceph_osd <| |>
+    Class['::ceph'] -> Platform::Ceph::Platform_ceph_osd <| |>
 
     # Journal disks need to be prepared before the OSDs are configured
-    Platform_ceph_journal <| |> -> Platform_ceph_osd <| |>
+    Platform::Ceph::Platform_ceph_journal <| |> -> Platform::Ceph::Platform_ceph_osd <| |>
     # Crush locations in ceph.conf need to be set before the OSDs are configured
-    Osd_crush_location <| |> -> Platform_ceph_osd <| |>
+    Platform::Ceph::Osd_crush_location <| |> -> Platform::Ceph::Platform_ceph_osd <| |>
 
     # default configuration for all ceph object resources
     Ceph::Osd {
@@ -703,16 +703,16 @@ class platform::ceph::osds(
       cluster_uuid => $cluster_uuid,
     }
 
-    create_resources('osd_crush_location', $osd_config)
-    create_resources('platform_ceph_osd', $osd_config)
-    create_resources('platform_ceph_journal', $journal_config)
+    create_resources('platform::ceph::osd_crush_location', $osd_config)
+    create_resources('platform::ceph::platform_ceph_osd', $osd_config)
+    create_resources('platform::ceph::platform_ceph_journal', $journal_config)
   }
 
   # Ensure ceph.conf is created
-  Class['::ceph'] -> Osd_location <| |>
+  Class['::ceph'] -> Platform::Ceph::Osd_location <| |>
 
   # Update ceph.conf with OSDs present on the node
-  create_resources('osd_location', $osd_config)
+  create_resources('platform::ceph::osd_location', $osd_config)
 }
 
 class platform::ceph::haproxy
