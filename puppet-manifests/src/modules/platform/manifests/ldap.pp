@@ -172,17 +172,6 @@ class platform::ldap::bootstrap
   -> exec { 'add operator to sys_protected protected group' :
     command => "ldapaddusertogroup operator ${::platform::params::protected_group_name}",
   }
-
-  # Change operator shell from default to /usr/local/bin/cgcs_cli
-  -> file { '/tmp/ldap.cgcs-shell.ldif':
-    ensure  => present,
-    replace => true,
-    source  => "puppet:///modules/${module_name}/ldap.cgcs-shell.ldif"
-  }
-  -> exec { 'ldap cgcs-cli shell update':
-    command =>
-      "ldapmodify -D ${dn} -w \"${admin_pw}\" -f /tmp/ldap.cgcs-shell.ldif"
-  }
 }
 
 class platform::ldap::secure::runtime
