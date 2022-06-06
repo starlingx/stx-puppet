@@ -300,6 +300,9 @@ else
         # shellcheck disable=SC1091
         source /usr/local/bin/network_sysconfig.sh
 
+        update_routes
+        update_interfaces
+
     elif [ -d /etc/network/interfaces.d/ ] ; then
 
         log_it "process Debian network config"
@@ -313,12 +316,13 @@ else
 
         parse_interface_stanzas
 
+        update_interfaces
+        update_routes
+
     else
         log_it "Not using sysconfig or ifupdown, cannot advance!  Aborting..."
         exit 1
     fi
 
-    update_routes
-    update_interfaces
 fi
 
