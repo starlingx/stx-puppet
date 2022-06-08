@@ -52,6 +52,7 @@ include ::platform::kubernetes::master
 include ::platform::kubernetes::gate
 include ::platform::helm
 include ::platform::armada
+include ::platform::tty
 
 include ::platform::patching
 include ::platform::patching::api
