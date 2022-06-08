@@ -8,19 +8,31 @@
 # kernel image to grub environment file
 #
 """Utility to add or remove cmdline options and
-kernel image to grub environment file"""
+kernel image to grub environment file
+
+The hugepagesz, hugepages and default_hugepagesz has close relationship:
+- It is legal to specify "hugepages=" by itself as long as
+  "default_hugepagesz" is specified, in which case it will
+  allocate that many pages of the default size.
+- Remove any of them means to remove all
+- If hugepagesz is set, "hugepages=" and "hugepagesz=" should
+  appear as pairs
+"""
 
 import argparse
 import subprocess
 import os
 import glob
+import sys
+
+BOOT_ENV = "/boot/efi/EFI/BOOT/boot.env"
 
 # Get value of kernel_params from conf
-def read_conf(conf):
+def read_kernel_params(conf):
     """Get value of kernel_params from conf"""
     res = ''
     try:
-        cmd = 'grub-editenv %s list' % conf
+        cmd = f'grub-editenv {conf} list'
         output = subprocess.check_output(cmd.split()).decode('utf-8')
     except Exception as err:
         print(err)
@@ -33,11 +45,11 @@ def read_conf(conf):
 
     return res
 
-# Write value of kernel_params to conf
-def write_conf(conf, value):
-    """Write value of kernel_params to conf"""
+# Write key=value string to conf
+def write_conf(conf, string):
+    """Write key=value string to conf"""
     try:
-        cmd = ['grub-editenv', conf, 'set', value]
+        cmd = ['grub-editenv', conf, 'set', string]
         subprocess.check_output(cmd)
     except Exception as err:
         print(err)
@@ -87,36 +99,65 @@ def convert_dict_to_value(kernel_params_dict):
 
     kernel_params = ""
     for key, val in kernel_params_dict.items():
-        if val:
-            kernel_params += " %s=%s" % (key, val)
-        else:
-            kernel_params += " %s" % (key)
+        if key == 'hugepage':
+            continue
 
-    return "kernel_params=%s" % kernel_params
+        if val:
+            kernel_params += f" {key}={val}"
+        else:
+            kernel_params += f" {key}"
+
+    if 'hugepage' in kernel_params_dict:
+        kernel_params += f" {kernel_params_dict['hugepage']}"
+
+    return f"kernel_params={kernel_params}"
 
 def convert_value_to_dict(value):
     """Value to dictionary"""
 
-    kernel_params_dict = dict()
-    hugepagesz_cache = ''
+    kernel_params_dict = {}
+    hugepage_cache = ''
+    hugepages_count = 0
+    hugepagesz_count = 0
+    has_default_hugepagesz = False
     for param in value.split():
-        if '=' in param and not param.startswith('hugepages='):
-            # hugepagesz is paired with hugepages, and can appear multiple times.
-            # Cache the arg and process with hugepages
-            if param.startswith('hugepagesz='):
-                hugepagesz_cache = param
+        if '=' in param:
+            # The hugepagesz, hugepages and default_hugepagesz has close relationship.
+            # Cache and process it later
+            if param.startswith('hugepages') or param.startswith('default_hugepagesz='):
+                hugepage_cache += " " + param
+                # The hugepagesz is paired with hugepages, count them
+                if param.startswith('hugepagesz='):
+                    hugepagesz_count += 1
+                elif param.startswith('hugepages='):
+                    hugepages_count += 1
+                elif param.startswith('default_hugepagesz='):
+                    has_default_hugepagesz = True
+
                 continue
 
             key, val = param.split('=')
         else:
             key, val = param, ''
 
-            # Use the cached hugepagesz + hugepages as the key
-            if param.startswith('hugepages='):
-                key = hugepagesz_cache + ' ' + key
-                hugepagesz_cache = ''
 
         kernel_params_dict[key] = val
+
+    if hugepage_cache:
+        # It is not legal to specify "hugepages=" by itself without
+        # default_hugepagesz and hugepagesz
+        if not has_default_hugepagesz and \
+           hugepagesz_count == 0 and \
+           hugepages_count > 0:
+            print("FAIL: default_hugepagesz and hugepagesz is not set")
+            print("FAIL: only hugepages is not allowed ")
+            sys.exit(1)
+
+        # It is not legal if "hugepages=" and "hugepagesz=" not pairs
+        elif hugepagesz_count > 0 and hugepages_count != hugepagesz_count:
+            print("FAIL: hugepagesz and hugepages does not appear as pairs")
+            sys.exit(1)
+        kernel_params_dict['hugepage'] = hugepage_cache
 
     return kernel_params_dict
 
@@ -124,8 +165,7 @@ def edit_boot_env(args):
     """Edit boot environment"""
 
     # Config file to dictionary
-    confile = '/boot/efi/EFI/BOOT/boot.env'
-    kernel_params = read_conf(confile)
+    kernel_params = read_kernel_params(BOOT_ENV)
     kernel_params_dict = convert_value_to_dict(kernel_params)
 
     # New added kernel params to dictionary
@@ -133,6 +173,12 @@ def edit_boot_env(args):
 
     # Update config file dictionary
     for key, val in new_kernel_params_dict.items():
+        if key == 'hugepage':
+            if 'hugepage' in kernel_params_dict:
+                kernel_params_dict['hugepage'] += f' {val}'
+            else:
+                kernel_params_dict['hugepage'] = val
+            continue
         kernel_params_dict[key] = val
 
     # Remove kernel params from dictionary
@@ -140,18 +186,22 @@ def edit_boot_env(args):
         for key in kernel_params_dict.copy():
             if key == param:
                 del kernel_params_dict[param]
-            # hugepagesz is paired with hugepages, remove one means to remove both
-            elif param.startswith('hugepages') and key.startswith('hugepages'):
-                del kernel_params_dict[key]
+            # The hugepagesz, hugepages and default_hugepagesz has
+            # close relationship, remove one means to remove all
+            elif param in ['hugepagesz', 'hugepages', 'default_hugepagesz']:
+                if 'hugepage' in kernel_params_dict:
+                    del kernel_params_dict['hugepage']
 
     # Dictionary to config file
-    value = convert_dict_to_value(kernel_params_dict)
-    write_conf(confile, value)
+    kernel_params = convert_dict_to_value(kernel_params_dict)
+    write_conf(BOOT_ENV, kernel_params)
 
 def get_kernel_dir():
     """Get kernel directory"""
 
-    cmdline = open("/proc/cmdline").read()
+    cmdline = ""
+    with open("/proc/cmdline", encoding="utf-8") as f_cmdline:
+        cmdline = f_cmdline.read()
     if cmdline.find("BOOT_IMAGE=/2/") >= 0:
         return "/boot/2"
 
@@ -160,25 +210,25 @@ def get_kernel_dir():
 def edit_kernel_env(args):
     """Edit kernel environment"""
 
-    confile = os.path.join(get_kernel_dir(), 'kernel.env')
+    kernel_env = os.path.join(get_kernel_dir(), 'kernel.env')
 
-    value = "kernel=%s" % args.set_kernel
-    write_conf(confile, value)
+    kernel = f"kernel={args.set_kernel}"
+    write_conf(kernel_env, kernel)
 
-    value = "kernel_rollback=%s" % args.set_kernel
-    write_conf(confile, value)
+    kernel_rallback = f"kernel_rollback={args.set_kernel}"
+    write_conf(kernel_env, kernel_rallback)
 
 def list_kernels():
     """List kernels"""
 
-    print("Available Kernels in %s" % get_kernel_dir())
+    print(f"Available Kernels in {get_kernel_dir()}")
     for kernel in glob.glob(os.path.join(get_kernel_dir(), "vmlinuz*-amd64")):
-        print("  %s" % os.path.basename(kernel))
+        print(f"  {os.path.basename(kernel)}")
 
-    confile = os.path.join(get_kernel_dir(), 'kernel.env')
-    print("\nIn %s:" % confile)
+    kernel_env = os.path.join(get_kernel_dir(), 'kernel.env')
+    print(f"\nIn {kernel_env}:")
     try:
-        cmd = 'grub-editenv %s list' % confile
+        cmd = f'grub-editenv {kernel_env} list'
         output = subprocess.check_output(cmd.split()).decode('utf-8')
     except Exception as err:
         print(err)
@@ -189,10 +239,9 @@ def list_kernels():
 def list_kernel_params():
     """List kernel params"""
 
-    confile = '/boot/efi/EFI/BOOT/boot.env'
-    print("In %s:" % confile)
+    print(f"In {BOOT_ENV}:")
     try:
-        cmd = 'grub-editenv %s list' % confile
+        cmd = f'grub-editenv {BOOT_ENV} list'
         output = subprocess.check_output(cmd.split()).decode('utf-8')
     except Exception as err:
         print(err)
