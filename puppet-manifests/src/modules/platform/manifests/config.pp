@@ -279,8 +279,8 @@ class platform::config::certs::ssl_ca
       $ca_update_cmd = 'update-ca-trust'
     }
     default: {
-      $ssl_ca_file = '/usr/local/share/ca-certificates/ca-cert.crt'
-      $ca_update_cmd = 'update-ca-certificates'
+      $ssl_ca_file = '/etc/ssl/certs/ca-cert.crt'
+      $ca_update_cmd = 'c_rehash'
     }
   }
 
