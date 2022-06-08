@@ -17,6 +17,12 @@ class platform::collectd::params (
   $encoding = undef,
 
   $collectd_d_dir = undef,
+  $plugin_dir = $::osfamily ? {
+    'RedHat' => '/usr/lib64/collectd',
+    'Debian' => '/usr/lib/collectd',
+    default   => '/usr/lib64/collectd',
+  },
+
 ) {}
 
 
@@ -44,7 +50,21 @@ class platform::collectd
     $address = regsubst($elem.delete(":${server_ports[$i]}"),'[\[\]]','','G')
   }
 
-  file { '/etc/collectd.conf':
+  case $::osfamily {
+    'RedHat': {
+      $config_file = '/etc/collectd.conf'
+    }
+    'Debian': {
+      $config_file = '/etc/collectd/collectd.conf'
+      #using encoding will break collectd if used in Debian, due python3 incompatibility
+      $encoding = undef
+    }
+    default: {
+      fail("unsupported osfamily ${::osfamily}, currently Debian and Redhat are the only supported platforms")
+    }
+  } # Case $::osfamily
+
+  file { $config_file:
     ensure  => 'present',
     replace => true,
     content => template('platform/collectd.conf.erb'),
