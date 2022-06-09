@@ -407,6 +407,49 @@ function get_prefix_length {
     fi
 }
 
+function route_add {
+    local routeLine="$*"
+    local route
+    local netmask
+    local nexthop
+    local ifname
+    local prefix
+    local metric
+
+    route=$( echo "${routeLine}" | awk '{print $1}' )
+    netmask=$( echo "${routeLine}" | awk '{print $2}' )
+    nexthop=$( echo "${routeLine}" | awk '{print $3}' )
+    ifname=$( echo "${routeLine}" | awk '{print $4}' )
+    metric=$( echo "${routeLine}" | awk '{print $6}' )
+    prefix=$(get_prefix_length ${netmask})
+
+    log_it "Adding route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask} metric ${metric}"
+    /usr/sbin/ip route add ${route}${prefix} via ${nexthop} dev ${ifname} metric ${metric}
+    if [ $? -ne 0 ] ; then
+        log_it "Failed adding route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask} metric ${metric}"
+    fi
+}
+
+function route_del {
+    local routeLine="$*"
+    local route
+    local netmask
+    local nexthop
+    local ifname
+
+    route=$( echo "${routeLine}" | awk '{print $1}' )
+    netmask=$( echo "${routeLine}" | awk '{print $2}' )
+    nexthop=$( echo "${routeLine}" | awk '{print $3}' )
+    ifname=$( echo "${routeLine}" | awk '{print $4}' )
+    prefix=$(get_prefix_length ${netmask})
+
+    log_it "Removing route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask}"
+    /usr/sbin/ip route del ${route}${prefix} via ${nexthop} dev ${ifname}
+    if [ $? -ne 0 ] ; then
+        log_it "Failed removing route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask}"
+    fi
+}
+
 #
 # Process static routes
 #
@@ -420,22 +463,7 @@ function update_routes {
             log_it "process routes in ${ETC_ROUTES_FILE}"
             etc_data=$(grep -v -E '(HEADER)|(^#)' ${ETC_ROUTES_FILE})
             while read etcRouteLine; do
-                local route
-                local netmask
-                local nexthop
-                local ifname
-
-                route=$( echo "${etcRouteLine}" | awk '{print $1}' )
-                netmask=$( echo "${etcRouteLine}" | awk '{print $2}' )
-                nexthop=$( echo "${etcRouteLine}" | awk '{print $3}' )
-                ifname=$( echo "${etcRouteLine}" | awk '{print $4}' )
-                prefix=$(get_prefix_length ${netmask})
-
-                log_it "Removing route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask}"
-                /usr/sbin/ip route del ${route}${prefix} via ${nexthop} dev ${ifname}
-                if [ $? -ne 0 ] ; then
-                    log_it "Failed removing route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask}"
-                fi
+                route_del "${etcRouteLine}"
                 sed -i "s/${etcRouteLine}//g" ${ETC_ROUTES_FILE}
             done <<< ${etc_data}
         fi
@@ -456,22 +484,7 @@ function update_routes {
                 grepCmd="grep -q '${etcRouteLine}' ${PUPPET_ROUTES_FILE} > /dev/null"
                 eval ${grepCmd}
                 if [ $? -ne 0 ] ; then
-                    local route
-                    local netmask
-                    local nexthop
-                    local ifname
-
-                    route=$( echo "${etcRouteLine}" | awk '{print $1}' )
-                    netmask=$( echo "${etcRouteLine}" | awk '{print $2}' )
-                    nexthop=$( echo "${etcRouteLine}" | awk '{print $3}' )
-                    ifname=$( echo "${etcRouteLine}" | awk '{print $4}' )
-                    prefix=$(get_prefix_length ${netmask})
-
-                    log_it "Removing route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask}"
-                    /usr/sbin/ip route del ${route}${prefix} via ${nexthop} dev ${ifname}
-                    if [ $? -ne 0 ] ; then
-                        log_it "Failed removing route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask}"
-                    fi
+                    route_del "${etcRouteLine}"
                 fi
             done <<< ${etc_data}
 
@@ -481,23 +494,7 @@ function update_routes {
                 grepCmd="grep -q '${puppetRouteLine}' ${ETC_ROUTES_FILE} > /dev/null"
                 eval ${grepCmd}
                 if [ $? -ne 0 ] ; then
-                    local route
-                    local netmask
-                    local nexthop
-                    local ifname
-                    local prefix
-
-                    route=$( echo "${puppetRouteLine}" | awk '{print $1}' )
-                    netmask=$( echo "${puppetRouteLine}" | awk '{print $2}' )
-                    nexthop=$( echo "${puppetRouteLine}" | awk '{print $3}' )
-                    ifname=$( echo "${puppetRouteLine}" | awk '{print $4}' )
-                    prefix=$(get_prefix_length ${netmask})
-
-                    log_it "Adding route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask}"
-                    /usr/sbin/ip route add ${route}${prefix} via ${nexthop} dev ${ifname}
-                    if [ $? -ne 0 ] ; then
-                        log_it "Failed adding route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask}"
-                    fi
+                    route_add "${puppetRouteLine}"
                 fi
             done <<< ${puppet_data}
 
@@ -508,25 +505,8 @@ function update_routes {
     else
         # process added routes
         puppet_data=$(grep -v -E '(HEADER)|(^#)' ${PUPPET_ROUTES_FILE})
-        while read newRouteLine; do
-            local route
-            local netmask
-            local nexthop
-            local ifname
-            local prefix
-
-            route=$( echo "${newRouteLine}" | awk '{print $1}' )
-            netmask=$( echo "${newRouteLine}" | awk '{print $2}' )
-            nexthop=$( echo "${newRouteLine}" | awk '{print $3}' )
-            ifname=$( echo "${newRouteLine}" | awk '{print $4}' )
-            prefix=$(get_prefix_length ${netmask})
-
-            log_it "Adding route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask}"
-            /usr/sbin/ip route add ${route}${prefix} via ${nexthop} dev ${ifname}
-            if [ $? -ne 0 ] ; then
-                log_it "Failed adding route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask}"
-            fi
-
+        while read puppetRouteLine; do
+            route_add "${puppetRouteLine}"
         done <<< ${puppet_data}
 
         do_cp ${PUPPET_ROUTES_FILE} ${ETC_ROUTES_FILE}
