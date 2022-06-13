@@ -26,7 +26,7 @@ class platform::client
   -> file {'/etc/bash_completion.d/openstack':
     ensure  => 'present',
     mode    => '0644',
-    content => generate('/usr/bin/openstack', 'complete'),
+    content => generate('/usr/bin/openstack', 'complete', '-q'),
   }
 
   if $::personality == 'controller' {
