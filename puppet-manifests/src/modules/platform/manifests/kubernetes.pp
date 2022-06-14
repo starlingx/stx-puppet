@@ -835,7 +835,8 @@ class platform::kubernetes::master::change_apiserver_parameters (
   $configview_temp_file = '/tmp/kubeadm_config_view.yaml'
 
   exec { 'update kube-apiserver params':
-    command => template('platform/kube-apiserver-change-params.erb')
+    command  => template('platform/kube-apiserver-change-params.erb'),
+    provider => shell,
   }
   if $wait_for_apiserver {
     # Wait for kube-apiserver to be up before executing next steps
