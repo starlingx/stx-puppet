@@ -48,5 +48,6 @@ kubectl --kubeconfig=/etc/kubernetes/admin.conf get cm -n kube-system kubeadm-co
 kubeadm init phase control-plane apiserver --config <%= @configmap_temp_file %>
 DEFAULT_NETWORK_INTERFACE=$(grep 'advertise-address=' /etc/kubernetes/manifests/kube-apiserver.yaml  | cut -d "=" -f2)
 sed -i "/oidc-issuer-url/! s/$DEFAULT_NETWORK_INTERFACE/$APISERVER_ADVERTISE_ADDRESS/g" /etc/kubernetes/manifests/kube-apiserver.yaml
+sed -i '/securityContext:/,/type: RuntimeDefault/d' /etc/kubernetes/manifests/kube-apiserver.yaml
 rm <%= @configmap_temp_file %>
 rm <%= @configview_temp_file %>
