@@ -47,6 +47,7 @@ include ::platform::ceph::worker
 include ::platform::worker::storage
 include ::platform::lmon
 include ::platform::rook
+include ::platform::tty
 
 class { '::platform::config::worker::post':
   stage => post,

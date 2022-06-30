@@ -32,6 +32,7 @@ include ::platform::docker::storage
 include ::platform::containerd::storage
 include ::platform::ceph::storage
 include ::platform::rook
+include ::platform::tty
 
 class { '::platform::config::storage::post':
   stage => post,
