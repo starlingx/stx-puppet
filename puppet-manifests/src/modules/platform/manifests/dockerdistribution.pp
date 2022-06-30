@@ -140,6 +140,25 @@ class platform::dockerdistribution::config
     source => "puppet:///modules/${module_name}/registry-token-server"
   }
 
+  if $::platform::params::system_type == 'All-in-one' and
+    $::platform::params::distributed_cloud_role != 'systemcontroller' {
+    $registry_token_server_max_procs = $::platform::params::eng_workers
+
+    file { '/etc/systemd/system/registry-token-server.service.d':
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => '0755',
+    }
+    -> file { '/etc/systemd/system/registry-token-server.service.d/registry-token-server-stx-override.conf':
+      ensure  => file,
+      content => template('platform/registry-token-server-stx-override.conf.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0644',
+    }
+  }
+
   # override the configuration of docker-distribution.service
   file { "/etc/systemd/system/${service_name}.d":
     ensure => 'directory',
