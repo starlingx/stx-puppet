@@ -64,6 +64,19 @@ class sysinv (
   $barbican_region_name        = 'RegionOne',
   $fm_catalog_info             = undef,
   $fernet_key_repository       = undef,
+  $periodic_interval_conductor = {  default => 60,
+                                    agent_update_request => 60,
+                                    kubernetes_local_secrets => 60,
+                                    deferred_runtime_config => 60,
+                                    controller_config_active_apply => 60,
+                                    upgrade_status => 60,
+                                    install_states => 60,
+                                    kubernetes_labels => 60,
+                                    image_conversion => 60,
+                                    storage_backend_failure => 60,
+                                    k8s_application => 60,
+                                    device_image_update => 60 },
+  $periodic_interval_agent     = {  default => 60 },
 ) {
 
   include sysinv::params
@@ -203,6 +216,37 @@ class sysinv (
     'fm/catalog_info':    value => $fm_catalog_info;
     'fm/os_region_name':  value => $region_name;
     'fernet_repo/key_repository':  value => $fernet_key_repository;
+  }
+
+  sysinv_config {
+    'conductor_periodic_task_intervals/default':
+        value => $periodic_interval_conductor[default];
+    'conductor_periodic_task_intervals/agent_update_request':
+        value => $periodic_interval_conductor[agent_update_request];
+    'conductor_periodic_task_intervals/kubernetes_local_secrets':
+        value => $periodic_interval_conductor[kubernetes_local_secrets];
+    'conductor_periodic_task_intervals/deferred_runtime_config':
+        value => $periodic_interval_conductor[deferred_runtime_config];
+    'conductor_periodic_task_intervals/controller_config_active_apply':
+        value => $periodic_interval_conductor[controller_config_active_apply];
+    'conductor_periodic_task_intervals/upgrade_status':
+        value => $periodic_interval_conductor[upgrade_status];
+    'conductor_periodic_task_intervals/install_states':
+        value => $periodic_interval_conductor[install_states];
+    'conductor_periodic_task_intervals/kubernetes_labels':
+        value => $periodic_interval_conductor[kubernetes_labels];
+    'conductor_periodic_task_intervals/image_conversion':
+        value => $periodic_interval_conductor[image_conversion];
+    'conductor_periodic_task_intervals/storage_backend_failure':
+        value => $periodic_interval_conductor[storage_backend_failure];
+    'conductor_periodic_task_intervals/k8s_application':
+        value => $periodic_interval_conductor[k8s_application];
+    'conductor_periodic_task_intervals/device_image_update':
+        value => $periodic_interval_conductor[device_image_update];
+  }
+
+  sysinv_config {
+    'agent_periodic_task_intervals/default': value => $periodic_interval_agent[default];
   }
 
   sysinv_api_paste_ini {
