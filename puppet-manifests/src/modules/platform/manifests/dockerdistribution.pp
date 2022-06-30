@@ -154,6 +154,19 @@ class platform::dockerdistribution::config
     mode    => '0644',
     content => template('platform/docker-distribution-override.conf.erb'),
   }
+
+  if $::platform::params::system_type == 'All-in-one' and
+    $::platform::params::distributed_cloud_role != 'systemcontroller' {
+    $docker_registry_max_procs = $::platform::params::eng_workers
+
+    file { "/etc/systemd/system/${service_name}.d/docker-distribution-stx-override.conf":
+      ensure  => file,
+      content => template('platform/docker-distribution-stx-override.conf.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0644',
+    }
+  }
 }
 
 # compute also needs the "insecure" flag in order to deploy images from
