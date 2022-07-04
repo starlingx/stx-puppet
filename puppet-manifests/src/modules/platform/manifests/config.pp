@@ -337,8 +337,18 @@ class platform::config::dccert::params (
 
 class platform::config::dc_root_ca
   inherits ::platform::config::dccert::params {
-  $dc_root_ca_file = '/etc/pki/ca-trust/source/anchors/dc-adminep-root-ca.crt'
   $dc_adminep_cert_file = '/etc/ssl/private/admin-ep-cert.pem'
+
+  case $::osfamily {
+    'RedHat': {
+      $dc_root_ca_file = '/etc/pki/ca-trust/source/anchors/dc-adminep-root-ca.crt'
+      $ca_update_cmd = 'update-ca-trust'
+    }
+    default: {
+      $dc_root_ca_file = '/etc/ssl/certs/dc-adminep-root-ca.crt'
+      $ca_update_cmd = 'c_rehash'
+    }
+  }
 
   if ! empty($dc_adminep_crt) {
     file { 'adminep-cert':
@@ -361,7 +371,7 @@ class platform::config::dc_root_ca
       content => $dc_root_ca_crt,
     }
     -> exec { 'update-dc-ca-trust':
-      command     => 'update-ca-trust',
+      command     => $ca_update_cmd,
     }
   }
 }
