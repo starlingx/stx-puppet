@@ -4,7 +4,7 @@ User=root
 NotifyAccess=all
 Type=notify
 ExecStart=
-ExecStart=-/bin/bash -c "GOMAXPROCS=$(nproc) /usr/bin/etcd \
+ExecStart=-/bin/bash -c "GOMAXPROCS=<%= @etcd_max_procs %> /usr/bin/etcd \
     --name=\"${ETCD_NAME}\" \
     --data-dir=\"${ETCD_DATA_DIR}\" \
     --listen-client-urls=\"${ETCD_LISTEN_CLIENT_URLS}\" \
