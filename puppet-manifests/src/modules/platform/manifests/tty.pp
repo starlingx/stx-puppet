@@ -8,11 +8,15 @@ class platform::tty
   inherits ::platform::tty::params {
   if $enabled {
     exec { "Enable (${active_device}) local line":
-      command => "stty clocal -F /dev/${active_device}"
+      command   => "stty clocal -F /dev/${active_device}",
+      logoutput => true,
+      returns   => [0, 1]
     }
   } else {
     exec { "Disable (${active_device}) local line":
-      command => "stty -clocal -F /dev/${active_device}"
+      command   => "stty -clocal -F /dev/${active_device}",
+      logoutput => true,
+      returns   => [0, 1]
     }
   }
 }
