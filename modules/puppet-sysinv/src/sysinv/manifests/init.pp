@@ -76,7 +76,9 @@ class sysinv (
                                     storage_backend_failure => 60,
                                     k8s_application => 60,
                                     device_image_update => 60 },
-  $periodic_interval_agent     = {  default => 60 },
+  $periodic_interval_agent     = {  default => 60,
+                                    inventory_audit => 60,
+                                    lldp_audit => 300 }
 ) {
 
   include sysinv::params
@@ -246,7 +248,12 @@ class sysinv (
   }
 
   sysinv_config {
-    'agent_periodic_task_intervals/default': value => $periodic_interval_agent[default];
+    'agent_periodic_task_intervals/default':
+        value => $periodic_interval_agent[default];
+    'agent_periodic_task_intervals/inventory_audit':
+        value => $periodic_interval_agent[inventory_audit];
+    'agent_periodic_task_intervals/lldp_audit':
+        value => $periodic_interval_agent[lldp_audit];
   }
 
   sysinv_api_paste_ini {
