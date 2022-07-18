@@ -67,6 +67,19 @@ class platform::containerd::config
   include ::platform::params
   include ::platform::mtce::params
 
+  if $::platform::params::system_type == 'All-in-one' and
+      $::platform::params::distributed_cloud_role != 'systemcontroller' {
+    $containerd_max_proc = $::platform::params::eng_workers
+
+    file { '/etc/systemd/system/containerd.service.d/containerd-max-proc.conf':
+      ensure  => file,
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0600',
+      content => template('platform/containerd-max-proc.conf.erb'),
+    }
+  }
+
   # If containerd is started prior to networking providing a default route, the
   # containerd cri plugin will fail to load and the status of the cri plugin
   # will be in 'error'. This will prevent any crictl image pulls from working as
