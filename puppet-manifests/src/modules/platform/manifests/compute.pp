@@ -84,6 +84,9 @@ class platform::compute::grub::update
 
   notice('Updating grub configuration')
 
+  # Remove nohz_full grub parameter if platform plugin is disabling it
+  $truncated_grub_updates = strip(regsubst($grub_updates, /nohz_full=disabled/, ''))
+
   $to_be_removed = join($keys, ' ')
   if $::osfamily == 'RedHat' {
     exec { 'Remove the cpu arguments':
@@ -94,10 +97,10 @@ class platform::compute::grub::update
       logoutput => true,
     }
     -> exec { 'Add the cpu arguments':
-      command => "grubby --update-kernel=ALL --args='${grub_updates}'",
+      command => "grubby --update-kernel=ALL --args='${truncated_grub_updates}'",
     }
     -> exec { 'Add the cpu arguments to /etc/default/grub':
-      command   => "/usr/local/bin/puppet-update-default-grub.sh --add ${grub_updates}",
+      command   => "/usr/local/bin/puppet-update-default-grub.sh --add ${truncated_grub_updates}",
       logoutput => true,
     }
   } elsif($::osfamily == 'Debian') {
@@ -105,7 +108,7 @@ class platform::compute::grub::update
       command   => "/usr/local/bin/puppet-update-grub-env.py --remove-kernelparams '${to_be_removed}'",
     }
     -> exec { 'Add the cpu arguments to /boot/efi/EFI/BOOT/boot.env':
-      command   => "/usr/local/bin/puppet-update-grub-env.py --add-kernelparams '${grub_updates}'",
+      command   => "/usr/local/bin/puppet-update-grub-env.py --add-kernelparams '${truncated_grub_updates}'",
     }
   }
 }
