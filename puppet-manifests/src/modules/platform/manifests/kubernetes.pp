@@ -616,8 +616,9 @@ class platform::kubernetes::coredns {
 
 # TODO: remove port 9001 once we have a public docker image registry using standard ports.
 # add 5000 as the default port for private registry
+# Ports are not being included in the iptables rules created.
 class platform::kubernetes::firewall::params (
-  $transport = 'tcp',
+  $transport = 'all',
   $table = 'nat',
   $dports = [80, 443, 9001, 5000],
   $chain = 'POSTROUTING',
