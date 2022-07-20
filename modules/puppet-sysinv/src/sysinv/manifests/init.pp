@@ -73,7 +73,7 @@ class sysinv (
                                     install_states => 60,
                                     kubernetes_labels => 60,
                                     image_conversion => 60,
-                                    storage_backend_failure => 60,
+                                    storage_backend_failure => 400,
                                     k8s_application => 60,
                                     device_image_update => 60 },
   $periodic_interval_agent     = {  default => 60,
