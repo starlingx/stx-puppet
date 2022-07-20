@@ -26,6 +26,7 @@ import glob
 import sys
 
 BOOT_ENV = "/boot/efi/EFI/BOOT/boot.env"
+KERNEL_PARAMS_STRING = "kernel_params"
 
 # Get value of kernel_params from conf
 def read_kernel_params(conf):
@@ -49,8 +50,11 @@ def read_kernel_params(conf):
 def write_conf(conf, string):
     """Write key=value string to conf"""
     try:
-        cmd = ['grub-editenv', conf, 'set', string]
-        subprocess.check_output(cmd)
+        cmd_unset = ['grub-editenv', conf, 'unset', KERNEL_PARAMS_STRING]
+        subprocess.check_output(cmd_unset)
+
+        cmd_set = ['grub-editenv', conf, 'set', string]
+        subprocess.check_output(cmd_set)
     except Exception as err:
         print(err)
         raise
