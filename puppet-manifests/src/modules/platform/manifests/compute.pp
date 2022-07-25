@@ -47,6 +47,7 @@ class platform::compute::grub::params (
   $g_audit = '',
   $g_audit_backlog_limit = 'audit_backlog_limit=8192',
   $bios_cstate = false,
+  $ignore_recovery = false,
   $keys = [
     'kvm-intel.eptad',
     'default_hugepagesz',
@@ -138,10 +139,16 @@ class platform::compute::grub::audit
     $ensure = present
     notice('CPU and Boot Argument audit passed.')
   } else {
-    $ensure = absent
     if !$cmd_ok {
-      notice('Kernel Boot Argument Mismatch')
-      include ::platform::compute::grub::recovery
+      if ($ignore_recovery) {
+        $ensure = present
+        notice('Ignoring Grub cmdline recovery')
+        include ::platform::compute::grub::update
+      } else {
+        notice('Kernel Boot Argument Mismatch')
+        $ensure = absent
+        include ::platform::compute::grub::recovery
+      }
     } else {
       notice("Mismatched CPUs: Found=${n_cpus}, Expected=${expected_n_cpus}")
     }
