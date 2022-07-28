@@ -194,6 +194,10 @@ class platform::postgresql::bootstrap
     -> exec { 'Disable include_dir':
         command => 'pg_conftool 13 main remove include_dir',
     }
+
+    -> exec { 'Change pg dir permissions':
+        command => "chown -R postgres:postgres ${root_dir}",
+    }
   }
   -> class {'::postgresql::globals':
     datadir => $data_dir,
