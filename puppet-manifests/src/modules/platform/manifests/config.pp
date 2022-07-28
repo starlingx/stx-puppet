@@ -279,8 +279,19 @@ class platform::config::certs::ssl_ca
       $ca_update_cmd = 'update-ca-trust'
     }
     default: {
-      $ssl_ca_file = '/etc/ssl/certs/ca-cert.crt'
-      $ca_update_cmd = 'c_rehash'
+      # This directory does not exist by default on debian
+      $ca_trust_dir = '/etc/pki/ca-trust/source/anchors'
+      file { ['/etc/pki/ca-trust', '/etc/pki/ca-trust/source', $ca_trust_dir]:
+        ensure => 'directory',
+        owner  => root,
+        group  => root,
+        mode   => '0644',
+      }
+      # update-ca-certificates command only scans for *.crt files
+      $ssl_ca_file = "${ca_trust_dir}/ca-cert.crt"
+      # This updates Debian's Trusted CAs file which is /etc/ssl/certs/ca-certificates.crt
+      # with certificates present in *.crt files in $ca_trust_dir
+      $ca_update_cmd = "update-ca-certificates --localcertsdir ${ca_trust_dir}"
     }
   }
 
