@@ -183,7 +183,7 @@ class platform::ldap::secure::runtime
 
   $dn = 'cn=config'
   $openldap_cert_name = 'system-openldap-local-certificate'
-  $certs_etc_path = '/etc/openldap/certs'
+  $certs_etc_path = "${slapd_etc_path}/certs"
 
   exec { 'populate openldap certificate':
     command => "kubectl get secret ${openldap_cert_name} -n deployment --kubeconfig=/etc/kubernetes/admin.conf \
@@ -194,15 +194,12 @@ class platform::ldap::secure::runtime
     --template='{{ index .data \"tls.key\" }}'|base64 -d > ${certs_etc_path}/openldap-cert.key"
   }
   -> exec { 'Set the owner and group for openldap crt and key files':
-    command => "chown -R ldap:ldap ${certs_etc_path}/openldap*",
+    command => "chown -R openldap:openldap ${certs_etc_path}/openldap*",
+    onlyif  => "test '${::osfamily }' == 'Debian'",
   }
   -> exec { 'ldap configuration update to enable TLS/SSL':
     command =>
       "ldapmodify -D ${dn} -w \"${admin_pw}\" -f ${slapd_etc_path}/certs.ldif"
-  }
-    -> exec { 'add ldaps to slapd configuration':
-    command =>
-      "/bin/sed -i 's,\"ldap:///\",\"ldap:/// ldaps:///\",' /etc/rc.d/init.d/openldap"
   }
     -> exec { 'restart-openldap':
     command => '/usr/bin/systemctl restart slapd.service'
