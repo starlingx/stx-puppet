@@ -925,50 +925,6 @@ class platform::ceph::rgw::keystone::runtime
   }
 }
 
-# Used during upgrades activation of stx.6.0 to remove msgr v1 config for
-# mon_host
-class platform::ceph::upgrade::runtime
-  inherits ::platform::ceph::params {
-
-  $system_mode = $::platform::params::system_mode
-  $system_type = $::platform::params::system_type
-
-  if $service_enabled {
-    if $system_type == 'All-in-one' {
-      if $system_mode == 'simplex' {
-        # 1 node configuration, a single monitor is available
-        $mon_host = $mon_0_addr
-
-        # Cleanup stx.5.0 ceph.conf from restored file from upgrade backup
-        ceph_config {
-          'mon/mon warn on insecure global id reclaim':         value => false;
-          'mon/mon warn on insecure global id reclaim allowed': value => false;
-          'mon/auth allow insecure global id reclaim':          value => true;
-          'mon.controller-0/mon_addr':                          ensure => absent;
-        } -> exec { 'Removing ceph warnings':
-                    command => 'ceph config set mon mon_warn_on_insecure_global_id_reclaim false;\
-                                ceph config set mon mon_warn_on_insecure_global_id_reclaim_allowed false;\
-                                ceph config set mon auth_allow_insecure_global_id_reclaim false'
-        }
-      } else {
-        # 2 node configuration, we have a floating monitor
-        $mon_host = $floating_mon_addr
-      }
-    } else {
-      # Multinode & standard, any 2 monitors form a cluster
-      if $mon_2_host {
-        $mon_host = "${mon_0_addr},${mon_1_addr},${mon_2_addr}"
-      } else {
-        $mon_host = "${mon_0_addr},${mon_1_addr}"
-      }
-    }
-
-    ceph_config {
-      'global/mon_host': value => $mon_host;
-    }
-  }
-}
-
 class platform::ceph::mon::runtime
   inherits ::platform::ceph::params {
 
