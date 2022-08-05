@@ -108,8 +108,18 @@ class platform::postgresql::server
     postgresql::server::config_entry { 'work_mem':
       value => '512MB',
     }
-    postgresql::server::config_entry { 'checkpoint_segments':
-      value => '10',
+    if $::osfamily == 'Debian' {
+      postgresql::server::config_entry { 'max_wal_size':
+        # checkpoint_segments was replaced by min_wal_size and max_wal_size
+        # since Postgres 9.5. The default value of min_wal_size is 80MB.
+        # The max_wal_size is set based on the following recommended formula
+        # max_wal_size = (3 * checkpoint_segments) * 16MB
+        value => '480MB',
+      }
+    } else {
+      postgresql::server::config_entry { 'checkpoint_segments':
+        value => '10',
+      }
     }
   }
 
