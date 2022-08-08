@@ -86,6 +86,8 @@ declare -i MAX_RETRIES=3
 HIERA_HOST=()
 if [ "${MANIFEST}" == 'ansible_bootstrap' ]; then
     HIERA_SYS=("${HIERADATA}/secure_static.yaml"  "${HIERADATA}/static.yaml")
+elif [ "${MANIFEST}" == 'restore' ]; then
+    HIERA_SYS=("${HIERADATA}/secure_static.yaml" "${HIERADATA}/static.yaml" "${HIERADATA}/system.yaml" "${HIERADATA}/secure_system.yaml")
 elif [ "${MANIFEST}" == 'upgrade' ]; then
     HIERA_SYS=("${HIERADATA}/secure_static.yaml"  "${HIERADATA}/static.yaml" "${HIERADATA}/system.yaml")
 else
