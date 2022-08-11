@@ -102,7 +102,7 @@ class platform::kubernetes::bindmounts {
     ensure   => mounted,
     device   => "/usr/local/kubernetes/${kubeadm_version}/stage1",
     fstype   => 'none',
-    options  => 'rw,bind',
+    options  => 'x-systemd.after=ostree-remount,rw,bind',
     remounts => false,
   }
 
@@ -111,7 +111,7 @@ class platform::kubernetes::bindmounts {
     ensure   => mounted,
     device   => "/usr/local/kubernetes/${kubelet_version}/stage2",
     fstype   => 'none',
-    options  => 'rw,bind',
+    options  => 'x-systemd.after=ostree-remount,rw,bind',
     remounts => false,
   }
 }
