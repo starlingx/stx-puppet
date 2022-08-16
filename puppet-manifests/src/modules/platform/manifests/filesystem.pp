@@ -62,23 +62,29 @@ define platform::filesystem (
   }
 
   if ($ensure == 'present') {
+    # A filesystem previously mounted, for example the scratch fs, needs to be unmounted
+    # before cleaning, otherwise the make filesystem command and/or dd command will fail.
+    exec { "umount mountpoint ${mountpoint} before cleaning":
+      command => "umount ${mountpoint}; true",
+      onlyif  => "test -e ${mountpoint}",
+    }
+
     # create logical volume
-    logical_volume { $lv_name:
+    -> logical_volume { $lv_name:
         ensure          => $ensure,
         volume_group    => $vg_name,
         size            => $size,
         size_is_minsize => $fs_size_is_minsize,
     }
-
     # Wipe 10MB at the beginning and at the end
     # of each LV in cgts-vg to prevent problems caused
     # by stale data on the disk
-    -> exec { "wipe start of device ${lv_name}":
-      command => "dd if=/dev/zero of=${lv_name} bs=1M count=10",
+    -> exec { "wipe start of device ${device}":
+      command => "dd if=/dev/zero of=${device} bs=1M count=10",
       onlyif  => "test ! -e /etc/platform/.${lv_name}"
     }
-    -> exec { "wipe end of device ${lv_name}":
-      command => "dd if=/dev/zero of=${lv_name} bs=1M seek=$(($(blockdev --getsz ${lv_name})/2048 - 10)) count=10",
+    -> exec { "wipe end of device ${device}":
+      command => "dd if=/dev/zero of=${device} bs=1M seek=$(($(blockdev --getsz ${device})/2048 - 10)) count=10",
       onlyif  => "test ! -e /etc/platform/.${lv_name}"
     }
     -> exec { "mark lv as wiped ${lv_name}:":
