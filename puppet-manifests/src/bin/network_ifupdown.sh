@@ -38,7 +38,7 @@ function do_if_up {
     iface=$( grep iface ${search_file} )
     if_name=$( echo "${iface}" | awk '{print $2}' )
     log_it "Bringing ${if_name} up"
-    /sbin/ifup ${if_name}
+    /sbin/ifup ${if_name} || log_it "Failed bringing ${if_name} up"
 }
 
 #
@@ -63,7 +63,7 @@ function do_if_down {
     iface=$( grep iface ${search_file} )
     if_name=$( echo "${iface}" | awk '{print $2}' )
     log_it "Bringing ${if_name} down"
-    /sbin/ifdown ${if_name}
+    /sbin/ifdown ${if_name} || log_it "Failed bringing ${if_name} down"
 }
 
 #
@@ -151,14 +151,18 @@ function is_vlan_device_present_on_kernel {
 function verify_all_vlans_created {
     for cfg_path in $(find ${ETC_DIR} -name "${IFNAME_INCLUDE}"); do
         cfg=$(basename ${cfg_path})
-        if is_vlan ${ETC_DIR}/${cfg}; then
-            is_vlan_device_present_on_kernel ${cfg_path}
-            if [ $? -ne 0 ] ; then
-                log_it "${cfg} - not present on the kernel, bring up before proceeding"
-                do_if_up ${cfg_path}
-                is_vlan_device_present_on_kernel ${ETC_DIR}/${cfg}
+        # do not process labeled interfaces
+        if [[ $cfg != *":"* ]]; then
+            log_it "verify_all_vlans_created process $cfg"
+            if is_vlan ${ETC_DIR}/${cfg}; then
+                is_vlan_device_present_on_kernel ${cfg_path}
                 if [ $? -ne 0 ] ; then
-                    log_it "${cfg} - failed to add VLAN interface on kernel"
+                    log_it "${cfg} - not present on the kernel, bring up before proceeding"
+                    do_if_up ${cfg_path}
+                    is_vlan_device_present_on_kernel ${ETC_DIR}/${cfg}
+                    if [ $? -ne 0 ] ; then
+                        log_it "${cfg} - failed to add VLAN interface on kernel"
+                    fi
                 fi
             fi
         fi

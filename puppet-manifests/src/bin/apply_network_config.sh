@@ -142,7 +142,12 @@ function update_interfaces {
     # the network service.
     verify_all_vlans_created
 
-    for cfg_path in $(find ${PUPPET_DIR} -name "${IFNAME_INCLUDE}"); do
+    # handle interfaces as a sorted list, this will guarantee that base
+    # interfaces are processed first
+    # e.g.
+    #   enp0s8 => enp0s8:1 => enp0s8.100 => enp0s8.100:1 => enp0s8.100:5
+    #   vlan160 => vlan160:1 => vlan160:5
+    for cfg_path in $(find ${PUPPET_DIR} -name "${IFNAME_INCLUDE}" | sort); do
         cfg=$(basename ${cfg_path})
 
         if is_vlan ${ETC_DIR}/${cfg}; then
