@@ -16,10 +16,9 @@ class platform::ldap::params (
     'RedHat' => '/usr/lib64/openldap',
     default   => '/usr/lib/ldap',
   },
-  $nslcd_gid = $::osfamily ? {
-    'RedHat' => 'ldap',
-    default   => 'openldap',
-  },
+  $nslcd_gid = 'ldap',
+  $secure_cert = '',
+  $secure_key = ''
 ) {}
 
 class platform::ldap::server
@@ -43,12 +42,14 @@ class platform::ldap::server::local
     onlyif  => "/usr/bin/test -e ${slapd_etc_path}/slapd.conf"
   }
 
-  service { 'nscd':
-    ensure     => 'running',
-    enable     => true,
-    name       => 'nscd',
-    hasstatus  => true,
-    hasrestart => true,
+  if $::osfamily == 'RedHat' {
+    service { 'nscd':
+      ensure     => 'running',
+      enable     => true,
+      name       => 'nscd',
+      hasstatus  => true,
+      hasrestart => true,
+    }
   }
 
   service { 'openldap':
@@ -94,15 +95,30 @@ class platform::ldap::server::local
 
   # start openldap with updated config and updated nsswitch
   # then convert slapd config to db format. Note, slapd must have run and created the db prior to this.
-  Exec['stop-openldap']
-  -> Exec['update-slapd-conf']
-  -> Service['nscd']
-  -> Service['nslcd']
-  -> Service['openldap']
-  -> Exec['slapd-convert-config']
-  -> Exec['slapd-conf-move-backup']
-  -> exec { 'restart-openldap':
-    command => '/usr/bin/systemctl restart slapd.service',
+  if $::osfamily == 'RedHat' {
+    Exec['stop-openldap']
+    -> Exec['update-slapd-conf']
+    -> Service['nscd']
+    -> Service['nslcd']
+    -> Service['openldap']
+    -> Exec['slapd-convert-config']
+    -> Exec['slapd-conf-move-backup']
+    -> exec { 'restart-openldap':
+      command => '/usr/bin/systemctl restart slapd.service',
+    }
+    -> class { '::platform::ldap::secure::config':}
+
+  }
+  else {
+    Exec['stop-openldap']
+    -> Exec['update-slapd-conf']
+    -> Service['openldap']
+    -> Exec['slapd-convert-config']
+    -> Exec['slapd-conf-move-backup']
+    -> exec { 'restart-openldap':
+      command => '/usr/bin/systemctl restart slapd.service',
+    }
+    -> class { '::platform::ldap::secure::config':}
   }
 }
 
@@ -115,17 +131,19 @@ class platform::ldap::client
       content => template('platform/ldap.conf.erb'),
   }
 
-  file { '/etc/nslcd.conf':
+  if $::osfamily == 'RedHat' {
+    file { '/etc/nslcd.conf':
       ensure  => 'present',
       replace => true,
       content => template('platform/nslcd.conf.erb'),
-  }
-  -> service { 'nslcd':
-    ensure     => 'running',
-    enable     => true,
-    name       => 'nslcd',
-    hasstatus  => true,
-    hasrestart => true,
+    }
+    -> service { 'nslcd':
+      ensure     => 'running',
+      enable     => true,
+      name       => 'nslcd',
+      hasstatus  => true,
+      hasrestart => true,
+    }
   }
 
   if $::personality == 'controller' {
@@ -153,12 +171,18 @@ class platform::ldap::bootstrap
   Class['platform::ldap::server::local'] -> Class[$name]
 
   $dn = 'cn=ldapadmin,dc=cgcs,dc=local'
+  if $::osfamily == 'RedHat' {
+    $ldap_admin_group = 'root'
+  }
+  else {
+    $ldap_admin_group = 'users'
+  }
 
   exec { 'populate initial ldap configuration':
     command => "ldapadd -D ${dn} -w \"${admin_pw}\" -f ${slapd_etc_path}/initial_config.ldif"
   }
   -> exec { 'create ldap admin user':
-    command => 'ldapadduser admin root'
+    command => "ldapadduser admin ${ldap_admin_group}"
   }
   -> exec { 'create ldap operator user':
     command => 'ldapadduser operator users'
@@ -174,34 +198,49 @@ class platform::ldap::bootstrap
   }
 }
 
-class platform::ldap::secure::runtime
+class platform::ldap::secure::config
   inherits ::platform::ldap::params {
-  include ::platform::params
   # Local ldap server configuration with SSL certificate.
   # It is applied when an openldap certificate is created or updated, during
   # application of controller manifest.
 
   $dn = 'cn=config'
-  $openldap_cert_name = 'system-openldap-local-certificate'
   $certs_etc_path = "${slapd_etc_path}/certs"
+  if $::osfamily == 'RedHat' {
+    $ldap_user = 'ldap'
+    $ldap_group = 'ldap'
+  }
+  else {
+    $ldap_user = 'openldap'
+    $ldap_group = 'openldap'
+  }
 
-  exec { 'populate openldap certificate':
-    command => "kubectl get secret ${openldap_cert_name} -n deployment --kubeconfig=/etc/kubernetes/admin.conf \
-    --template='{{ index .data \"tls.crt\" }}'|base64 -d > ${certs_etc_path}/openldap-cert.crt"
+  if (! empty($secure_cert)) and (! empty($secure_key)) {
+    file { 'ldap-cert':
+      ensure  => present,
+      path    => "${certs_etc_path}/openldap-cert.crt",
+      owner   => $ldap_user,
+      group   => $ldap_group,
+      mode    => '0644',
+      content => $secure_cert,
+    }
+    -> file { 'ldap-key':
+      ensure  => present,
+      path    => "${certs_etc_path}/openldap-cert.key",
+      owner   => $ldap_user,
+      group   => $ldap_group,
+      mode    => '0644',
+      content => $secure_key,
+    }
+    -> exec { 'ldap configuration update to enable TLS/SSL':
+      command => "ldapmodify -D ${dn} -w \"${admin_pw}\" -xH ldap:/// -f ${slapd_etc_path}/certs.ldif",
+    }
   }
-  -> exec { 'populate openldap certificate key':
-    command => "kubectl get secret ${openldap_cert_name} -n deployment --kubeconfig=/etc/kubernetes/admin.conf \
-    --template='{{ index .data \"tls.key\" }}'|base64 -d > ${certs_etc_path}/openldap-cert.key"
-  }
-  -> exec { 'Set the owner and group for openldap crt and key files':
-    command => "chown -R openldap:openldap ${certs_etc_path}/openldap*",
-    onlyif  => "test '${::osfamily }' == 'Debian'",
-  }
-  -> exec { 'ldap configuration update to enable TLS/SSL':
-    command =>
-      "ldapmodify -D ${dn} -w \"${admin_pw}\" -f ${slapd_etc_path}/certs.ldif"
-  }
-    -> exec { 'restart-openldap':
-    command => '/usr/bin/systemctl restart slapd.service'
-  }
+}
+
+class platform::ldap::secure::runtime
+  inherits ::platform::ldap::params {
+  # Local ldap server configuration with SSL certificate.
+
+  class { '::platform::ldap::secure::config':}
 }
