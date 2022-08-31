@@ -27,7 +27,9 @@ class platform::sssd::config
 class platform::sssd
   inherits ::platform::sssd::params {
 
-  Class['::platform::ldap::server'] -> Class[$name]
+  if $::personality == 'controller' {
+    Class['::platform::ldap::server'] -> Class[$name]
+  }
 
   include ::platform::sssd::config
 }
