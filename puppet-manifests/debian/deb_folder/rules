@@ -14,4 +14,8 @@ override_dh_install:
 		BINDIR=$(CURDIR)/debian/tmp/usr/local/bin \
 		CONFIGDIR=$(CURDIR)/debian/tmp/etc/puppet \
 		MODULEDIR=$(CURDIR)/debian/tmp/usr/share/puppet/modules
+
+	# nslcd doesn't exist on Debian
+	rm $(CURDIR)/debian/tmp/usr/share/puppet/modules/platform/templates/nslcd.conf.erb
+
 	dh_install
