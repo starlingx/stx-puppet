@@ -20,6 +20,7 @@ class platform::params (
   $system_type = undef,
   $system_name = undef,
   $platform_cpu_count = undef,
+  $hyperthreading_enabled = false,
   $vswitch_type = undef,
   $security_profile = undef,
   $security_feature = undef,
@@ -71,7 +72,13 @@ class platform::params (
     # All eng_workers derivatives are set to 1 for AIO.
     # Services can add an additional worker if it is deemed necessary in their own puppet files.
     if ($platform_cpu_count <= $platform_default_min_cpu_count) {
-      $eng_workers = $platform_cpu_count
+      # When Hyper-Threading is enabled, consider only the quantity of physical cores
+      # to define the number of eng_workers
+      if $hyperthreading_enabled {
+        $eng_workers = $platform_cpu_count/2
+      } else {
+        $eng_workers = $platform_cpu_count
+      }
     } else {
       if $system_mode == 'simplex' or ($phys_core_count <= 8 and $plat_res_mem < 14500) or str2bool($::is_virtual) {
         $eng_workers = $platform_default_min_cpu_count
