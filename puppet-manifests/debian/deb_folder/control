@@ -44,7 +44,6 @@ Depends: ${misc:Depends}, puppet,
  puppet-module-camptocamp-kmod,
  puppet-ldap,
  puppet-network,
- puppet-nslcd,
  puppet-module-voxpupuli-collectd,
  python3-ruamel.yaml
 Description: Puppet configuration and manifests
