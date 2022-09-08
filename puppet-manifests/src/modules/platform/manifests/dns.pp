@@ -75,6 +75,11 @@ class platform::dns::resolv (
 }
 
 
+class platform::dns::resolv::runtime {
+  include ::platform::dns::resolv
+}
+
+
 class platform::dns {
   Anchor['platform::networking'] -> Class[$name]
 
