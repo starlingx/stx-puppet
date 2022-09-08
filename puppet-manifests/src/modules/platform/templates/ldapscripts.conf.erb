@@ -16,13 +16,13 @@
 #  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 #  USA.
 #
-# Copyright (c) 2018 Wind River Systems, Inc.
+# Copyright (c) 2018-2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 
 # LDAP server
-SERVER="ldap://<%= @ldapserver_host %>"
+SERVER="<%= @ldap_protocol %>://<%= @ldapserver_host %>"
 
 # Suffixes
 SUFFIX="dc=cgcs,dc=local" # Global suffix
