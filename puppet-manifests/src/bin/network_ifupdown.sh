@@ -125,6 +125,42 @@ function parse_interface_stanzas {
         fi
     done
 
+    # if inet6, search for the first labeled interface (label=':1') and remove the label
+    # from instanza, since all labeled inet6 interface adresses are created with
+    # preferred_lifetime=0 and that marks the address as deprecated. So the first labeled
+    # interface must apply the address over the interface itself
+    # e.g. stanza vlan100:1 needs to be vlan100
+    for cfg_path in $(find ${PUPPET_DIR} -name "${IFNAME_INCLUDE}" | sort); do
+        local iface_file
+        iface_file=$(basename ${cfg_path})
+        iface_name=${iface_file#ifcfg-}
+        base_iface_name=${iface_name%:*}
+        is_inet6_label=$( grep -E "iface ${base_iface_name}:[1-9] inet6" ${cfg_path} )
+        if [ -n "${is_inet6_label}" ]; then
+            if [[ -e ${cfg_path%:*} ]]; then
+                is_inet6_manual=$( grep -E "iface ${base_iface_name} inet6 manual" ${cfg_path%:*} )
+                if [ -n "${is_inet6_manual}" ]; then
+                    # Collect the base interface operations
+                    puppet_data=$(grep -v HEADER ${cfg_path%:*})
+                    while read interfaceLine; do
+                        local startLine
+                        local operations=("pre-up" "up" "post-up" "pre-down" "down" "post-down")
+                        startLine=$( echo "${interfaceLine}" | awk '{print $1}' )
+                        if printf '%s\0' "${operations[@]}" | grep -Fxqz -- "${startLine}"; then
+                            echo "${interfaceLine}" >> ${cfg_path}
+                        fi
+                    done <<< ${puppet_data}
+                    # remove the label from stanza
+                    local label
+                    label=${iface_name#*:}
+                    sed -i "s/:${label}//" ${cfg_path}
+                    # use the merged stanza
+                    mv ${cfg_path} ${cfg_path%:*}
+                    sed -i "s/# HEADER/# HEADER: for inet6 handles ${iface_name}\n# HEADER/" ${cfg_path%:*}
+                fi
+            fi
+        fi
+    done
 }
 
 #
