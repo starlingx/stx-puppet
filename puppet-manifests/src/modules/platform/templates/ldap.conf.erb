@@ -6,6 +6,9 @@
 # This file should be world readable but not world writable.
 #
 BASE                dc=cgcs,dc=local
-URI                 ldap://<%= @ldapserver_host %>
+URI                 <%= @ldap_protocol %>://<%= @ldapserver_host %>
+<%- if @ldap_protocol == 'ldaps' -%>
+TLS_CACERT          /etc/ssl/certs/ca-certificates.crt
+<%- end -%>
 pam_lookup_policy   yes
 sudoers_base        ou=SUDOers,dc=cgcs,dc=local

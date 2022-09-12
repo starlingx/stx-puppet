@@ -123,7 +123,12 @@ class platform::ldap::server::local
 }
 
 
-class platform::ldap::client
+class platform::ldap::client (
+  $ldap_protocol= $::osfamily ? {
+    'RedHat' => 'ldap',
+    default  => 'ldaps',
+  },
+)
   inherits ::platform::ldap::params {
   file { "${slapd_etc_path}/ldap.conf":
       ensure  => 'present',
@@ -166,7 +171,6 @@ class platform::ldap::bootstrap
   # replaced by remote ldap server configuration (if needed) during
   # application of controller manifest.
   include ::platform::ldap::server::local
-  include ::platform::ldap::client
 
   Class['platform::ldap::server::local'] -> Class[$name]
 
@@ -178,7 +182,10 @@ class platform::ldap::bootstrap
     $ldap_admin_group = 'users'
   }
 
-  exec { 'populate initial ldap configuration':
+  class {'::platform::ldap::client':
+    ldap_protocol => 'ldap',
+  }
+  -> exec { 'populate initial ldap configuration':
     command => "ldapadd -D ${dn} -w \"${admin_pw}\" -f ${slapd_etc_path}/initial_config.ldif"
   }
   -> exec { 'create ldap admin user':
