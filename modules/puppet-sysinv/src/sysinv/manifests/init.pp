@@ -71,7 +71,7 @@ class sysinv (
                                     controller_config_active_apply => 60,
                                     upgrade_status => 60,
                                     install_states => 60,
-                                    kubernetes_labels => 60,
+                                    kubernetes_labels => 180,
                                     image_conversion => 60,
                                     storage_backend_failure => 400,
                                     k8s_application => 60,
