@@ -75,7 +75,7 @@ class sysinv (
                                     image_conversion => 60,
                                     storage_backend_failure => 400,
                                     k8s_application => 60,
-                                    device_image_update => 60 },
+                                    device_image_update => 300 },
   $periodic_interval_agent     = {  default => 60,
                                     inventory_audit => 60,
                                     lldp_audit => 300 }
