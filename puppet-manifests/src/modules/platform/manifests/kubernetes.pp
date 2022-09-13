@@ -832,26 +832,32 @@ class platform::kubernetes::master::change_apiserver_parameters (
   $etcd_certfile = $platform::kubernetes::params::etcd_certfile,
   $etcd_keyfile = $platform::kubernetes::params::etcd_keyfile,
   $etcd_servers = $platform::kubernetes::params::etcd_servers,
-  $wait_for_apiserver = true,
 ) inherits ::platform::kubernetes::params {
 
-  $configmap_temp_file = '/tmp/cluster_configmap.yaml'
-  $configview_temp_file = '/tmp/kubeadm_config_view.yaml'
-
-  exec { 'update kube-apiserver params':
-    command  => template('platform/kube-apiserver-change-params.erb'),
-    provider => shell,
+  # Update ownership/permissions for files.
+  # We want it readable by sysinv and sysadmin.
+  file { '/tmp/puppet/hieradata/':
+    ensure  => directory,
+    owner   => 'root',
+    group   => $::platform::params::protected_group_name,
+    mode    => '0444',
+    recurse => true,
   }
-  if $wait_for_apiserver {
-    # Wait for kube-apiserver to be up before executing next steps
-    # Uses a k8s API health endpoint for that: https://kubernetes.io/docs/reference/using-api/health-checks/
-    exec { 'wait_for_kube_api_server':
-      command   => '/usr/bin/curl -k -f -m 15 https://localhost:6443/readyz',
-      timeout   => 30,
-      tries     => 18,
-      try_sleep => 5,
-      require   => Exec['update kube-apiserver params'],
-    }
+
+  file { '/etc/kubernetes/backup/':
+    ensure  => directory,
+    owner   => 'root',
+    group   => $::platform::params::protected_group_name,
+    mode    => '0444',
+    recurse => true,
+  }
+
+  if $etcd_cafile and $etcd_certfile and $etcd_keyfile and $etcd_servers {
+    exec { 'update configmap and apply changes to control plane components':
+      command   => "python /usr/share/puppet/modules/platform/files/change_k8s_control_plane_params.py --etcd_cafile ${etcd_cafile} --etcd_certfile ${etcd_certfile} --etcd_keyfile ${etcd_keyfile} --etcd_servers ${etcd_servers}"}  # lint:ignore:140chars
+  } else {
+    exec { 'update configmap and apply changes to control plane components':
+      command   => 'python /usr/share/puppet/modules/platform/files/change_k8s_control_plane_params.py'}
   }
 }
 
