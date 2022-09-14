@@ -145,15 +145,38 @@ define platform::network::network_route6 (
   $gateway,
   $ifname,
 ) {
-  file { "/etc/sysconfig/network-scripts/route6-${ifname}":
-    ensure  => present,
-    owner   => root,
-    group   => root,
-    mode    => '0644',
-    content => "${prefix} via ${gateway} dev ${ifname}"
-  }
+  case $::osfamily {
+    'RedHat': {
+      file { "/etc/sysconfig/network-scripts/route6-${ifname}":
+        ensure  => present,
+        owner   => root,
+        group   => root,
+        mode    => '0644',
+        content => "${prefix} via ${gateway} dev ${ifname}"
+      }
+    }
+    'Debian': {
+      file { '/var/run/network-scripts.puppet/routes6':
+        ensure => present,
+        owner  => root,
+        group  => root,
+        mode   => '0644'
+      }
+      if $prefix == 'default' {
+        file_line { 'set_ipv6_default_route':
+          ensure             => present,
+          path               => '/var/run/network-scripts.puppet/routes6',
+          line               => "default 0 ${gateway} ${ifname} metric 1024",
+          match              => 'default 0 .*',
+          append_on_no_match => true
+        }
+      }
+    }
+    default : {
+      fail("unsupported osfamily ${::osfamily}, Debian and Redhat are the only supported ones")
+    }
+  } # Case $::osfamily
 }
-
 
 class platform::network::routes (
   $route_config = {}
@@ -339,6 +362,7 @@ class platform::network::apply {
   exec {'apply-network-config':
     command => 'apply_network_config.sh',
   }
+
   # Wait for network interface to leave tentative state during ipv6 DAD
   exec {'wait-for-tentative':
     command   => '[ $(ip -6 addr sh | grep -c inet6.*tentative) -eq 0 ]',

@@ -13,6 +13,7 @@
 export IFNAME_INCLUDE="ifcfg-*"
 export PUPPET_FILE="/var/run/network-scripts.puppet/interfaces"
 export PUPPET_ROUTES_FILE="/var/run/network-scripts.puppet/routes"
+export PUPPET_ROUTES6_FILE="/var/run/network-scripts.puppet/routes6"
 export ETC_ROUTES_FILE="/etc/network/routes"
 export ETC_DIR="/etc/network/interfaces.d/"
 
@@ -447,6 +448,18 @@ function get_prefix_length {
     fi
 }
 
+# if route is default, remove prefix_len
+function get_linux_network {
+    network=$1
+    prefix_len=$2
+    local linux_network
+    linux_network="${network}${prefix_len}"
+    if [ "${network}" == "default" ]; then
+        linux_network="${network}"
+    fi
+    echo "${linux_network}"
+}
+
 function route_add {
     local routeLine="$*"
     local route
@@ -455,6 +468,7 @@ function route_add {
     local ifname
     local prefix
     local metric
+    local linux_network
 
     route=$( echo "${routeLine}" | awk '{print $1}' )
     netmask=$( echo "${routeLine}" | awk '{print $2}' )
@@ -462,11 +476,16 @@ function route_add {
     ifname=$( echo "${routeLine}" | awk '{print $4}' )
     metric=$( echo "${routeLine}" | awk '{print $6}' )
     prefix=$(get_prefix_length ${netmask})
+    linux_network=$(get_linux_network ${route} ${prefix})
 
-    log_it "Adding route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask} metric ${metric}"
-    /usr/sbin/ip route add ${route}${prefix} via ${nexthop} dev ${ifname} metric ${metric}
-    if [ $? -ne 0 ] ; then
-        log_it "Failed adding route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask} metric ${metric}"
+    if [ "$linux_network" != "" ] && [ "$nexthop" != "" ] && [ "$ifname" != "" ] && [ "$metric" != "" ]; then
+        log_it "Adding route: ${linux_network} via ${nexthop} dev ${ifname} netmask ${netmask} metric ${metric}"
+        /usr/sbin/ip route add ${linux_network} via ${nexthop} dev ${ifname} metric ${metric}
+        if [ $? -ne 0 ] ; then
+            log_it "Failed adding route: ${linux_network} via ${nexthop} dev ${ifname} netmask ${netmask} metric ${metric}"
+        fi
+    else
+        log_it "Route add with invalid parameter: ${linux_network} via ${nexthop} dev ${ifname} netmask ${netmask} metric ${metric}."
     fi
 }
 
@@ -482,11 +501,16 @@ function route_del {
     nexthop=$( echo "${routeLine}" | awk '{print $3}' )
     ifname=$( echo "${routeLine}" | awk '{print $4}' )
     prefix=$(get_prefix_length ${netmask})
+    linux_network=$(get_linux_network ${route} ${prefix})
 
-    log_it "Removing route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask}"
-    /usr/sbin/ip route del ${route}${prefix} via ${nexthop} dev ${ifname}
-    if [ $? -ne 0 ] ; then
-        log_it "Failed removing route: ${route}${prefix} via ${nexthop} dev ${ifname} netmask ${netmask}"
+    if [ "$linux_network" != "" ] && [ "$nexthop" != "" ] && [ "$ifname" != "" ]; then
+        log_it "Removing route: ${linux_network} via ${nexthop} dev ${ifname} netmask ${netmask}"
+        /usr/sbin/ip route del ${linux_network} via ${nexthop} dev ${ifname}
+        if [ $? -ne 0 ] ; then
+            log_it "Failed removing route: ${linux_network} via ${nexthop} dev ${ifname} netmask ${netmask}"
+        fi
+    else
+        log_it "Route del with invalid parameter: ${linux_network} via ${nexthop} dev ${ifname} netmask ${netmask}."
     fi
 }
 
@@ -496,6 +520,21 @@ function route_del {
 function update_routes {
     local etc_data
     local puppet_data
+
+    if [ -f ${PUPPET_ROUTES6_FILE} ]; then
+        log_it "add IPv6 routes generated in network.pp"
+        if [ -f ${PUPPET_ROUTES_FILE} ]; then
+            puppet_data=$(grep -v HEADER ${PUPPET_ROUTES6_FILE})
+            while read route6Line; do
+                route_exists=$( grep -E "${route6Line}" ${PUPPET_ROUTES_FILE} )
+                if [ "${route_exists}" == "" ]; then
+                    cat ${route6Line} >> ${PUPPET_ROUTES_FILE}
+                fi
+            done <<< ${puppet_data}
+        else
+            cat ${PUPPET_ROUTES6_FILE} >> ${PUPPET_ROUTES_FILE}
+        fi
+    fi
 
     if [ ! -f ${PUPPET_ROUTES_FILE} ] ; then
         log_it "no puppet routes to process, remove existing ones and return"
