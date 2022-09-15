@@ -1,7 +1,10 @@
 class platform::ldap::params (
   $admin_pw,
   $admin_hashed_pw = undef,
-  $provider_uri = undef,
+  $provider_uri = $::osfamily ? {
+    'RedHat' => 'ldap://controller-1',
+    default  => 'ldaps://controller-1',
+  },
   $server_id = undef,
   $ldapserver_remote = false,
   $ldapserver_host = undef,
@@ -10,11 +13,11 @@ class platform::ldap::params (
   $nslcd_idle_timelimit = 600,
   $slapd_etc_path = $::osfamily ? {
     'RedHat' => '/etc/openldap',
-    default   => '/etc/ldap',
+    default  => '/etc/ldap',
   },
   $slapd_mod_path = $::osfamily ? {
     'RedHat' => '/usr/lib64/openldap',
-    default   => '/usr/lib/ldap',
+    default  => '/usr/lib/ldap',
   },
   $nslcd_gid = 'ldap',
   $secure_cert = '',
@@ -124,7 +127,7 @@ class platform::ldap::server::local
 
 
 class platform::ldap::client (
-  $ldap_protocol= $::osfamily ? {
+  $ldap_protocol = $::osfamily ? {
     'RedHat' => 'ldap',
     default  => 'ldaps',
   },

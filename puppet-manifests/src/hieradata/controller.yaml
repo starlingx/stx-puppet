@@ -42,7 +42,6 @@ platform::drbd::params::rtt_ms: 0.2
 
 # Default LDAP configuration required for bootstrap of controller-0
 platform::ldap::params::server_id: '001'
-platform::ldap::params::provider_uri: 'ldap://controller-1'
 
 # FIXME(mpeters): remove packstack specific variable
 # workaround until openstack credentials module is updated to not reference
