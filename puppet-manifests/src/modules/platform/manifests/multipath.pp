@@ -1,8 +1,5 @@
 class platform::multipath::params (
-  $enabled = $::osfamily ? {
-    'Debian' => false,
-    default => true,
-  },
+  $enabled = true,
 ) {
 }
 
