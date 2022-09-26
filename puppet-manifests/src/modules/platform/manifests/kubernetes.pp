@@ -866,7 +866,8 @@ class platform::kubernetes::master::update_kubeadm_feature_gates (
 
   exec { 'update kubeadm feature-gates':
     command   => '/usr/local/sbin/update-k8s-feature-gates.sh',
-    logoutput => true
+    logoutput => true,
+    onlyif    => 'test -e /usr/local/sbin/update-k8s-feature-gates.sh'
   }
 
   # Wait for kube-apiserver to be up
