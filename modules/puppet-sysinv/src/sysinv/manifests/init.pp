@@ -26,6 +26,11 @@ class sysinv (
   $journal_min_size            = 1024,
   $journal_default_size        = 1024,
   $rpc_backend                 = 'sysinv.openstack.common.rpc.impl_kombu',
+  $rpc_backend_zeromq          = true,
+  $rpc_zeromq_bind_ip              = '::',
+  $rpc_zeromq_conductor_bind_ip    = '::',
+  $rpc_zeromq_conductor_bind_port  = '9501',
+  $rpc_zeromq_agent_bind_port      = '9502',
   $control_exchange            = 'openstack',
   $rabbit_host                 = '127.0.0.1',
   $rabbit_port                 = 5672,
@@ -168,6 +173,11 @@ class sysinv (
     'DEFAULT/debug':               value => $debug;
     'DEFAULT/api_paste_config':    value => $api_paste_config;
     'DEFAULT/rpc_backend':         value => $rpc_backend;
+    'DEFAULT/rpc_backend_zeromq':             value => $rpc_backend_zeromq;
+    'DEFAULT/rpc_zeromq_bind_ip':             value => $rpc_zeromq_bind_ip;
+    'DEFAULT/rpc_zeromq_conductor_bind_ip':   value => $rpc_zeromq_conductor_bind_ip;
+    'DEFAULT/rpc_zeromq_agent_bind_port':     value => $rpc_zeromq_agent_bind_port;
+    'DEFAULT/rpc_zeromq_conductor_bind_port': value => $rpc_zeromq_conductor_bind_port;
   }
 
   # Automatically add psycopg2 driver to postgresql (only does this if it is missing)
