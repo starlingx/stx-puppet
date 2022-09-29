@@ -21,7 +21,8 @@ class platform::ldap::params (
   },
   $nslcd_gid = 'ldap',
   $secure_cert = '',
-  $secure_key = ''
+  $secure_key = '',
+  $ca_cert = ''
 ) {}
 
 class platform::ldap::server
@@ -133,6 +134,17 @@ class platform::ldap::client (
   },
 )
   inherits ::platform::ldap::params {
+  $openldap_ca_file = '/etc/pki/ca-trust/source/anchors/openldap-ca.crt'
+
+  case $::osfamily {
+    'RedHat': {
+      $ca_update_cmd = 'update-ca-trust'
+    }
+    default: {
+      $ca_update_cmd = 'update-ca-certificates --localcertsdir /etc/pki/ca-trust/source/anchors'
+    }
+  }
+
   file { "${slapd_etc_path}/ldap.conf":
       ensure  => 'present',
       replace => true,
@@ -159,6 +171,21 @@ class platform::ldap::client (
       ensure  => 'present',
       replace => true,
       content => template('platform/ldapscripts.conf.erb'),
+    }
+  }
+
+  # Install openldap CA certificate
+  if (! empty($ca_cert)) {
+    file { 'ldap-ca-cert':
+      ensure  => present,
+      path    => $openldap_ca_file,
+      owner   => root,
+      group   => root,
+      mode    => '0644',
+      content => $ca_cert,
+    }
+    -> exec { 'update-openldap-ca-trust':
+      command => $ca_update_cmd,
     }
   }
 }
