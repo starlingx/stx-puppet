@@ -6,6 +6,14 @@ class platform::sssd::params (
   $nss_options = {},
   $pam_options = {},
   $domains = {},
+  $domain_name = undef,
+  $ldap_uri = undef,
+  $ldap_access_filter = undef,
+  $ldap_search_base = undef,
+  $ldap_user_search_base = undef,
+  $ldap_group_search_base = undef,
+  $ldap_default_bind_dn = undef,
+  $ldap_default_authtok = undef,
 ) {}
 
 class platform::sssd::config
@@ -34,3 +42,14 @@ class platform::sssd
   include ::platform::sssd::config
 }
 
+class platform::sssd::domain::runtime
+  inherits ::platform::sssd::params {
+
+  include ::platform::sssd::config
+
+  Class['::platform::sssd::config']
+  -> exec { 'restart sssd service':
+    command => '/usr/bin/systemctl restart sssd.service',
+    onlyif  => "test '${::osfamily }' == 'Debian'",
+  }
+}
