@@ -319,6 +319,12 @@ def restore_k8s_configuration(kubeadm_cm_bak_file, cluster_config_bak_file,
     # Run mandatory tasks after the update proccess has finished
     post_k8s_updating_tasks(post_k8s_tasks)
 
+    # Restarting Kubelet
+    LOG.debug('Restarting Kubelet')
+    cmd = ["systemctl", "restart", "kubelet.service"]
+    if not _exec_cmd(cmd) == 0:
+        return 2
+
     # Wait for kube-apiserver to be up before executing next steps
     k8s_apiserver_healthy = k8s_health_check(
         timeout=timeout, try_sleep=try_sleep, tries=tries,

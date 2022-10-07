@@ -854,10 +854,12 @@ class platform::kubernetes::master::change_apiserver_parameters (
 
   if $etcd_cafile and $etcd_certfile and $etcd_keyfile and $etcd_servers {
     exec { 'update configmap and apply changes to control plane components':
-      command   => "python /usr/share/puppet/modules/platform/files/change_k8s_control_plane_params.py --etcd_cafile ${etcd_cafile} --etcd_certfile ${etcd_certfile} --etcd_keyfile ${etcd_keyfile} --etcd_servers ${etcd_servers}"}  # lint:ignore:140chars
+      command => "python /usr/share/puppet/modules/platform/files/change_k8s_control_plane_params.py --etcd_cafile ${etcd_cafile} --etcd_certfile ${etcd_certfile} --etcd_keyfile ${etcd_keyfile} --etcd_servers ${etcd_servers}",  # lint:ignore:140chars
+      timeout => 300}
   } else {
     exec { 'update configmap and apply changes to control plane components':
-      command   => 'python /usr/share/puppet/modules/platform/files/change_k8s_control_plane_params.py'}
+      command => 'python /usr/share/puppet/modules/platform/files/change_k8s_control_plane_params.py',
+      timeout => 300}
   }
 }
 
