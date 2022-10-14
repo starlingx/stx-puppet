@@ -68,6 +68,16 @@ class platform::ldap::server::local
     command => '/usr/bin/systemctl stop slapd.service',
   }
 
+  exec { 'restart-openldap':
+    command => '/usr/bin/systemctl restart slapd.service',
+    onlyif  => "/usr/bin/test -e ${slapd_etc_path}/slapd.conf"
+  }
+
+  exec { 'configure-ldaps':
+    command => "ldapmodify -D cn=config -w \"${admin_pw}\" -xH ldap:/// -f ${slapd_etc_path}/certs.ldif",
+    onlyif  => ["test -e ${slapd_etc_path}/certs/openldap-cert.crt", "test -e ${slapd_etc_path}/certs/openldap-cert.key"]
+  }
+
   exec { 'update-slapd-conf':
     command => "/bin/sed -i \\
                           -e 's#provider=ldap.*#provider=${provider_uri}#' \\
@@ -118,11 +128,10 @@ class platform::ldap::server::local
     -> Exec['update-slapd-conf']
     -> Service['openldap']
     -> Exec['slapd-convert-config']
+    -> Exec['restart-openldap']
+    -> class { '::platform::ldap::secure::config': }
+    -> Exec['configure-ldaps']
     -> Exec['slapd-conf-move-backup']
-    -> exec { 'restart-openldap':
-      command => '/usr/bin/systemctl restart slapd.service',
-    }
-    -> class { '::platform::ldap::secure::config':}
   }
 }
 
@@ -241,7 +250,6 @@ class platform::ldap::secure::config
   # It is applied when an openldap certificate is created or updated, during
   # application of controller manifest.
 
-  $dn = 'cn=config'
   $certs_etc_path = "${slapd_etc_path}/certs"
   if $::osfamily == 'RedHat' {
     $ldap_user = 'ldap'
@@ -268,9 +276,6 @@ class platform::ldap::secure::config
       group   => $ldap_group,
       mode    => '0644',
       content => $secure_key,
-    }
-    -> exec { 'ldap configuration update to enable TLS/SSL':
-      command => "ldapmodify -D ${dn} -w \"${admin_pw}\" -xH ldap:/// -f ${slapd_etc_path}/certs.ldif",
     }
   }
 }
