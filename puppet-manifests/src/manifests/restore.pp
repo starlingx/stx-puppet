@@ -14,8 +14,14 @@ include ::platform::ldap::bootstrap
 include ::platform::drbd::bootstrap
 include ::platform::postgresql::bootstrap
 include ::platform::amqp::bootstrap
+
 include ::platform::drbd::etcd::bootstrap
 include ::platform::drbd::dockerdistribution::bootstrap
+
+# Puppet classes to enable the bring up of kubernetes master
+include ::platform::docker::bootstrap
+include ::platform::etcd::bootstrap
+
 include ::platform::filesystem::docker::bootstrap
 include ::platform::filesystem::scratch
 include ::platform::filesystem::backup
