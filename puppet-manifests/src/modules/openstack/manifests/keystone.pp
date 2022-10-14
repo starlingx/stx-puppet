@@ -628,9 +628,21 @@ class openstack::keystone::password::runtime {
 }
 
 class openstack::keystone::fm::password::runtime {
-  class { '::fm::api':
-    sync_db => str2bool($::is_standalone_controller),
+  include ::platform::params
+  include ::platform::fm::params
+
+  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+    $assigned_workers = min($::platform::params::eng_workers, 6)
+  } else {
+    $assigned_workers = $::platform::params::eng_workers
   }
+
+  class { '::fm::api':
+    host    => $::platform::fm::params::api_host,
+    workers => $assigned_workers,
+    sync_db => $::platform::params::init_database,
+  }
+  Fm_config<||> ~> Service['fm-api']
 
   platform::sm::restart {'fm-mgr': }
 }
@@ -698,4 +710,11 @@ class openstack::keystone::dcmanager::password::runtime {
   } else {
     platform::sm::restart {'cert-mon': }
   }
+}
+
+class openstack::keystone::sysinv::password::runtime {
+  include ::sysinv::api
+  include ::platform::sysinv
+  include ::sysinv::certmon
+  include ::sysinv::certalarm
 }
