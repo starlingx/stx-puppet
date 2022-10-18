@@ -46,6 +46,7 @@ class platform::compute::grub::params (
   $default_pgsz = '',
   $g_audit = '',
   $g_audit_backlog_limit = 'audit_backlog_limit=8192',
+  $g_intel_nic_driver_version = '',
   $bios_cstate = false,
   $ignore_recovery = false,
   $keys = [
@@ -60,6 +61,7 @@ class platform::compute::grub::params (
     'irqaffinity',
     'audit',
     'audit_backlog_limit',
+    'multi-drivers-switch',
   ],
 ) {
 
@@ -75,8 +77,13 @@ class platform::compute::grub::params (
     $intel_idle_cstate = ''
   }
   $updated_audit = "audit=${g_audit}"
+
+  $multi_drivers_switch = "multi-drivers-switch=${g_intel_nic_driver_version}"
+
   $grub_updates = strip(
-    "${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit} ${intel_idle_cstate}"
+    # lint:ignore:140chars
+    "${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit} ${intel_idle_cstate} ${multi_drivers_switch}"
+    # lint:endignore:140chars
     )
 }
 
