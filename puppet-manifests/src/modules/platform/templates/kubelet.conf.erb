@@ -1,2 +1,2 @@
 # Overrides config file for kubelet
-KUBELET_EXTRA_ARGS=--cni-bin-dir=<%= @k8s_cni_bin_dir %> --node-ip=<%= @node_ip %> --volume-plugin-dir=<%= @k8s_vol_plugin_dir %> <%= @k8s_cpu_manager_opts %> --container-runtime=remote --container-runtime-endpoint=unix:///var/run/containerd/containerd.sock --pod-max-pids <%= @k8s_pod_max_pids %>
+KUBELET_EXTRA_ARGS=--node-ip=<%= @node_ip %> --volume-plugin-dir=<%= @k8s_vol_plugin_dir %> <%= @k8s_cpu_manager_opts %> --container-runtime=remote --container-runtime-endpoint=unix:///var/run/containerd/containerd.sock --pod-max-pids <%= @k8s_pod_max_pids %>
