@@ -143,6 +143,8 @@ class platform::ldap::client (
   },
 )
   inherits ::platform::ldap::params {
+  include ::platform::params
+
   $openldap_ca_file = '/etc/pki/ca-trust/source/anchors/openldap-ca.crt'
 
   case $::osfamily {
@@ -157,6 +159,15 @@ class platform::ldap::client (
   file { "${slapd_etc_path}/ldap.conf":
       ensure  => 'present',
       replace => true,
+      content => template('platform/ldap.conf.erb'),
+  }
+
+  # Create ldap configuraion for sysadmin user
+  file { "${::platform::params::sysadmin_user_dir}/.ldaprc":
+      ensure  => 'present',
+      replace => true,
+      owner   => $::platform::params::sysadmin_user_name,
+      group   => $::platform::params::protected_group_name,
       content => template('platform/ldap.conf.erb'),
   }
 
