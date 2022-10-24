@@ -64,13 +64,3 @@ class platform::smapi {
   include ::platform::smapi::common
   include ::platform::smapi::haproxy
 }
-
-class platform::smapi::rehome {
-  include ::platform::smapi::common
-
-  File['/etc/sm-api/sm-api.conf']
-  ~> service { 'sm-api.service':
-    ensure => 'running',
-    enable => true,
-  }
-}
