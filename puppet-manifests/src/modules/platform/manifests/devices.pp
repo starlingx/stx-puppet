@@ -83,11 +83,22 @@ define platform::devices::sriov_bind (
       Exec["sriov-enable-device: ${title}"]
       -> Class['platform::devices::acc100::config']
     }
-    ensure_resource(kmod::load, $driver)
-    exec { "sriov-bind-device: ${title}":
-      command   => template('platform/sriov.bind-device.erb'),
-      logoutput => true,
-      require   => [ Kmod::Load[$driver] ],
+    if ($driver == 'vfio-pci') {
+      exec { "Load vfio-pci driver with sriov enabled: ${title}":
+        command   => 'modprobe vfio-pci enable_sriov=1 disable_idle_d3=1',
+        logoutput => true,
+      }
+      -> exec { "sriov-bind-device: ${title}":
+        command   => template('platform/sriov.bind-device.erb'),
+        logoutput => true,
+      }
+    } else {
+      ensure_resource(kmod::load, $driver)
+      exec { "sriov-bind-device: ${title}":
+        command   => template('platform/sriov.bind-device.erb'),
+        logoutput => true,
+        require   => [ Kmod::Load[$driver] ],
+      }
     }
   }
 }
@@ -185,10 +196,16 @@ class platform::devices::acc100::config (
   $num_vf_bundles
 ) inherits ::platform::devices::acc100::fec {
   if $enabled {
-      exec { "Configure ACC100 device with ${num_vf_bundles} VF bundles":
+    file { [ '/etc/pf-bb-config/', '/etc/pf-bb-config/acc100' ]:
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => '0640',
+    }
+    -> exec { "Configure ACC100 device with ${num_vf_bundles} VF bundles":
         command   => template('platform/acc100-config.erb'),
         logoutput => true,
-      }
+    }
   }
 }
 

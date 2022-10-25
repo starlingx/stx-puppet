@@ -1,7 +1,9 @@
 /bin/true # puppet requires this for correct template parsing
 
 ACC_CONFIG_FILE=/usr/share/pf-bb-config/acc100/acc100_config_1vf_4g5g.cfg
+ETC_ACC_CONFIG_FILE=/etc/pf-bb-config/acc100/acc100_config_1vf_4g5g.cfg
 NUM_VF_BUNDLES=<%= @num_vf_bundles -%>
 
-sed -i 's/num_vf_bundles\ =\ [0-9]*/num_vf_bundles\ =\ '${NUM_VF_BUNDLES}'/' ${ACC_CONFIG_FILE}
-/usr/bin/pf_bb_config ACC100 -c ${ACC_CONFIG_FILE}
+cp -R ${ACC_CONFIG_FILE} ${ETC_ACC_CONFIG_FILE}
+sed -i 's/num_vf_bundles\ =\ [0-9]*/num_vf_bundles\ =\ '${NUM_VF_BUNDLES}'/' ${ETC_ACC_CONFIG_FILE}
+/usr/bin/pf_bb_config ACC100 -c ${ETC_ACC_CONFIG_FILE}
