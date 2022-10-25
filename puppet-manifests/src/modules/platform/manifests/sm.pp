@@ -135,7 +135,6 @@ class platform::sm
 
   # Platform NFS network is over the management network
   $platform_nfs_ip_interface   = $::platform::network::mgmt::params::interface_name
-  $platform_nfs_ip_param_ip    = $::platform::network::mgmt::params::platform_nfs_address
   $platform_nfs_ip_param_mask  = $::platform::network::mgmt::params::subnet_prefixlen
   $platform_nfs_ip_network_url = $::platform::network::mgmt::params::subnet_network_url
 
@@ -539,15 +538,6 @@ class platform::sm
     command => "sm-configure service_instance registry-token-server registry-token-server \"\"",
   }
 
-  if $system_mode == 'duplex-direct' or $system_mode == 'simplex' {
-      exec { 'Configure Platform NFS':
-        command => "sm-configure service_instance platform-nfs-ip platform-nfs-ip \"ip=${platform_nfs_ip_param_ip},cidr_netmask=${platform_nfs_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7,dc=yes\"",
-      }
-  } else {
-      exec { 'Configure Platform NFS':
-        command => "sm-configure service_instance platform-nfs-ip platform-nfs-ip \"ip=${platform_nfs_ip_param_ip},cidr_netmask=${platform_nfs_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7,preferred_lft=${preferred_lft}\"",
-      }
-  }
 
   exec { 'Configure System Inventory API':
     command => "sm-configure service_instance sysinv-inv sysinv-inv \"dbg=false,os_username=${os_username},os_project_name=${os_project_name},os_user_domain_name=${os_user_domain_name},os_project_domain_name=${os_project_domain_name},os_auth_url=${os_auth_url},os_region_name=${os_region_name},system_url=${system_url}\"",
