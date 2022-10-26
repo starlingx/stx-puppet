@@ -116,12 +116,9 @@ class platform::ldap::server::local
     -> Service['nslcd']
     -> Service['openldap']
     -> Exec['slapd-convert-config']
-    -> Exec['slapd-conf-move-backup']
-    -> exec { 'restart-openldap':
-      command => '/usr/bin/systemctl restart slapd.service',
-    }
+    -> Exec['restart-openldap']
     -> class { '::platform::ldap::secure::config':}
-
+    -> Exec['slapd-conf-move-backup']
   }
   else {
     Exec['stop-openldap']
