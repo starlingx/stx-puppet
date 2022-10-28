@@ -528,7 +528,7 @@ function update_routes {
             while read route6Line; do
                 route_exists=$( grep -E "${route6Line}" ${PUPPET_ROUTES_FILE} )
                 if [ "${route_exists}" == "" ]; then
-                    cat ${route6Line} >> ${PUPPET_ROUTES_FILE}
+                    echo "${route6Line}" >> ${PUPPET_ROUTES_FILE}
                 fi
             done <<< ${puppet_data}
         else
