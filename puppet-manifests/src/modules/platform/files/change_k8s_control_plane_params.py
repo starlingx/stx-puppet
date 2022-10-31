@@ -83,7 +83,6 @@ def _exec_cmd(cmd, stdout=None):
     if stdout is not None:
         kwargs["stdout"] = stdout
     try:
-        # LOG.debug("  executing: %s", cmd)
         subprocess.check_call(cmd, **kwargs)
     except CalledProcessError as e:
         LOG.error("return code: %s", e.returncode)
@@ -375,7 +374,7 @@ def _validate_admission_plugins(custom_plugins):
     for plugin in required_plugins:
         if plugin not in custom_plugins:
             custom_plugins = custom_plugins + "," + plugin
-    return 'enable-admission-plugins', custom_plugins
+    return custom_plugins
 
 
 def main():
@@ -466,6 +465,7 @@ def main():
             'oidc_client_id': 'oidc-client-id',
             'oidc_username_claim': 'oidc-username-claim',
             'oidc_groups_claim': 'oidc-groups-claim',
+            'admission_plugins': 'enable-admission-plugins',
         },
         'extraVolumes': {},
     }
@@ -539,8 +539,11 @@ def main():
         timeout=timeout, try_sleep=try_sleep, tries=tries,
         healthz_endpoint=APISERVER_READYZ_ENDPOINT)
 
-    if not os.path.isfile(kubeadm_cm_bak_file):
+    if not os.path.isfile(kubeadm_cm_bak_file) or\
+            not os.path.isfile(cluster_config_bak_file):
+        LOG.debug("No k8s backup files founded.")
         if is_k8s_apiserver_up:
+            LOG.debug("Creating backup from current k8s config.")
             export_k8s_kubeadm_configmap(kubeadm_cm_bak_file)
             export_k8s_cluster_configuration(cluster_config_bak_file)
         else:
@@ -551,6 +554,7 @@ def main():
     # -----------------------------------------------------------------------------
     # Load current applied k8s cluster configuration
     # -----------------------------------------------------------------------------
+    LOG.debug('Exporting current config to file.')
     if export_k8s_kubeadm_configmap(kubeadm_cm_file) != 0:
         LOG.debug("k8s is not running, copy configmap backup file")
         cmd = ["cp", kubeadm_cm_bak_file, kubeadm_cm_file]
@@ -561,6 +565,7 @@ def main():
             return 3
 
     try:
+        LOG.debug('Loading current config from file.')
         with open(kubeadm_cm_file, 'r') as file:
             kubeadm_cfg = yaml.load(file, Loader=yaml.RoundTripLoader)
             cluster_cfg = yaml.load(
@@ -587,19 +592,36 @@ def main():
     for param_key, value in hieradata.items():
         if param_key.startswith(KUBE_APISERVER_TAG):
             param_name = param_key.split(KUBE_APISERVER_TAG)[1]
+            for sect in apiserver_schema.keys():
+                if param_name in apiserver_schema[sect].keys():
+                    param_name = apiserver_schema[sect][param_name]
             service_params['apiServer'][param_name] = value
+
         elif param_key.startswith(CONTROLLER_MANAGER_TAG):
             param_name = param_key.split(CONTROLLER_MANAGER_TAG)[1]
+            for sect in controller_manager_schema.keys():
+                if param_name in controller_manager_schema[sect].keys():
+                    param_name = controller_manager_schema[sect][param_name]
             service_params['controllerManager'][param_name] = value
+
         elif param_key.startswith(SCHEDULER_TAG):
             param_name = param_key.split(SCHEDULER_TAG)[1]
+            for sect in scheduler_schema.keys():
+                if param_name in scheduler_schema[sect].keys():
+                    param_name = scheduler_schema[sect][param_name]
             service_params['scheduler'][param_name] = value
+
         elif param_key.startswith(ETCD_TAG):
             param_name = param_key.split(DEFAULT_TAG)[1]
+            for sect in etcd_schema.keys():
+                if param_name in etcd_schema[sect].keys():
+                    param_name = etcd_schema[sect][param_name]
             service_params['etcd'][param_name] = value
+
         elif param_key.startswith(CONFIG_TAG):
             param_name = param_key.split(CONFIG_TAG)[1]
             service_params['config'][param_name] = value
+
         elif param_key.startswith(KUBELET_TAG):
             param_name = param_key.split(KUBELET_TAG)[1]
             service_params['kubelet'][param_name] = value
@@ -627,17 +649,15 @@ def main():
     # By default all not known params will be placed in section 'extraArgs'
     for param, value in service_params['apiServer'].items():
         if param in apiserver_schema['root'].keys():
-            param = apiserver_schema['root'].get(param, param)
             cluster_cfg['apiServer'][param] = value
 
         else:
             if 'extraArgs' not in cluster_cfg['apiServer'].keys():
                 cluster_cfg['apiServer']['extraArgs'] = {}
-            if param in ('admission_plugins', 'enable-admission-plugins'):
-                param, value = _validate_admission_plugins(value)
+            if param == 'enable-admission-plugins':
+                value = _validate_admission_plugins(value)
                 cluster_cfg['apiServer']['extraArgs'][param] = value
             else:
-                param = apiserver_schema['extraArgs'].get(param, param)
                 cluster_cfg['apiServer']['extraArgs'][param] = value
 
     # remove all parameters not present in service-parameter.
@@ -682,24 +702,20 @@ def main():
     # Update etcd section ---------------------------------------------------------
     for param, value in service_params['etcd'].items():
         # Prioritize user-defined arguments, otherwise, the values are taken from hieradata.
-        value = etcd_cafile if param in 'etcd_cafile' else value
-        value = etcd_certfile if param in 'etcd_certfile' else value
-        value = etcd_keyfile if param in 'etcd_keyfile' else value
-        value = etcd_servers if param in 'etcd_servers' else value
+        value = etcd_cafile if param == 'caFile' and etcd_cafile else value
+        value = etcd_certfile if param == 'certFile' and etcd_certfile else value
+        value = etcd_keyfile if param == 'keyFile' and etcd_keyfile else value
+        value = etcd_servers if param == 'endpoints' and etcd_servers else value
 
         # By default all not known params will be place in section 'external'
         if param in etcd_schema['root'].keys():
-            param = etcd_schema['root'].get(param, param)
             cluster_cfg['etcd'][param] = value
         else:
             # params saved like list (value should be separated by comma)
-            if param in ['etcd_servers']:
-                param = etcd_schema['external'].get(param, param)
-                cluster_cfg['etcd']['external'][param] =\
-                    value.split(',')
+            if param == 'endpoints':
+                cluster_cfg['etcd']['external'][param] = value.split(',')
             # by default params are saved like strings
             else:
-                param = etcd_schema['external'].get(param, param)
                 cluster_cfg['etcd']['external'][param] = value
 
     # -----------------------------------------------------------------------------
