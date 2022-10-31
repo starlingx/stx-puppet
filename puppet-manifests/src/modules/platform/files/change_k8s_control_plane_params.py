@@ -267,7 +267,7 @@ def pre_k8s_updating_tasks(post_tasks=None):
 
         if advertise_address and default_network_interface \
            and advertise_address != default_network_interface:
-            cmd = ["sed", "-i", "s/{}/{}/g".format(default_network_interface, advertise_address),
+            cmd = ["sed", "-i", "/oidc-issuer-url/! s/{}/{}/g".format(default_network_interface, advertise_address),
                    KUBE_APISERVER_CONFIG]
             _ = _exec_cmd(cmd)
 
