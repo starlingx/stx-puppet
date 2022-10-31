@@ -120,7 +120,6 @@ define nic_clock_handler (
       command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
         echo ${wpc_commands[$parm][$value]}",
       provider => shell,
-      onlyif   => "grep 000[e-f] /sys/class/net/${base_port}/device/subsystem_device",
       require  => [ Exec["${ifname}_heading"], Exec["${ifname}_${base_port}_heading"] ]
     }
     -> exec { "${ifname}_${parm}_to_file":
@@ -140,33 +139,27 @@ define nic_clock_reset (
     command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
       echo 0 1 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL1",
     provider => shell,
-    onlyif   => "grep 000[e-f] /sys/class/net/${base_port}/device/subsystem_device"
   }
   exec { "${ifname}_clear_UFL2":
     command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
       echo 0 2 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2",
     provider => shell,
-    onlyif   => "grep 000[e-f] /sys/class/net/${base_port}/device/subsystem_device"
   }
   exec { "${ifname}_clear_SMA1":
     command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
       echo 0 1 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1",
     provider => shell,
-    onlyif   => "grep 000[e-f] /sys/class/net/${base_port}/device/subsystem_device"
   }
   exec { "${ifname}_clear_SMA2":
     command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
       echo 0 2 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2",
     provider => shell,
-    onlyif   => "grep 000[e-f] /sys/class/net/${base_port}/device/subsystem_device"
   }
   exec { "${ifname}_clear_rclka":
     command => "echo 0 0 > /sys/class/net/${name}/device/phy/synce",
-    onlyif  => "grep 000[e-f] /sys/class/net/${name}/device/subsystem_device"
   }
   exec { "${ifname}_clear_rclkb":
     command => "echo 0 1 > /sys/class/net/${name}/device/phy/synce",
-    onlyif  => "grep 000[e-f] /sys/class/net/${name}/device/subsystem_device"
   }
 }
 
