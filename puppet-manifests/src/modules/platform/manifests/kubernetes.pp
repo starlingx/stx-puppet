@@ -357,9 +357,16 @@ class platform::kubernetes::master::init
       source => "puppet:///modules/${module_name}/kubeconfig.sh"
     }
 
-    # Remove the taint from AIO master nodes
-    -> exec { 'remove taint from master node':
+    # Remove the "master" taint from AIO master nodes. (Can be removed once the "control-plane" taint is the default.)
+    -> exec { 'remove master taint from master node':
       command   => "kubectl --kubeconfig=/etc/kubernetes/admin.conf taint node ${::platform::params::hostname} node-role.kubernetes.io/master- || true", # lint:ignore:140chars
+      logoutput => true,
+      onlyif    => "test '${::platform::params::system_type }' == 'All-in-one'",
+    }
+
+    # Remove the "control-plane" taint from AIO control-plane nodes
+    -> exec { 'remove control-plane taint from control-plane node':
+      command   => "kubectl --kubeconfig=/etc/kubernetes/admin.conf taint node ${::platform::params::hostname} node-role.kubernetes.io/control-plane- || true", # lint:ignore:140chars
       logoutput => true,
       onlyif    => "test '${::platform::params::system_type }' == 'All-in-one'",
     }
@@ -581,9 +588,9 @@ class platform::kubernetes::gate {
 }
 
 class platform::kubernetes::coredns::duplex {
-  # For duplex and multi-node system, restrict the dns pod to master nodes
-  exec { 'restrict coredns to master nodes':
-    command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch deployment coredns -p \'{"spec":{"template":{"spec":{"nodeSelector":{"node-role.kubernetes.io/master":""}}}}}\'', # lint:ignore:140chars
+  # For duplex and multi-node system, restrict the dns pod to control-plane nodes
+  exec { 'restrict coredns to control-plane nodes':
+    command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch deployment coredns -p \'{"spec":{"template":{"spec":{"nodeSelector":{"node-role.kubernetes.io/control-plane":""}}}}}\'', # lint:ignore:140chars
     logoutput => true,
   }
 
@@ -724,9 +731,9 @@ class platform::kubernetes::upgrade_first_control_plane
   }
 
   if $::platform::params::system_mode != 'simplex' {
-    # For duplex and multi-node system, restrict the coredns pod to master nodes
-    exec { 'restrict coredns to master nodes':
-      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch deployment coredns -p \'{"spec":{"template":{"spec":{"nodeSelector":{"node-role.kubernetes.io/master":""}}}}}\'', # lint:ignore:140chars
+    # For duplex and multi-node system, restrict the coredns pod to control-plane nodes
+    exec { 'restrict coredns to control-plane nodes':
+      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch deployment coredns -p \'{"spec":{"template":{"spec":{"nodeSelector":{"node-role.kubernetes.io/control-plane":""}}}}}\'', # lint:ignore:140chars
       logoutput => true,
       require   => Exec['upgrade first control plane']
     }
