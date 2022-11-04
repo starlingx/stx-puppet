@@ -725,7 +725,7 @@ class platform::kubernetes::upgrade_first_control_plane
 
   # The --allow-*-upgrades options allow us to upgrade to any k8s release if necessary
   exec { 'upgrade first control plane':
-    command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf upgrade apply ${version} --config /etc/kubernetes/kubelet_override.yaml --allow-experimental-upgrades --allow-release-candidate-upgrades -y", # lint:ignore:140chars
+    command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf upgrade apply ${version} --allow-experimental-upgrades --allow-release-candidate-upgrades -y", # lint:ignore:140chars
     logoutput => true,
     require   => Exec['update kubeadm-config']
   }
@@ -757,9 +757,9 @@ class platform::kubernetes::upgrade_control_plane
   # Update kubeadm bindmount if needed.
   require platform::kubernetes::bindmounts
 
-  # control plane is only upgraded on a controller (which has admin.conf)
+  # control plane is only upgraded on a controller
   exec { 'upgrade control plane':
-    command   => 'kubeadm --kubeconfig=/etc/kubernetes/admin.conf upgrade node',
+    command   => 'kubeadm upgrade node',
     logoutput => true,
   }
 }
