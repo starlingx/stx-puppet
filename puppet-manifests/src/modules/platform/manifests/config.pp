@@ -201,6 +201,26 @@ class platform::config::hostname {
   }
 }
 
+class platform::config::apparmor {
+  include ::platform::params
+
+  if $::osfamily == 'Debian' {
+    if $::platform::params::apparmor == 'enabled' {
+        exec { 'set-apparmor':
+          command => '/usr/bin/sed -i "s/apparmor=0/apparmor=1/" /boot/1/kernel.env',
+        }
+    } else {
+        exec { 'remove-apparmor':
+          command => '/usr/bin/sed -i "s/apparmor=1/apparmor=0/" /boot/1/kernel.env',
+        }
+    }
+  }
+}
+
+class platform::config::apparmor::runtime {
+  include ::platform::config::apparmor
+}
+
 
 class platform::config::hosts
   inherits ::platform::config::params {
@@ -401,6 +421,7 @@ class platform::config::pre {
     gid    => '99',
   }
 
+  include ::platform::config::apparmor
   include ::platform::config::timezone
   include ::platform::config::hostname
   include ::platform::config::hosts
