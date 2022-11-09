@@ -3,7 +3,10 @@ define platform::worker::storage::wipe_new_pv {
   $cmd = join(['/sbin/pvs --nosuffix --noheadings ',$name,' 2>/dev/null | grep nova-local || true'])
   $result = generate('/bin/sh', '-c', $cmd)
   if $result !~ /nova-local/ {
-    exec { "Wipe New PV not in VG - ${name}":
+    exec { 'vgchange -an nova-local':
+      command  => 'vgchange -an nova-local || true'
+    }
+    -> exec { "Wipe New PV not in VG - ${name}":
       provider => shell,
       command  => "wipefs -a ${name}",
       before   => Lvm::Volume[instances_lv],
