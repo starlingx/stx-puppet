@@ -236,7 +236,15 @@ class platform::config::hosts
     },
   }
 
-  $merged_hosts = merge($localhost, $hosts)
+  # it will replace previous aliases of controller
+  $nfs_alias_controller = {
+    'controller' => {
+      host_aliases => ['registry.local','controller-platform-nfs']
+    },
+  }
+
+  $hosts_with_alias = deep_merge($hosts, $nfs_alias_controller)
+  $merged_hosts = merge($localhost, $hosts_with_alias)
   create_resources('host', $merged_hosts, {})
 }
 
