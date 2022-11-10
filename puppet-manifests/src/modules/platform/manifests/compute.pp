@@ -78,7 +78,11 @@ class platform::compute::grub::params (
   }
   $updated_audit = "audit=${g_audit}"
 
-  $multi_drivers_switch = "multi-drivers-switch=${g_intel_nic_driver_version}"
+  if ! empty($g_intel_nic_driver_version) {
+    $multi_drivers_switch = "multi-drivers-switch=${g_intel_nic_driver_version}"
+  } else {
+    $multi_drivers_switch = ''
+  }
 
   $grub_updates = strip(
     # lint:ignore:140chars
