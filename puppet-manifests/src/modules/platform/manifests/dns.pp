@@ -1,11 +1,11 @@
 class platform::dns::dnsmasq::params (
   $efi_bootloader = $::osfamily ? {
     'RedHat' => 'EFI/grubx64.efi',
-    default => 'EFI/BOOT/bootx64-nosig.efi'
+    default => 'EFI/BOOT/bootx64.efi'
   },
   $uefi_bootloader = $::osfamily ? {
     'RedHat' => 'EFI/shim.efi',
-    default => 'EFI/BOOT/bootx64-nosig.efi'
+    default => 'EFI/BOOT/bootx64.efi'
   }
 ) {}
 
