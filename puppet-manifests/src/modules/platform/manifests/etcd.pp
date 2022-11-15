@@ -23,16 +23,26 @@ class platform::etcd::params (
 # create an init.d script for SM to manage the service
 class platform::etcd::setup {
 
+  include ::platform::params
+
+  if $::platform::params::system_type == 'All-in-one' and
+    $::platform::params::distributed_cloud_role != 'systemcontroller' {
+    $etcd_max_procs = $::platform::params::eng_workers
+  } else {
+    $etcd_max_procs = '$(nproc)'
+  }
+
   file {'etcd_override_dir':
     ensure => directory,
     path   => '/etc/systemd/system/etcd.service.d',
     mode   => '0755',
   }
-  -> file {'etcd_override':
-    ensure => present,
-    path   => '/etc/systemd/system/etcd.service.d/etcd-override.conf',
-    mode   => '0644',
-    source => "puppet:///modules/${module_name}/etcd-override.conf"
+  -> file { '/etc/systemd/system/etcd.service.d/etcd-override.conf':
+    ensure  => file,
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+    content => template('platform/etcd-override.conf.erb'),
   }
   -> file {'etcd_initd_script':
     ensure => 'present',
