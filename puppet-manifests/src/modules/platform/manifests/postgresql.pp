@@ -1,5 +1,69 @@
+class platform::postgresql::base::params {
+  include ::platform::params
+
+  if $::platform::params::system_type == 'All-in-one' and
+      $::platform::params::distributed_cloud_role != 'systemcontroller' {
+    # Scale down AIO
+    $autovacuum_max_workers = min($::platform::params::eng_workers, 5)
+    $max_worker_processes = min($::platform::params::eng_workers, 8)
+    $max_parallel_workers = min($::platform::params::eng_workers, 8)
+    $max_parallel_maintenance_workers = min($::platform::params::eng_workers, 2)
+    $max_parallel_workers_per_gather = min($::platform::params::eng_workers, 2)
+  } else {
+    # Make autovacuum more aggressive
+    $autovacuum_max_workers = 5
+    # Default values
+    $max_worker_processes = 8
+    $max_parallel_workers = 8
+    $max_parallel_maintenance_workers = 2
+    $max_parallel_workers_per_gather = 2
+  }
+}
+
+class platform::postgresql::custom::params (
+    $autovacuum_max_workers           = undef,
+    $max_worker_processes             = undef,
+    $max_parallel_workers             = undef,
+    $max_parallel_maintenance_workers = undef,
+    $max_parallel_workers_per_gather  = undef
+) {}
+
 class platform::postgresql::params
   inherits ::platform::params {
+
+  include ::platform::postgresql::base::params
+  include ::platform::postgresql::custom::params
+
+  if $::platform::postgresql::custom::params::autovacuum_max_workers {
+    $autovacuum_max_workers = $::platform::postgresql::custom::params::autovacuum_max_workers
+  }
+  else {
+    $autovacuum_max_workers = $::platform::postgresql::base::params::autovacuum_max_workers
+  }
+  if $::platform::postgresql::custom::params::max_worker_processes {
+    $max_worker_processes = $::platform::postgresql::custom::params::max_worker_processes
+  }
+  else {
+    $max_worker_processes = $::platform::postgresql::base::params::max_worker_processes
+  }
+  if $::platform::postgresql::custom::params::max_parallel_workers {
+    $max_parallel_workers = $::platform::postgresql::custom::params::max_parallel_workers
+  }
+  else {
+    $max_parallel_workers = $::platform::postgresql::base::params::max_parallel_workers
+  }
+  if $::platform::postgresql::custom::params::max_parallel_maintenance_workers {
+    $max_parallel_maintenance_workers = $::platform::postgresql::custom::params::max_parallel_maintenance_workers
+  }
+  else {
+    $max_parallel_maintenance_workers = $::platform::postgresql::base::params::max_parallel_maintenance_workers
+  }
+  if $::platform::postgresql::custom::params::max_parallel_workers_per_gather {
+    $max_parallel_workers_per_gather = $::platform::postgresql::custom::params::max_parallel_workers_per_gather
+  }
+  else {
+    $max_parallel_workers_per_gather = $::platform::postgresql::base::params::max_parallel_workers_per_gather
+  }
 
   $root_dir = '/var/lib/postgresql'
   $config_dir = $::osfamily ? {
@@ -38,9 +102,27 @@ class platform::postgresql::server
   postgresql::server::config_entry { 'log_autovacuum_min_duration':
     value => '100',
   }
-  # Make autovacuum more aggressive
+  # Set autovacuum max workers
   postgresql::server::config_entry { 'autovacuum_max_workers':
-    value => '5',
+    value => $autovacuum_max_workers,
+  }
+  if $::osfamily == 'Debian' {
+    # Set max worker processes
+    postgresql::server::config_entry { 'max_worker_processes':
+      value => $max_worker_processes,
+    }
+    # Set max parallel workers
+    postgresql::server::config_entry { 'max_parallel_workers':
+      value => $max_parallel_workers,
+    }
+    # Set max parallel maintenance workers
+    postgresql::server::config_entry { 'max_parallel_maintenance_workers':
+      value => $max_parallel_maintenance_workers,
+    }
+    # Set max parallel workers per gather
+    postgresql::server::config_entry { 'max_parallel_workers_per_gather':
+      value => $max_parallel_workers_per_gather,
+    }
   }
   postgresql::server::config_entry { 'autovacuum_vacuum_scale_factor':
     value => '0.05',
@@ -303,3 +385,10 @@ class platform::postgresql::sc::runtime
   }
 }
 
+class platform::postgresql::runtime
+  inherits ::platform::postgresql::params {
+
+  class {'platform::postgresql::server':
+    stage => post
+  }
+}
