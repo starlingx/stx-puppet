@@ -8,9 +8,11 @@ class platform::ntp (
   case $::osfamily {
     'RedHat': {
       $ntp_service_name = 'ntpd'
+      $ntp_pmon_conf_template = 'platform/ntp.pmon.conf.erb'
     }
     'Debian': {
       $ntp_service_name = 'ntp'
+      $ntp_pmon_conf_template = 'platform/ntp_debian.pmon.conf.erb'
     }
     default: {
       fail("unsuported osfamily ${::osfamily}, currently Debian and Redhat are the only supported platforms")
@@ -29,7 +31,7 @@ class platform::ntp (
     ensure  => file,
     path    => '/etc/ntp.pmon.conf',
     mode    => '0644',
-    content => template('platform/ntp.pmon.conf.erb'),
+    content => template($ntp_pmon_conf_template),
   }
   -> exec { 'systemd-daemon-reload':
     command => '/usr/bin/systemctl daemon-reload',
