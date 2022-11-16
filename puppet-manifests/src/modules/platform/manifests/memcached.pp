@@ -14,6 +14,13 @@ class platform::memcached::params(
   $controller_1_hostname = $::platform::params::controller_1_hostname
   $system_mode           = $::platform::params::system_mode
 
+  if $::platform::params::system_type == 'All-in-one' and
+    $::platform::params::distributed_cloud_role != 'systemcontroller' {
+    $processorcount = $::platform::params::eng_workers
+  } else {
+    $processorcount = $::processorcount
+  }
+
   if $system_mode == 'simplex' {
     $listen_ip = $::platform::network::mgmt::params::controller0_address
   } else {
@@ -48,6 +55,7 @@ class platform::memcached
     max_connections => $max_connections,
     max_memory      => $max_memory,
     service_restart => $service_restart,
+    processorcount  => $processorcount
   }
 
   -> exec { 'systemctl enable memcached.service':
