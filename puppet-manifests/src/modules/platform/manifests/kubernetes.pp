@@ -571,8 +571,22 @@ class platform::kubernetes::worker
 class platform::kubernetes::aio
   inherits ::platform::kubernetes::params {
 
+  include ::platform::params
   include ::platform::kubernetes::master
   include ::platform::kubernetes::worker
+
+  if $::platform::params::distributed_cloud_role != 'systemcontroller' {
+    $kubelet_max_procs = $::platform::params::eng_workers
+
+    # Set kubelet GOMAXPROCS environment variable
+    file { '/etc/systemd/system/kubelet.service.d/kubelet-max-procs.conf':
+      ensure  => file,
+      content => template('platform/kubelet-max-procs.conf.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0644',
+    }
+  }
 
   Class['::platform::kubernetes::master']
   -> Class['::platform::kubernetes::worker']
