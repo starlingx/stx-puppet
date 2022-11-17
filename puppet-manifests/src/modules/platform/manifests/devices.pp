@@ -83,6 +83,13 @@ define platform::devices::sriov_bind (
       Exec["sriov-enable-device: ${title}"]
       -> Class['platform::devices::acc100::config']
     }
+    if ($device_id != undef) and ($device_id == '57c0') {
+      class { platform::devices::acc200::config :
+        num_vf_bundles => $num_vfs
+      }
+      Exec["sriov-enable-device: ${title}"]
+      -> Class['platform::devices::acc200::config']
+    }
     if ($driver == 'vfio-pci') {
       exec { "Load vfio-pci driver with sriov enabled: ${title}":
         command   => 'modprobe vfio-pci enable_sriov=1 disable_idle_d3=1',
@@ -204,6 +211,27 @@ class platform::devices::acc100::config (
     }
     -> exec { "Configure ACC100 device with ${num_vf_bundles} VF bundles":
         command   => template('platform/acc100-config.erb'),
+        logoutput => true,
+    }
+  }
+}
+
+class platform::devices::acc200::fec (
+  $enabled = true
+) {}
+
+class platform::devices::acc200::config (
+  $num_vf_bundles
+) inherits ::platform::devices::acc200::fec {
+  if $enabled {
+    file { [ '/etc/pf-bb-config/', '/etc/pf-bb-config/acc200' ]:
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => '0640',
+    }
+    -> exec { "Configure ACC200 device with ${num_vf_bundles} VF bundles":
+        command   => template('platform/acc200-config.erb'),
         logoutput => true,
     }
   }
