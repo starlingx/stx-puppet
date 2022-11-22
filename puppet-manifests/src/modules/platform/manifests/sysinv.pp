@@ -95,7 +95,7 @@ class platform::sysinv::haproxy
     platform::haproxy::proxy { 'sysinv-restapi-admin':
       https_ep_type     => 'admin',
       server_name       => 's-sysinv',
-      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_ip_address => $::platform::haproxy::params::private_dc_ip_address,
       public_port       => $api_port + 1,
       private_port      => $api_port,
       server_timeout    => $server_timeout,

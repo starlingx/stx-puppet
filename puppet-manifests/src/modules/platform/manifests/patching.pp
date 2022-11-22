@@ -70,7 +70,7 @@ class platform::patching::haproxy
     platform::haproxy::proxy { 'patching-restapi-admin':
       https_ep_type     => 'admin',
       server_name       => 's-patching',
-      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_ip_address => $::platform::haproxy::params::private_dc_ip_address,
       public_port       => $private_port + 1,
       private_port      => $private_port,
       server_timeout    => $server_timeout,
