@@ -781,25 +781,53 @@ class platform::kubernetes::upgrade_control_plane
 class platform::kubernetes::master::upgrade_kubelet
   inherits ::platform::kubernetes::params {
 
-  # Update kubeadm/kubelet bindmounts if needed.
-  include platform::kubernetes::bindmounts
-
-  # Tell pmon to stop kubelet so it doesn't try to restart it
-  exec { 'stop kubelet':
-      command => '/usr/local/sbin/pmon-stop kubelet'
-  }
+  $kubelet_version = $::platform::kubernetes::params::kubelet_version
   # Mask restarting kubelet and stop it now so that we can unmount
   # and re-mount the bind mount.
-  -> exec { 'mask kubelet':
-      command => '/usr/bin/systemctl mask --now kubelet',
-      before  => Mount['/usr/local/kubernetes/current/stage2'],
+  exec { 'mask kubelet for master upgrade':
+      command => '/usr/bin/systemctl mask --runtime --now kubelet',
   }
+  # Tell pmon to stop kubelet so it doesn't try to restart it
+  -> exec { 'stop kubelet for master upgrade':
+      command => '/usr/local/sbin/pmon-stop kubelet',
+  }
+
+  # The next three steps are a hack.  While stress-testing in the lab it
+  # was discovered that intermittently the attempt to remount the
+  # "stage2" mountpoint fails due to it being busy.  Waiting for kubelet
+  # to exit is not sufficient, as occasionally the remount attempt
+  # happens while kubectl is running.  The best solution found so far
+  # is to retry the unmount repeatedly until it succeeds, and then
+  # explicitly update the /etc/fstab file and mount the filesystem
+  # again.
+  # The worst case seen so far is a 16-second delay before the unmount
+  # actually succeeds.  In the future we should probably switch to using
+  # symlinks instead of bindmounts so that they can be changed
+  # atomically.
+
+  # Try unmounting stage2 until it succeeds
+  -> exec { 'unmount k8s stage2 for master upgrade':
+      command   => '/usr/bin/umount /usr/local/kubernetes/current/stage2',
+      tries     => 30,
+      try_sleep => 1,
+      timeout   => 10,
+  }
+  -> exec { 'update fstab for master upgrade':
+      command => "/usr/bin/sed -i \"s#/usr/local/kubernetes/[0-9]\.[0-9]\+\.[0-9]\+/stage2#/usr/local/kubernetes/${kubelet_version}/stage2#\" /etc/fstab", # lint:ignore:140chars
+  }
+  # Remount k8s stage2 so that the puppet mount class works
+  -> exec { 'mount k8s stage2 for master upgrade':
+      command   => '/usr/bin/mount /usr/local/kubernetes/current/stage2',
+      tries     => 30,
+      try_sleep => 1,
+      timeout   => 10,
+  }
+
   # Unmask and restart kubelet after the bind mount is updated.
-  -> exec { 'unmask kubelet':
-      command => '/usr/bin/systemctl unmask kubelet',
-      require => Mount['/usr/local/kubernetes/current/stage2'],
+  -> exec { 'unmask kubelet for master upgrade':
+      command => '/usr/bin/systemctl unmask --runtime kubelet',
   }
-  -> exec { 'restart kubelet':
+  -> exec { 'restart kubelet for master upgrade':
       command => '/usr/local/sbin/pmon-start kubelet'
   }
 }
@@ -808,9 +836,6 @@ class platform::kubernetes::worker::upgrade_kubelet
   inherits ::platform::kubernetes::params {
 
   include ::platform::dockerdistribution::params
-
-  # Update kubeadm/kubelet bindmounts if needed.
-  include platform::kubernetes::bindmounts
 
   # workers use kubelet.conf rather than admin.conf
   $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
@@ -823,27 +848,57 @@ class platform::kubernetes::worker::upgrade_kubelet
     before    => Exec['upgrade kubelet'],
   }
 
-  exec { 'upgrade kubelet':
+  exec { 'upgrade kubelet for worker':
     command   => 'kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf upgrade node',
     logoutput => true,
   }
 
-  # Tell pmon to stop kubelet so it doesn't try to restart it
-  -> exec { 'stop kubelet':
-      command => '/usr/local/sbin/pmon-stop kubelet'
-  }
+  $kubelet_version = $::platform::kubernetes::params::kubelet_version
   # Mask restarting kubelet and stop it now so that we can unmount
   # and re-mount the bind mount.
-  -> exec { 'mask kubelet':
-      command => '/usr/bin/systemctl mask --now kubelet',
-      before  => Mount['/usr/local/kubernetes/current/stage2'],
+  -> exec { 'mask kubelet for worker upgrade':
+      command => '/usr/bin/systemctl mask --runtime --now kubelet',
+  }
+  # Tell pmon to stop kubelet so it doesn't try to restart it
+  -> exec { 'stop kubelet for worker upgrade':
+      command => '/usr/local/sbin/pmon-stop kubelet',
+  }
+
+  # The next three steps are a hack.  While stress-testing in the lab it
+  # was discovered that intermittently the attempt to remount the
+  # "stage2" mountpoint fails due to it being busy.  Waiting for kubelet
+  # to exit is not sufficient, as occasionally the remount attempt
+  # happens while kubectl is running.  The best solution found so far
+  # is to retry the unmount repeatedly until it succeeds, and then
+  # explicitly update the /etc/fstab file and mount the filesystem
+  # again.
+  # The worst case seen so far is a 16-second delay before the unmount
+  # actually succeeds.  In the future we should probably switch to using
+  # symlinks instead of bindmounts so that they can be changed
+  # atomically.
+
+  # Try unmounting stage2 until it succeeds
+  -> exec { 'unmount k8s stage2 for worker upgrade':
+      command   => '/usr/bin/umount /usr/local/kubernetes/current/stage2',
+      tries     => 30,
+      try_sleep => 1,
+      timeout   => 10,
+  }
+  -> exec { 'update fstab for worker upgrade':
+      command => "/usr/bin/sed -i \"s#/usr/local/kubernetes/[0-9]\.[0-9]\+\.[0-9]\+/stage2#/usr/local/kubernetes/${kubelet_version}/stage2#\" /etc/fstab", # lint:ignore:140chars
+  }
+  # Remount k8s stage2 so that the puppet mount class works
+  -> exec { 'mount k8s stage2 for worker upgrade':
+      command   => '/usr/bin/mount /usr/local/kubernetes/current/stage2',
+      tries     => 30,
+      try_sleep => 1,
+      timeout   => 10,
   }
   # Unmask and restart kubelet after the bind mount is updated.
-  -> exec { 'unmask kubelet':
-      command => '/usr/bin/systemctl unmask kubelet',
-      require => Mount['/usr/local/kubernetes/current/stage2'],
+  -> exec { 'unmask kubelet for worker upgrade':
+      command => '/usr/bin/systemctl unmask --runtime kubelet',
   }
-  -> exec { 'restart kubelet':
+  -> exec { 'restart kubelet for worker upgrade':
       command => '/usr/local/sbin/pmon-restart kubelet'
   }
 }
