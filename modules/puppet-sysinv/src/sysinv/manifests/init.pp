@@ -74,7 +74,7 @@ class sysinv (
                                     kubernetes_local_secrets => 86400,
                                     deferred_runtime_config => 60,
                                     controller_config_active_apply => 60,
-                                    upgrade_status => 60,
+                                    upgrade_status => 180,
                                     install_states => 60,
                                     kubernetes_labels => 180,
                                     image_conversion => 60,
