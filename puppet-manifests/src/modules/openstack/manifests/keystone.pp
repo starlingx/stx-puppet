@@ -675,43 +675,6 @@ class openstack::keystone::nfv::password::runtime {
   platform::sm::restart {'vim': }
 }
 
-class openstack::keystone::dcmanager::password::runtime {
-
-  include ::platform::sysinv
-  include ::sysinv::certmon
-
-  if $::platform::params::distributed_cloud_role == 'systemcontroller' {
-
-    class { '::dcmanager::api':
-      sync_db => str2bool($::is_standalone_controller),
-    }
-
-    class { '::dcorch::api_proxy':
-      sync_db => str2bool($::is_standalone_controller),
-    }
-
-    platform::sm::restart {'dcorch-engine': }
-    platform::sm::restart {'dcmanager-manager': }
-    platform::sm::restart {'dcmanager-api': }
-    platform::sm::restart {'dcmanager-audit':}
-
-    # update dcmanager pw in cert-mon
-    exec {'wait-for-dcmanager-manager':
-      command   => '[ $(sm-query service dcmanager-manager | grep -c ".*enabled-active.*") -eq 1 ]',
-      tries     => 15,
-      try_sleep => 1,
-    }
-    -> exec {'wait-for-dcmanager-api':
-      command   => '[ $(sm-query service dcmanager-api | grep -c ".*enabled-active.*") -eq 1 ]',
-      tries     => 15,
-      try_sleep => 1,
-    }
-    -> platform::sm::restart {'cert-mon': }
-  } else {
-    platform::sm::restart {'cert-mon': }
-  }
-}
-
 class openstack::keystone::sysinv::password::runtime {
   include ::sysinv::api
   include ::platform::sysinv
