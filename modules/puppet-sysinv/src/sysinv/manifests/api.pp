@@ -369,3 +369,18 @@ class sysinv::api (
   }
 
 }
+
+class sysinv::api::keystone::password (
+  $keystone_enabled = true
+) {
+
+  if $keystone_enabled {
+    sysinv_config {
+      'keystone_authtoken/password': value => lookup('sysinv::api::keystone_password'), secret => true;
+    }
+
+    sysinv_api_paste_ini {
+      'filter:authtoken/password': value => lookup('sysinv::api::keystone_password'), secret => true;
+    }
+  }
+}

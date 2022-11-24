@@ -676,8 +676,7 @@ class openstack::keystone::nfv::password::runtime {
 }
 
 class openstack::keystone::sysinv::password::runtime {
-  include ::sysinv::api
-  include ::platform::sysinv
-  include ::sysinv::certmon
-  include ::sysinv::certalarm
+  include ::sysinv::api::keystone::password
+  include ::sysinv::certmon::keystone::password
+  include ::sysinv::certalarm::keystone::password
 }
