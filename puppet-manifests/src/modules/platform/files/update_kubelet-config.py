@@ -19,6 +19,17 @@ args = parser.parse_args()
 
 configmap_file = args.configmap_file
 
+# The following are kubernetes evictionHard default settings, see reference:
+# kubernetes/pkg/kubelet/apis/config/v1beta1/defaults_linux.go .
+# All four parameters require explicit definition if we want to modify a
+# subset of the values.
+evictionHard_default = {
+    'memory.available': '100Mi',
+    'nodefs.available': '10%',
+    'nodefs.inodesFree': '5%',
+    'imagefs.available': '15%'
+}
+
 with open(configmap_file, 'r') as dest:
     configmap = yaml.load(dest, Loader=yaml.RoundTripLoader)
 
@@ -30,7 +41,7 @@ with open(configmap_file, 'r') as dest:
     # Update imageGC parameters
     kubelet_config['imageGCLowThresholdPercent'] = args.image_gc_low_threshold_percent
     kubelet_config['imageGCHighThresholdPercent'] = args.image_gc_high_threshold_percent
-    kubelet_config.setdefault('evictionHard', {})
+    kubelet_config['evictionHard'] = evictionHard_default
     kubelet_config['evictionHard']['imagefs.available'] = args.eviction_hard_imagefs_available
 
     kubelet_config_string = yaml.dump(kubelet_config, Dumper=yaml.RoundTripDumper,
