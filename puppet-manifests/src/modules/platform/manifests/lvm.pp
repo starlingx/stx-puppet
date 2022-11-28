@@ -65,13 +65,6 @@ class platform::lvm::vg::cgts_vg(
   }
 }
 
-class platform::lvm::vg::cinder_volumes(
-  $vg_name = 'cinder-volumes',
-  $physical_volumes = [],
-) inherits platform::lvm::params {
-  # Let cinder manifests set up DRBD synced volume group
-}
-
 class platform::lvm::vg::nova_local(
   $vg_name = 'nova-local',
   $physical_volumes = [],
@@ -85,7 +78,6 @@ class platform::lvm::vg::nova_local(
 
 class platform::lvm::controller::vgs {
   include ::platform::lvm::vg::cgts_vg
-  include ::platform::lvm::vg::cinder_volumes
   include ::platform::lvm::vg::nova_local
 }
 

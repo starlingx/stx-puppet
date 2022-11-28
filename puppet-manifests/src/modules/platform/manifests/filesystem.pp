@@ -31,11 +31,7 @@ define platform::filesystem (
   }
 
   if ($ensure == 'absent') {
-    exec { "umount mountpoint ${mountpoint}":
-      command => "umount ${mountpoint}; true",
-      onlyif  => "test -e ${mountpoint}",
-    }
-    -> mount { $name:
+    mount { $name:
       ensure  => $ensure,
       atboot  => 'yes',
       name    => $mountpoint,
@@ -47,16 +43,16 @@ define platform::filesystem (
       ensure => $ensure,
       force  => true,
     }
-    -> exec { "wipe start of device ${device}":
+    -> exec { "removing: wipe start of device ${device}":
       command => "dd if=/dev/zero of=${device} bs=512 count=34",
       onlyif  => "blkid ${device}",
     }
-    -> exec { "wipe end of device ${device}":
+    -> exec { "removing: wipe end of device ${device}":
       command => "dd if=/dev/zero of=${device} bs=512 seek=$(($(blockdev --getsz ${device}) - 34)) count=34",
       onlyif  => "blkid ${device}",
     }
     -> exec { "lvremove lv ${lv_name}":
-      command => "lvremove -f cgts-vg ${lv_name}; true",
+      command => "lvremove -f cgts-vg/${lv_name}; true",
       onlyif  => "test -e /dev/cgts-vg/${lv_name}"
     }
   }
@@ -79,11 +75,11 @@ define platform::filesystem (
     # Wipe 10MB at the beginning and at the end
     # of each LV in cgts-vg to prevent problems caused
     # by stale data on the disk
-    -> exec { "wipe start of device ${device}":
+    -> exec { "creating: wipe start of device ${device}":
       command => "dd if=/dev/zero of=${device} bs=1M count=10",
       onlyif  => "test ! -e /etc/platform/.${lv_name}"
     }
-    -> exec { "wipe end of device ${device}":
+    -> exec { "creating: wipe end of device ${device}":
       command => "dd if=/dev/zero of=${device} bs=1M seek=$(($(blockdev --getsz ${device})/2048 - 10)) count=10",
       onlyif  => "test ! -e /etc/platform/.${lv_name}"
     }
@@ -112,7 +108,7 @@ define platform::filesystem (
     # in fstab yet, as they will be added to it and mounted in the following
     # mount resource
     -> exec { "mount ${device}":
-      unless  => "mount | awk '{print \$3}' | grep -Fxq \$(realpath ${mountpoint})",
+      unless  => "mount | awk '{print \$3}' | grep -Fxq ${mountpoint}",
       command => "mount ${mountpoint} || true",
       path    => '/usr/bin',
     }
@@ -154,7 +150,7 @@ define platform::filesystem::resize(
   # After a partition extend, wipe 10MB at the end of the partition
   # to make sure that there is no leftover
   # type metadata from a previous install
-  -> exec { "wipe end of device ${device}":
+  -> exec { "resizing: wipe end of device ${device}":
     command => "dd if=/dev/zero of=${device} bs=1M seek=$(($(blockdev --getsz ${device})/2048 - 10)) count=10",
   }
   -> exec { "resize2fs ${devmapper}":
@@ -189,18 +185,6 @@ class platform::filesystem::backup
   }
 }
 
-class platform::filesystem::conversion::params (
-  $conversion_enabled = false,
-  $ensure = absent,
-  $lv_size = '1',
-  $lv_name = 'conversion-lv',
-  $mountpoint = '/opt/conversion',
-  $devmapper = '/dev/mapper/cgts--vg-conversion--lv',
-  $fs_type = 'ext4',
-  $fs_options = ' ',
-  $mode = '0750'
-) { }
-
 class platform::filesystem::scratch::params (
   $lv_size = '2',
   $lv_name = 'scratch-lv',
@@ -231,6 +215,18 @@ class platform::filesystem::scratch
   }
 }
 
+class platform::filesystem::conversion::params (
+  $conversion_enabled = false,
+  $ensure = absent,
+  $lv_size = '1',
+  $lv_name = 'conversion-lv',
+  $mountpoint = $::osfamily ? { 'Debian' => '/var/rootdirs/opt/conversion', default => '/opt/conversion' },
+  $devmapper = '/dev/mapper/cgts--vg-conversion--lv',
+  $fs_type = 'ext4',
+  $fs_options = ' ',
+  $mode = '0750'
+) { }
+
 class platform::filesystem::conversion
   inherits ::platform::filesystem::conversion::params {
 
@@ -239,6 +235,48 @@ class platform::filesystem::conversion
     $mode = '0777'
   }
   platform::filesystem { $lv_name:
+    ensure     => $ensure,
+    lv_name    => $lv_name,
+    lv_size    => $lv_size,
+    mountpoint => $mountpoint,
+    fs_type    => $fs_type,
+    fs_options => $fs_options,
+    mode       => $mode
+  }
+}
+
+class platform::filesystem::instances::mountpoint {
+  file { '/var/lib/nova':
+    ensure => 'directory',
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0755',
+  }
+}
+
+class platform::filesystem::instances::params (
+  $instances_enabled = false,
+  $ensure = absent,
+  $lv_size = '1',
+  $lv_name = 'instances-lv',
+  $mountpoint = '/var/lib/nova/instances',
+  $devmapper = '/dev/mapper/cgts--vg-instances--lv',
+  $fs_type = 'ext4',
+  $fs_options = ' ',
+  $mode = '0750',
+) { }
+
+class platform::filesystem::instances
+  inherits ::platform::filesystem::instances::params {
+  include ::platform::filesystem::instances::mountpoint
+
+  if $instances_enabled {
+    $ensure = present
+    $mode = '0777'
+  }
+
+  Class['::platform::filesystem::instances::mountpoint']
+  -> platform::filesystem { $lv_name:
     ensure     => $ensure,
     lv_name    => $lv_name,
     lv_size    => $lv_size,
@@ -309,6 +347,8 @@ class platform::filesystem::storage {
 
 class platform::filesystem::compute {
   if $::personality == 'worker' {
+    include ::platform::filesystem::instances
+
     # The default docker size for controller is 20G
     # other than 30G. To prevent the docker size to
     # be overrided to 30G for AIO, this is scoped to
@@ -319,7 +359,7 @@ class platform::filesystem::compute {
     }
     -> class {'platform::filesystem::docker' :
     }
-  }
+}
 
   Class['::platform::lvm::vg::cgts_vg'] -> Class[$name]
 }
@@ -328,6 +368,7 @@ class platform::filesystem::controller {
   include ::platform::filesystem::backup
   include ::platform::filesystem::scratch
   include ::platform::filesystem::conversion
+  include ::platform::filesystem::instances
   include ::platform::filesystem::docker
   include ::platform::filesystem::kubelet
   include ::platform::filesystem::log_bind
@@ -389,6 +430,31 @@ class platform::filesystem::conversion::runtime {
 
   if $conversion_enabled {
     Class['::platform::filesystem::conversion']
+    -> platform::filesystem::resize { $lv_name:
+      lv_name   => $lv_name,
+      lv_size   => $lv_size,
+      devmapper => $devmapper,
+    }
+  } else {
+    $mountpoint = $::platform::filesystem::conversion::params::mountpoint
+    exec { "umount ${lv_name} mountpoint ${mountpoint}":
+      command => "umount ${mountpoint}; true",
+      onlyif  => "mountpoint -q ${mountpoint}",
+    } -> Mount[$lv_name]
+  }
+}
+
+class platform::filesystem::instances::runtime {
+  include ::platform::filesystem::instances
+  include ::platform::filesystem::instances::params
+
+  $instances_enabled = $::platform::filesystem::instances::params::instances_enabled
+  $lv_name = $::platform::filesystem::instances::params::lv_name
+  $lv_size = $::platform::filesystem::instances::params::lv_size
+  $devmapper = $::platform::filesystem::instances::params::devmapper
+
+  if $instances_enabled {
+    Class['::platform::filesystem::instances']
     -> platform::filesystem::resize { $lv_name:
       lv_name   => $lv_name,
       lv_size   => $lv_size,
