@@ -357,6 +357,12 @@ class platform::config::certs::ssl_ca
     subscribe   => File[$ssl_ca_file],
     refreshonly => true
   }
+
+  -> exec { 'restart sssd service on cert install/uninstall':
+    command => '/usr/bin/systemctl restart sssd.service',
+    onlyif  => "test '${::osfamily }' == 'Debian'",
+  }
+
   if str2bool($::is_controller_active) {
     Exec['restart containerd']
     -> file { '/etc/platform/.ssl_ca_complete':
