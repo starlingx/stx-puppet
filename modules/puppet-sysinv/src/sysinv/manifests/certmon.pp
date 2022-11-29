@@ -131,3 +131,20 @@ class sysinv::certmon (
     }
   }
 }
+
+class sysinv::certmon::keystone::password (
+  $keystone_enabled = true
+) {
+
+  if $keystone_enabled {
+    certmon_config {
+      'keystone_authtoken/password': value => lookup('sysinv::certmon::local_keystone_password'), secret => true;
+    }
+
+    if $::platform::params::distributed_cloud_role == 'systemcontroller' {
+      certmon_config {
+        'endpoint_cache/password': value => lookup('sysinv::certmon::dc_keystone_password'), secret => true;
+      }
+    }
+  }
+}

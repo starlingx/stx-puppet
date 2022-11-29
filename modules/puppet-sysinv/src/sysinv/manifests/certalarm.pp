@@ -98,3 +98,14 @@ class sysinv::certalarm (
     }
   }
 }
+
+class sysinv::certalarm::keystone::password (
+  $keystone_enabled = true
+) {
+
+  if $keystone_enabled {
+    certalarm_config {
+      'keystone_authtoken/password': value => lookup('sysinv::certalarm::local_keystone_password'), secret => true;
+    }
+  }
+}
