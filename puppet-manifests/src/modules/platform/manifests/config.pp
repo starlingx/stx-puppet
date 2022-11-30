@@ -448,6 +448,7 @@ class platform::config::pre {
       $::personality == 'controller') {
     include ::platform::config::dc_root_ca
   }
+  include ::platform::coredump::k8s_token_handler::config
 }
 
 
