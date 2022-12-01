@@ -267,6 +267,7 @@ class platform::dockerdistribution::garbagecollect {
   $runtime_config = '/etc/docker-distribution/registry/runtime_config.yml'
   $readonly_config = '/etc/docker-distribution/registry/readonly_config.yml'
   $used_config = '/etc/docker-distribution/registry/config.yml'
+  $registry_cmd = $::osfamily ? { 'Debian' => 'docker-registry', default => 'registry' }
 
   exec { 'turn registry read only':
     command => "ln -fs ${readonly_config} ${used_config}",
@@ -279,7 +280,7 @@ class platform::dockerdistribution::garbagecollect {
   }
 
   -> exec { 'run garbage collect':
-    command => "/usr/bin/registry garbage-collect ${used_config}",
+    command => "/usr/bin/${registry_cmd} garbage-collect ${used_config}",
   }
 
   -> exec { 'turn registry back to read write':
