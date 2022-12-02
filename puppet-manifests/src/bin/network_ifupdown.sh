@@ -153,6 +153,8 @@ function parse_interface_stanzas {
                     done <<< ${puppet_data}
                     # remove the label from stanza
                     sed -i "s/${iface_name}/${base_iface_name}/" ${cfg_path}
+                    # Remove labelled iface from auto file
+                    sed -i "s/ ${iface_name}//" ${PUPPET_DIR}/auto
                     # use the merged stanza
                     mv ${cfg_path} ${cfg_path%:*}
                     sed -i "s/# HEADER/# HEADER: for inet6 handles ${iface_name}\n# HEADER/" ${cfg_path%:*}
