@@ -205,7 +205,9 @@ class platform::sysctl::storage {
   include ::platform::sysctl
 
   class { 'platform::sysctl::vm_min_free_kbytes':
-    minimum_kb => 262144
+    minimum_kb   => 262144,
+    per_every_gb => 16,
+    reserve_mb   => 256,
   }
 }
 
