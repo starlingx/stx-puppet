@@ -738,9 +738,17 @@ class platform::kubernetes::upgrade_first_control_plane
   }
 
   # The --allow-*-upgrades options allow us to upgrade to any k8s release if necessary
+  # The -v6 gives verbose debug output includes health, GET response, delay.
+  # Puppet captures no command output on timeout. Workaround:
+  # - use 'stdbuf' to flush line buffer for stdout and stderr
+  # - redirect stderr to stdout
+  # - use 'tee' so we write output to both stdout and file
+  # Since we hit default 300 second timeout under load (i.e., upgrade 250 subclouds
+  # in parallel), specify larger timeout.
   exec { 'upgrade first control plane':
-    command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf upgrade apply ${version} --allow-experimental-upgrades --allow-release-candidate-upgrades -y", # lint:ignore:140chars
+    command   => "stdbuf -oL -eL kubeadm -v6 --kubeconfig=/etc/kubernetes/admin.conf upgrade apply ${version} --allow-experimental-upgrades --allow-release-candidate-upgrades -y 2>&1 | tee /var/log/puppet/latest/kubeadm-upgrade-apply.log", # lint:ignore:140chars
     logoutput => true,
+    timeout   => 600,
     require   => Exec['update kubeadm-config']
   }
 
