@@ -49,8 +49,6 @@ class dcorch::keystone::auth (
   $patching_proxy_admin_url      = 'http://127.0.0.1:25491',
 
   $nfv_proxy_public_url          = 'http://127.0.0.1:4545',
-  $nfv_proxy_admin_url           = 'http://127.0.0.1:4545',
-  $nfv_proxy_internal_url        = 'http://127.0.0.1:4545',
 ) {
   if $::platform::params::distributed_cloud_role =='systemcontroller' {
     keystone::resource::service_identity { 'dcorch':
@@ -100,13 +98,11 @@ class dcorch::keystone::auth (
     }
 
     keystone_endpoint { "${region}/vim::nfv" :
-      ensure       =>  'present',
-      name         =>  'vim',
-      type         =>  'nfv',
-      region       =>  $region,
-      public_url   =>  $nfv_proxy_public_url,
-      admin_url    =>  $nfv_proxy_admin_url,
-      internal_url =>  $nfv_proxy_internal_url
+      ensure     =>  'present',
+      name       =>  'vim',
+      type       =>  'nfv',
+      region     =>  $region,
+      public_url =>  $nfv_proxy_public_url
     }
   }
 }
