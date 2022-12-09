@@ -49,8 +49,11 @@ class platform::worker::storage (
   $removing_pvs_str = join($removing_pvs,' ')
   $round_to_extent = false
 
-  # Ensure partitions update prior to local storage configuration
-  Class['::platform::partitions'] -> Class[$name]
+  # Ensure partitions update and filesystems update prior to local storage
+  # configuration
+  Class['::platform::partitions']
+  -> Class['::platform::filesystem::instances']
+  -> Class[$name]
 
   ::platform::worker::storage::wipe_new_pv { $adding_pvs: }
   ::platform::worker::storage::wipe_pv_and_format { $removing_pvs: }
@@ -60,9 +63,9 @@ class platform::worker::storage (
       line  => "    global_filter = ${lvm_update_filter}",
       match => '^[\s]*#? global_filter =',
   }
-  -> exec { 'umount /var/lib/nova/instances':
+  -> exec { 'umount /var/lib/nova/instances for nova-local':
     command => 'umount /var/lib/nova/instances; true',
-    onlyif  => 'test -e /var/lib/nova/instances',
+    onlyif  => 'findmnt -o SOURCE -n /var/lib/nova/instances | grep -q nova--local',
   }
   -> exec { 'umount /dev/nova-local/instances_lv':
     command => 'umount /dev/nova-local/instances_lv; true',
@@ -83,12 +86,6 @@ class platform::worker::storage (
   }
   if ! empty($::platform::lvm::vg::nova_local::physical_volumes) {
     File_line['disable_old_lvg_disks']
-    -> file { '/var/lib/nova':
-      ensure => 'directory',
-      owner  => 'root',
-      group  => 'root',
-      mode   => '0755',
-    }
     -> exec { 'add device mapper mapping':
       command => 'lvchange -ay /dev/nova-local/instances_lv || true',
     }
@@ -107,11 +104,9 @@ class platform::worker::storage (
       options => '-F -F',
       require => Logical_volume['instances_lv']
     }
-    -> file { '/var/lib/nova/instances':
-      ensure => 'directory',
-      owner  => 'root',
-      group  => 'root',
-      mode   => '0755',
+    -> exec { 'create nova instances mountpoint: /var/lib/nova/instances':
+      command => 'mkdir -p /var/lib/nova/instances',
+      onlyif  => 'test ! -d /var/lib/nova/instances',
     }
     -> exec { 'mount /dev/nova-local/instances_lv':
       unless  => 'mount | grep -q /var/lib/nova/instances',
