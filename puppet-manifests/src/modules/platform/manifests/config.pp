@@ -15,6 +15,7 @@ class platform::config
 
   include ::platform::params
   include ::platform::anchors
+  include ::platform::config::tmout
 
   stage { 'pre':
     before => Stage['main'],
@@ -569,4 +570,13 @@ class platform::config::bootstrap {
   include ::platform::anchors
   include ::platform::config::hostname
   include ::platform::config::hosts
+}
+
+class platform::config::tmout {
+  file_line { 'set TMOUT':
+    ensure => present,
+    path   => '/etc/profile.d/custom.sh',
+    line   => 'export TMOUT=900',
+    match  => 'export TMOUT',
+  }
 }
