@@ -947,35 +947,6 @@ class platform::kubernetes::master::change_apiserver_parameters (
   }
 }
 
-class platform::kubernetes::master::update_kubeadm_feature_gates (
-) inherits ::platform::kubernetes::params {
-
-  exec { 'update kubeadm feature-gates':
-    command   => '/usr/local/sbin/update-k8s-feature-gates.sh',
-    logoutput => true,
-    onlyif    => 'test -e /usr/local/sbin/update-k8s-feature-gates.sh'
-  }
-
-  # Wait for kube-apiserver to be up
-  # Uses a k8s API health endpoint for that: https://kubernetes.io/docs/reference/using-api/health-checks/
-  exec { 'wait_for_kube_api_server':
-    command   => '/usr/bin/curl -k -f -m 15 https://localhost:6443/readyz',
-    timeout   => 30,
-    tries     => 18,
-    try_sleep => 5,
-    require   => Exec['update kubeadm feature-gates'],
-  }
-  # Wait for kube-controller-manager to be up.
-  # The only container inside the kube-controller-manager-<hostname> pod is restarted when kube-controller-manager manifest is updated
-  exec { 'wait_for_kube_controller_manager':
-    command   => '/usr/bin/crictl ps | grep kube-controller-manager | grep -q Running',
-    timeout   => 30,
-    tries     => 6,
-    try_sleep => 5,
-    require   => Exec['update kubeadm feature-gates'],
-  }
-}
-
 class platform::kubernetes::certsans::runtime
   inherits ::platform::kubernetes::params {
   include ::platform::params
