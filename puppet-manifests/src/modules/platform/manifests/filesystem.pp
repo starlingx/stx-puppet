@@ -166,7 +166,7 @@ define platform::filesystem::resize(
 
 class platform::filesystem::backup::params (
   $lv_name = 'backup-lv',
-  $lv_size = '1',
+  $lv_size = lookup({'name'  => 'platform::filesystem::backup::restore::lv_size', 'merge' => 'hash', 'default_value' => '1'}),
   $mountpoint = $::osfamily ? { 'Debian' => '/var/rootdirs/opt/backups', default => '/opt/backups' },
   $devmapper = '/dev/mapper/cgts--vg-backup--lv',
   $fs_type = 'ext4',
@@ -186,7 +186,7 @@ class platform::filesystem::backup
 }
 
 class platform::filesystem::scratch::params (
-  $lv_size = '2',
+  $lv_size = lookup({'name'  => 'platform::filesystem::scratch::restore::lv_size', 'merge' => 'hash', 'default_value' => '2'}),
   $lv_name = 'scratch-lv',
   $mountpoint = $::osfamily ? {
     'Debian' => '/var/rootdirs/scratch',
@@ -288,7 +288,7 @@ class platform::filesystem::instances
 }
 
 class platform::filesystem::kubelet::params (
-  $lv_size = '2',
+  $lv_size = lookup({'name'  => 'platform::filesystem::kubelet::restore::lv_size', 'merge' => 'hash', 'default_value' => '2'}),
   $lv_name = 'kubelet-lv',
   $mountpoint = '/var/lib/kubelet',
   $devmapper = '/dev/mapper/cgts--vg-kubelet--lv',
@@ -309,7 +309,7 @@ class platform::filesystem::kubelet
 }
 
 class platform::filesystem::docker::params (
-  $lv_size = '1',
+  $lv_size = lookup({'name'  => 'platform::filesystem::docker::restore::lv_size', 'merge' => 'hash', 'default_value' => '1'}),
   $lv_name = 'docker-lv',
   $mountpoint = '/var/lib/docker',
   $devmapper = '/dev/mapper/cgts--vg-docker--lv',
@@ -497,7 +497,7 @@ class platform::filesystem::docker::runtime {
 
 
 class platform::filesystem::docker::params::bootstrap (
-  $lv_size = '20',
+  $lv_size = lookup({'name'  => 'platform::filesystem::docker::restore::lv_size', 'merge' => 'hash', 'default_value' => '20'}),
   $lv_name = 'docker-lv',
   $mountpoint = '/var/lib/docker',
   $devmapper = '/dev/mapper/cgts--vg-docker--lv',
@@ -523,7 +523,7 @@ class platform::filesystem::docker::bootstrap
 
 class platform::filesystem::log::params (
   $lv_name = 'log-lv',
-  $lv_size = '8',
+  $lv_size = lookup({'name'  => 'platform::filesystem::log::restore::lv_size', 'merge' => 'hash', 'default_value' => '8'}),
   $mountpoint = '/var/log',
   $devmapper = '/dev/mapper/cgts--vg-log--lv',
   $fs_type = 'ext4',
