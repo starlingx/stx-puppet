@@ -360,7 +360,7 @@ class platform::config::certs::ssl_ca
   }
 
   -> exec { 'restart sssd service on cert install/uninstall':
-    command => '/usr/bin/systemctl restart sssd.service',
+    command => '/usr/local/sbin/pmon-restart sssd',
     onlyif  => "test '${::osfamily }' == 'Debian'",
   }
 

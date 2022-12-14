@@ -49,7 +49,7 @@ class platform::sssd::domain::runtime
 
   Class['::platform::sssd::config']
   -> exec { 'restart sssd service':
-    command => '/usr/bin/systemctl restart sssd.service',
+    command => '/usr/local/sbin/pmon-restart sssd',
     onlyif  => "test '${::osfamily }' == 'Debian'",
   }
 }
