@@ -314,7 +314,7 @@ class platform::config::certs::ssl_ca
         ensure => 'directory',
         owner  => root,
         group  => root,
-        mode   => '0644',
+        mode   => '0755',
       }
       # update-ca-certificates command only scans for *.crt files
       $ssl_ca_file = "${ca_trust_dir}/ca-cert.crt"
