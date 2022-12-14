@@ -310,7 +310,7 @@ class platform::config::certs::ssl_ca
     default: {
       # This directory does not exist by default on debian
       $ca_trust_dir = '/etc/pki/ca-trust/source/anchors'
-      file { ['/etc/pki/ca-trust', '/etc/pki/ca-trust/source', $ca_trust_dir]:
+      file { ['/etc/pki', '/etc/pki/ca-trust', '/etc/pki/ca-trust/source', $ca_trust_dir]:
         ensure => 'directory',
         owner  => root,
         group  => root,
