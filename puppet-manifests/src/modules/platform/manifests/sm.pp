@@ -47,6 +47,11 @@ class platform::sm
   $ironic_ip_param_ip            = $::platform::network::ironic::params::controller_address
   $ironic_ip_param_mask          = $::platform::network::ironic::params::subnet_prefixlen
 
+  include ::platform::network::admin::params
+  $admin_ip_interface           = $::platform::network::admin::params::interface_name
+  $admin_ip_param_ip            = $::platform::network::admin::params::controller_address
+  $admin_ip_param_mask          = $::platform::network::admin::params::subnet_prefixlen
+
   include ::platform::drbd::pgsql::params
   $pg_drbd_resource              = $::platform::drbd::pgsql::params::resource_name
   $pg_fs_device                  = $::platform::drbd::pgsql::params::device
@@ -184,6 +189,7 @@ class platform::sm
     $management_my_unit_ip   = $::platform::network::mgmt::params::controller0_address
     $oam_my_unit_ip          = $::platform::network::oam::params::controller_address
     $cluster_host_my_unit_ip = $::platform::network::cluster_host::params::controller_address
+    $admin_my_unit_ip        = $::platform::network::admin::params::controller_address
   } else {
     case $::hostname {
       $controller_0_hostname: {
@@ -194,6 +200,8 @@ class platform::sm
         $oam_peer_unit_ip        = $::platform::network::oam::params::controller1_address
         $cluster_host_my_unit_ip = $::platform::network::cluster_host::params::controller0_address
         $cluster_host_peer_unit_ip = $::platform::network::cluster_host::params::controller1_address
+        $admin_my_unit_ip          = $::platform::network::admin::params::controller0_address
+        $admin_peer_unit_ip        = $::platform::network::admin::params::controller1_address
       }
       $controller_1_hostname: {
         $hostunit = '1'
@@ -203,6 +211,8 @@ class platform::sm
         $oam_peer_unit_ip        = $::platform::network::oam::params::controller0_address
         $cluster_host_my_unit_ip = $::platform::network::cluster_host::params::controller1_address
         $cluster_host_peer_unit_ip = $::platform::network::cluster_host::params::controller0_address
+        $admin_my_unit_ip          = $::platform::network::admin::params::controller1_address
+        $admin_peer_unit_ip        = $::platform::network::admin::params::controller0_address
       }
       default: {
         $hostunit = '2'
@@ -212,6 +222,8 @@ class platform::sm
         $oam_peer_unit_ip = undef
         $cluster_host_my_unit_ip = undef
         $cluster_host_peer_unit_ip = undef
+        $admin_my_unit_ip = undef
+        $admin_peer_unit_ip = undef
       }
     }
   }
@@ -250,6 +262,20 @@ class platform::sm
       command => "sm-configure interface controller cluster-host-interface \"\" ${cluster_host_my_unit_ip} 2222 2223 \"\" 2222 2223",
     }
 
+    if $admin_my_unit_ip {
+      exec { 'Deprovision admin-ip service group member':
+        command => 'sm-deprovision service-group-member admin-services admin-ip',
+      }
+      -> exec { 'Deprovision admin-ip service':
+        command => 'sm-deprovision service admin-ip',
+      }
+      -> exec { 'Provision Admin Interface':
+        command => 'sm-provision service-domain-interface controller admin-interface',
+      }
+      exec { 'Configure Admin Interface':
+        command => "sm-configure interface controller admin-interface \"\" ${admin_my_unit_ip} 2222 2223 \"\" 2222 2223",
+      }
+    }
   } else {
     exec { 'Configure OAM Interface':
       command => "sm-configure interface controller oam-interface \"\" ${oam_my_unit_ip} 2222 2223 ${oam_peer_unit_ip} 2222 2223",
@@ -260,6 +286,14 @@ class platform::sm
 
     exec { 'Configure Cluster Host Interface':
       command => "sm-configure interface controller cluster-host-interface ${cluster_host_ip_multicast} ${cluster_host_my_unit_ip} 2222 2223 ${cluster_host_peer_unit_ip} 2222 2223",
+    }
+    if $admin_my_unit_ip {
+      exec { 'Provision Admin Interface':
+        command => 'sm-provision service-domain-interface controller admin-interface',
+      }
+      -> exec { 'Configure Admin Interface':
+        command => "sm-configure interface controller admin-interface \"\" ${admin_my_unit_ip} 2222 2223 ${admin_peer_unit_ip} 2222 2223",
+      }
     }
   }
 
@@ -340,6 +374,26 @@ class platform::sm
       }
       -> exec { 'Configure Ironic IP':
           command => "sm-configure service_instance ironic-ip ironic-ip \"ip=${ironic_ip_param_ip},cidr_netmask=${ironic_ip_param_mask},nic=${ironic_ip_interface},arp_count=7\"",
+      }
+  }
+
+  # Create the Admin IP service if it is configured
+  if $admin_ip_interface {
+      # Provision and configure admin-subcloud
+      exec { 'Provision admin-services (service-domain-member admin-services)':
+        command => 'sm-provision service-domain-member controller admin-services',
+      }
+      -> exec { 'Provision admin-services (service-group admin-services)':
+        command => 'sm-provision service-group admin-services',
+      }
+      exec { 'Configure Admin IP service in SM (service-group-member admin-ip)':
+          command => 'sm-provision service-group-member admin-services admin-ip',
+      }
+      -> exec { 'Configure Admin IP service in SM (service admin-ip)':
+          command => 'sm-provision service admin-ip',
+      }
+      -> exec { 'Configure Admin IP':
+          command => "sm-configure service_instance admin-ip admin-ip \"ip=${admin_ip_param_ip},cidr_netmask=${admin_ip_param_mask},nic=${admin_ip_interface},arp_count=7\"",
       }
   }
 
@@ -611,6 +665,11 @@ class platform::sm
         exec { 'Configure distributed-cloud-services redundancy model':
             command => "sm-configure service_group yes controller distributed-cloud-services N 1 0 \"\" \"\"",
         }
+        if $admin_ip_interface {
+          exec { 'Configure admin-service redundancy model':
+            command => "sm-configure service_group yes controller admin-services N 1 0 \"\" directory-services",
+          }
+        }
     }
   } else {
     exec { 'Provision oam-ip service group member':
@@ -622,6 +681,18 @@ class platform::sm
 
     exec { 'Configure oam-service redundancy model to DX':
       command => "sm-configure service_group yes controller oam-services 'N + M' 1 1 \"controller-aggregate\" directory-services",
+    }
+
+    if $admin_ip_interface {
+      exec { 'Provision admin-ip service group member':
+        command => 'sm-provision service-group-member admin-services admin-ip',
+      }
+      -> exec { 'Provision admin-ip service':
+        command => 'sm-provision service admin-ip',
+      }
+      exec { 'Configure admin-service redundancy model to DX':
+        command => "sm-configure service_group yes controller admin-services 'N + M' 1 1 \"controller-aggregate\" directory-services",
+      }
     }
 
     exec { 'Configure controller-services redundancy model to DX':
@@ -1085,6 +1156,81 @@ class platform::sm::update_oam_config::runtime {
       tries     => 15,
       try_sleep => 1,
     }
+  }
+  # lint:endignore:140chars
+}
+
+class platform::sm::enable_admin_config::runtime {
+  include ::platform::network::admin::params
+  $admin_ip_interface  = $::platform::network::admin::params::interface_name
+  exec { 'Manage admin-ip service':
+    command => 'sm-manage service admin-ip'
+  }
+  -> exec { 'Provision admin-ip service':
+    command => 'sm-provision service-group-member admin-services admin-ip --apply'
+  }
+  -> exec { 'Provision service domain admin-interface':
+    command => 'sm-provision service-domain-interface controller admin-interface --apply'
+  }
+  -> exec { 'Bring up interface':
+    command => "ifup ${admin_ip_interface}"
+  }
+}
+
+class platform::sm::disable_admin_config::runtime {
+  include ::platform::network::admin::params
+  $admin_ip_interface  = $::platform::network::admin::params::interface_name
+  exec { 'Unmanage admin-ip service':
+    command => 'sm-unmanage service admin-ip'
+  }
+  -> exec { 'Deprovision admin-ip service':
+    command => 'sm-deprovision service-group-member admin-services admin-ip --apply'
+  }
+  -> exec { 'Deprovision service domain admin-interface':
+    command => 'sm-deprovision service-domain-interface controller admin-interface --apply'
+  }
+  -> exec { 'Bring down interface':
+    command => "ifdown ${admin_ip_interface}"
+  }
+}
+
+class platform::sm::update_admin_config::runtime {
+  # lint:ignore:140chars
+  include ::platform::network::admin::params
+  $admin_ip_interface  = $::platform::network::admin::params::interface_name
+  $admin_ip_param_ip   = $::platform::network::admin::params::controller_address
+  $admin_ip_param_mask = $::platform::network::admin::params::subnet_prefixlen
+
+  $system_mode                   = $::platform::params::system_mode
+
+  if $system_mode == 'simplex' {
+    $admin_my_unit_ip        = $::platform::network::admin::params::controller_address
+    $sm_cmd = "sm-configure interface controller admin-interface \"\" ${admin_my_unit_ip} 2222 2223 \"\" 2222 2223 --apply"
+  } else {
+    $controller_0_hostname         = $::platform::params::controller_0_hostname
+    $controller_1_hostname         = $::platform::params::controller_1_hostname
+    case $::hostname {
+      $controller_0_hostname: {
+        $admin_my_unit_ip          = $::platform::network::admin::params::controller0_address
+        $admin_peer_unit_ip        = $::platform::network::admin::params::controller1_address
+      }
+      $controller_1_hostname: {
+        $admin_my_unit_ip          = $::platform::network::admin::params::controller1_address
+        $admin_peer_unit_ip        = $::platform::network::admin::params::controller0_address
+      }
+      default: {
+        $admin_my_unit_ip = undef
+        $admin_peer_unit_ip = undef
+      }
+    }
+    $sm_cmd = "sm-configure interface controller admin-interface \"\" ${admin_my_unit_ip} 2222 2223 ${admin_peer_unit_ip} 2222 2223 --apply"
+  }
+
+  exec { 'Reconfigure Admin IP':
+    command => "sm-configure service_instance admin-ip admin-ip \"ip=${admin_ip_param_ip},cidr_netmask=${admin_ip_param_mask},nic=${admin_ip_interface},arp_count=7\" --apply",
+  }
+  -> exec { 'Configure Admin Interface':
+    command => $sm_cmd,
   }
   # lint:endignore:140chars
 }
