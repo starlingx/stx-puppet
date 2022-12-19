@@ -847,13 +847,14 @@ class platform::kubernetes::worker::upgrade_kubelet
 
   # workers use kubelet.conf rather than admin.conf
   $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
+  $kubelet_version = $::platform::kubernetes::params::kubelet_version
 
   # Pull the pause image tag from kubeadm required images list for this version
   exec { 'pull pause image':
     # spltting this command over multiple lines will break puppet-lint for later violations
     command   => "kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf config images list --kubernetes-version ${upgrade_to_version} --image-repository=registry.local:9001/k8s.gcr.io 2>/dev/null | grep k8s.gcr.io/pause: | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
     logoutput => true,
-    before    => Exec['upgrade kubelet'],
+    before    => Exec['upgrade kubelet for worker'],
   }
 
   exec { 'upgrade kubelet for worker':
@@ -861,7 +862,6 @@ class platform::kubernetes::worker::upgrade_kubelet
     logoutput => true,
   }
 
-  $kubelet_version = $::platform::kubernetes::params::kubelet_version
   # Mask restarting kubelet and stop it now so that we can unmount
   # and re-mount the bind mount.
   -> exec { 'mask kubelet for worker upgrade':
