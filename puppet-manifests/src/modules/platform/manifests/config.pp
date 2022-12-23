@@ -503,6 +503,15 @@ class platform::config::controller::post
   file { '/var/run/.controller_config_complete':
     ensure => present,
   }
+
+  # In standard mode, the active controller will update grub parameters via
+  # platform::compute::grub::runtime. But to update a standby controller,
+  # platform::compute::grub::audit needs to be called from here like it's being
+  # done for the workers.
+  # The active controller will also call this code, for both standard and AIO-SX
+  # systems, but platform::compute::grub::audit will not execut grub update again
+  # since the it was already updated via platform::compute::grub::runtime.
+  include ::platform::compute::grub::audit
 }
 
 class platform::config::worker::post
