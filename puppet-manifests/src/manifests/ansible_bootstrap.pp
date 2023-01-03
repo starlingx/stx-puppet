@@ -21,9 +21,6 @@ include ::platform::client::bootstrap
 
 include ::platform::sysinv::bootstrap
 
-# Puppet class to setup helm database
-include ::platform::helm::bootstrap
-
 # Puppet classes to enable the bring up of kubernetes master
 include ::platform::docker::bootstrap
 include ::platform::etcd::bootstrap
