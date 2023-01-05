@@ -936,14 +936,27 @@ class platform::kubernetes::master::change_apiserver_parameters (
     recurse => true,
   }
 
+  # Ensure backup is created first time
+  exec { 'create configmap backup':
+    command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf get cm -n kube-system kubeadm-config -o=yaml > /etc/kubernetes/backup/configmap.yaml', # lint:ignore:140chars
+    logoutput => true,
+    unless    => 'test -e /etc/kubernetes/backup/configmap.yaml',
+  }
+
+  exec { 'create cluster_config backup':
+    command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf get cm -n kube-system kubeadm-config -o=jsonpath={.data.ClusterConfiguration} > /etc/kubernetes/backup/cluster_config.yaml', # lint:ignore:140chars
+    logoutput => true,
+    unless    => 'test -e /etc/kubernetes/backup/cluster_config.yaml',
+  }
+
   if $etcd_cafile and $etcd_certfile and $etcd_keyfile and $etcd_servers {
     exec { 'update configmap and apply changes to control plane components':
       command => "python /usr/share/puppet/modules/platform/files/change_k8s_control_plane_params.py --etcd_cafile ${etcd_cafile} --etcd_certfile ${etcd_certfile} --etcd_keyfile ${etcd_keyfile} --etcd_servers ${etcd_servers}",  # lint:ignore:140chars
-      timeout => 300}
+      timeout => 600}
   } else {
     exec { 'update configmap and apply changes to control plane components':
       command => 'python /usr/share/puppet/modules/platform/files/change_k8s_control_plane_params.py',
-      timeout => 300}
+      timeout => 600}
   }
 }
 
