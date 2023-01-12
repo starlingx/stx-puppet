@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022 Wind River Systems, Inc.
+# Copyright (c) 2021-2023 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -536,7 +536,7 @@ def generates_kubeadm_config_file(
         try:
             with open(kubeadm_config_file, 'w') as file:
                 for key, value in base_cluster_cfg.items():
-                    file.write(f"{key}: {value}\n")
+                    file.write("%s: %s\n" % (key, value))
                 file.write("---\n")
         except Exception as e:
             LOG.error('Initializing kubeadm config file with '
@@ -672,10 +672,9 @@ def get_kubelet_cfg_from_service_parameters(service_params):
 
     Supported Types Kubelet Configuration (v1beta1):
     * string: no cast required.
-    * []string: no cast required.
-    * map[string]string:
+    * map[string]string and []string:
       - The values must be in json format.
-      - Cast to python dict type.
+      - Cast to python dict or list type.
     * int32, int64: cast to python int type.
     * float: cast to python float type.
 
@@ -685,12 +684,13 @@ def get_kubelet_cfg_from_service_parameters(service_params):
     """
     kubelet_cfg = {}
     for param, value in service_params['kubelet'].items():
-        # map[string]string
-        if value.startswith('{') and value.endswith('}'):
+        # map[string]string & []string
+        if value.startswith(('[', '{')) and value.endswith((']', '}')):
             try:
                 value = json.loads(value.replace('True', 'true').replace('False', 'false').replace("'", '"'))
             except Exception as e:
-                LOG.error('Parsing kubelet value: %s', e)
+                msg = 'Parsing param: %s / value: %s. [Error: %s]' % (param, value, e)
+                LOG.error(msg)
                 return 3
         # bool
         elif value in ['False', 'false'] or value in ['True', 'true']:
