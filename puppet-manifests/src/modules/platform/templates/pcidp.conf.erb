@@ -1,3 +1,21 @@
-<%- if @pcidp_resources -%>
-<%= JSON.pretty_generate(JSON.parse(@pcidp_resources)) %>
-<%- end-%>
+<%-
+pcidp_res_obj = nil
+if @pcidp_resources and not @pcidp_resources.empty?() then
+    pcidp_res_obj = JSON.parse(@pcidp_resources)
+    if not pcidp_res_obj['resourceList'] or
+            pcidp_res_obj['resourceList'].empty?() then
+        pcidp_res_obj = nil
+    end
+end
+-%>
+<%- if pcidp_res_obj -%>
+<%= JSON.pretty_generate(pcidp_res_obj) %>
+<%- else -%>
+{
+    "resourceList": [ {
+            "resourceName": "dummy",
+            "selectors": { }
+        }
+    ]
+}
+<%- end -%>
