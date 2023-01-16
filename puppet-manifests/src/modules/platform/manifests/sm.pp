@@ -725,15 +725,9 @@ class platform::sm
             command => 'sm-provision service-group-member cloud-services dbmon --apply'
         }
     }
-    exec { 'provision guest-agent service group member':
-        command => 'sm-provision service-group-member controller-services guest-agent --apply'
-    }
   } else {
     exec { 'deprovision service group member':
         command => 'sm-deprovision service-group-member cloud-services dbmon --apply'
-    }
-    exec { 'deprovision guest-agent service group member':
-        command => 'sm-deprovision service-group-member controller-services guest-agent --apply'
     }
   }
 
@@ -1151,9 +1145,6 @@ class platform::sm::stx_openstack::runtime {
             command => 'sm-provision service-group-member cloud-services dbmon --apply'
         }
     }
-    exec { 'provision guest-agent service group member':
-        command => 'sm-provision service-group-member controller-services guest-agent --apply'
-    }
     # Configure openstack dcdbsync for systemcontroller and subcloud
     if ($::platform::params::distributed_cloud_role =='systemcontroller') or
       ($::platform::params::distributed_cloud_role =='subcloud') {
@@ -1164,9 +1155,6 @@ class platform::sm::stx_openstack::runtime {
   } else {
     exec { 'deprovision service group member':
         command => 'sm-deprovision service-group-member cloud-services dbmon --apply'
-    }
-    exec { 'deprovision guest-agent service group member':
-        command => 'sm-deprovision service-group-member controller-services guest-agent --apply'
     }
     exec { 'deprovision distributed-cloud service group member':
         command => 'sm-deprovision service-group-member distributed-cloud-services dcdbsync-openstack-api --apply'
