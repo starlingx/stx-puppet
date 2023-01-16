@@ -16,6 +16,7 @@ class platform::config
   include ::platform::params
   include ::platform::anchors
   include ::platform::config::tmout
+  include ::platform::config::pam_systemd
 
   stage { 'pre':
     before => Stage['main'],
@@ -578,5 +579,14 @@ class platform::config::tmout {
     path   => '/etc/profile.d/custom.sh',
     line   => 'export TMOUT=900',
     match  => 'export TMOUT',
+  }
+}
+
+class platform::config::pam_systemd {
+  file_line { 'rm pam_systemd':
+    ensure            => absent,
+    path              => '/etc/pam.d/common-session',
+    match             => 'pam_systemd.so$',
+    match_for_absence => true,
   }
 }
