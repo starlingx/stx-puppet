@@ -2,6 +2,7 @@ class platform::haproxy::params (
   $private_ip_address,
   $public_ip_address,
   $public_address_url,
+  $private_dc_ip_address,
   $enable_https = false,
   $https_ep_type = 'public',
 

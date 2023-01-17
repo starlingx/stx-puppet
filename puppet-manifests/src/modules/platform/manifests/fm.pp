@@ -63,7 +63,7 @@ class platform::fm::haproxy
     platform::haproxy::proxy { 'fm-api-admin':
       https_ep_type     => 'admin',
       server_name       => 's-fm-api-admin',
-      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_ip_address => $::platform::haproxy::params::private_dc_ip_address,
       public_port       => $api_port + 1,
       private_port      => $api_port,
     }

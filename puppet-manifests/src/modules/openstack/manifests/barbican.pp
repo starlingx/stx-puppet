@@ -138,7 +138,7 @@ class openstack::barbican::haproxy
     platform::haproxy::proxy { 'barbican-restapi-admin':
       https_ep_type     => 'admin',
       server_name       => 's-barbican-restapi',
-      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_ip_address => $::platform::haproxy::params::private_dc_ip_address,
       public_port       => $api_port + 1,
       private_port      => $api_port,
     }
