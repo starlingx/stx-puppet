@@ -53,7 +53,7 @@ class openstack::keystone (
     Class[$name] -> Class['::platform::client']
 
     include ::keystone::client
-
+    include ::keystone::cache
 
     # Configure keystone graceful shutdown timeout
     # TODO(mpeters): move to puppet-keystone for module configuration
