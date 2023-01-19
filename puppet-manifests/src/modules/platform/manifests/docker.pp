@@ -15,6 +15,7 @@ class platform::docker::params (
   $elastic_registry            = undef,
   $ghcr_registry               = undef,
   $registryk8s_registry        = undef,
+  $icr_registry                = undef,
   $k8s_registry_secure         = true,
   $quay_registry_secure        = true,
   $gcr_registry_secure         = true,
@@ -22,6 +23,7 @@ class platform::docker::params (
   $elastic_registry_secure     = true,
   $ghcr_registry_secure        = true,
   $registryk8s_registry_secure = true,
+  $icr_registry_secure         = true,
 ) { }
 
 class platform::docker::proxyconfig

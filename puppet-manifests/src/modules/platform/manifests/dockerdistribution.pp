@@ -48,6 +48,9 @@ class platform::dockerdistribution::registries {
 
     {url => $::platform::docker::params::registryk8s_registry,
     secure => $::platform::docker::params::registryk8s_registry_secure},
+
+    {url => $::platform::docker::params::icr_registry,
+    secure => $::platform::docker::params::icr_registry_secure},
   ]
 
   $insecure_registries_list = $registries.filter |$registry| { !$registry['secure'] }
