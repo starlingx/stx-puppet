@@ -329,6 +329,7 @@ class platform::kubernetes::master::init
     # - Ansible replay is not impacted by flag creation.
 
     $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
+    $software_version = $::platform::params::software_version
 
     exec { 'pre pull k8s images':
       command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${version}  --image-repository registry.local:9001/k8s.gcr.io | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
@@ -393,6 +394,15 @@ class platform::kubernetes::master::init
     -> exec { 'perform systemctl daemon reload for kubelet override':
       command   => 'systemctl daemon-reload',
       logoutput => true,
+    }
+
+    # Update plugin directory for upgrade from 21.12 to 22.12 release
+    # This has no impact on 22.06 to 22.12 upgrade as the directory
+    # has been updated in 22.06
+    # There is a separate change to update kubeadm-config configmap
+    -> exec { 'Update plugin directory to /var/opt/libexec/':
+      command => '/bin/sed -i "s|/usr/libexec/|/var/opt/libexec/|g" /etc/kubernetes/manifests/kube-controller-manager.yaml',
+      onlyif  => "test '${software_version}' == '22.12'",
     }
 
     # Initial kubernetes config done on node
