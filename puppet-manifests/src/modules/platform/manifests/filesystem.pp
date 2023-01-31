@@ -590,3 +590,38 @@ class platform::filesystem::var::runtime {
       devmapper => $devmapper,
   }
 }
+
+class platform::filesystem::root::params (
+  $lv_name = 'root-lv',
+  $lv_size = lookup({'name'  => 'platform::filesystem::root::restore::lv_size', 'merge' => 'hash', 'default_value' => '20'}),
+  $mountpoint = '/',
+  $devmapper = '/dev/mapper/cgts--vg-root--lv',
+  $fs_type = 'ext4',
+  $fs_options = ' '
+) {}
+
+class platform::filesystem::root
+  inherits ::platform::filesystem::root::params {
+
+  platform::filesystem { $lv_name:
+      lv_name    => $lv_name,
+      lv_size    => $lv_size,
+      mountpoint => $mountpoint,
+      fs_type    => $fs_type,
+      fs_options => $fs_options
+  }
+}
+
+class platform::filesystem::root::runtime {
+
+  include ::platform::filesystem::root::params
+  $lv_name = $::platform::filesystem::root::params::lv_name
+  $lv_size = $::platform::filesystem::root::params::lv_size
+  $devmapper = $::platform::filesystem::root::params::devmapper
+
+  platform::filesystem::resize { $lv_name:
+      lv_name   => $lv_name,
+      lv_size   => $lv_size,
+      devmapper => $devmapper,
+  }
+}
