@@ -141,35 +141,46 @@ class platform::compute::grub::audit
 
   notice('Audit CPU and Grub Configuration')
 
-  $expected_n_cpus = Integer($::number_of_logical_cpus)
-  $n_cpus_ok = ($n_cpus == $expected_n_cpus)
-
   $cmd_ok = check_grub_config($grub_updates)
 
-  if $cmd_ok and $n_cpus_ok {
-    $ensure = present
-    notice('CPU and Boot Argument audit passed.')
-  } else {
-    if !$cmd_ok {
-      if ($ignore_recovery) {
-        $ensure = present
-        notice('Ignoring Grub cmdline recovery')
-        include ::platform::compute::grub::update
-      } else {
-        notice('Kernel Boot Argument Mismatch')
-        $ensure = absent
-        include ::platform::compute::grub::recovery
-      }
+  # Handle controller in standard mode (non-worker)
+  if !str2bool($::is_worker_subfunction) {
+    notice('Handling non-worker node.')
+    if $cmd_ok {
+      notice('Boot Argument audit passed.')
     } else {
-      notice("Mismatched CPUs: Found=${n_cpus}, Expected=${expected_n_cpus}")
+      notice('Kernel Boot Argument Mismatch')
+      include ::platform::compute::grub::recovery
     }
-  }
+  } else {
+    $expected_n_cpus = Integer($::number_of_logical_cpus)
+    $n_cpus_ok = ($n_cpus == $expected_n_cpus)
 
-  file { '/var/run/worker_goenabled':
-    ensure => $ensure,
-    owner  => 'root',
-    group  => 'root',
-    mode   => '0644',
+    if $cmd_ok and $n_cpus_ok {
+      $ensure = present
+      notice('CPU and Boot Argument audit passed.')
+    } else {
+      if !$cmd_ok {
+        if ($ignore_recovery) {
+          $ensure = present
+          notice('Ignoring Grub cmdline recovery')
+          include ::platform::compute::grub::update
+        } else {
+          notice('Kernel Boot Argument Mismatch')
+          $ensure = absent
+          include ::platform::compute::grub::recovery
+        }
+      } else {
+        notice("Mismatched CPUs: Found=${n_cpus}, Expected=${expected_n_cpus}")
+      }
+    }
+
+    file { '/var/run/worker_goenabled':
+      ensure => $ensure,
+      owner  => 'root',
+      group  => 'root',
+      mode   => '0644',
+    }
   }
 }
 
