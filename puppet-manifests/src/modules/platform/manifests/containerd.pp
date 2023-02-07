@@ -127,7 +127,7 @@ class platform::containerd::config
   -> exec { 'set containerd sandbox pause image':
     # The full path to kubeadm is used so we do not rely on bindmounts.
     # Determine the appropriate sandbox image.
-    command   => "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm config images list --kubernetes-version ${kubeadm_version} --image-repository=registry.local:9001/k8s.gcr.io 2>/dev/null | grep pause: | xargs -I '{}' sed -i -e '/sandbox_image =/ s|= .*|= \"{}\"|' /etc/containerd/config.toml", # lint:ignore:140chars
+    command   => "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm config images list --kubernetes-version ${kubeadm_version} 2>/dev/null | grep pause: | xargs -I '{}' sed -i -e '/sandbox_image =/ s|= .*|= \"registry.local:9001/{}\"|' /etc/containerd/config.toml", # lint:ignore:140chars
     logoutput => true,
   }
   -> Service['containerd']
