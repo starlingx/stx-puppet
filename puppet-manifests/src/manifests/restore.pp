@@ -22,7 +22,7 @@ include ::platform::drbd::dockerdistribution::bootstrap
 include ::platform::docker::bootstrap
 include ::platform::etcd::bootstrap
 
-include ::platform::filesystem::docker::bootstrap
+include ::platform::filesystem::docker
 include ::platform::filesystem::scratch
 include ::platform::filesystem::backup
 include ::platform::filesystem::kubelet
