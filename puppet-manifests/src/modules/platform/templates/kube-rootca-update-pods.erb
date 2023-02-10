@@ -6,7 +6,7 @@
 declare -A namespaces=()
 declare -A deployments=()
 declare -A daemonsets=()
-declare -A statefullsets=()
+declare -A statefulsets=()
 
 namespaces=$(kubectl get namespace -o jsonpath='{.items[*].metadata.name}')
 
@@ -47,9 +47,10 @@ for namespace in ${!statefulsets[@]}; do
     done
 done
 
-# Check the rollout status. Check every 15 seconds for 8 mins
-max_retries=32
-retry_interval=15
+# Check the rollout status. Check every 45 seconds for, at least, 30 mins.
+# The execution time of "kubectl rollout status" commands is not counted.
+max_retries=40
+retry_interval=45
 max_retry_time=$(($max_retries*$retry_interval))
 
 function check_status () {
@@ -59,12 +60,13 @@ function check_status () {
     local sets=$4
     local ret=0
     for name in $sets; do
-        output=$( (kubectl rollout status --watch=false $kind $name -n $namespace) )
-        echo $output | grep -q "successfully"
+        kubectl rollout status --timeout=100ms $kind $name -n $namespace 2>/dev/null
         if [ $? -ne 0 ]; then
             ret=1
             if [ $retry -eq $max_retries ]; then
-                echo "ATTENTION $kind: $name in ns: $namespace not complete rollout restart in $max_retry_time seconds."
+                echo "ATTENTION $kind: rollout of $name in ns: $namespace not completed in $max_retry_time seconds."
+            else
+                echo "INFO $kind: rollout of $name in ns: $namespace not completed yet. Check $retry of $max_retries."
             fi
         fi
     done
@@ -96,8 +98,12 @@ for (( retry=1; retry<=$max_retries; retry++ )); do
         fi
     done
 
-    # Exit earlier if all restart completed
+    # Exit if all restart completed
     if [ $notcomplete -eq 0 ]; then
-        break
+        echo "INFO Rollout completed successfully."
+        exit 0
     fi
 done
+
+echo "ERROR Rollout failed."
+exit 1
