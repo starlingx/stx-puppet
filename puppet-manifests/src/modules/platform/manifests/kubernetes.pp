@@ -747,6 +747,11 @@ class platform::kubernetes::upgrade_first_control_plane
     logoutput => true
   }
 
+  # The kubeadm command below doesn't have the credentials to download the
+  # images from local registry when they are not present in the cache, so we
+  # assure here that the images are downloaded.
+  require platform::kubernetes::pre_pull_control_plane_images
+
   # The --allow-*-upgrades options allow us to upgrade to any k8s release if necessary
   # The -v6 gives verbose debug output includes health, GET response, delay.
   # Puppet captures no command output on timeout. Workaround:
@@ -788,6 +793,11 @@ class platform::kubernetes::upgrade_control_plane
 
   # Update kubeadm bindmount if needed.
   require platform::kubernetes::bindmounts
+
+  # The kubeadm command below doesn't have the credentials to download the
+  # images from local registry when they are not present in the cache, so we
+  # assure here that the images are downloaded.
+  require platform::kubernetes::pre_pull_control_plane_images
 
   # control plane is only upgraded on a controller
   exec { 'upgrade control plane':
