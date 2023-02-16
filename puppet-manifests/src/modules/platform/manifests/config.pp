@@ -41,12 +41,14 @@ class platform::config::file {
   include ::platform::network::mgmt::params
   include ::platform::network::oam::params
   include ::platform::network::cluster_host::params
+  include ::platform::network::admin::params
   include ::openstack::horizon::params
 
   # dependent template variables
   $management_interface = $::platform::network::mgmt::params::interface_name
   $cluster_host_interface = $::platform::network::cluster_host::params::interface_name
   $oam_interface = $::platform::network::oam::params::interface_name
+  $admin_interface = $::platform::network::admin::params::interface_name
 
   $platform_conf = '/etc/platform/platform.conf'
 
@@ -85,6 +87,22 @@ class platform::config::file {
       path  => $platform_conf,
       line  => "oam_interface=${oam_interface}",
       match => '^oam_interface=',
+    }
+  }
+
+  if $admin_interface {
+    file_line { "${platform_conf} admin_interface":
+      path  => '/etc/platform/platform.conf',
+      line  => "admin_interface=${admin_interface}",
+      match => '^admin_interface=',
+    }
+  }
+  else {
+    file_line { "${platform_conf} admin_interface":
+      ensure            => absent,
+      path              => '/etc/platform/platform.conf',
+      match             => '^admin_interface=',
+      match_for_absence => true,
     }
   }
 
