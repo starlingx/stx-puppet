@@ -22,7 +22,8 @@ class platform::ldap::params (
   $nslcd_gid = 'ldap',
   $secure_cert = '',
   $secure_key = '',
-  $ca_cert = ''
+  $ca_cert = '',
+  $insecure_service = 'enabled',
 ) {}
 
 class platform::ldap::server
@@ -293,4 +294,26 @@ class platform::ldap::secure::runtime
   # Local ldap server configuration with SSL certificate.
 
   class { '::platform::ldap::secure::config':}
+}
+
+# This class is intended to be used only at runtime to
+# enable/disable ldap insecure service.
+class platform::ldap::insecure::runtime
+  inherits ::platform::ldap::params {
+  # Enable/disable local openldap insecure service.
+
+  $init_script = '/etc/init.d/openldap'
+  if downcase($insecure_service) == 'enabled' {
+    $update_cmd = "/bin/sed -i -e 's#\"ldaps:///\"#\"ldap:/// ldaps:///\"#' ${init_script}"
+  }
+  else {
+    $update_cmd = "/bin/sed -i -e 's#\"ldap:/// ldaps:///\"#\"ldaps:///\"#' ${init_script}"
+  }
+
+  exec { 'update openldap init script':
+    command => $update_cmd,
+  }
+  -> exec { 'Restart openldap service':
+    command => 'sm-restart-safe service open-ldap',
+  }
 }
