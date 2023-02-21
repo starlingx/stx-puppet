@@ -9,7 +9,8 @@ define ptp_config_files(
   $id,
   $ptp_conf_dir,
   $ptp_options_dir,
-  $pmc_gm_settings = ''
+  $pmc_gm_settings = '',
+  $device_parameters = ''
 ) {
   file { $_name:
     ensure  => file,
@@ -53,7 +54,8 @@ define set_ptp4l_pmc_parameters(
   $id,
   $ptp_conf_dir,
   $ptp_options_dir,
-  $pmc_gm_settings = ''
+  $pmc_gm_settings = '',
+  $device_parameters = ''
 ) {
   if ($service == 'ptp4l') and ($pmc_gm_settings != '') {
     exec { "${_name}_set_initial_pmc_paramters":
@@ -275,6 +277,12 @@ class platform::ptpinstance (
     mode    => '0644',
     content => template('platform/ts2phc-instance.service.erb'),
   }
+  -> file { 'synce4l_service_instance':
+    ensure  => file,
+    path    => '/etc/systemd/system/synce4l@.service',
+    mode    => '0644',
+    content => template('platform/synce4l-instance.service.erb'),
+  }
   -> exec { 'stop-ptp4l-instances':
     command => '/usr/bin/systemctl stop ptp4l*',
   }
@@ -304,6 +312,13 @@ class platform::ptpinstance (
     command => '/usr/bin/systemctl disable ts2phc@*',
     onlyif  => 'test -f /etc/systemd/system/ts2phc@.service',
   }
+  -> exec { 'stop-synce4l-instance':
+    command => '/usr/bin/systemctl stop synce4l@*',
+  }
+  -> exec { 'disable-sycne4l-instance':
+    command => '/usr/bin/systemctl disable synce4l@*',
+    onlyif  => 'test -f /etc/systemd/system/synce4l@.service',
+  }
   -> exec { 'ptpinstance-systemctl-daemon-reload':
     command => '/usr/bin/systemctl daemon-reload',
   }
@@ -315,6 +330,9 @@ class platform::ptpinstance (
   }
   -> exec { 'ptpinstance-systemctl-reset-failed-ts2phc':
     command => '/usr/bin/systemctl reset-failed ts2phc@*',
+  }
+  -> exec { 'ptpinstance-systemctl-reset-failed-synce4l':
+    command => '/usr/bin/systemctl reset-failed synce4l*',
   }
 
   if $enabled {

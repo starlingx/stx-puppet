@@ -8,6 +8,15 @@
 <%- end -%>
 <%- end -%>
 
+<%- if @service == 'synce4l' -%>
+[<<%= @_name %>>]
+<%- if @device_parameters -%>
+<%- @device_parameters.each do |key,value| -%>
+<%= key %> <%= value %>
+<%- end -%>
+<%- end -%>
+<%- end -%>
+
 <%- if @interfaces -%>
 <%- @interfaces.each do |interface| %>
 <%- interface['port_names'].each do |port| -%>
@@ -17,10 +26,10 @@
 ##
 <%- interface['parameters'].each do |key,value| -%>
 <%= key %> <%= value %>
-
-
-
 <%- end -%>
+
+
+
 <%- end -%>
 <%- end -%>
 <%- end -%>
