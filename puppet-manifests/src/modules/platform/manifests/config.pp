@@ -15,7 +15,6 @@ class platform::config
 
   include ::platform::params
   include ::platform::anchors
-  include ::platform::config::tmout
   include ::platform::config::pam_systemd
 
   stage { 'pre':
@@ -598,15 +597,6 @@ class platform::config::bootstrap {
   include ::platform::anchors
   include ::platform::config::hostname
   include ::platform::config::hosts
-}
-
-class platform::config::tmout {
-  file_line { 'set TMOUT':
-    ensure => present,
-    path   => '/etc/profile.d/custom.sh',
-    line   => 'export TMOUT=900',
-    match  => 'export TMOUT',
-  }
 }
 
 class platform::config::pam_systemd {
