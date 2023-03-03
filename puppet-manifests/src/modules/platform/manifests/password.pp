@@ -23,9 +23,9 @@ class platform::password {
     match => '^group: *files sss',
   }
 
-  file_line { '/etc/nsswitch.conf add sudoers ldap':
+  file_line { '/etc/nsswitch.conf add sudoers sss':
     path  => '/etc/nsswitch.conf',
-    line  => 'sudoers:   files ldap',
+    line  => 'sudoers:   files sss',
     match => '^sudoers: *files',
   }
 
