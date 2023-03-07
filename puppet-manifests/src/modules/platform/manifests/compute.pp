@@ -172,6 +172,7 @@ class platform::compute::grub::audit
         }
       } else {
         notice("Mismatched CPUs: Found=${n_cpus}, Expected=${expected_n_cpus}")
+        $ensure = absent
       }
     }
 
