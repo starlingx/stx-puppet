@@ -6,4 +6,4 @@ revision:
     dist: $STX_DIST
     PKG_GITREVCOUNT: true
     SRC_GITREVCOUNT:
-        SRC_BASE_SRCREV: 15f6ec02c32c41bdbffa021258bddeca73b2fef3
+      SRC_BASE_SRCREV: 7b680ed0cf5b671aeb1f567dc3e1f6731021b9cd
