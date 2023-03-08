@@ -2,9 +2,10 @@ class platform::sssd::params (
   $manage_package = false,
   $manage_service = false,
   $reconnection_retries = 3,
-  $services = ['nss','pam'],
+  $services = ['nss','pam','sudo'],
   $nss_options = {},
   $pam_options = {},
+  $sudo_options = {},
   $domains = {},
   $domain_name = undef,
   $ldap_uri = undef,
@@ -27,6 +28,7 @@ class platform::sssd::config
       services             => $services,
       nss_options          => $nss_options,
       pam_options          => $pam_options,
+      sudo_options         => $sudo_options,
       domains              => $domains,
     }
   }
