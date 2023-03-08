@@ -20,6 +20,7 @@ define platform::haproxy::proxy (
   $private_ip_address = undef,
   $server_timeout = undef,
   $client_timeout = undef,
+  $retry_on = undef,
   $x_forwarded_proto = true,
   $enable_https = undef,
   $https_ep_type = undef,
@@ -142,9 +143,10 @@ define platform::haproxy::proxy (
     collect_exported => false,
     name             => "${name}-internal",
     options          => {
-      'server'  => "${server_name} ${private_ip}:${private_port}",
-      'timeout' => $timeout_option,
-      'mode'    => $mode_option,
+      'server'   => "${server_name} ${private_ip}:${private_port}",
+      'timeout'  => $timeout_option,
+      'mode'     => $mode_option,
+      'retry-on' => $retry_on
     }
   }
 }

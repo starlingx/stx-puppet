@@ -96,7 +96,7 @@ class dcorch::api_proxy (
   $keystone_identity_uri      = false,
   $keystone_user_domain       = 'Default',
   $keystone_project_domain    = 'Default',
-  $keystone_http_connect_timeout = '10',
+  $keystone_http_connect_timeout = '15',
   $dcmanager_keystone_user    = 'dcmanager',
   $auth_type                  = 'password',
   $service_port               = '5000',

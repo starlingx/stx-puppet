@@ -169,6 +169,7 @@ class openstack::keystone::haproxy
       public_ip_address => $::platform::haproxy::params::private_dc_ip_address,
       public_port       => $api_port + 1,
       private_port      => $api_port,
+      retry_on          => 'conn-failure 0rtt-rejected',
     }
   }
 }
