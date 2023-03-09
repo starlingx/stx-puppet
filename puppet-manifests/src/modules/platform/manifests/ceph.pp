@@ -202,6 +202,17 @@ class platform::ceph::pmond_config {
 }
 
 
+class platform::ceph::mds_pmond_config {
+  file { '/etc/pmon.d/ceph-mds.conf':
+    ensure => link,
+    target => '/etc/ceph/ceph-mds.conf.pmon',
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0640',
+  }
+}
+
+
 class platform::ceph::monitor
   inherits ::platform::ceph::params {
 
@@ -210,6 +221,13 @@ class platform::ceph::monitor
 
   if $service_enabled {
     if $system_type == 'All-in-one' and 'duplex' in $system_mode {
+
+      if $::personality == 'controller' {
+        # In AIO-DX, only controllers have the ceph-mds service. This is managed by pmon.
+        # All other ceph services are managed by SM.
+        include ::platform::ceph::mds_pmond_config
+      }
+
       if str2bool($::is_controller_active) or str2bool($::is_standalone_controller) {
         # Ceph mon is configured on a DRBD partition,
         # when 'ceph' storage backend is added in sysinv.
@@ -219,7 +237,6 @@ class platform::ceph::monitor
         $configure_ceph_mon = false
       }
     } else {
-      # Simplex, multinode. Ceph is pmon managed.
       if $::hostname == $mon_0_host or $::hostname == $mon_1_host or $::hostname == $mon_2_host {
         $configure_ceph_mon = true
       } else {
@@ -272,6 +289,8 @@ class platform::ceph::monitor
         fs_options => $mon_fs_options,
       } -> Class['::ceph']
 
+      # Except on AIO-DX, all ceph services are managed by pmon.
+      # The system uses the ceph.conf.pmon to initialize/manage all ceph services.
       include ::platform::ceph::pmond_config
     }
 
