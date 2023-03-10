@@ -120,9 +120,9 @@ class platform::docker::storage
 class platform::docker::config::bootstrap
   inherits ::platform::docker::params {
 
-  require ::platform::filesystem::docker::bootstrap
+  require ::platform::filesystem::docker
 
-  Class['::platform::filesystem::docker::bootstrap'] ~> Class[$name]
+  Class['::platform::filesystem::docker'] ~> Class[$name]
 
   service { 'docker':
     ensure  => 'running',
