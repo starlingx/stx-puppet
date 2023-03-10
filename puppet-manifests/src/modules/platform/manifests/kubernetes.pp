@@ -328,7 +328,7 @@ class platform::kubernetes::master::init
     #   This flag is created by Ansible on controller-0;
     # - Ansible replay is not impacted by flag creation.
 
-    $local_registry_auth = Sensitive("${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}") # lint:ignore:140chars
+    $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
     $software_version = $::platform::params::software_version
 
     exec { 'pre pull k8s images':
@@ -460,7 +460,7 @@ class platform::kubernetes::worker::init
     # kubeadm config images list does not use the --kubeconfig argument
     # and admin.conf will not exist on a pure worker, and kubelet.conf will not
     # exist until after a join.
-    $local_registry_auth = Sensitive("${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}") # lint:ignore:140chars
+    $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
     exec { 'load k8s pause image by containerd':
       # splitting this command over multiple lines appears to break puppet-lint
       command   => "kubeadm config images list --kubernetes-version ${version} --image-repository=registry.local:9001/k8s.gcr.io 2>/dev/null | grep k8s.gcr.io/pause: | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
@@ -725,7 +725,7 @@ class platform::kubernetes::pre_pull_control_plane_images
   # Update kubeadm bindmount if needed
   require platform::kubernetes::bindmounts
 
-  $local_registry_auth = Sensitive("${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}") # lint:ignore:140chars
+  $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
 
   exec { 'pre pull images':
     command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${upgrade_to_version} --image-repository=registry.local:9001/k8s.gcr.io | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
@@ -866,7 +866,7 @@ class platform::kubernetes::worker::upgrade_kubelet
   include ::platform::dockerdistribution::params
 
   # workers use kubelet.conf rather than admin.conf
-  $local_registry_auth = Sensitive("${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}") # lint:ignore:140chars
+  $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
   $kubelet_version = $::platform::kubernetes::params::kubelet_version
 
   # Pull the pause image tag from kubeadm required images list for this version
