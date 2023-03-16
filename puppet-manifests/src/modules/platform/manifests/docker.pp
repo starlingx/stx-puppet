@@ -168,13 +168,19 @@ class platform::docker::runtime
 
   if str2bool($::is_initial_config) {
     $containerd_restart_cmd = 'systemctl restart containerd'
+    $dockerd_restart_cmd = 'systemctl restart docker'
   }
   else {
     $containerd_restart_cmd = 'pmon-restart containerd'
+    $dockerd_restart_cmd = 'pmon-restart dockerd'
   }
 
-  # Restart containerd also cause docker to restart.
+  # Restart containerd.
   exec { 'restart containerd for proxy changes':
     command     => $containerd_restart_cmd,
+  }
+  # Restart docker.
+  -> exec { 'restart docker for proxy changes':
+    command     => $dockerd_restart_cmd,
   }
 }
