@@ -332,7 +332,7 @@ class platform::kubernetes::master::init
     $software_version = $::platform::params::software_version
 
     exec { 'pre pull k8s images':
-      command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${version}  --image-repository registry.local:9001/k8s.gcr.io | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
+      command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${version} | xargs -i crictl pull --creds ${local_registry_auth} registry.local:9001/{}", # lint:ignore:140chars
       logoutput => true,
     }
 
@@ -463,7 +463,7 @@ class platform::kubernetes::worker::init
     $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
     exec { 'load k8s pause image by containerd':
       # splitting this command over multiple lines appears to break puppet-lint
-      command   => "kubeadm config images list --kubernetes-version ${version} --image-repository=registry.local:9001/k8s.gcr.io 2>/dev/null | grep k8s.gcr.io/pause: | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
+      command   => "kubeadm config images list --kubernetes-version ${version} 2>/dev/null | grep pause: | xargs -i crictl pull --creds ${local_registry_auth} registry.local:9001/{}", # lint:ignore:140chars
       logoutput => true,
       before    => Exec['configure worker node'],
     }
@@ -728,7 +728,7 @@ class platform::kubernetes::pre_pull_control_plane_images
   $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
 
   exec { 'pre pull images':
-    command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${upgrade_to_version} --image-repository=registry.local:9001/k8s.gcr.io | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
+    command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${upgrade_to_version} | xargs -i crictl pull --creds ${local_registry_auth} registry.local:9001/{}", # lint:ignore:140chars
     logoutput => true,
   }
 }
@@ -871,8 +871,8 @@ class platform::kubernetes::worker::upgrade_kubelet
 
   # Pull the pause image tag from kubeadm required images list for this version
   exec { 'pull pause image':
-    # spltting this command over multiple lines will break puppet-lint for later violations
-    command   => "kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf config images list --kubernetes-version ${upgrade_to_version} --image-repository=registry.local:9001/k8s.gcr.io 2>/dev/null | grep k8s.gcr.io/pause: | xargs -i crictl pull --creds ${local_registry_auth} {}", # lint:ignore:140chars
+    # splitting this command over multiple lines will break puppet-lint for later violations
+    command   => "kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf config images list --kubernetes-version ${upgrade_to_version} 2>/dev/null | grep pause: | xargs -i crictl pull --creds ${local_registry_auth} registry.local:9001/{}", # lint:ignore:140chars
     logoutput => true,
     before    => Exec['upgrade kubelet for worker'],
   }
