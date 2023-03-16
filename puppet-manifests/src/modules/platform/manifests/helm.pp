@@ -110,3 +110,22 @@ class platform::helm::runtime {
 
   Exec['sm-restart-lighttpd'] -> Class['::platform::helm::repositories']
 }
+
+class platform::helm::v2::db::postgresql (
+  $password,
+  $dbname = 'helmv2',
+  $user   = 'helmv2',
+  $encoding   = undef,
+  $privileges = 'ALL',
+) {
+    ::postgresql::server::db { $dbname:
+      user     => $user,
+      password => postgresql_password($user, $password),
+      encoding => $encoding,
+      grant    => $privileges,
+    }
+}
+
+class platform::helm::bootstrap {
+  include ::platform::helm::v2::db::postgresql
+}

@@ -41,6 +41,7 @@ include ::platform::dockerdistribution
 include ::platform::containerd::controller
 include ::platform::kubernetes::gate
 include ::platform::helm
+include ::platform::armada
 include ::platform::tty
 include ::platform::coredump::k8s_token_handler::controller
 

@@ -351,6 +351,7 @@ class platform::postgresql::upgrade
   include ::sysinv::db::postgresql
   include ::keystone::db::postgresql
   include ::fm::db::postgresql
+  include ::platform::helm::v2::db::postgresql
 }
 
 class platform::postgresql::sc::configured {
