@@ -722,13 +722,13 @@ class platform::kubernetes::pre_pull_control_plane_images
 
   include ::platform::dockerdistribution::params
 
-  # Update kubeadm bindmount if needed
-  require platform::kubernetes::bindmounts
+  # Get the short kubernetes version without the leading 'v'.
+  $short_version = regsubst($upgrade_to_version, '^v(.*)', '\1')
 
   $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
 
   exec { 'pre pull images':
-    command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${upgrade_to_version} | xargs -i crictl pull --creds ${local_registry_auth} registry.local:9001/{}", # lint:ignore:140chars
+    command   => "/usr/local/kubernetes/${short_version}/stage1/usr/bin/kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${upgrade_to_version} | xargs -i crictl pull --creds ${local_registry_auth} registry.local:9001/{}", # lint:ignore:140chars
     logoutput => true,
   }
 }
