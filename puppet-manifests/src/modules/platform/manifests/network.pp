@@ -38,6 +38,8 @@ class platform::network::mgmt::params(
   $controller1_address = undef, # controller unit1
   $mtu = 1500,
   # network type specific parameters
+  # TODO: remove platform_nfs_address when StarlingX rel 6 and 7 are not being used anymore
+  $platform_nfs_address = undef,
 ) { }
 
 class platform::network::oam::params(
@@ -156,6 +158,40 @@ class platform::network::addresses (
   create_resources('platform::network::network_address', $address_config, {})
 }
 
+
+# TODO: update_platform_nfs_ip_references is just necessary to allow an upgrade
+# from StarlingX releases 6 or 7 to new releases.
+# remove this class when StarlingX rel. 6 or 7 are not being used anymore
+class platform::network::update_platform_nfs_ip_references (
+) {
+  include ::platform::network::mgmt::params
+  include ::platform::upgrade::params
+
+  $upgrade_to_release = $::platform::upgrade::params::to_release
+  $plat_nfs_ip = $::platform::network::mgmt::params::platform_nfs_address
+  $plat_nfs_prefixlen = $::platform::network::mgmt::params::subnet_prefixlen
+  $plat_nfs_iface = $::platform::network::mgmt::params::interface_name
+
+  # platform-nfs-ip SM deprovision ( run in active and standby controller )
+  exec {'Deprovision platform-nfs-ip (service-group-member platform-nfs-ip)':
+    command => 'sm-deprovision service-group-member controller-services platform-nfs-ip --apply'
+  }
+  -> exec { 'Deprovision Platform-NFS IP service in SM (service platform-nfs-ip)':
+    command => 'sm-deprovision service platform-nfs-ip',
+  }
+  -> exec { "Removing Plaform NFS IP address from interface: ${plat_nfs_iface}":
+    command => "ip addr del ${plat_nfs_ip}/${plat_nfs_prefixlen} dev ${plat_nfs_iface}",
+    onlyif  => "ip -br addr show dev ${plat_nfs_iface} 2>/dev/null | grep '${plat_nfs_ip}/${plat_nfs_prefixlen}' 1>/dev/null",
+  }
+  -> exec { "Removing Plaform NFS IP address from /${upgrade_to_release}/dnsmasq.hosts":
+    command => "sed -i '/controller-platform-nfs/d' /opt/platform/config/${upgrade_to_release}/dnsmasq.hosts",
+    onlyif  => "test -f /opt/platform/config/${upgrade_to_release}/dnsmasq.hosts",
+  }
+  -> exec { "Removing Plaform NFS IP address from /${upgrade_to_release}/hieradata/system.yaml":
+    command => "sed -i '/platform_nfs_address/d' /opt/platform/puppet/${upgrade_to_release}/hieradata/system.yaml",
+    onlyif  => "test -f /opt/platform/puppet/${upgrade_to_release}/hieradata/system.yaml",
+  }
+}
 
 # Defines a single route resource for an interface.
 # If multiple are required in the future, then this will need to
