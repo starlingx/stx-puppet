@@ -140,6 +140,7 @@ class platform::sm
 
   # Platform NFS network is over the management network
   $platform_nfs_ip_interface   = $::platform::network::mgmt::params::interface_name
+  $platform_nfs_ip_param_ip    = $::platform::network::mgmt::params::platform_nfs_address
   $platform_nfs_ip_param_mask  = $::platform::network::mgmt::params::subnet_prefixlen
   $platform_nfs_ip_network_url = $::platform::network::mgmt::params::subnet_network_url
 
@@ -592,6 +593,35 @@ class platform::sm
     command => "sm-configure service_instance registry-token-server registry-token-server \"\"",
   }
 
+  # TODO: platform-nfs-ip is just necessary to allow an upgrade from StarlingX
+  # releases 6 or 7 to new releases.
+  # remove the platform-nfs-ip provision/deprovision when StarlingX rel. 6 or 7 are not being used anymore
+  if $platform_nfs_ip_param_ip and $system_mode != 'simplex' {
+
+    exec { 'Configure old platform-nfs-ip service in SM (service-group-member platform-nfs-ip)':
+        command => 'sm-provision service-group-member controller-services platform-nfs-ip',
+    }
+    -> exec { 'Configure old Platform-NFS IP service in SM (service platform-nfs-ip)':
+        command => 'sm-provision service platform-nfs-ip',
+    }
+
+    if $system_mode == 'duplex-direct' {
+      exec { 'Configure Platform NFS':
+        command => "sm-configure service_instance platform-nfs-ip platform-nfs-ip \"ip=${platform_nfs_ip_param_ip},cidr_netmask=${platform_nfs_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7,dc=yes\"",
+      }
+    } else {
+      exec { 'Configure Platform NFS':
+        command => "sm-configure service_instance platform-nfs-ip platform-nfs-ip \"ip=${platform_nfs_ip_param_ip},cidr_netmask=${platform_nfs_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7,preferred_lft=${preferred_lft}\"",
+      }
+    }
+  }  else {
+    exec {'Deprovision old platform-nfs-ip (service-group-member platform-nfs-ip)':
+      command => 'sm-deprovision service-group-member controller-services platform-nfs-ip'
+    }
+    -> exec { 'Deprovision old Platform-NFS IP service in SM (service platform-nfs-ip)':
+      command => 'sm-deprovision service platform-nfs-ip',
+    }
+  }
 
   exec { 'Configure System Inventory API':
     command => "sm-configure service_instance sysinv-inv sysinv-inv \"dbg=false,os_username=${os_username},os_project_name=${os_project_name},os_user_domain_name=${os_user_domain_name},os_project_domain_name=${os_project_domain_name},os_auth_url=${os_auth_url},os_region_name=${os_region_name},system_url=${system_url}\"",
