@@ -114,18 +114,12 @@ class platform::sysctl::controller::reserve_ports
   # Incorporate the reserved keystone port (35357) from
   # /usr/lib/sysctl.d/openstack-keystone.conf
   #
-  # Helm v2.13.1 hardcodes the following Tiller ports when installed in the
-  # k8s cluster: 44134 (server), 44135 (probe), 44136 (trace). Reserve them
-  # from the ephemeral port range. This will avoid potential port conflicts
-  # that will cause the tiller pod to crash when the port is assigned to
-  # another client/server
-  #
   # libvirt v4.7.0 hardcodes the ports 49152-49215 as its default port range
   # for migrations (qemu.conf). Reserve them from the ephemeral port range.
   # This will avoid potential port conflicts that will cause migration
   # failures when the port is assigned to another service
   sysctl::value { 'net.ipv4.ip_local_reserved_ports':
-    value => '35357,44134-44136,49152-49215'
+    value => '35357,49152-49215'
   }
 }
 
