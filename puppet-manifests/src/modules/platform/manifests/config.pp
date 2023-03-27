@@ -344,9 +344,11 @@ class platform::config::certs::ssl_ca
 
   if str2bool($::is_initial_config) {
     $containerd_restart_cmd = 'systemctl restart containerd'
+    $dockerd_restart_cmd = 'systemctl restart docker'
   }
   else {
     $containerd_restart_cmd = 'pmon-restart containerd'
+    $dockerd_restart_cmd = 'pmon-restart dockerd'
   }
 
   if ! empty($ssl_ca_cert) {
@@ -370,20 +372,27 @@ class platform::config::certs::ssl_ca
     subscribe   => File[$ssl_ca_file],
     refreshonly => true
   }
-  # Restart containerd also cause docker to restart.
+  # Restart containerd.
   -> exec { 'restart containerd':
     command     => $containerd_restart_cmd,
     subscribe   => File[$ssl_ca_file],
     refreshonly => true
   }
-
+  # Restart docker.
+  -> exec { 'restart dockerd':
+    command     => $dockerd_restart_cmd,
+    subscribe   => File[$ssl_ca_file],
+    refreshonly => true
+  }
   -> exec { 'restart sssd service on cert install/uninstall':
-    command => '/usr/local/sbin/pmon-restart sssd',
-    onlyif  => "test '${::osfamily }' == 'Debian'",
+    command     => '/usr/local/sbin/pmon-restart sssd',
+    subscribe   => File[$ssl_ca_file],
+    refreshonly => true,
+    onlyif      => "test '${::osfamily }' == 'Debian'",
   }
 
   if str2bool($::is_controller_active) {
-    Exec['restart containerd']
+    Exec['restart sssd service on cert install/uninstall']
     -> file { '/etc/platform/.ssl_ca_complete':
       ensure => present,
       owner  => root,
