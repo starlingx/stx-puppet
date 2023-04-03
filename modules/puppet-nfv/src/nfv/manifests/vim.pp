@@ -24,7 +24,7 @@ class nfv::vim (
   $block_storage_plugin_disabled = false,
   $compute_plugin_disabled  = false,
   $network_plugin_disabled  = false,
-  $guest_plugin_disabled    = false,
+  $guest_plugin_disabled    = true,
   $fault_mgmt_plugin_disabled = false,
   $fault_management_pod_disabled = true,
   $vim_rpc_ip               = '127.0.0.1',
