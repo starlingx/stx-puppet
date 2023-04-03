@@ -102,13 +102,22 @@ def _exec_cmd(cmd, stdout=None, stderr=None):
     return rc
 
 
-def _log_file_content(log_file):
+def _log_file_content(log_file, logger=LOG.error):
     """Auxiliary function to log the content of file."""
     try:
         with open(log_file, 'r') as file:
-            LOG.error(file.read())
+            logger(file.read())
     except Exception:
         pass
+
+
+def _search_string_on_file(file_path, word):
+    """Auxiliary function to check if a string exists in a file."""
+    with open(file_path, 'r') as file:
+        for line in file:
+            if word in line:
+                return True
+    return False
 
 
 def update_k8s_control_plane_components(config_filename,
@@ -127,6 +136,8 @@ def update_k8s_kubelet(config_filename, error_log_file):
      - rc = 0, update process successful.
      - rc = 1, update process failed.
     """
+    # pylint: disable-msg=no-else-return
+
     LOG.debug('Applying new configuration to Kubelet ...')
     try:
         if os.path.isfile(error_log_file):
@@ -144,10 +155,34 @@ def update_k8s_kubelet(config_filename, error_log_file):
         # other error occurs. Therefore, we need to look for an error message
         # to ensure that the applied settings match the settings set by the
         # user.
+        # Case: error_log file is empty
         if rc == 0 and os.stat(error_log_file).st_size == 0:
             return 0
 
-        # include error_log_file into LOG
+        # Case: error_log file is not empty
+        if rc == 0 and os.stat(error_log_file).st_size != 0:
+            # Look for "error unmarshaling configuration"* string inside
+            # error_log_file. Kubelet update command includes warnings on
+            # stderror, so we need to make sure that error_log_file actually
+            # contains errors.
+            # * In the kubernetes codebase, VerifyUnmarshalStrict function
+            # validates the configuration parameters to be applied, if the
+            # validation process fails, the error(s) are printed with the
+            # message "error unmarshaling configuration"
+            # https://github.com/kubernetes/kubernetes/blob/master/cmd/kubeadm/
+            #   app/util/config/strict/strict.go
+            # Validation includes invalid parameter names, invalid values
+            # and casting errors, among others.
+            # Case: error_log_file contains errors
+            if _search_string_on_file(error_log_file, 'error unmarshaling configuration'):
+                _log_file_content(error_log_file)
+                return 1
+            # Case: error_log_file contains only warnings
+            LOG.warning('Kubelet configuration updated with warnings.')
+            _log_file_content(error_log_file, logger=LOG.warning)
+            return 0
+
+        # Case: kubelet update fails
         _log_file_content(error_log_file)
         return 1
 
@@ -603,7 +638,8 @@ def get_service_parameters_from_hieradata(
                       'scheduler': {}, 'etcd': {},
                       'config': {}, 'kubelet': {},
                       'apiServerVolumes': {}, 'controllerManagerVolumes': {},
-                      'schedulerVolumes': {}, 'kubeletVolumes': {}}
+                      'schedulerVolumes': {}, 'kubeletVolumes': {},
+                      'base': {}}
 
     for param_key, value in hieradata.items():
         if param_key.startswith(KUBE_APISERVER_TAG):
@@ -662,6 +698,10 @@ def get_service_parameters_from_hieradata(
                     param_name = kubelet_schema[sect][param_name]
             service_params['kubelet'][param_name] = value
 
+        elif param_key.startswith(DEFAULT_TAG):
+            param_name = param_key.split(DEFAULT_TAG)[1]
+            service_params['base'][param_name] = value
+
     return service_params
 
 
@@ -709,6 +749,13 @@ def get_kubelet_cfg_from_service_parameters(service_params):
                 pass
 
         kubelet_cfg[param] = value
+
+    # Default values
+    # If the parameter is not user defined, the default value is used.
+    if 'clusterDNS' not in kubelet_cfg:
+        if 'dns_service_ip' in service_params['base']:
+            kubelet_cfg['clusterDNS'] = [service_params['base']['dns_service_ip']]
+
     return kubelet_cfg
 
 
