@@ -593,7 +593,7 @@ class platform::sm
     command => "sm-configure service_instance registry-token-server registry-token-server \"\"",
   }
 
-  # TODO: platform-nfs-ip is just necessary to allow an upgrade from StarlingX
+  # TODO(fcorream): platform-nfs-ip is just necessary to allow an upgrade from StarlingX
   # releases 6 or 7 to new releases.
   # remove the platform-nfs-ip provision/deprovision when StarlingX rel. 6 or 7 are not being used anymore
   if $platform_nfs_ip_param_ip and $system_mode != 'simplex' {
