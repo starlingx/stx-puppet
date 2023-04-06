@@ -159,8 +159,8 @@ class platform::network::addresses (
 }
 
 
-# TODO: update_platform_nfs_ip_references is just necessary to allow an upgrade
-# from StarlingX releases 6 or 7 to new releases.
+# TODO(fcorream): update_platform_nfs_ip_references is just necessary to allow
+# an upgrade from StarlingX releases 6 or 7 to new releases.
 # remove this class when StarlingX rel. 6 or 7 are not being used anymore
 class platform::network::update_platform_nfs_ip_references (
 ) {
@@ -172,24 +172,29 @@ class platform::network::update_platform_nfs_ip_references (
   $plat_nfs_prefixlen = $::platform::network::mgmt::params::subnet_prefixlen
   $plat_nfs_iface = $::platform::network::mgmt::params::interface_name
 
-  # platform-nfs-ip SM deprovision ( run in active and standby controller )
-  exec {'Deprovision platform-nfs-ip (service-group-member platform-nfs-ip)':
-    command => 'sm-deprovision service-group-member controller-services platform-nfs-ip --apply'
-  }
-  -> exec { 'Deprovision Platform-NFS IP service in SM (service platform-nfs-ip)':
-    command => 'sm-deprovision service platform-nfs-ip',
-  }
-  -> exec { "Removing Plaform NFS IP address from interface: ${plat_nfs_iface}":
-    command => "ip addr del ${plat_nfs_ip}/${plat_nfs_prefixlen} dev ${plat_nfs_iface}",
-    onlyif  => "ip -br addr show dev ${plat_nfs_iface} 2>/dev/null | grep '${plat_nfs_ip}/${plat_nfs_prefixlen}' 1>/dev/null",
-  }
-  -> exec { "Removing Plaform NFS IP address from /${upgrade_to_release}/dnsmasq.hosts":
-    command => "sed -i '/controller-platform-nfs/d' /opt/platform/config/${upgrade_to_release}/dnsmasq.hosts",
-    onlyif  => "test -f /opt/platform/config/${upgrade_to_release}/dnsmasq.hosts",
-  }
-  -> exec { "Removing Plaform NFS IP address from /${upgrade_to_release}/hieradata/system.yaml":
-    command => "sed -i '/platform_nfs_address/d' /opt/platform/puppet/${upgrade_to_release}/hieradata/system.yaml",
-    onlyif  => "test -f /opt/platform/puppet/${upgrade_to_release}/hieradata/system.yaml",
+  # if plat_nfs_ip is empty, it means upgrade-activate was called again and there is nothing to do
+  if $plat_nfs_ip and $plat_nfs_ip != '' {
+    # platform-nfs-ip SM deprovision ( run in active and standby controller )
+    exec {'Deprovision platform-nfs-ip (service-group-member platform-nfs-ip)':
+      command => 'sm-deprovision service-group-member controller-services platform-nfs-ip --apply'
+    }
+    -> exec { 'Deprovision Platform-NFS IP service in SM (service platform-nfs-ip)':
+      command => 'sm-deprovision service platform-nfs-ip',
+    }
+    -> exec { "Removing Plaform NFS IP address from interface: ${plat_nfs_iface}":
+      command => "ip addr del ${plat_nfs_ip}/${plat_nfs_prefixlen} dev ${plat_nfs_iface}",
+      onlyif  => "ip -br addr show dev ${plat_nfs_iface} 2>/dev/null | grep '${plat_nfs_ip}/${plat_nfs_prefixlen}' 1>/dev/null",
+    }
+    -> exec { "Removing Plaform NFS IP address from /${upgrade_to_release}/dnsmasq.hosts":
+      command => "sed -i '/controller-platform-nfs/d' /opt/platform/config/${upgrade_to_release}/dnsmasq.hosts",
+      onlyif  => "test -f /opt/platform/config/${upgrade_to_release}/dnsmasq.hosts",
+    }
+    -> exec { "Removing Plaform NFS IP address from /${upgrade_to_release}/hieradata/system.yaml":
+      command => "sed -i '/platform_nfs_address/d' /opt/platform/puppet/${upgrade_to_release}/hieradata/system.yaml",
+      onlyif  => "test -f /opt/platform/puppet/${upgrade_to_release}/hieradata/system.yaml",
+    }
+  } else {
+    notice('update platform nfs ip not detected, deprovisioning skipped')
   }
 }
 
