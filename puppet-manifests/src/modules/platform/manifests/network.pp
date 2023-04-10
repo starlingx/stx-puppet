@@ -242,6 +242,12 @@ define platform::network::network_route6 (
 class platform::network::routes (
   $route_config = {}
 ) {
+  # Reset file /var/run/network-scripts.puppet/routes so that deleted routes don't persist
+  exec { 'Erasing routes from file /var/run/network-scripts.puppet/routes':
+    command => "/bin/sed -i '/# HEADER/!d' /var/run/network-scripts.puppet/routes",
+    onlyif  => 'test -f /var/run/network-scripts.puppet/routes',
+  }
+
   create_resources('network_route', $route_config, {})
 
   include ::platform::params
