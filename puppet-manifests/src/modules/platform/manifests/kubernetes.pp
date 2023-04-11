@@ -55,6 +55,41 @@ class platform::kubernetes::params (
   $kubelet_eviction_hard_imagefs_available = '2Gi',
 ) { }
 
+define platform::kubernetes::pull_images_from_registry (
+  $resource_title,
+  $command,
+  $before_exec,
+  $local_registry_auth,
+) {
+  file { '/tmp/puppet/registry_credentials':
+    ensure  => file,
+    content => template('platform/registry_credentials.erb'),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0640',
+  }
+
+  if ($before_exec == undef) {
+    exec { $resource_title:
+      command   => $command,
+      logoutput => true,
+      require   => File['/tmp/puppet/registry_credentials'],
+    }
+  } else {
+    exec { $resource_title:
+      command   => $command,
+      logoutput => true,
+      require   => File['/tmp/puppet/registry_credentials'],
+      before    => Exec[$before_exec],
+    }
+  }
+
+  exec { 'destroy credentials file':
+    command => '/bin/rm -f /tmp/puppet/registry_credentials',
+    onlyif  => 'test -e /tmp/puppet/registry_credentials',
+  }
+}
+
 class platform::kubernetes::configuration {
 
   if 'kube-ignore-isol-cpus=enabled' in $::platform::kubernetes::params::host_labels {
@@ -328,12 +363,18 @@ class platform::kubernetes::master::init
     #   This flag is created by Ansible on controller-0;
     # - Ansible replay is not impacted by flag creation.
 
-    $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
     $software_version = $::platform::params::software_version
+    $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
+    $creds_command = '$(cat /tmp/puppet/registry_credentials)'
 
-    exec { 'pre pull k8s images':
-      command   => "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${version} | xargs -i crictl pull --creds ${local_registry_auth} registry.local:9001/{}", # lint:ignore:140chars
-      logoutput => true,
+    $resource_title = 'pre pull k8s images'
+    $command = "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${version} | xargs -i crictl pull --creds ${creds_command} registry.local:9001/{}" # lint:ignore:140chars
+
+    platform::kubernetes::pull_images_from_registry { 'pull images from private registry':
+      resource_title      => $resource_title,
+      command             => $command,
+      before_exec         => undef,
+      local_registry_auth => $local_registry_auth,
     }
 
     -> exec { 'configure master node':
@@ -449,24 +490,31 @@ class platform::kubernetes::master
 
 class platform::kubernetes::worker::init
   inherits ::platform::kubernetes::params {
+  include ::platform::dockerdistribution::params
 
   Class['::platform::docker::config'] -> Class[$name]
   Class['::platform::containerd::config'] -> Class[$name]
   Class['::platform::filesystem::kubelet'] -> Class[$name]
 
   if str2bool($::is_initial_config) {
-    include ::platform::dockerdistribution::params
     # Pull pause image tag from kubeadm required images list for this version
     # kubeadm config images list does not use the --kubeconfig argument
     # and admin.conf will not exist on a pure worker, and kubelet.conf will not
     # exist until after a join.
     $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
-    exec { 'load k8s pause image by containerd':
-      # splitting this command over multiple lines appears to break puppet-lint
-      command   => "kubeadm config images list --kubernetes-version ${version} 2>/dev/null | grep pause: | xargs -i crictl pull --creds ${local_registry_auth} registry.local:9001/{}", # lint:ignore:140chars
-      logoutput => true,
-      before    => Exec['configure worker node'],
+    $creds_command = '$(cat /tmp/puppet/registry_credentials)'
+
+    $resource_title = 'load k8s pause image by containerd'
+    $command = "kubeadm config images list --kubernetes-version ${version} 2>/dev/null | grep pause: | xargs -i crictl pull --creds ${creds_command} registry.local:9001/{}" # lint:ignore:140chars
+    $before_exec = 'configure worker node'
+
+    platform::kubernetes::pull_images_from_registry { 'pull images from private registry':
+      resource_title      => $resource_title,
+      command             => $command,
+      before_exec         => $before_exec,
+      local_registry_auth => $local_registry_auth,
     }
+
   }
 
   # Configure the worker node. Only do this once, so check whether the
@@ -719,17 +767,21 @@ class platform::kubernetes::firewall
 
 class platform::kubernetes::pre_pull_control_plane_images
   inherits ::platform::kubernetes::params {
-
   include ::platform::dockerdistribution::params
 
   # Get the short kubernetes version without the leading 'v'.
   $short_version = regsubst($upgrade_to_version, '^v(.*)', '\1')
-
   $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
+  $creds_command = '$(cat /tmp/puppet/registry_credentials)'
 
-  exec { 'pre pull images':
-    command   => "/usr/local/kubernetes/${short_version}/stage1/usr/bin/kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${upgrade_to_version} | xargs -i crictl pull --creds ${local_registry_auth} registry.local:9001/{}", # lint:ignore:140chars
-    logoutput => true,
+  $resource_title = 'pre pull images'
+  $command = "/usr/local/kubernetes/${short_version}/stage1/usr/bin/kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${upgrade_to_version} | xargs -i crictl pull --creds ${creds_command} registry.local:9001/{}" # lint:ignore:140chars
+
+  platform::kubernetes::pull_images_from_registry { 'pull images from private registry':
+    resource_title      => $resource_title,
+    command             => $command,
+    before_exec         => undef,
+    local_registry_auth => $local_registry_auth,
   }
 }
 
@@ -862,19 +914,22 @@ class platform::kubernetes::master::upgrade_kubelet
 
 class platform::kubernetes::worker::upgrade_kubelet
   inherits ::platform::kubernetes::params {
-
   include ::platform::dockerdistribution::params
 
   # workers use kubelet.conf rather than admin.conf
-  $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
   $kubelet_version = $::platform::kubernetes::params::kubelet_version
+  $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
+  $creds_command = '$(cat /tmp/puppet/registry_credentials)'
 
-  # Pull the pause image tag from kubeadm required images list for this version
-  exec { 'pull pause image':
-    # splitting this command over multiple lines will break puppet-lint for later violations
-    command   => "kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf config images list --kubernetes-version ${upgrade_to_version} 2>/dev/null | grep pause: | xargs -i crictl pull --creds ${local_registry_auth} registry.local:9001/{}", # lint:ignore:140chars
-    logoutput => true,
-    before    => Exec['upgrade kubelet for worker'],
+  $resource_title = 'pull pause image'
+  $command = "kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf config images list --kubernetes-version ${upgrade_to_version} 2>/dev/null | grep pause: | xargs -i crictl pull --creds ${creds_command} registry.local:9001/{}" # lint:ignore:140chars
+  $before_exec = 'upgrade kubelet for worker'
+
+  platform::kubernetes::pull_images_from_registry { 'pull images from private registry':
+    resource_title      => $resource_title,
+    command             => $command,
+    before_exec         => $before_exec,
+    local_registry_auth => $local_registry_auth,
   }
 
   exec { 'upgrade kubelet for worker':
