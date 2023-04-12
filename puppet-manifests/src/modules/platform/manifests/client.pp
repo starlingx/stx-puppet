@@ -23,6 +23,12 @@ class platform::client
     group   => 'root',
     content => template('platform/openrc.admin.erb'),
   }
+
+  -> exec { 'change group ownership for /etc/platform/openrc':
+    command => 'chgrp sys_protected /etc/platform/openrc',
+    onlyif  => '/usr/bin/test -e /etc/platform/openrc'
+  }
+
   -> file {'/etc/bash_completion.d/openstack':
     ensure  => 'present',
     mode    => '0644',
