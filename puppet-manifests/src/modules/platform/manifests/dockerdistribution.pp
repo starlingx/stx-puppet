@@ -53,7 +53,7 @@ class platform::dockerdistribution::registries {
     secure => $::platform::docker::params::icr_registry_secure},
   ]
 
-  $insecure_registries_list = $registries.filter |$registry| { !$registry['secure'] }
+  $insecure_registries_list = $registries.filter |$registry| { $registry['secure'] == 'False' }
   $insecure_registries = unique(
     $insecure_registries_list.reduce([]) |$result, $registry| {
       $result + regsubst($registry['url'], '/.*', '')
