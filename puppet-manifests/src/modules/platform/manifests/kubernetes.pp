@@ -793,12 +793,6 @@ class platform::kubernetes::upgrade_first_control_plane
   # Update kubeadm bindmount if needed.
   require platform::kubernetes::bindmounts
 
-  # Update apiserver and kubelet config to configure cgroupDriver and RemoveSelfLink feature-gates
-  exec { 'update kubeadm-config':
-    command   => '/usr/local/sbin/upgrade_k8s_config.sh',
-    logoutput => true
-  }
-
   # The kubeadm command below doesn't have the credentials to download the
   # images from local registry when they are not present in the cache, so we
   # assure here that the images are downloaded.
@@ -923,11 +917,13 @@ class platform::kubernetes::worker::upgrade_kubelet
 
   # workers use kubelet.conf rather than admin.conf
   $kubelet_version = $::platform::kubernetes::params::kubelet_version
+  $kubeadm_version = $::platform::kubernetes::params::kubeadm_version # lint:ignore:140chars
   $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
   $creds_command = '$(cat /tmp/puppet/registry_credentials)'
 
   $resource_title = 'pull pause image'
-  $command = "kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf config images list --kubernetes-version ${upgrade_to_version} 2>/dev/null | grep pause: | xargs -i crictl pull --creds ${creds_command} registry.local:9001/{}" # lint:ignore:140chars
+  # Needs to use the newer version in case the kubeadm configmap format has changed.
+  $command = "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf config images list --kubernetes-version ${upgrade_to_version} 2>/dev/null | grep pause: | xargs -i crictl pull --creds ${creds_command} registry.local:9001/{}" # lint:ignore:140chars
   $before_exec = 'upgrade kubelet for worker'
 
   platform::kubernetes::pull_images_from_registry { 'pull images from private registry':
@@ -938,7 +934,8 @@ class platform::kubernetes::worker::upgrade_kubelet
   }
 
   exec { 'upgrade kubelet for worker':
-    command   => 'kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf upgrade node',
+    # Use the newer version of kubeadm in case the kubeadm configmap format has changed.
+    command   => "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf upgrade node",
     logoutput => true,
   }
 
