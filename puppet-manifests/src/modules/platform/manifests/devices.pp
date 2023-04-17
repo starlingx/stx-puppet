@@ -95,6 +95,14 @@ define platform::devices::sriov_bind (
         command   => 'modprobe vfio-pci enable_sriov=1 disable_idle_d3=1',
         logoutput => true,
       }
+      -> exec { "Ensure enable_sriov is set: ${title}":
+        command   => 'echo 1 > /sys/module/vfio_pci/parameters/enable_sriov',
+        logoutput => true,
+      }
+      -> exec { "Ensure disable_idle_d3 is set: ${title}":
+        command   => 'echo 1 > /sys/module/vfio_pci/parameters/disable_idle_d3',
+        logoutput => true,
+      }
       -> exec { "sriov-bind-device: ${title}":
         command   => template('platform/sriov.bind-device.erb'),
         logoutput => true,
