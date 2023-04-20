@@ -15,11 +15,21 @@ s_exit() {
 cm_kubelet_tempfile=$(mktemp)
 
 <% if @is_controller_active.to_s == 'true' or @system_mode == 'simplex' -%>
-# Get current kubelet-config versioned configmap name
-cm_name=$(kubectl -n kube-system get configmaps -oname 2>/dev/null | \
-          awk '/kubelet-config/ {print $1}')
+# Get the most current kubelet-config versioned configmap name
+cm_name=$(kubectl -n kube-system get configmaps -oname \
+          --sort-by=.metadata.creationTimestamp 2>/dev/null)
 if [ $? -ne 0 ]; then
     echo "Get configmaps failed."
+    s_exit 1
+fi
+cm_name=$(grep -e kubelet-config <<< "${cm_name}" 2>/dev/null)
+if [ $? -ne 0 ]; then
+    echo "Could not find kubelet-config configmap."
+    s_exit 1
+fi
+cm_name=$(tail -n 1 <<< "${cm_name}" 2>/dev/null)
+if [ $? -ne 0 ]; then
+    echo "Could not get last kubelet-config configmap."
     s_exit 1
 fi
 echo "Got configmap: ${cm_name}"
