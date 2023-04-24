@@ -7,20 +7,22 @@
 
 
 DESC="Docker Registry Token Server"
+NAME="registry-token-server"
 SERVICE="registry-token-server.service"
 PIDFILE="/var/run/registry-token-server.pid"
 
-
 status()
 {
-    if [ "`systemctl is-active registry-token-server.service`" = "active" ]; then
-        RETVAL=0
-        echo "$DESC is running"
-        return
-    else
-        echo "$DESC is Not running"
-        RETVAL=1
+    pid=`cat $PIDFILE 2>/dev/null`
+    if [ -n "$pid" ]; then
+        if ps -f -p $pid | grep $NAME &> /dev/null ; then
+            RETVAL=0
+            echo "$DESC is running"
+            return
+        fi
     fi
+    echo "$DESC is not running"
+    RETVAL=1
 }
 
 start()
