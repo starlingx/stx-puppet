@@ -40,6 +40,7 @@ LOG.addHandler(fileHandler)
 LOG.debug('Starting k8s update process.')
 
 post_k8s_tasks = []
+parameters_to_preserve = {}
 
 DEFAULT_TAG = 'platform::kubernetes::params::'
 KUBE_APISERVER_TAG = 'platform::kubernetes::kube_apiserver::params::'
@@ -354,7 +355,7 @@ def merge_configmap_files(lastest_configmap_file, bak_configmap_file,
         raise
 
 
-def pre_k8s_updating_tasks(post_tasks=None):
+def pre_k8s_updating_tasks(post_tasks, params_to_preserve):
     """The function execute a group of tasks that are needed before the
     k8s cluster is updated.
     Args:
@@ -378,6 +379,7 @@ def pre_k8s_updating_tasks(post_tasks=None):
     if m:
         advertise_address = m.group(1)
         LOG.debug('  advertise_address = %s', advertise_address)
+        params_to_preserve['advertise-address'] = advertise_address
 
     def _post_task_update_advertise_address():
         """This method will be executed in right after control plane has been initialized and it
@@ -1242,6 +1244,14 @@ def main():
         return 3
 
     # -----------------------------------------------------------------------------
+    # Pre updating tasks
+    # -----------------------------------------------------------------------------
+    # Run mandatory tasks before the update proccess starts
+    if pre_k8s_updating_tasks(post_k8s_tasks, parameters_to_preserve) != 0:
+        LOG.error('Running pre updating tasks.')
+        return 3
+
+    # -----------------------------------------------------------------------------
     # Load k8s service-parameters from hieradata
     # (updated by user through sysinv > service-parameter)
     # -----------------------------------------------------------------------------
@@ -1289,6 +1299,11 @@ def main():
         for param in list(cluster_cfg['apiServer']['extraArgs'].keys()):
             if param not in service_params['apiServer']:
                 cluster_cfg['apiServer']['extraArgs'].pop(param)
+
+    # add/replace parameters from last valid k8s manifests that are required
+    # not to be modified during the upgrade process
+    for param, value in parameters_to_preserve.items():
+        cluster_cfg['apiServer']['extraArgs'][param] = value
 
     # apiserver_volumes section
     if cluster_cfg['apiServer'] and 'extraVolumes' in cluster_cfg['apiServer']:
@@ -1380,7 +1395,7 @@ def main():
                 cluster_cfg['etcd']['external'][param] = value
 
     # -----------------------------------------------------------------------------
-    # Pre updating tasks and patch kubeadm configmap
+    # Patch kubeadm configmap
     # -----------------------------------------------------------------------------
     # Ensure the yaml is constructed with proper formatting and tabbing
     cluster_cfg_str = yaml.dump(
@@ -1395,11 +1410,6 @@ def main():
                       default_flow_style=False)
     except Exception as e:
         LOG.error('Saving updated kubeadm-config into file. %s', e)
-        return 3
-
-    # Run mandatory tasks before the update proccess starts
-    if pre_k8s_updating_tasks(post_k8s_tasks) != 0:
-        LOG.error('Running pre updating tasks.')
         return 3
 
     # Patch kubeadm-config configmap with the updated configuration.
