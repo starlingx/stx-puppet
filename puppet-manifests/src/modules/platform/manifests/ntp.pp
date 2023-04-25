@@ -104,6 +104,12 @@ class platform::ntp::server {
       mode    => '0640',
       content => template('platform/ntp_initial.conf.server.erb'),
     }
+
+    file { '/etc/default/ntp':
+      ensure  => file,
+      mode    => '0644',
+      content => 'NTPD_OPTS="-U 0"',
+    }
   }
 }
 
