@@ -818,6 +818,11 @@ class platform::kubernetes::upgrade_first_control_plane
     timeout   => 600,
     require   => Exec['update kubeadm-config']
   }
+  -> exec { 'purge all kubelet-config except most recent':
+      environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
+      command     => 'kubectl -n kube-system get configmaps -oname --sort-by=.metadata.creationTimestamp | grep -e kubelet-config | head -n -1 | xargs -r -i kubectl -n kube-system delete {}', # lint:ignore:140chars
+      logoutput   => true,
+  }
 
   if $::platform::params::system_mode != 'simplex' {
     # For duplex and multi-node system, restrict the coredns pod to control-plane nodes
