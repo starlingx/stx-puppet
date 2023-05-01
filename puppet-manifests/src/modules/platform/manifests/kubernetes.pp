@@ -810,7 +810,6 @@ class platform::kubernetes::upgrade_first_control_plane
     command   => "stdbuf -oL -eL kubeadm -v6 --kubeconfig=/etc/kubernetes/admin.conf upgrade apply ${version} --allow-experimental-upgrades --allow-release-candidate-upgrades -y 2>&1 | tee /var/log/puppet/latest/kubeadm-upgrade-apply.log", # lint:ignore:140chars
     logoutput => true,
     timeout   => 600,
-    require   => Exec['update kubeadm-config']
   }
   -> exec { 'purge all kubelet-config except most recent':
       environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
