@@ -378,15 +378,18 @@ class platform::sm
       }
   }
 
+  if $::platform::params::distributed_cloud_role =='subcloud' {
+    exec { 'Provision admin-services (service-domain-member admin-services)':
+      command => 'sm-provision service-domain-member controller admin-services',
+    }
+    -> exec { 'Provision admin-services (service-group admin-services)':
+      command => 'sm-provision service-group admin-services',
+    }
+  }
+
   # Create the Admin IP service if it is configured
   if $admin_ip_interface {
       # Provision and configure admin-subcloud
-      exec { 'Provision admin-services (service-domain-member admin-services)':
-        command => 'sm-provision service-domain-member controller admin-services',
-      }
-      -> exec { 'Provision admin-services (service-group admin-services)':
-        command => 'sm-provision service-group admin-services',
-      }
       exec { 'Configure Admin IP service in SM (service-group-member admin-ip)':
           command => 'sm-provision service-group-member admin-services admin-ip',
       }
@@ -695,10 +698,8 @@ class platform::sm
         exec { 'Configure distributed-cloud-services redundancy model':
             command => "sm-configure service_group yes controller distributed-cloud-services N 1 0 \"\" \"\"",
         }
-        if $admin_ip_interface {
-          exec { 'Configure admin-service redundancy model':
-            command => "sm-configure service_group yes controller admin-services N 1 0 \"\" directory-services",
-          }
+        exec { 'Configure admin-service redundancy model':
+          command => "sm-configure service_group yes controller admin-services N 1 0 \"\" directory-services",
         }
     }
   } else {
@@ -719,9 +720,6 @@ class platform::sm
       }
       -> exec { 'Provision admin-ip service':
         command => 'sm-provision service admin-ip',
-      }
-      exec { 'Configure admin-service redundancy model to DX':
-        command => "sm-configure service_group yes controller admin-services 'N + M' 1 1 \"controller-aggregate\" directory-services",
       }
     }
 
@@ -760,6 +758,9 @@ class platform::sm
     if $::platform::params::distributed_cloud_role == 'subcloud' {
         exec { 'Configure distributed-cloud-services redundancy model to DX':
             command => "sm-configure service_group yes controller distributed-cloud-services 'N + M' 1 1 \"controller-aggregate\" \"\"",
+        }
+        exec { 'Configure admin-service redundancy model to DX':
+            command => "sm-configure service_group yes controller admin-services 'N + M' 1 1 \"controller-aggregate\" directory-services",
         }
     }
   }
