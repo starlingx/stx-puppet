@@ -90,6 +90,18 @@ def set_parser():
                         help='Set which kernel to boot',
                         action='store')
 
+    parser.add_argument('--set-kernel-lowlatency',
+                        default=False,
+                        dest='set_kernel_lowlatency',
+                        help='Set the lowlatency kernel to boot',
+                        action='store_true')
+
+    parser.add_argument('--set-kernel-standard',
+                        default=False,
+                        dest='set_kernel_standard',
+                        help='Set the standard kernel to boot',
+                        action='store_true')
+
     parser.add_argument('--list-kernels',
                         default=False,
                         dest='list_kernels',
@@ -214,13 +226,33 @@ def get_kernel_dir():
 def edit_kernel_env(args):
     """Edit kernel environment"""
 
-    kernel_env = os.path.join(get_kernel_dir(), 'kernel.env')
+    kernel_dir = get_kernel_dir()
+    path_all = os.path.join(kernel_dir,"vmlinuz*-amd64")
+    path_rt = os.path.join(kernel_dir, "vmlinuz*rt*-amd64")
 
-    kernel = f"kernel={args.set_kernel}"
+    glob_all_kernels = [os.path.basename(f) for f in glob.glob(path_all)]
+    glob_rt_kernels = [os.path.basename(f) for f in glob.glob(path_rt)]
+    glob_std_kernels = list(set(glob_all_kernels) - set(glob_rt_kernels))
+
+    if args.set_kernel_lowlatency:
+        kernel = f"kernel={sorted(glob_rt_kernels, reverse=True).pop()}"
+    elif args.set_kernel_standard:
+        kernel = f"kernel={sorted(glob_std_kernels, reverse=True).pop()}"
+    else:
+        kernel = f"kernel={args.set_kernel}"
+
+    if not kernel:
+        err = f"Kernel not found in ${kernel_dir}"
+        print(err)
+        raise Exception(err)
+
+    # write key-value kernel=... to kernel.env file
+    kernel_env = os.path.join(kernel_dir, 'kernel.env')
     write_conf(kernel_env, kernel)
 
-    kernel_rallback = f"kernel_rollback={args.set_kernel}"
-    write_conf(kernel_env, kernel_rallback)
+    # write key-value kernel_rollback=... to kernel.env file
+    kernel_rollback_env = f"kernel_rollback={kernel}"
+    write_conf(kernel_env, kernel_rollback_env)
 
 def list_kernels():
     """List kernels"""
@@ -264,7 +296,7 @@ def main():
     if args.add_kernel_params or args.del_kernel_params:
         edit_boot_env(args)
 
-    if args.set_kernel:
+    if args.set_kernel or args.set_kernel_lowlatency or args.set_kernel_standard:
         edit_kernel_env(args)
 
     if args.list_kernels:
