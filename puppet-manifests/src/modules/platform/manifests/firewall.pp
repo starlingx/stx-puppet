@@ -210,19 +210,260 @@ class platform::firewall::calico::oam::endpoints {
   }
 }
 
-class platform::firewall::calico::oam {
+class platform::firewall::calico::controller {
   contain ::platform::firewall::calico::oam::endpoints
   contain ::platform::firewall::calico::oam::services
+  contain ::platform::firewall::calico::mgmt
+  contain ::platform::firewall::calico::cluster_host
+  contain ::platform::firewall::calico::pxeboot
+  contain ::platform::firewall::calico::storage
+  contain ::platform::firewall::calico::admin
+  contain ::platform::firewall::calico::hostendpoint
 
   Class['::platform::kubernetes::gate'] -> Class[$name]
+
   Class['::platform::firewall::calico::oam::endpoints']
   -> Class['::platform::firewall::calico::oam::services']
+  -> Class['::platform::firewall::calico::mgmt']
+  -> Class['::platform::firewall::calico::cluster_host']
+  -> Class['::platform::firewall::calico::pxeboot']
+  -> Class['::platform::firewall::calico::storage']
+  -> Class['::platform::firewall::calico::admin']
+  -> Class['::platform::firewall::calico::hostendpoint']
+}
+
+class platform::firewall::calico::worker {
+  contain ::platform::firewall::calico::mgmt
+  contain ::platform::firewall::calico::cluster_host
+  contain ::platform::firewall::calico::pxeboot
+  contain ::platform::firewall::calico::storage
+  contain ::platform::firewall::calico::hostendpoint
+
+  Class['::platform::kubernetes::worker'] -> Class[$name]
+
+  Class['::platform::firewall::calico::mgmt']
+  -> Class['::platform::firewall::calico::cluster_host']
+  -> Class['::platform::firewall::calico::pxeboot']
+  -> Class['::platform::firewall::calico::storage']
+  -> Class['::platform::firewall::calico::hostendpoint']
 }
 
 class platform::firewall::runtime {
   include ::platform::firewall::calico::oam::endpoints
   include ::platform::firewall::calico::oam::services
+  include ::platform::firewall::calico::mgmt
+  include ::platform::firewall::calico::cluster_host
+  include ::platform::firewall::calico::pxeboot
+  include ::platform::firewall::calico::storage
+  include ::platform::firewall::calico::admin
+  include ::platform::firewall::calico::hostendpoint
 
   Class['::platform::firewall::calico::oam::endpoints']
   -> Class['::platform::firewall::calico::oam::services']
+  -> Class['::platform::firewall::calico::mgmt']
+  -> Class['::platform::firewall::calico::cluster_host']
+  -> Class['::platform::firewall::calico::pxeboot']
+  -> Class['::platform::firewall::calico::storage']
+  -> Class['::platform::firewall::calico::admin']
+  -> Class['::platform::firewall::calico::hostendpoint']
+}
+
+class platform::firewall::calico::mgmt (
+  $config = {}
+) {
+  if $config != {} {
+    $yaml_config = hash2yaml($config)
+    $gnp_name = "${::personality}-mgmt-if-gnp"
+    $file_name_gnp = "/tmp/gnp_${gnp_name}.yaml"
+    file { $file_name_gnp:
+      ensure  => file,
+      content => template('platform/calico_platform_network_if_gnp.yaml.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0640',
+    }
+    # Remove annotation as it contains last-applied-configuration with
+    # resourceVersion in it, which will require the gnp re-apply to
+    # provide a matching resourceVersion in the yaml file.
+    -> exec { "remove annotation from ${gnp_name}":
+      path    => '/usr/bin:/usr/sbin:/bin',
+      command => @("CMD"/L),
+        kubectl --kubeconfig=/etc/kubernetes/admin.conf annotate globalnetworkpolicies.crd.projectcalico.org \
+        ${gnp_name} kubectl.kubernetes.io/last-applied-configuration-
+        | CMD
+      onlyif  => "kubectl --kubeconfig=/etc/kubernetes/admin.conf get globalnetworkpolicies.crd.projectcalico.org ${gnp_name}"
+    }
+    -> exec { "apply resource ${file_name_gnp}":
+      path    => '/usr/bin:/usr/sbin:/bin',
+      command => "kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f ${file_name_gnp}",
+      onlyif  => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf get customresourcedefinitions.apiextensions.k8s.io'
+    }
+  }
+}
+
+class platform::firewall::calico::cluster_host  (
+  $config = {}
+) {
+  if $config != {} {
+    $yaml_config = hash2yaml($config)
+    $gnp_name = "${::personality}-cluster_host-if-gnp"
+    $file_name_gnp = "/tmp/gnp_${gnp_name}.yaml"
+    file { $file_name_gnp:
+      ensure  => file,
+      content => template('platform/calico_platform_network_if_gnp.yaml.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0640',
+    }
+    # Remove annotation as it contains last-applied-configuration with
+    # resourceVersion in it, which will require the gnp re-apply to
+    # provide a matching resourceVersion in the yaml file.
+    -> exec { "remove annotation from ${gnp_name}":
+      path    => '/usr/bin:/usr/sbin:/bin',
+      command => @("CMD"/L),
+        kubectl --kubeconfig=/etc/kubernetes/admin.conf annotate globalnetworkpolicies.crd.projectcalico.org \
+        ${gnp_name} kubectl.kubernetes.io/last-applied-configuration-
+        | CMD
+      onlyif  => "kubectl --kubeconfig=/etc/kubernetes/admin.conf get globalnetworkpolicies.crd.projectcalico.org ${gnp_name}"
+    }
+    -> exec { "apply resource ${file_name_gnp}":
+      path    => '/usr/bin:/usr/sbin:/bin',
+      command => "kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f ${file_name_gnp}",
+      onlyif  => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf get customresourcedefinitions.apiextensions.k8s.io'
+    }
+  }
+}
+
+class platform::firewall::calico::pxeboot  (
+  $config = {}
+) {
+  if $config != {} {
+    $yaml_config = hash2yaml($config)
+    $gnp_name = "${::personality}-pxeboot-if-gnp"
+    $file_name_gnp = "/tmp/gnp_${gnp_name}.yaml"
+    file { $file_name_gnp:
+      ensure  => file,
+      content => template('platform/calico_platform_network_if_gnp.yaml.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0640',
+    }
+    # Remove annotation as it contains last-applied-configuration with
+    # resourceVersion in it, which will require the gnp re-apply to
+    # provide a matching resourceVersion in the yaml file.
+    -> exec { "remove annotation from ${gnp_name}":
+      path    => '/usr/bin:/usr/sbin:/bin',
+      command => @("CMD"/L),
+        kubectl --kubeconfig=/etc/kubernetes/admin.conf annotate globalnetworkpolicies.crd.projectcalico.org \
+        ${gnp_name} kubectl.kubernetes.io/last-applied-configuration-
+        | CMD
+      onlyif  => "kubectl --kubeconfig=/etc/kubernetes/admin.conf get globalnetworkpolicies.crd.projectcalico.org ${gnp_name}"
+    }
+    -> exec { "apply resource ${file_name_gnp}":
+      path    => '/usr/bin:/usr/sbin:/bin',
+      command => "kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f ${file_name_gnp}",
+      onlyif  => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf get customresourcedefinitions.apiextensions.k8s.io'
+    }
+  }
+}
+
+class platform::firewall::calico::storage  (
+  $config = {}
+) {
+  if $config != {} {
+    $yaml_config = hash2yaml($config)
+    $gnp_name = "${::personality}-storage-if-gnp"
+    $file_name_gnp = "/tmp/gnp_${gnp_name}.yaml"
+    file { $file_name_gnp:
+      ensure  => file,
+      content => template('platform/calico_platform_network_if_gnp.yaml.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0640',
+    }
+    # Remove annotation as it contains last-applied-configuration with
+    # resourceVersion in it, which will require the gnp re-apply to
+    # provide a matching resourceVersion in the yaml file.
+    -> exec { "remove annotation from ${gnp_name}":
+      path    => '/usr/bin:/usr/sbin:/bin',
+      command => @("CMD"/L),
+        kubectl --kubeconfig=/etc/kubernetes/admin.conf annotate globalnetworkpolicies.crd.projectcalico.org \
+        ${gnp_name} kubectl.kubernetes.io/last-applied-configuration-
+        | CMD
+      onlyif  => "kubectl --kubeconfig=/etc/kubernetes/admin.conf get globalnetworkpolicies.crd.projectcalico.org ${gnp_name}"
+    }
+    -> exec { "apply resource ${file_name_gnp}":
+      path    => '/usr/bin:/usr/sbin:/bin',
+      command => "kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f ${file_name_gnp}",
+      onlyif  => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf get customresourcedefinitions.apiextensions.k8s.io'
+    }
+  }
+}
+
+class platform::firewall::calico::admin  (
+  $config = {}
+) {
+  if $config != {} {
+    $yaml_config = hash2yaml($config)
+    $gnp_name = "${::personality}-admin-if-gnp"
+    $file_name_gnp = "/tmp/gnp_${gnp_name}.yaml"
+    file { $file_name_gnp:
+      ensure  => file,
+      content => template('platform/calico_platform_network_if_gnp.yaml.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0640',
+    }
+    # Remove annotation as it contains last-applied-configuration with
+    # resourceVersion in it, which will require the gnp re-apply to
+    # provide a matching resourceVersion in the yaml file.
+    -> exec { "remove annotation from ${gnp_name}":
+      path    => '/usr/bin:/usr/sbin:/bin',
+      command => @("CMD"/L),
+        kubectl --kubeconfig=/etc/kubernetes/admin.conf annotate globalnetworkpolicies.crd.projectcalico.org \
+        ${gnp_name} kubectl.kubernetes.io/last-applied-configuration-
+        | CMD
+      onlyif  => "kubectl --kubeconfig=/etc/kubernetes/admin.conf get globalnetworkpolicies.crd.projectcalico.org ${gnp_name}"
+    }
+    -> exec { "apply resource ${file_name_gnp}":
+      path    => '/usr/bin:/usr/sbin:/bin',
+      command => "kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f ${file_name_gnp}",
+      onlyif  => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf get customresourcedefinitions.apiextensions.k8s.io'
+    }
+  }
+}
+
+class platform::firewall::calico::hostendpoint (
+  $config = {}
+) {
+  $active_heps = keys($config)
+  if $config != {} {
+    $config.each |$key, $value| {
+      # create/update host endpoint
+      $file_name_hep = "/tmp/hep_${key}.yaml"
+      $yaml_config = hash2yaml($value)
+      file { $file_name_hep:
+        ensure  => file,
+        content => template('platform/calico_platform_firewall_if_hep.yaml.erb'),
+        owner   => 'root',
+        group   => 'root',
+        mode    => '0640',
+      }
+      -> exec { "apply resource ${file_name_hep}":
+        path    => '/usr/bin:/usr/sbin:/bin',
+        command => "kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f ${file_name_hep}",
+        onlyif  => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf get customresourcedefinitions.apiextensions.k8s.io'
+      }
+    }
+  }
+  # storage nodes do not run k8s
+  if $::personality != 'storage' {
+    exec { "get active hostendepoints: ${active_heps}":
+      command => "echo ${active_heps} > /tmp/hep_active.txt",
+    }
+    -> exec { 'remove unused hostendepoints':
+      command => 'remove_unused_calico_hostendpoints.sh',
+      onlyif  => 'test -f /tmp/hep_active.txt'
+    }
+  }
 }
