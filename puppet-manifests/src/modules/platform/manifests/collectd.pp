@@ -83,8 +83,17 @@ class platform::collectd
     group  => 'root',
     mode   => '0600',
   }
-}
 
+  # Crontab entry for rss daily Memory log.
+  cron { 'memory-logs':
+  ensure      => 'present',
+  command     => '/usr/bin/date >> /var/log/rss-memory.log; /usr/bin/ps -e -o ppid,pid,nlwp,rss:10,vsz:10,comm,cmd --sort=-rss >> /var/log/rss-memory.log', # lint:ignore:140chars
+  environment => 'PATH=/bin:/usr/bin:/usr/sbin',
+  minute      => '00',
+  hour        => '1',
+  user        => 'root',
+  }
+}
 class platform::collectd::runtime {
   include ::platform::collectd
 }
