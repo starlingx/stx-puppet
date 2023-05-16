@@ -1,4 +1,4 @@
-define ptp_config_files(
+define platform::ptpinstance::ptp_config_files(
   $_name,
   $service,
   $global_parameters,
@@ -43,7 +43,7 @@ define ptp_config_files(
   }
 }
 
-define set_ptp4l_pmc_parameters(
+define platform::ptpinstance::set_ptp4l_pmc_parameters(
   $_name,
   $service,
   $global_parameters,
@@ -80,7 +80,7 @@ define set_ptp4l_pmc_parameters(
   }
 }
 
-define nic_clock_handler (
+define platform::ptpinstance::nic_clock_handler (
   $ifname,
   $parameters,
   $port_names,
@@ -130,7 +130,7 @@ define nic_clock_handler (
   }
 }
 
-define nic_clock_reset (
+define platform::ptpinstance::nic_clock_reset (
   $ifname,
   $parameters,
   $port_names,
@@ -193,7 +193,7 @@ class platform::ptpinstance::nic_clock (
     require => File["${ptp_conf_dir}/ptpinstance"]
   }
   if $nic_clock_enabled {
-    create_resources('nic_clock_handler', $nic_clock_config, {'ptp_conf_dir' => $ptp_conf_dir})
+    create_resources('platform::ptpinstance::nic_clock_handler', $nic_clock_config, {'ptp_conf_dir' => $ptp_conf_dir})
   }
 }
 
@@ -205,7 +205,7 @@ class platform::ptpinstance::nic_clock::nic_reset (
   $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
 
   if $nic_clock_enabled {
-    create_resources('nic_clock_reset', $nic_clock_config)
+    create_resources('platform::ptpinstance::nic_clock_reset', $nic_clock_config)
   }
   exec { 'clear_clock_conf_file':
     command => "echo \"\" > ${ptp_conf_dir}/ptpinstance/clock-conf.conf",
@@ -336,8 +336,8 @@ class platform::ptpinstance (
   }
 
   if $enabled {
-    create_resources('ptp_config_files', $config, $ptp_state)
-    create_resources('set_ptp4l_pmc_parameters', $config, $ptp_state)
+    create_resources('platform::ptpinstance::ptp_config_files', $config, $ptp_state)
+    create_resources('platform::ptpinstance::set_ptp4l_pmc_parameters', $config, $ptp_state)
   }
 
   exec { 'set-ice-gnss-thread-niceness':

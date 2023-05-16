@@ -6,8 +6,7 @@ class platform::partitions::params (
   $check_config = undef,
 ) {}
 
-
-define platform_manage_partition(
+define platform::partitions::platform_manage_partition(
   $action = $name,
   $config = undef,
   $shutdown_drbd_resource = undef,
@@ -28,31 +27,30 @@ define platform_manage_partition(
   }
 }
 
-
 class platform::partitions
   inherits ::platform::partitions::params {
 
   # Ensure partitions are updated before the PVs and VGs are setup
-  Platform_manage_partition <| |> -> Physical_volume <| |>
-  Platform_manage_partition <| |> -> Volume_group <| |>
+  Platform::Partitions::Platform_manage_partition <| |> -> Physical_volume <| |>
+  Platform::Partitions::Platform_manage_partition <| |> -> Volume_group <| |>
 
   # Perform partition updates in a particular order: deletions,
   # modifications, then creations.
 
   # NOTE: Currently we are executing partition changes serially, not in bulk.
-  platform_manage_partition { 'check':
-    config => $check_config,
+  platform::partitions::platform_manage_partition { 'check':
+    config => $::platform::partitions::params::check_config,
   }
-  -> platform_manage_partition { 'delete':
-    config => $delete_config,
+  -> platform::partitions::platform_manage_partition { 'delete':
+    config => $::platform::partitions::params::delete_config,
   }
-  -> platform_manage_partition { 'modify':
-    config                 => $modify_config,
-    shutdown_drbd_resource => $shutdown_drbd_resource,
+  -> platform::partitions::platform_manage_partition { 'modify':
+    config                 => $::platform::partitions::params::modify_config,
+    shutdown_drbd_resource => $::platform::partitions::params::shutdown_drbd_resource,
     system_mode            => $::platform::params::system_mode,
   }
-  -> platform_manage_partition { 'create':
-    config => $create_config,
+  -> platform::partitions::platform_manage_partition { 'create':
+    config => $::platform::partitions::params::create_config,
   }
 }
 

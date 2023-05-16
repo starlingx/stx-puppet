@@ -13,7 +13,7 @@ define platform::rook::mapping {
 }
 
 
-define platform_rook_directory(
+define platform::rook::directory(
   $disk_node,
   $data_path,
   $directory,
@@ -28,7 +28,7 @@ class platform::rook::directories(
   $dir_config = {},
 ) inherits ::platform::rook::params {
 
-  create_resources('platform_rook_directory', $dir_config)
+  create_resources('platform::rook::directory', $dir_config)
 }
 
 class platform::rook::vg::rook_vg(
