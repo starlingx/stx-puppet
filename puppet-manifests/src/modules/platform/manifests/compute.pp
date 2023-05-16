@@ -47,6 +47,7 @@ class platform::compute::grub::params (
   $g_audit = '',
   $g_audit_backlog_limit = 'audit_backlog_limit=8192',
   $g_intel_nic_driver_version = '',
+  $g_intel_pstate = '',
   $bios_cstate = false,
   $ignore_recovery = false,
   $keys = [
@@ -62,6 +63,7 @@ class platform::compute::grub::params (
     'audit',
     'audit_backlog_limit',
     'multi-drivers-switch',
+    'intel_pstate',
   ],
 ) {
 
@@ -84,9 +86,15 @@ class platform::compute::grub::params (
     $multi_drivers_switch = ''
   }
 
+  if ! empty($g_intel_pstate) {
+    $intel_pstate = "intel_pstate=${g_intel_pstate}"
+  } else {
+    $intel_pstate = ''
+  }
+
   $grub_updates = strip(
     # lint:ignore:140chars
-    "${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit} ${intel_idle_cstate} ${multi_drivers_switch}"
+    "${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit} ${intel_idle_cstate} ${multi_drivers_switch} ${intel_pstate}"
     # lint:endignore:140chars
     )
 }
