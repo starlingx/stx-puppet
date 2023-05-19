@@ -4,7 +4,6 @@ class platform::config::params (
   $timezone = 'UTC',
 ) { }
 
-
 class platform::config::certs::params (
   $ssl_ca_cert = '',
 ) { }
@@ -199,8 +198,46 @@ class platform::config::file {
     match => '^http_port=',
   }
 
+  include platform::config::file::subfunctions::lowlatency
 }
 
+# update the subfunctions in /etc/platform/platform.conf
+# with the current low latency setting
+class platform::config::file::subfunctions::lowlatency {
+  include platform::sysctl::params
+  $platform_conf = '/etc/platform/platform.conf'
+
+  if str2bool($platform::sysctl::params::low_latency) {
+    # low latency = true, append 'lowlatency'
+    if !str2bool($::is_lowlatency_subfunction) {
+      $subfunctions = "${::subfunction},lowlatency"
+
+      file_line { "${platform_conf} subfunctions":
+        path  => $platform_conf,
+        line  => "subfunction=${subfunctions}",
+        match => '^subfunction=',
+      }
+    }
+  }
+  else {
+    # low latency = false, remove 'lowlatency'
+    if str2bool($::is_lowlatency_subfunction) {
+      $subfunctions = regsubst($::subfunction, /,?lowlatency/,'')
+
+      file_line { "${platform_conf} subfunctions":
+        path  => $platform_conf,
+        line  => "subfunction=${subfunctions}",
+        match => '^subfunction=',
+      }
+    }
+  }
+}
+
+# runtime manifest updates subfunctions line
+# in /etc/platform/platform.conf to match low latency config setting
+class platform::config::file::subfunctions::lowlatency::runtime {
+  include platform::config::file::subfunctions::lowlatency
+}
 
 class platform::config::hostname {
   include ::platform::params
