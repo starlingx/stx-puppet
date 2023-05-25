@@ -53,12 +53,14 @@ dhcp-option=option6:224,<%= @install_uuid %>
 #             7    EFI BC (EFI Byte Code)
 #             8    EFI Xscale
 #             9    EFI x86-64
+#             11   EFI ARM64
 #
 dhcp-match=set:efi,option:client-arch,2
 dhcp-match=set:efi,option:client-arch,6
 dhcp-match=set:uefi,option:client-arch,7
 dhcp-match=set:efi,option:client-arch,8
 dhcp-match=set:efi,option:client-arch,9
+dhcp-match=set:efi,option:client-arch,11
 dhcp-match=set:bios,option:client-arch,0
 dhcp-match=set:bios,option:client-arch,1
 dhcp-match=set:bios,option:client-arch,3
