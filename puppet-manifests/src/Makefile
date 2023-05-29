@@ -20,6 +20,11 @@ endif
 	install -m 755 -D bin/puppet-update-default-grub.sh $(BINDIR)/puppet-update-default-grub.sh
 	install -m 755 -D bin/puppet-update-grub-env.py $(BINDIR)/puppet-update-grub-env.py
 	install -m 755 -D bin/remove_unused_calico_hostendpoints.sh $(BINDIR)/remove_unused_calico_hostendpoints.sh
+	install -m 755 -D bin/remove_remote_unused_calico_hostendpoints.sh $(BINDIR)/remove_remote_unused_calico_hostendpoints.sh
+	install -m 755 -D bin/calico_firewall_apply_hostendp.sh $(BINDIR)/calico_firewall_apply_hostendp.sh
+	install -m 755 -D bin/calico_firewall_apply_policy.sh $(BINDIR)/calico_firewall_apply_policy.sh
+	install -m 755 -D bin/calico_firewall_remote_apply_hostendp.sh $(BINDIR)/calico_firewall_remote_apply_hostendp.sh
+	install -m 755 -D bin/calico_firewall_remote_apply_policy.sh $(BINDIR)/calico_firewall_remote_apply_policy.sh
 	install -d -m 0755 $(CONFIGDIR)
 ifdef hiera_v5
 	install -m 640 etc/hiera_v5.yaml $(CONFIGDIR)/hiera.yaml

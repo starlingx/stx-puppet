@@ -42,6 +42,7 @@ include ::platform::docker::worker
 include ::platform::containerd::worker
 include ::platform::dockerdistribution::compute
 include ::platform::kubernetes::worker
+include ::platform::firewall::calico::worker
 include ::platform::multipath
 include ::platform::client
 include ::platform::ceph::worker

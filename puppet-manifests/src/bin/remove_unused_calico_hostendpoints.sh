@@ -23,20 +23,28 @@ function log_it {
     logger "${BASH_SOURCE[1]} ${1}"
 }
 
-if [ ! -f /tmp/hep_active.txt ]; then
-    log_it "file /tmp/hep_active.txt does not exist, cannot proceed";
+hostname=${1}
+hep_active_file=${2}
+
+if [ ! -f ${hep_active_file} ]; then
+    log_it "file ${hep_active_file} does not exist, cannot proceed";
     exit 1
 fi
 
-hostname=$(cat /etc/hostname)
+kubeconfig="/etc/kubernetes/admin.conf"
+
 # the HostEndpoint format is [hostname]-[ifname]-if-hep
-for hep in $(kubectl --kubeconfig=/etc/kubernetes/admin.conf get hostendpoints --no-headers | grep ${hostname} | awk '{print $1}'); do
+for hep in $(kubectl --kubeconfig=${kubeconfig} get hostendpoints --no-headers | grep ${hostname} | awk '{print $1}'); do
     # We are not handling the OAM hostendpoint interface for now
     if [[ ! ${hep} =~ .*"-oam-if-hep" ]]; then
-        count=$(grep -c ${hep} /tmp/hep_active.txt);
+        count=$(grep -c ${hep} ${hep_active_file});
         if [ "$count" == "0" ]; then
-            log_it "remove non-active ${hep} from calico"
-            kubectl --kubeconfig=/etc/kubernetes/admin.conf delete hostendpoints ${hep};
+            log_it "remove non-active ${hep} from calico";
+            kubectl --kubeconfig=${kubeconfig} delete hostendpoints ${hep};
+            if [ "$?" -ne 0 ]; then
+                log_it "Failed to delete ${hep} with ${hep_active_file}"
+                exit 1
+            fi
         fi
     fi
 done
