@@ -157,6 +157,10 @@ class platform::postgresql::server
     }
   }
 
+  # Explicitly disable huge pages usage, by default postgres uses it if available
+  postgresql::server::config_entry { 'huge_pages':
+    value => 'off',
+  }
 
   # Set large values for postgres in standard or system controller.
   # In AIO or virtual box, use reduced settings.
