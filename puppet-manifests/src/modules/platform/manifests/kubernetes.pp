@@ -47,6 +47,14 @@ class platform::kubernetes::params (
   $controller_manager_key = undef,
   $kubelet_cert = undef,
   $kubelet_key = undef,
+  $etcd_cert_file = undef,
+  $etcd_key_file = undef,
+  $etcd_ca_cert = undef,
+  $etcd_endpoints = undef,
+  $etcd_snapshot_file = '/opt/backups/k8s-control-plane/etcd/stx_etcd.snap',
+  $static_pod_manifests = '/opt/backups/k8s-control-plane/static-pod-manifests',
+  $etcd_name = 'controller',
+  $etcd_initial_cluster = 'controller=http://localhost:2380',
   # The file holding the root CA cert/key to update to
   $rootca_certfile_new = '/etc/kubernetes/pki/ca_new.crt',
   $rootca_keyfile_new = '/etc/kubernetes/pki/ca_new.key',
@@ -1591,19 +1599,65 @@ class platform::kubernetes::update_kubelet_config::runtime
   }
 }
 
+class platform::kubernetes::cordon_node {
+  exec { 'drain the node':
+    command   => "kubectl --kubeconfig=/etc/kubernetes/admin.conf drain ${::platform::params::hostname} --ignore-daemonsets --delete-emptydir-data --force --skip-wait-for-delete-timeout=10", # lint:ignore:140chars
+    logoutput => true,
+  }
+}
+
 class platform::kubernetes::upgrade_abort
   inherits ::platform::kubernetes::params {
-
+  $software_version = $::platform::params::software_version
+  include platform::kubernetes::cordon_node
   include platform::kubernetes::mask_stop_kubelet
-  include platform::kubernetes::unmask_start_kubelet
   include platform::kubernetes::bindmounts
+  include platform::kubernetes::unmask_start_kubelet
 
-  exec { 'restore static manifest files':
-    command => '/usr/bin/cp -r  /var/rootdirs/opt/backups/k8s-control-plane/static-pod-manifests/* /etc/kubernetes/manifests',
-    require => Class['platform::kubernetes::mask_stop_kubelet']
+  exec { 'remove the control-plane pods':
+      command => '/usr/bin/rm -f  /etc/kubernetes/manifests/*.yaml',
+      require => Class['platform::kubernetes::cordon_node'],
+      onlyif  => "test -d ${static_pod_manifests}",
   }
-  -> exec { 'restart etcd':
-      command => '/usr/bin/systemctl restart etcd',
+  -> exec { 'wait for control plane terminated':
+      command => '/usr/local/bin/kube-wait-control-plane-terminated.sh',
+      onlyif  => "test -d ${static_pod_manifests}",
+  }
+  -> Class['platform::kubernetes::mask_stop_kubelet']
+  -> exec { 'stop all containers':
+      command   => '/usr/sbin/k8s-container-cleanup.sh  force-clean',
+      logoutput => true,
+  }
+  -> exec { 'mask containerd service':
+      command => '/usr/bin/systemctl mask --runtime --now containerd',
+  }
+  -> exec { 'mask docker service':
+      command => '/usr/bin/systemctl mask --runtime --now docker',
+  }
+  -> exec { 'mask etcd service':
+      command => '/usr/bin/systemctl mask --runtime --now etcd',
+  }
+  -> exec{ 'remove etcd data dir':
+      command => "rm -rf /opt/etcd/${software_version}/controller.etcd",
+      onlyif  => "test -f ${etcd_snapshot_file}",
+  }
+  -> exec { 'restore etcd snapshot':
+      command     => "etcdctl --cert ${etcd_cert_file} --key ${etcd_key_file} --cacert ${etcd_ca_cert} --endpoints ${etcd_endpoints} snapshot restore ${etcd_snapshot_file} --data-dir /opt/etcd/${software_version}/controller.etcd --name ${etcd_name} --initial-cluster ${etcd_initial_cluster} ", # lint:ignore:140chars
+      environment => [ 'ETCDCTL_API=3' ],
+      onlyif      => "test -f ${etcd_snapshot_file}"
+  }
+  -> exec { 'restore static manifest files':
+      command => "/usr/bin/cp -f  ${static_pod_manifests}/*.yaml /etc/kubernetes/manifests",
+      onlyif  => "test -d ${static_pod_manifests}",
+  }
+  -> exec { 'unmask etcd service':
+      command => '/usr/bin/systemctl unmask --runtime --now etcd',
+  }
+  -> exec { 'unmask docker service':
+      command => '/usr/bin/systemctl unmask --runtime --now docker',
+  }
+  -> exec { 'unmask containerd service':
+      command => '/usr/bin/systemctl unmask --runtime --now containerd',
   }
   -> Class['platform::kubernetes::bindmounts']
   -> Class['platform::kubernetes::unmask_start_kubelet']
