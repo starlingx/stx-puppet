@@ -915,6 +915,36 @@ def _validate_admission_plugins(custom_plugins):
     return custom_plugins
 
 
+def _check_if_configmap_exist(
+        configmap_name, tries=RECOVERY_TRIES, try_sleep=RECOVERY_TRY_SLEEP):
+    msg = 'Checking if configmap exists [%s].' % (configmap_name)
+    LOG.debug(msg)
+    while tries:
+        try:
+            cmd = ["kubectl", "--kubeconfig=/etc/kubernetes/admin.conf",
+                   "get", "configmap", "-n", "kube-system", configmap_name]
+            configmap_exists = subprocess.check_output(
+                cmd, stderr=subprocess.STDOUT, universal_newlines=True)
+            if configmap_exists:
+                LOG.debug('Configmap exists, skipping.')
+                return True
+        except subprocess.CalledProcessError as e:
+            error_msg = e.output
+            if error_msg.find('Error from server (NotFound): configmaps') != -1:
+                LOG.debug('Configmap does not exist.')
+                return False
+            msg = "Checking configmap [%s]: %s" % (tries, e)
+            LOG.error(msg)
+            tries -= 1
+            time.sleep(try_sleep)
+        except Exception as e:
+            msg = "Checking configmap [%s]: %s" % (tries, e)
+            LOG.error(msg)
+            tries -= 1
+            time.sleep(try_sleep)
+    raise Exception("Failed to check if configmap exists.")
+
+
 def initialize_k8s_configmaps(
         hieradata_file, k8s_configmaps_init_flag,
         apiserver_schema, controller_manager_schema,
@@ -954,16 +984,9 @@ def initialize_k8s_configmaps(
             configmap_name = sp.get_k8s_configmap_name(volume)
 
             # verify if configmap exists
-            LOG.debug('Checking if configmap exists [%s].' % (configmap_name))
-            try:
-                cmd = ["kubectl", "--kubeconfig=/etc/kubernetes/admin.conf",
-                       "get", "configmap", "-n", "kube-system", configmap_name]
-                configmap_exists = subprocess.check_output(cmd)
-                if configmap_exists:
-                    LOG.debug('Configmap exists, skipping.')
-                    continue
-            except Exception:
-                pass
+            configmap_exists = _check_if_configmap_exist(configmap_name)
+            if configmap_exists:
+                continue
 
             # verifying configuration file
             if not os.path.isfile(hostPath):
@@ -985,18 +1008,19 @@ def initialize_k8s_configmaps(
                 cmd = ["kubectl", "--kubeconfig=/etc/kubernetes/admin.conf",
                        "create", "configmap", "-n", "kube-system",
                        configmap_name, "--from-file", hostPath]
-                _ = subprocess.check_output(cmd)
+                _ = _exec_cmd(cmd)
             except Exception as exc:
                 LOG.error('Creating configmap: %s' % (exc))
                 raise
 
-            # create completed flag
-            try:
-                cmd = ["touch", k8s_configmaps_init_flag]
-                _ = subprocess.check_output(cmd)
-            except Exception as exc:
-                LOG.error('Creating k8s configmaps initialization flag: %s' % (exc))
-                raise
+    # create k8s_configmaps_init flag
+    try:
+        cmd = ["touch", k8s_configmaps_init_flag]
+        _ = _exec_cmd(cmd)
+        LOG.debug('K8s configmaps initialized successfully')
+    except Exception as exc:
+        LOG.error('Creating k8s configmaps initialization flag: %s' % (exc))
+        raise
 
 
 def main():
@@ -1414,7 +1438,7 @@ def main():
 
     # Patch kubeadm-config configmap with the updated configuration.
     if patch_k8s_kubeadm_configmap(kubeadm_cm_file) != 0:
-        LOG.error('Parching kubeadm-config configmap.')
+        LOG.error('Patching kubeadm-config configmap.')
         return 3
 
     # Export the updated k8s cluster configuration
