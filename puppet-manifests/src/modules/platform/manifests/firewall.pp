@@ -268,6 +268,10 @@ class platform::firewall::runtime {
   -> Class['::platform::firewall::calico::hostendpoint']
 }
 
+class platform::firewall::mgmt::runtime {
+  include ::platform::firewall::calico::mgmt
+}
+
 class platform::firewall::calico::mgmt (
   $config = {}
 ) {
