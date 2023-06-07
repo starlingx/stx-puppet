@@ -15,6 +15,7 @@ else
 	install -m 755 -D bin/puppet-manifest-apply.sh $(BINDIR)/puppet-manifest-apply.sh
 endif
 	install -m 755 -D bin/apply_network_config.sh $(BINDIR)/apply_network_config.sh
+	install -m 755 -D bin/k8s_wait_for_endpoints_health.py $(BINDIR)/k8s_wait_for_endpoints_health.py
 	install -m 755 -D bin/kube-wait-control-plane-terminated.sh $(BINDIR)/kube-wait-control-plane-terminated.sh
 	install -m 755 -D bin/network_ifupdown.sh $(BINDIR)/network_ifupdown.sh
 	install -m 755 -D bin/network_sysconfig.sh $(BINDIR)/network_sysconfig.sh

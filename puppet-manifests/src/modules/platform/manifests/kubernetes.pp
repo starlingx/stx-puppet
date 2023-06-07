@@ -1661,4 +1661,7 @@ class platform::kubernetes::upgrade_abort
   }
   -> Class['platform::kubernetes::bindmounts']
   -> Class['platform::kubernetes::unmask_start_kubelet']
+  -> exec { 'wait for kubernetes endpoints health check':
+      command => '/usr/local/bin/k8s_wait_for_endpoints_health.py',
+  }
 }
