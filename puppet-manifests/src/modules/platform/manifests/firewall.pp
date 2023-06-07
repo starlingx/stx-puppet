@@ -272,6 +272,10 @@ class platform::firewall::mgmt::runtime {
   include ::platform::firewall::calico::mgmt
 }
 
+class platform::firewall::admin::runtime {
+  include ::platform::firewall::calico::admin
+}
+
 class platform::firewall::calico::mgmt (
   $config = {}
 ) {
