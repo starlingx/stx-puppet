@@ -1,5 +1,5 @@
 class platform::sysinv::params (
-  $api_port = 6385,
+  $api_port = undef,
   $region_name = undef,
   $service_create = false,
   $fm_catalog_info = 'faultmanagement:fm:internalURL',

@@ -1,6 +1,6 @@
 class platform::patching::params (
   $private_port = 5491,
-  $public_port = 15491,
+  $public_port = undef,
   $server_timeout = '600s',
   $region_name = undef,
   $service_create = false,

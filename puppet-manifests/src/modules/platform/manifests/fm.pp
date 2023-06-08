@@ -1,5 +1,5 @@
 class platform::fm::params (
-  $api_port = 18002,
+  $api_port = undef,
   $api_host = '127.0.0.1',
   $region_name = undef,
   $system_name = undef,

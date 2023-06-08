@@ -4,7 +4,7 @@ class openstack::keystone::params(
   $auth_uri,
   $host_url,
   $openstack_auth_uri = undef,
-  $api_port = 5000,
+  $api_port = undef,
   $admin_port = 5000,
   $region_name = undef,
   $system_controller_region = undef,

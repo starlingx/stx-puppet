@@ -1,5 +1,5 @@
 class platform::nfv::params (
-  $api_port = 4545,
+  $api_port = undef,
   $region_name = undef,
   $service_create = false,
 ) { }

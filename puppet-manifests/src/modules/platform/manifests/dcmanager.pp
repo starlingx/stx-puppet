@@ -1,5 +1,5 @@
 class platform::dcmanager::params (
-  $api_port = 8119,
+  $api_port = undef,
   $region_name = undef,
   $domain_name = undef,
   $domain_admin = undef,

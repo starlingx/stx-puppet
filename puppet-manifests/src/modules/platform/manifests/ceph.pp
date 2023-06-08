@@ -26,7 +26,7 @@ class platform::ceph::params(
   $rgw_client_name = 'radosgw.gateway',
   $rgw_user_name = 'root',
   $rgw_frontend_type = 'civetweb',
-  $rgw_port = 7480,
+  $rgw_port = undef,
   $rgw_log_file = '/var/log/radosgw/radosgw.log',
   $rgw_service_domain = undef,
   $rgw_service_project = undef,

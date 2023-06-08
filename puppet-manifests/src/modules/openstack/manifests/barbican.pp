@@ -1,5 +1,5 @@
 class openstack::barbican::params (
-  $api_port = 9311,
+  $api_port = undef,
   $region_name = undef,
   $service_name = 'barbican-api',
   $service_create = false,
