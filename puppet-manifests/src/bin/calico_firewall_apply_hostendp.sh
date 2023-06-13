@@ -33,7 +33,16 @@ if [[ ${resource_exist} == "${resource_name}" ]]; then
     if [ "$?" -ne 0 ]; then
         log_it "Failed to apply ${hep_name} with ${file_name_hep}"
         exit 1
+    else
+        log_it "Successfully applied ${hep_name} with ${file_name_hep}"
+        if [ -f /etc/platform/.platform_firewall_config_required ]; then
+            log_it "remove flag platform_firewall_config_required"
+            rm -fv /etc/platform/.platform_firewall_config_required
+        fi
     fi
+else
+    log_it "Failed to check if ${resource_name} exists, mark for sysinv to reapply"
+    touch /etc/platform/.platform_firewall_config_required
 fi
 
 exit 0
