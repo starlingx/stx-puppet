@@ -24,6 +24,13 @@ class platform::users
     password_max_age => $sysadmin_password_max_age,
     shell            => '/bin/bash',
   }
+
+  # Create a 'denyssh' group for ldap users
+  # without ssh access
+  -> group { $::platform::params::deny_ssh_group_name:
+    ensure => 'present',
+    gid    => $::platform::params::deny_ssh_group_id,
+  }
 }
 
 
@@ -43,6 +50,13 @@ class platform::users::bootstrap
     home             => '/home/sysadmin',
     password_max_age => $sysadmin_password_max_age,
     shell            => '/bin/bash',
+  }
+
+  # Create a 'denyssh' group for ldap users
+  # without ssh access
+  -> group { $::platform::params::deny_ssh_group_name:
+    ensure => 'present',
+    gid    => $::platform::params::deny_ssh_group_id,
   }
 }
 

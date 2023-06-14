@@ -39,6 +39,8 @@ class platform::params (
   $sysadmin_user_dir = '/home/sysadmin'
   $protected_group_name = 'sys_protected'
   $protected_group_id = '345'
+  $deny_ssh_group_name = 'denyssh'
+  $deny_ssh_group_id = '10000'
 
   $phys_core_count = Integer($::physical_core_count)
   $plat_res_mem = Integer($::platform_res_mem)
