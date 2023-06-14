@@ -14,6 +14,7 @@ include ::platform::ldap::bootstrap
 include ::platform::drbd::bootstrap
 include ::platform::postgresql::bootstrap
 include ::platform::amqp::bootstrap
+include ::platform::compute::grub::update
 
 include ::platform::drbd::etcd::bootstrap
 include ::platform::drbd::dockerdistribution::bootstrap
