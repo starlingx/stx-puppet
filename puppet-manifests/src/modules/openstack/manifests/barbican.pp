@@ -68,19 +68,41 @@ class openstack::barbican::service (
   $service_enabled = false,
 ) inherits ::openstack::barbican::params {
 
-  $api_fqdn = $::platform::params::controller_hostname
-  $url_host = "http://${api_fqdn}:${api_port}"
+  include ::platform::params
+  include ::platform::network::mgmt::params
+
+  $system_mode = $::platform::params::system_mode
+  $controller_fqdn = $::platform::params::controller_fqdn
+
+  # gunicorn-config.py doesn't support FQDN in IPv6 scenario,
+  # for IPv4 it works well, for this reason the gunicorn-config.py
+  # will always use the IP address
   if $service_enabled {
-      $enabled = true
-      $api_host = '[::]'
+      $gunicorn_bind = '[::]'
   } else {
-      $enabled = false
-      include ::platform::network::mgmt::params
-      $api_host = $::platform::network::mgmt::params::subnet_version ? {
+      $gunicorn_bind = $::platform::network::mgmt::params::subnet_version ? {
         6       => "[${::platform::network::mgmt::params::controller_address}]",
         default => $::platform::network::mgmt::params::controller_address,
       }
   }
+
+  if ($::platform::network::mgmt::params::fqdn_ready != undef) {
+    $fqdn_ready = $::platform::network::mgmt::params::fqdn_ready
+  }
+  else {
+    $fqdn_ready = false
+  }
+
+  #use FQDN after bootstrap completed
+  if (str2bool($::is_bootstrap_completed) or
+      $fqdn_ready) {
+    $api_fqdn = $controller_fqdn
+    $api_host = $controller_fqdn
+  } else {
+    $api_fqdn = $::platform::params::controller_hostname
+    $api_host = $gunicorn_bind
+  }
+  $api_href = "http://${api_fqdn}:${api_port}"
 
   # On Debian barbican is set to run by UWSGI by default so
   # it doesn't update gunicorn-config.py. Update it in order
@@ -88,7 +110,7 @@ class openstack::barbican::service (
   if $::osfamily == 'Debian' {
     file_line { 'Modify bind_port in gunicorn-config.py':
       path  => '/etc/barbican/gunicorn-config.py',
-      line  => "bind = '${api_host}:${api_port}'",
+      line  => "bind = '${gunicorn_bind}:${api_port}'",
       match => '.*bind = .*',
       tag   => 'modify-bind-port',
     }
@@ -97,10 +119,10 @@ class openstack::barbican::service (
   include ::platform::amqp::params
 
   class { '::barbican::api':
-    enabled                      => $enabled,
+    enabled                      => $service_enabled,
     bind_host                    => $api_host,
     bind_port                    => $api_port,
-    host_href                    => $url_host,
+    host_href                    => $api_href,
     sync_db                      => !$::openstack::barbican::params::service_create,
     enable_proxy_headers_parsing => true,
     rabbit_use_ssl               => $::platform::amqp::params::ssl_enabled,
