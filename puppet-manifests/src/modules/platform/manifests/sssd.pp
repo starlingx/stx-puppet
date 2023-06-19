@@ -21,6 +21,23 @@ class platform::sssd::config
   inherits ::platform::sssd::params {
 
   if $::osfamily == 'Debian' {
+    # Generate sssd systemd override file
+    $sssd_override_dir = '/etc/systemd/system/sssd.service.d'
+
+    file { $sssd_override_dir:
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => '0755',
+    }
+    -> file { "${sssd_override_dir}/sssd-stx-override.conf":
+      content => template('platform/sssd.systemd.override.conf.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0644',
+    }
+
+    # Update sssd configuration
     class { 'sssd':
       manage_package       => $manage_package,
       manage_service       => $manage_service,
