@@ -11,6 +11,10 @@ class platform::compute::params (
 class platform::compute::config
   inherits ::platform::compute::params {
   include ::platform::collectd::restart
+  include ::platform::kubernetes::params
+
+  $power_management = 'power-management=enabled' in $::platform::kubernetes::params::host_labels
+
   file { '/etc/platform/worker_reserved.conf':
       ensure  => 'present',
       replace => true,
@@ -26,7 +30,7 @@ class platform::compute::config
     }
   }
 
-  if $max_cpu_mhz_configured != undef {
+  if (!$power_management and $max_cpu_mhz_configured != undef) {
     exec { 'Update host max CPU frequency':
       command   => "/usr/bin/cpupower frequency-set -u ${max_cpu_mhz_configured}MHz",
       logoutput => true,
@@ -64,8 +68,11 @@ class platform::compute::grub::params (
     'audit_backlog_limit',
     'multi-drivers-switch',
     'intel_pstate',
+    'intel_idle.max_cstate',
   ],
 ) {
+
+  include ::platform::kubernetes::params
 
   if $::is_broadwell_processor {
     $eptad = 'kvm-intel.eptad=0'
@@ -73,7 +80,9 @@ class platform::compute::grub::params (
     $eptad = ''
   }
 
-  if $bios_cstate {
+  $power_management = 'power-management=enabled' in $::platform::kubernetes::params::host_labels
+
+  if (!$power_management and $bios_cstate) {
     $intel_idle_cstate = 'intel_idle.max_cstate=0'
   } else {
     $intel_idle_cstate = ''
