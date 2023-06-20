@@ -287,7 +287,7 @@ class platform::compute::hugepage::params (
 ) {}
 
 
-define allocate_pages (
+define platform::compute::allocate_pages (
   $path,
   $page_count,
 ) {
@@ -316,7 +316,7 @@ class platform::compute::allocate
       if size($per_node_2M)== 3 {
         $node = $per_node_2M[0]
         $page_size = $per_node_2M[1]
-        allocate_pages { "Start ${node} ${page_size}":
+        platform::compute::allocate_pages { "Start ${node} ${page_size}":
           path       => "${nodefs}/${node}/hugepages/hugepages-${page_size}/nr_hugepages",
           page_count => $per_node_2M[2],
         }
@@ -331,7 +331,7 @@ class platform::compute::allocate
       if size($per_node_1G)== 3 {
         $node = $per_node_1G[0]
         $page_size = $per_node_1G[1]
-        allocate_pages { "Start ${node} ${page_size}":
+        platform::compute::allocate_pages { "Start ${node} ${page_size}":
           path       => "${nodefs}/${node}/hugepages/hugepages-${page_size}/nr_hugepages",
           page_count => $per_node_1G[2],
         }

@@ -1,4 +1,4 @@
-define qat_device_files(
+define platform::devices::qat_device_files(
   $qat_idx,
   $device_id,
 ) {
@@ -29,7 +29,7 @@ class platform::devices::qat (
 )
 {
   if $service_enabled {
-    create_resources('qat_device_files', $device_config)
+    create_resources('platform::devices::qat_device_files', $device_config)
 
     service { 'qat_service':
       ensure     => 'running',
