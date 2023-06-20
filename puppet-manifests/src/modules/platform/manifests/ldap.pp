@@ -215,41 +215,41 @@ class platform::ldap::client::runtime {
 class platform::ldap::bootstrap
   inherits ::platform::ldap::params {
   include ::platform::params
-  # Local ldap server is configured during bootstrap. It is later
-  # replaced by remote ldap server configuration (if needed) during
-  # application of controller manifest.
-  include ::platform::ldap::server::local
+  # When ldapserver_remote is true (always the case for subclouds),
+  # it is not necessary to configure the local ldap server
+  if ! $ldapserver_remote {
+    include ::platform::ldap::server::local
+    Class['platform::ldap::server::local'] -> Class[$name]
 
-  Class['platform::ldap::server::local'] -> Class[$name]
+    $dn = 'cn=ldapadmin,dc=cgcs,dc=local'
+    if $::osfamily == 'RedHat' {
+      $ldap_admin_group = 'root'
+    }
+    else {
+      $ldap_admin_group = 'users'
+    }
 
-  $dn = 'cn=ldapadmin,dc=cgcs,dc=local'
-  if $::osfamily == 'RedHat' {
-    $ldap_admin_group = 'root'
-  }
-  else {
-    $ldap_admin_group = 'users'
-  }
-
-  class {'::platform::ldap::client':
-    ldap_protocol => 'ldap',
-  }
-  -> exec { 'populate initial ldap configuration':
-    command => "ldapadd -D ${dn} -w \"${admin_pw}\" -f ${slapd_etc_path}/initial_config.ldif"
-  }
-  -> exec { 'create ldap admin user':
-    command => "ldapadduser admin ${ldap_admin_group}"
-  }
-  -> exec { 'create ldap operator user':
-    command => 'ldapadduser operator users'
-  }
-  -> exec { 'create ldap protected group':
-    command => "ldapaddgroup ${::platform::params::protected_group_name} ${::platform::params::protected_group_id}"
-  }
-  -> exec { 'add admin to sys_protected protected group' :
-    command => "ldapaddusertogroup admin ${::platform::params::protected_group_name}",
-  }
-  -> exec { 'add operator to sys_protected protected group' :
-    command => "ldapaddusertogroup operator ${::platform::params::protected_group_name}",
+    class {'::platform::ldap::client':
+      ldap_protocol => 'ldap',
+    }
+    -> exec { 'populate initial ldap configuration':
+      command => "ldapadd -D ${dn} -w \"${admin_pw}\" -f ${slapd_etc_path}/initial_config.ldif"
+    }
+    -> exec { 'create ldap admin user':
+      command => "ldapadduser admin ${ldap_admin_group}"
+    }
+    -> exec { 'create ldap operator user':
+      command => 'ldapadduser operator users'
+    }
+    -> exec { 'create ldap protected group':
+      command => "ldapaddgroup ${::platform::params::protected_group_name} ${::platform::params::protected_group_id}"
+    }
+    -> exec { 'add admin to sys_protected protected group' :
+      command => "ldapaddusertogroup admin ${::platform::params::protected_group_name}",
+    }
+    -> exec { 'add operator to sys_protected protected group' :
+      command => "ldapaddusertogroup operator ${::platform::params::protected_group_name}",
+    }
   }
 }
 
