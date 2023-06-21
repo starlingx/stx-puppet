@@ -18,7 +18,7 @@ class platform::client
 
   file {'/etc/platform/openrc':
     ensure  => 'present',
-    mode    => '0640',
+    mode    => '0644',
     owner   => 'root',
     group   => 'root',
     content => template('platform/openrc.admin.erb'),

@@ -1,10 +1,21 @@
+# Usage: source this file with parameter "--no_credentials" to avoid exporting
+# user and password. Also, PS1 variable is not set.
+
+if [[ $1 == "--no_credentials" ]]; then
+    no_credentials=true
+else
+    no_credentials=false
+fi
+
 unset OS_SERVICE_TOKEN
 
 export OS_ENDPOINT_TYPE=internalURL
 export CINDER_ENDPOINT_TYPE=internalURL
 
-export OS_USERNAME=<%= @admin_username %>
-export OS_PASSWORD=`TERM=linux <%= @keyring_file %> 2>/dev/null`
+if [[ "$no_credentials" == false ]]; then
+    export OS_USERNAME=<%= @admin_username %>
+    export OS_PASSWORD=`TERM=linux <%= @keyring_file %> 2>/dev/null`
+fi
 export OS_AUTH_TYPE=password
 export OS_AUTH_URL=<%= @identity_auth_url %>
 
@@ -15,9 +26,23 @@ export OS_IDENTITY_API_VERSION=<%= @identity_api_version %>
 export OS_REGION_NAME=<%= @identity_region %>
 export OS_INTERFACE=internal
 
-if [ ! -z "${OS_PASSWORD}" ]; then
-    export PS1='[\u@\h \W(keystone_$OS_USERNAME)]\$ '
+if [[ "$no_credentials" == false ]]; then
+    if [ ! -z "${OS_PASSWORD}" ]; then
+        export PS1='[\u@\h \W(keystone_$OS_USERNAME)]\$ '
+    else
+        if [ ! -e <%= @keyring_file %> ]; then
+            echo 'Openstack Admin credentials can only be loaded from the active controller.'
+        else
+            echo 'Not enough privileges to read keyring password.'
+        fi
+        export PS1='\h:\w\$ '
+        return 1
+    fi
 else
-    echo 'Openstack Admin credentials can only be loaded from the active controller.'
-    export PS1='\h:\w\$ '
+    if [ ! -e <%= @keyring_file %> ]; then
+        echo 'This file should only be loaded from the active controller.'
+        return 1
+    fi
 fi
+
+return 0
