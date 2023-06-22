@@ -175,7 +175,7 @@ echo "Applying puppet ${MANIFEST} manifest..."
 # it is not possible to fail cd command, but tox doesn't like it without an exit.
 cd $PUPPET_TMP || exit
 flock /var/run/puppet.lock \
-    puppet apply --debug --trace --modulepath ${PUPPET_MODULES_PATH} ${PUPPET_MANIFEST} \
+    puppet apply --trace --modulepath ${PUPPET_MODULES_PATH} ${PUPPET_MANIFEST} \
         < /dev/null 2>&1 | awk ' { system("date -u +%FT%T.%3N | tr \"\n\" \" \""); print $0; fflush(); } ' > ${LOGFILE}
 
 rc=$?
