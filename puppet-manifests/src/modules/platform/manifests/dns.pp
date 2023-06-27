@@ -14,6 +14,7 @@ class platform::dns::dnsmasq
 
   # dependent template variables
   $install_uuid = $::install_uuid
+  $system_mode = $::platform::params::system_mode
 
   include ::platform::params
   $config_path = $::platform::params::config_path
