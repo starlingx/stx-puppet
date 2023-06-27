@@ -18,7 +18,8 @@ class sysinv::agent (
   $agent_driver = false,
   $package_ensure   = 'latest',
   $enabled          = true,
-  $lldp_drivers     = []
+  $lldp_drivers     = [],
+  $dpdk_elf_file    = undef,
 ) {
 
   include sysinv::params
@@ -30,6 +31,12 @@ class sysinv::agent (
   if $agent_driver {
     sysinv_config {
       'DEFAULT/agent_driver': value => $agent_driver;
+    }
+  }
+
+  if ($::sysinv::agent::dpdk_elf_file != undef) {
+    sysinv_config {
+      'dpdk/dpdk_elf': value => $dpdk_elf_file;
     }
   }
 
