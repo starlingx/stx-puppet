@@ -43,11 +43,11 @@ class dcorch::db::postgresql(
   include dcorch::deps
 
   ::openstacklib::db::postgresql { 'dcorch':
-    password_hash => postgresql_password($user, $password),
-    dbname        => $dbname,
-    user          => $user,
-    encoding      => $encoding,
-    privileges    => $privileges,
+    password   => $password,
+    dbname     => $dbname,
+    user       => $user,
+    encoding   => $encoding,
+    privileges => $privileges,
   }
 
   Anchor['dcorch::db::begin']
