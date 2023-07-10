@@ -43,6 +43,11 @@ class platform::client
       mode   => '0755',
     }
   }
+
+  -> exec { 'change permission for /etc/apparmor.d/':
+    command => 'setfacl -m g:sys_protected:rwx /etc/apparmor.d/',
+    onlyif  => '/usr/bin/test -d /etc/apparmor.d/'
+  }
 }
 
 class platform::client::credentials::params (
