@@ -5,25 +5,28 @@
 
 
 DESC="Docker Distribution aka Docker Registry"
+NAME="docker-distribution"
 SERVICE="docker-distribution.service"
 PIDFILE="/var/run/docker-distribution.pid"
 
 OS_ID=$(grep '^ID=' /etc/os-release | cut -f2- -d= | sed -e 's/\"//g')
 if [[ "$OS_ID" == "debian" ]]; then
+    NAME="docker-registry"
     SERVICE="docker-registry.service"
 fi
 
-
 status()
 {
-    if [ "`systemctl is-active $SERVICE`" = "active" ]; then
-        RETVAL=0
-        echo "$DESC is running"
-        return
-    else
-        echo "$DESC is Not running"
-        RETVAL=1
+    pid=`cat $PIDFILE 2>/dev/null`
+    if [ -n "$pid" ]; then
+        if ps -f -p $pid | grep $NAME &> /dev/null ; then
+            RETVAL=0
+            echo "$DESC is running"
+            return
+        fi
     fi
+    echo "$DESC is not running"
+    RETVAL=1
 }
 
 start()
