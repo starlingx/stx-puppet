@@ -201,7 +201,7 @@ define openstack::keystone::user::option (
   exec { "Set user ${username} option ${option} to ${option_value}":
     command   => @("EOC"/L),
       /usr/local/bin/set_keystone_user_option.sh \
-      ${admin_username} ${admin_password} ${auth_url} ${username} ${option} ${option_value}
+      ${admin_username} '${admin_password}' ${auth_url} ${username} ${option} ${option_value}
       | EOC
     logoutput => true,
     provider  => shell,
