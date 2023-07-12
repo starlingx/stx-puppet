@@ -1,6 +1,8 @@
 #!/usr/bin/make -f
 #export DH_VERBOSE = 1
 
+export DEB_HOST_ARCH = $(shell dpkg-architecture -qDEB_HOST_ARCH 2>/dev/null)
+
 %:
 	dh $@
 
@@ -10,6 +12,9 @@ override_dh_usrlocal:
 	echo "Do Nothing"
 
 override_dh_install:
+ifeq ($(DEB_HOST_ARCH),arm64)
+	sed -i "s/amd64/arm64/" $(CURDIR)/bin/puppet-update-grub-env.py
+endif
 	$(MAKE) install hiera_v5=true ignore_puppet_warnings=true \
 		BINDIR=$(CURDIR)/debian/tmp/usr/local/bin \
 		CONFIGDIR=$(CURDIR)/debian/tmp/etc/puppet \
