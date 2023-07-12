@@ -66,6 +66,16 @@ class platform::compute::grub::params (
     'intel_pstate',
   ],
 ) {
+  include platform::sysctl::params
+
+  if str2bool($platform::sysctl::params::low_latency) {
+    $nmi_watchdog = 'nmi_watchdog=0 softlockup_panic=0'
+    $skew_tick = 'skew_tick=1'
+  }
+  else {
+    $nmi_watchdog = 'nmi_watchdog=panic,1 softlockup_panic=1'
+    $skew_tick = ''
+  }
 
   if $::is_broadwell_processor {
     $eptad = 'kvm-intel.eptad=0'
@@ -94,7 +104,7 @@ class platform::compute::grub::params (
 
   $grub_updates = strip(
     # lint:ignore:140chars
-    "${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit} ${intel_idle_cstate} ${multi_drivers_switch} ${intel_pstate}"
+    "${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit} ${intel_idle_cstate} ${multi_drivers_switch} ${intel_pstate} ${nmi_watchdog} ${skew_tick}"
     # lint:endignore:140chars
     )
 }
