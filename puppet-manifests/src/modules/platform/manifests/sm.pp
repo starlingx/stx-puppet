@@ -1068,6 +1068,12 @@ class platform::sm
     -> exec { 'Provision DCOrch-Patch-Api-Proxy in SM (service dcorch-patch-api-proxy)':
       command => 'sm-provision service dcorch-patch-api-proxy',
     }
+    -> exec { 'Provision DCOrch-USM-Api-Proxy (service-group-member dcorch-usm-api-proxy)':
+      command => 'sm-provision service-group-member distributed-cloud-services dcorch-usm-api-proxy',
+    }
+    -> exec { 'Provision DCOrch-USM-Api-Proxy in SM (service dcorch-usm-api-proxy)':
+      command => 'sm-provision service dcorch-usm-api-proxy',
+    }
     -> exec { 'Provision DCDBsync-RestApi (service-group-member dcdbsync-api)':
       command => 'sm-provision service-group-member distributed-cloud-services dcdbsync-api',
     }
@@ -1109,6 +1115,9 @@ class platform::sm
     }
     -> exec { 'Configure OpenStack - DCOrch-patch-api-proxy':
       command => "sm-configure service_instance dcorch-patch-api-proxy dcorch-patch-api-proxy \"\"",
+    }
+    -> exec { 'Configure OpenStack - DCOrch-usm-api-proxy':
+      command => "sm-configure service_instance dcorch-usm-api-proxy dcorch-usm-api-proxy \"\"",
     }
     -> exec { 'Configure OpenStack - DCDBsync-API':
       command => "sm-configure service_instance dcdbsync-api dcdbsync-api \"\"",

@@ -1,7 +1,7 @@
 #
 # Files in this package are licensed under Apache; see LICENSE file.
 #
-# Copyright (c) 2013-2021 Wind River Systems, Inc.
+# Copyright (c) 2013-2023 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -55,6 +55,8 @@ class dcorch (
   $network_remote_port         = 9696,
   $patching_bind_port          = 25491,
   $patching_remote_port        = 5491,
+  $usm_bind_port               = 25497,
+  $usm_remote_port             = 5497,
   $identity_bind_port          = 25000,
   $identity_remote_port        = 5000,
 ) {
@@ -152,6 +154,11 @@ class dcorch (
     'patching/bind_port' : value => $patching_bind_port;
     'patching/remote_host' : value => '0.0.0.0';
     'patching/remote_port' : value => $patching_remote_port;
+
+    'usm/bind_host' : value => $proxy_bind_host;
+    'usm/bind_port' : value => $usm_bind_port;
+    'usm/remote_host' : value => '0.0.0.0';
+    'usm/remote_port' : value => $usm_remote_port;
 
     'identity/bind_host' : value => $proxy_bind_host;
     'identity/bind_port' : value => $identity_bind_port;

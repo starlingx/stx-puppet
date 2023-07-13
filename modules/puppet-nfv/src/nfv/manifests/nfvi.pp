@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2016-2018 Wind River Systems, Inc.
+# Copyright (c) 2016-2023 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -61,6 +61,10 @@ class nfv::nfvi (
   $patching_service_name         = 'patching',
   $patching_service_type         = 'patching',
   $patching_endpoint_type        = 'admin',
+  $usm_region_name               = 'RegionOne',
+  $usm_service_name              = 'usm',
+  $usm_service_type              = 'usm',
+  $usm_endpoint_type             = 'admin',
   $fm_region_name                = 'RegionOne',
   $fm_service_name               = 'fm',
   $fm_service_type               = 'faultmanagement',
@@ -157,6 +161,11 @@ class nfv::nfvi (
     'patching/service_name': value => $patching_service_name;
     'patching/service_type': value => $patching_service_type;
     'patching/endpoint_type': value => $patching_endpoint_type;
+
+    'usm/region_name': value => $usm_region_name;
+    'usm/service_name': value => $usm_service_name;
+    'usm/service_type': value => $usm_service_type;
+    'usm/endpoint_type': value => $usm_endpoint_type;
 
     'fm/region_name': value => $fm_region_name;
     'fm/service_name': value => $fm_service_name;

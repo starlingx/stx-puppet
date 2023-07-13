@@ -9,3 +9,4 @@ modules/puppet-patching
 modules/puppet-smapi
 modules/puppet-sshd
 modules/puppet-sysinv
+modules/puppet-usm
