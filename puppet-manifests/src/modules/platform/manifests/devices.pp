@@ -164,6 +164,7 @@ class platform::devices::fpga::n3000::reset
   inherits ::platform::devices::fpga::fec::params {
   # To reset N3000 FPGA
   Class[$name] -> Class['::platform::devices::fpga::fec::pf']
+  Class[$name] -> Class['::platform::network::interfaces::sriov::enable']
   exec { 'Reset n3000 fpgas':
     command   => 'sysinv-reset-n3000-fpgas',
     path      => ['/usr/bin/', '/usr/sbin/'],
@@ -178,6 +179,7 @@ class platform::devices::fpga::fec::config
   inherits ::platform::devices::fpga::fec::params {
   notice('Looking for N3000 device to reset...')
   if $::is_n3000_present {
+    include platform::network::interfaces::sriov::enable
     include platform::devices::fpga::n3000::reset
   }
   include platform::devices::fpga::fec::pf
