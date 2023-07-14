@@ -40,7 +40,16 @@ if [[ ${resource_exist} == "${resource_name}" ]]; then
     if [ "$?" -ne 0 ]; then
         log_it "Failed to apply ${gnp_name} with ${file_name_gnp}"
         exit 1
+    else
+        log_it "Successfully applied ${gnp_name} with ${file_name_gnp}"
+        if [ -f /etc/platform/.platform_firewall_config_required ]; then
+            log_it "remove flag platform_firewall_config_required"
+            rm -fv /etc/platform/.platform_firewall_config_required
+        fi
     fi
+else
+    log_it "Failed to check ${resource_name} exists, mark for sysinv to reapply"
+    touch /etc/platform/.platform_firewall_config_required
 fi
 
 exit 0

@@ -76,143 +76,8 @@ define platform::firewall::rule (
   }
 }
 
-class platform::firewall::calico::oam::services {
-  include ::platform::params
-  include ::platform::network::oam::params
-  include ::platform::nfv::params
-  include ::platform::fm::params
-  include ::platform::patching::params
-  include ::platform::sysinv::params
-  include ::platform::smapi::params
-  include ::platform::ceph::params
-  include ::openstack::barbican::params
-  include ::openstack::keystone::params
-  include ::openstack::horizon::params
-  include ::platform::dcmanager::params
-  include ::platform::dcorch::params
-  include ::platform::docker::params
-
-  $ip_version = $::platform::network::oam::params::subnet_version
-
-  # icmp
-  $t_icmp_proto = $ip_version ? {
-    6 => 'ICMPv6',
-    default => 'ICMP'
-  }
-
-  # udp
-  $sm_port = [2222, 2223]
-  $ntp_port = [123]
-  $ptp_port = [319, 320]
-
-  # tcp
-  $ssh_port = [22]
-
-  if $::platform::fm::params::service_enabled {
-    $fm_port = [$::platform::fm::params::api_port]
-  } else {
-    $fm_port = []
-  }
-
-  $nfv_vim_port = [$::platform::nfv::params::api_port]
-  $patching_port = [$::platform::patching::params::public_port]
-  $sysinv_port = [$::platform::sysinv::params::api_port]
-  $sm_api_port = [$::platform::smapi::params::port]
-  $docker_registry_port = [$::platform::docker::params::registry_port]
-  $docker_token_port = [$::platform::docker::params::token_port]
-  $kube_apiserver_port = [6443]
-
-  if $::platform::ceph::params::service_enabled {
-    $ceph_radosgw_port = [$::platform::ceph::params::rgw_port]
-  } else {
-    $ceph_radosgw_port = []
-  }
-
-  $barbican_api_port = [$::openstack::barbican::params::api_port]
-
-  $keystone_port = [$::openstack::keystone::params::api_port]
-
-  if $::platform::params::distributed_cloud_role != 'subcloud'  {
-    if $::openstack::horizon::params::enable_https {
-      $horizon_port = [$::openstack::horizon::params::https_port]
-    } else {
-      $horizon_port = [$::openstack::horizon::params::http_port]
-    }
-  } else {
-    $horizon_port = []
-  }
-
-  if $::platform::params::distributed_cloud_role == 'systemcontroller' {
-    $dc_port = [$::platform::dcmanager::params::api_port,
-                $::platform::dcorch::params::sysinv_api_proxy_port,
-                $::platform::dcorch::params::patch_api_proxy_port,
-                $::platform::dcorch::params::identity_api_proxy_port]
-  } else {
-    $dc_port = []
-  }
-
-  $t_ip_version = $ip_version
-  $t_udp_ports = concat($sm_port, $ntp_port, $ptp_port)
-  $t_tcp_ports = concat($ssh_port,
-                        $fm_port, $nfv_vim_port, $patching_port, $sysinv_port, $sm_api_port,
-                        $kube_apiserver_port, $docker_registry_port, $docker_token_port,
-                        $ceph_radosgw_port, $barbican_api_port, $keystone_port, $horizon_port,
-                        $dc_port)
-
-  $file_name = '/tmp/gnp_all_oam.yaml'
-  $oam_if_gnp = 'controller-oam-if-gnp'
-  file { $file_name:
-      ensure  => file,
-      content => template('platform/calico_oam_if_gnp.yaml.erb'),
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0640',
-  }
-  # Remove annotation as it contains last-applied-configuration with
-  # resourceVersion in it, which will require the gnp re-apply to
-  # provide a matching resourceVersion in the yaml file.
-  -> exec { "remove annotation from ${oam_if_gnp}":
-    path    => '/usr/bin:/usr/sbin:/bin',
-    command => @("CMD"/L),
-      kubectl --kubeconfig=/etc/kubernetes/admin.conf annotate globalnetworkpolicies.crd.projectcalico.org \
-      ${oam_if_gnp} kubectl.kubernetes.io/last-applied-configuration-
-      | CMD
-    onlyif  => "kubectl --kubeconfig=/etc/kubernetes/admin.conf get globalnetworkpolicies.crd.projectcalico.org ${oam_if_gnp}"
-  }
-  -> exec { "apply resource ${file_name}":
-    path    => '/usr/bin:/usr/sbin:/bin',
-    command => "kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f ${file_name}",
-    onlyif  => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf get customresourcedefinitions.apiextensions.k8s.io'
-  }
-}
-
-class platform::firewall::calico::oam::endpoints {
-  include ::platform::params
-  include ::platform::network::oam::params
-
-  $host = $::platform::params::hostname
-  $oam_if = $::platform::network::oam::params::interface_name
-  $oam_addr = $::platform::network::oam::params::interface_address
-
-  # create/update host endpoint to represent oam interface
-  $file_name_oam = "/tmp/hep_${host}_oam.yaml"
-  file { $file_name_oam:
-    ensure  => file,
-    content => template('platform/calico_oam_if_hep.yaml.erb'),
-    owner   => 'root',
-    group   => 'root',
-    mode    => '0640',
-  }
-  -> exec { "apply resource ${file_name_oam}":
-    path    => '/usr/bin:/usr/sbin:/bin',
-    command => "kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f ${file_name_oam}",
-    onlyif  => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf get customresourcedefinitions.apiextensions.k8s.io'
-  }
-}
-
 class platform::firewall::calico::controller {
-  contain ::platform::firewall::calico::oam::endpoints
-  contain ::platform::firewall::calico::oam::services
+  contain ::platform::firewall::calico::oam
   contain ::platform::firewall::calico::mgmt
   contain ::platform::firewall::calico::cluster_host
   contain ::platform::firewall::calico::pxeboot
@@ -222,8 +87,7 @@ class platform::firewall::calico::controller {
 
   Class['::platform::kubernetes::gate'] -> Class[$name]
 
-  Class['::platform::firewall::calico::oam::endpoints']
-  -> Class['::platform::firewall::calico::oam::services']
+  Class['::platform::firewall::calico::oam']
   -> Class['::platform::firewall::calico::mgmt']
   -> Class['::platform::firewall::calico::cluster_host']
   -> Class['::platform::firewall::calico::pxeboot']
@@ -249,8 +113,7 @@ class platform::firewall::calico::worker {
 }
 
 class platform::firewall::runtime {
-  include ::platform::firewall::calico::oam::endpoints
-  include ::platform::firewall::calico::oam::services
+  include ::platform::firewall::calico::oam
   include ::platform::firewall::calico::mgmt
   include ::platform::firewall::calico::cluster_host
   include ::platform::firewall::calico::pxeboot
@@ -258,8 +121,7 @@ class platform::firewall::runtime {
   include ::platform::firewall::calico::admin
   include ::platform::firewall::calico::hostendpoint
 
-  Class['::platform::firewall::calico::oam::endpoints']
-  -> Class['::platform::firewall::calico::oam::services']
+  Class['::platform::firewall::calico::oam']
   -> Class['::platform::firewall::calico::mgmt']
   -> Class['::platform::firewall::calico::cluster_host']
   -> Class['::platform::firewall::calico::pxeboot']
@@ -274,6 +136,29 @@ class platform::firewall::mgmt::runtime {
 
 class platform::firewall::admin::runtime {
   include ::platform::firewall::calico::admin
+}
+
+class platform::firewall::calico::oam (
+  $config = {}
+) {
+  if $config != {} {
+    $apply_script = 'calico_firewall_apply_policy.sh'
+    $yaml_config = hash2yaml($config)
+    $gnp_name = "${::personality}-oam-if-gnp"
+    $file_name_gnp = "/tmp/gnp_${gnp_name}.yaml"
+    file { $file_name_gnp:
+      ensure  => file,
+      content => template('platform/calico_platform_network_if_gnp.yaml.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0640',
+    }
+    -> exec { "apply globalnetworkpolicies ${gnp_name} with ${file_name_gnp}":
+      path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+      command   => "${apply_script} ${gnp_name} ${file_name_gnp}",
+      logoutput => true
+    }
+  }
 }
 
 class platform::firewall::calico::mgmt (

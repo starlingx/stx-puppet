@@ -15,8 +15,6 @@
 #
 #  This file is then compared with the installed endpoints in calico and the
 #  non-active ones are removed
-#
-#  We are not handling the OAM hostendpoint interface for now
 
 function log_it {
     # check /var/log/user.log for the messages
@@ -35,16 +33,13 @@ kubeconfig="/etc/kubernetes/admin.conf"
 
 # the HostEndpoint format is [hostname]-[ifname]-if-hep
 for hep in $(kubectl --kubeconfig=${kubeconfig} get hostendpoints --no-headers | grep ${hostname} | awk '{print $1}'); do
-    # We are not handling the OAM hostendpoint interface for now
-    if [[ ! ${hep} =~ .*"-oam-if-hep" ]]; then
-        count=$(grep -c ${hep} ${hep_active_file});
-        if [ "$count" == "0" ]; then
-            log_it "remove non-active ${hep} from calico";
-            kubectl --kubeconfig=${kubeconfig} delete hostendpoints ${hep};
-            if [ "$?" -ne 0 ]; then
-                log_it "Failed to delete ${hep} with ${hep_active_file}"
-                exit 1
-            fi
+    count=$(grep -c ${hep} ${hep_active_file});
+    if [ "${count}" == "0" ]; then
+        log_it "remove non-active ${hep} from calico";
+        kubectl --kubeconfig=${kubeconfig} delete hostendpoints ${hep};
+        if [ "$?" -ne 0 ]; then
+            log_it "Failed to delete ${hep} with ${hep_active_file}"
+            exit 1
         fi
     fi
 done
