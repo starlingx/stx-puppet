@@ -12,3 +12,5 @@ TLS_CACERT          /etc/ssl/certs/ca-certificates.crt
 <%- end -%>
 pam_lookup_policy   yes
 sudoers_base        ou=SUDOers,dc=cgcs,dc=local
+# Set network connection timeout to 5 seconds
+NETWORK_TIMEOUT     5
