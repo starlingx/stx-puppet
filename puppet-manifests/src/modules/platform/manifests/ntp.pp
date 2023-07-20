@@ -1,25 +1,23 @@
-class platform::ntp::apparmor {
-  exec { 'apparmor-update-ntpd':
-    command => "sed -i '/\\/etc\\/ntp.conf r,/a\\ \\ \\/etc\\/ntp_initial.conf r,' /etc/apparmor.d/usr.sbin.ntpd",
-    unless  => "grep -q '/etc/ntp_initial.conf r,' /etc/apparmor.d/usr.sbin.ntpd",
-    notify  => Exec['reload-apparmor-ntp-profile'],
-  }
-
-  exec { 'reload-apparmor-ntp-profile':
-    command     => '/usr/sbin/apparmor_parser -vTr /etc/apparmor.d/usr.sbin.ntpd',
-    refreshonly => true
-  }
-}
 class platform::ntp (
   $ntpdate_timeout,
   $servers = [],
   $enabled = true,
 )
 {
-  include platform::ntp::apparmor
   # Setting ntp service name
-  $ntp_service_name = 'ntp'
-  $ntp_pmon_conf_template = 'platform/ntp_debian.pmon.conf.erb'
+  case $::osfamily {
+    'RedHat': {
+      $ntp_service_name = 'ntpd'
+      $ntp_pmon_conf_template = 'platform/ntp.pmon.conf.erb'
+    }
+    'Debian': {
+      $ntp_service_name = 'ntp'
+      $ntp_pmon_conf_template = 'platform/ntp_debian.pmon.conf.erb'
+    }
+    default: {
+      fail("unsuported osfamily ${::osfamily}, currently Debian and Redhat are the only supported platforms")
+    }
+  }
 
   if $enabled {
     $pmon_ensure = 'link'
@@ -28,7 +26,6 @@ class platform::ntp (
   }
 
   File['ntp_config']
-  -> Class['platform::ntp::apparmor']
   -> File['ntp_config_initial']
   -> file { 'ntp_pmon_config':
     ensure  => file,
