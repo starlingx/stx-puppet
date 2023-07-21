@@ -29,6 +29,7 @@ include ::platform::ptpinstance
 include ::platform::ptpinstance::nic_clock
 include ::platform::lldp
 include ::platform::patching
+include ::platform::usm
 include ::platform::remotelogging
 include ::platform::mtce
 include ::platform::sysinv

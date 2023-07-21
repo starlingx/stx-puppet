@@ -454,6 +454,7 @@ class openstack::keystone::endpoint::runtime {
 
     include ::sysinv::keystone::auth
     include ::patching::keystone::auth
+    include ::usm::keystone::auth
     include ::nfv::keystone::auth
     include ::fm::keystone::auth
     include ::barbican::keystone::auth
@@ -665,6 +666,22 @@ class openstack::keystone::patching::password::runtime {
 
   if $::personality == 'controller' {
     Patching_config<||> ~> service { 'sw-patch-controller-daemon.service':
+      ensure => 'running',
+      enable => true,
+    }
+  }
+}
+
+class openstack::keystone::usm::password::runtime {
+  include ::usm::api
+
+  Usm_config<||> ~> service { 'software-agent.service':
+    ensure => 'running',
+    enable => true,
+  }
+
+  if $::personality == 'controller' {
+    Usm_config<||> ~> service { 'software-controller-daemon.service':
       ensure => 'running',
       enable => true,
     }

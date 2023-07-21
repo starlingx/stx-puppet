@@ -1,0 +1,5 @@
+puppet-usm (1.0.0-1) unstable; urgency=medium
+
+  * Initial release.
+
+ -- Al Bailey <al.bailey@windriver.com>  Thu, 13 Jul 2023 17:33:32 -0400

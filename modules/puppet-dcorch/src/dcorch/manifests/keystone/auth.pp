@@ -1,7 +1,7 @@
 #
 # Files in this package are licensed under Apache; see LICENSE file.
 #
-# Copyright (c) 2013-2018 Wind River Systems, Inc.
+# Copyright (c) 2013-2023 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -34,6 +34,7 @@ class dcorch::keystone::auth (
   $cinder_proxy_internal_url_v2  = 'http://127.0.0.1:28776/v2/%(tenant_id)s',
   $cinder_proxy_internal_url_v3  = 'http://127.0.0.1:28776/v3/%(tenant_id)s',
   $patching_proxy_internal_url   = 'http://127.0.0.1:25491',
+  $usm_proxy_internal_url        = 'http://127.0.0.1:25497',
   $identity_proxy_internal_url   = 'http://127.0.0.1:25000/v3',
 
   $neutron_proxy_public_url      = 'http://127.0.0.1:29696',
@@ -42,11 +43,13 @@ class dcorch::keystone::auth (
   $cinder_proxy_public_url_v2    = 'http://127.0.0.1:28776/v2/%(tenant_id)s',
   $cinder_proxy_public_url_v3    = 'http://127.0.0.1:28776/v3/%(tenant_id)s',
   $patching_proxy_public_url     = 'http://127.0.0.1:25491',
+  $usm_proxy_public_url          = 'http://127.0.0.1:25497',
   $identity_proxy_public_url     = 'http://127.0.0.1:25000/v3',
 
   $identity_proxy_admin_url      = 'http://127.0.0.1:25000/v3',
   $sysinv_proxy_admin_url        = 'http://127.0.0.1:26385/v1',
   $patching_proxy_admin_url      = 'http://127.0.0.1:25491',
+  $usm_proxy_admin_url           = 'http://127.0.0.1:25497',
 
   $nfv_proxy_public_url          = 'http://127.0.0.1:4545',
   $nfv_proxy_admin_url           = 'http://127.0.0.1:4545',
@@ -88,6 +91,15 @@ class dcorch::keystone::auth (
       public_url   =>  $patching_proxy_public_url,
       admin_url    =>  $patching_proxy_admin_url,
       internal_url =>  $patching_proxy_internal_url
+    }
+    keystone_endpoint { "${region}/usm::usm" :
+      ensure       =>  'present',
+      name         =>  'usm',
+      type         =>  'usm',
+      region       =>  $region,
+      public_url   =>  $usm_proxy_public_url,
+      admin_url    =>  $usm_proxy_admin_url,
+      internal_url =>  $usm_proxy_internal_url
     }
     keystone_endpoint { "${region}/keystone::identity" :
       ensure       =>  'present',

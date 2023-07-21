@@ -58,6 +58,9 @@ include ::platform::coredump::k8s_token_handler::controller
 include ::platform::patching
 include ::platform::patching::api
 
+include ::platform::usm
+include ::platform::usm::api
+
 include ::platform::remotelogging
 include ::platform::remotelogging::proxy
 
