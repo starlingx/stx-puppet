@@ -43,14 +43,22 @@ if [ "$?" -ne 0 ]; then
     hostname=$(cat /etc/hostname)
     log_it "Failed to remote copy ${hostname}:${file_name_hep} to controller:${file_name_hep} "
     rm -f /tmp/ansible_adhoc_host
-    exit 1
+    touch /etc/platform/.platform_firewall_config_required
+    exit 0
 fi
 
 ansible controller -i /tmp/ansible_adhoc_host -m ansible.builtin.shell -a "/usr/local/bin/calico_firewall_apply_hostendp.sh ${hep_name} ${file_name_hep}"
 if [ "$?" -ne 0 ]; then
     log_it "Failed to remote apply hostendpoint ${hep_name} with file ${file_name_hep}"
     rm -f /tmp/ansible_adhoc_host
-    exit 1
+    touch /etc/platform/.platform_firewall_config_required
+    exit 0
+else
+    log_it "Successfully applied ${hep_name} with ${file_name_hep}"
+    if [ -f /etc/platform/.platform_firewall_config_required ]; then
+        log_it "remove flag platform_firewall_config_required"
+        rm -fv /etc/platform/.platform_firewall_config_required
+    fi
 fi
 
 rm -f /tmp/ansible_adhoc_host

@@ -77,6 +77,7 @@ define platform::firewall::rule (
 }
 
 class platform::firewall::calico::controller {
+  contain ::platform::firewall::calico::is_config_available
   contain ::platform::firewall::calico::oam
   contain ::platform::firewall::calico::mgmt
   contain ::platform::firewall::calico::cluster_host
@@ -87,7 +88,8 @@ class platform::firewall::calico::controller {
 
   Class['::platform::kubernetes::gate'] -> Class[$name]
 
-  Class['::platform::firewall::calico::oam']
+  Class['::platform::firewall::calico::is_config_available']
+  -> Class['::platform::firewall::calico::oam']
   -> Class['::platform::firewall::calico::mgmt']
   -> Class['::platform::firewall::calico::cluster_host']
   -> Class['::platform::firewall::calico::pxeboot']
@@ -97,6 +99,7 @@ class platform::firewall::calico::controller {
 }
 
 class platform::firewall::calico::worker {
+  contain ::platform::firewall::calico::is_config_available
   contain ::platform::firewall::calico::mgmt
   contain ::platform::firewall::calico::cluster_host
   contain ::platform::firewall::calico::pxeboot
@@ -105,7 +108,8 @@ class platform::firewall::calico::worker {
 
   Class['::platform::kubernetes::worker'] -> Class[$name]
 
-  Class['::platform::firewall::calico::mgmt']
+  Class['::platform::firewall::calico::is_config_available']
+  -> Class['::platform::firewall::calico::mgmt']
   -> Class['::platform::firewall::calico::cluster_host']
   -> Class['::platform::firewall::calico::pxeboot']
   -> Class['::platform::firewall::calico::storage']
@@ -339,7 +343,33 @@ class platform::firewall::calico::hostendpoint (
     -> exec { "remove unused hostendepoints ${::hostname} ${file_hep_active}":
       path    => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
       command => "${remove_script} ${::hostname} ${file_hep_active}",
-      onlyif  => "test -f ${file_hep_active}"
+      onlyif  => "test -f ${file_hep_active} && test ! -f /etc/platform/.platform_firewall_config_required"
     }
   }
 }
+
+class platform::firewall::calico::is_config_available {
+  include ::platform::firewall::calico::oam
+  include ::platform::firewall::calico::mgmt
+  include ::platform::firewall::calico::cluster_host
+  include ::platform::firewall::calico::pxeboot
+  include ::platform::firewall::calico::storage
+  include ::platform::firewall::calico::admin
+  include ::platform::firewall::calico::hostendpoint
+  if $::personality != 'storage' {
+    if ($::platform::firewall::calico::oam::config == {}
+          and $::platform::firewall::calico::mgmt::config == {}
+          and $::platform::firewall::calico::cluster_host::config == {}
+          and $::platform::firewall::calico::pxeboot::config == {}
+          and $::platform::firewall::calico::storage::config == {}
+          and $::platform::firewall::calico::admin::config == {}
+          and $::platform::firewall::calico::hostendpoint::config == {}) {
+      exec { 'request platform::firewall runtime execution':
+        path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+        command   => 'touch /etc/platform/.platform_firewall_config_required',
+        logoutput => true
+      }
+    }
+  }
+}
+
