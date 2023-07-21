@@ -350,7 +350,7 @@ class platform::ptpinstance (
 
 class platform::ptpinstance::runtime {
   class { 'platform::ptpinstance': runtime => true }
-  class { 'platform::ptpinstance::nic_clock': }
+  -> class { 'platform::ptpinstance::nic_clock': }
   -> exec {'Ensure collectd is restarted':
     command => '/usr/local/sbin/pmon-restart collectd'
   }
