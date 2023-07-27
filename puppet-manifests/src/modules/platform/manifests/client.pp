@@ -44,7 +44,7 @@ class platform::client
     }
   }
 
-  -> exec { 'change permission for /etc/apparmor.d/':
+  exec { 'change permission for /etc/apparmor.d/':
     command => 'setfacl -m g:sys_protected:rwx /etc/apparmor.d/',
     onlyif  => '/usr/bin/test -d /etc/apparmor.d/'
   }
