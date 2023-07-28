@@ -5,3 +5,4 @@ After=config.service
 [Service]
 # pmond monitors kubelet.service
 Restart=no
+ExecStartPre=-/usr/local/bin/kubelet-cleanup-orphaned-volumes.sh

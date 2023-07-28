@@ -27,6 +27,8 @@ endif
 	install -m 755 -D bin/calico_firewall_apply_policy.sh $(BINDIR)/calico_firewall_apply_policy.sh
 	install -m 755 -D bin/calico_firewall_remote_apply_hostendp.sh $(BINDIR)/calico_firewall_remote_apply_hostendp.sh
 	install -m 755 -D bin/calico_firewall_remote_apply_policy.sh $(BINDIR)/calico_firewall_remote_apply_policy.sh
+	install -m 755 -D bin/kubelet-cleanup-orphaned-volumes.sh $(BINDIR)/kubelet-cleanup-orphaned-volumes.sh
+
 	install -d -m 0755 $(CONFIGDIR)
 ifdef hiera_v5
 	install -m 640 etc/hiera_v5.yaml $(CONFIGDIR)/hiera.yaml
