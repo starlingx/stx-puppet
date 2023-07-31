@@ -162,6 +162,41 @@ function parse_interface_stanzas {
             fi
         fi
     done
+
+    # in Debian the package ifenslave can also configure the slave interfaces
+    # but it requires that ifup execute the bonded interface first when executing
+    # with --all, the section below edits the auto file to put the interfaces in
+    # the order "auto lo [bond interfaces] [ethernet interfaces] [vlan interfaces]"
+    bonded_if=()
+    vlan_if=()
+    ethernet_if=()
+    auto_arr=($(grep -v HEADER ${PUPPET_DIR}/auto))
+    for auto_if in ${auto_arr[@]:1}; do
+        if [[ ${auto_if} == "auto" ]]; then
+            continue
+        fi
+        bond_slaves=$(grep -c bond-slaves ${PUPPET_DIR}/ifcfg-${auto_if})
+        vlan_raw_device=$(grep -c vlan-raw-device ${PUPPET_DIR}/ifcfg-${auto_if})
+        if [ "${bond_slaves}" == "1" ]; then
+            bonded_if+=( ${auto_if} )
+        elif [ "${vlan_raw_device}" == "1" ]; then
+            vlan_if+=( ${auto_if} )
+        elif [[ "${bond_slaves}" == "0" && "${vlan_raw_device}" == "0" ]]; then
+            ethernet_if+=( ${auto_if} )
+        fi
+    done
+    new_auto=( "auto" )
+    for intf in ${bonded_if[@]}; do
+        new_auto+=("${intf}");
+    done
+    for intf in ${ethernet_if[@]}; do
+        new_auto+=("${intf}");
+    done
+    for intf in ${vlan_if[@]}; do
+        new_auto+=("${intf}");
+    done
+    echo "${new_auto[@]}" > ${PUPPET_DIR}/auto
+
 }
 
 #

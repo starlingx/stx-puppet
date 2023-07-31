@@ -142,13 +142,10 @@ function update_interfaces {
     # the network service.
     verify_all_vlans_created
 
-    # handle interfaces as a sorted list, this will guarantee that base
-    # interfaces are processed first
-    # e.g.
-    #   enp0s8 => enp0s8:1 => enp0s8.100 => enp0s8.100:1 => enp0s8.100:5
-    #   vlan160 => vlan160:1 => vlan160:5
-    for cfg_path in $(find ${PUPPET_DIR} -name "${IFNAME_INCLUDE}" | sort); do
-        cfg=$(basename ${cfg_path})
+    # the auto file contains the correct ordered execution list
+    auto_puppet=( $(grep -v HEADER ${PUPPET_DIR}/auto) )
+    for auto_if in ${auto_puppet[@]:1}; do
+        cfg="ifcfg-${auto_if}"
 
         if is_vlan ${ETC_DIR}/${cfg}; then
             vlans+=(${cfg})
@@ -195,14 +192,12 @@ function update_interfaces {
     done
 
     current=()
-    for f in $(find ${ETC_DIR} -name "${IFNAME_INCLUDE}"); do
-        current+=($(basename ${f}))
-    done
+    if [ -x ${ETC_DIR}/auto ]; then
+        auto_etc=( $(grep -v HEADER ${ETC_DIR}/auto) )
+        current=( ${auto_etc[@]:1} )
+    fi
 
-    active=()
-    for f in $(find ${PUPPET_DIR} -name "${IFNAME_INCLUDE}"); do
-        active+=($(basename ${f}))
-    done
+    active=( ${auto_puppet[@]} )
 
     # synchronize with sysinv-agent audit
     sysinv_agent_lock ${ACQUIRE_LOCK}
