@@ -1212,9 +1212,6 @@ class platform::sm::enable_admin_config::runtime {
   -> exec { 'Provision service domain admin-interface':
     command => 'sm-provision service-domain-interface controller admin-interface --apply'
   }
-  -> exec { 'Bring up interface':
-    command => "ifup ${admin_ip_interface}"
-  }
 }
 
 class platform::sm::disable_admin_config::runtime {
@@ -1228,9 +1225,6 @@ class platform::sm::disable_admin_config::runtime {
   }
   -> exec { 'Deprovision service domain admin-interface':
     command => 'sm-deprovision service-domain-interface controller admin-interface --apply'
-  }
-  -> exec { 'Bring down interface':
-    command => "ifdown ${admin_ip_interface}"
   }
 }
 
