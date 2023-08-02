@@ -4,6 +4,7 @@
 
 import argparse
 from contextlib import contextmanager
+from distutils.version import LooseVersion
 import json
 import logging
 import os
@@ -840,7 +841,12 @@ def update_kubelet_configmap(latest_config):
     if not k8s_version:
         return 1
     k8s_version = '.'.join(k8s_version.replace('v', '').split('.')[:2])
-    configmap_name = 'kubelet-config-' + k8s_version
+    # For k8s version 1.24 and later the kubelet-config configmap does not
+    # have a version in the name
+    if LooseVersion(k8s_version) >= LooseVersion("1.24"):
+        configmap_name = 'kubelet-config'
+    else:
+        configmap_name = 'kubelet-config-' + k8s_version
 
     # delete current kubelet configmap
     try:
