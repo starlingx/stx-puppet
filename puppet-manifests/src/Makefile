@@ -29,6 +29,7 @@ endif
 	install -m 755 -D bin/calico_firewall_remote_apply_policy.sh $(BINDIR)/calico_firewall_remote_apply_policy.sh
 	install -m 755 -D bin/kubelet-cleanup-orphaned-volumes.sh $(BINDIR)/kubelet-cleanup-orphaned-volumes.sh
 	install -m 755 -D bin/check_ipv6_tentative_addresses.py $(BINDIR)/check_ipv6_tentative_addresses.py
+	install -m 755 -D bin/manage_partitions_pre_script.sh $(BINDIR)/manage_partitions_pre_script.sh
 
 	install -d -m 0755 $(CONFIGDIR)
 ifdef hiera_v5
