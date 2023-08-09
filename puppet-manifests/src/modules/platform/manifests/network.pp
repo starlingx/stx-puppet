@@ -430,9 +430,11 @@ class platform::network::apply {
     command => 'apply_network_config.sh',
   }
 
-  # Wait for network interface to leave tentative state during ipv6 DAD
-  exec {'wait-for-tentative':
-    command   => '[ $(ip -6 addr sh | grep -c inet6.*tentative) -eq 0 ]',
+  # Wait for network interface to leave tentative state during ipv6 DAD, if interface is UP
+  exec { 'wait-for-tentative':
+    path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+    command   => 'check_ipv6_tentative_addresses.py',
+    logoutput => true,
     tries     => 10,
     try_sleep => 1,
   }
