@@ -32,12 +32,6 @@ class sysinv (
   $rpc_zeromq_conductor_bind_port  = '9501',
   $rpc_zeromq_agent_bind_port      = '9502',
   $control_exchange            = 'openstack',
-  $rabbit_host                 = '127.0.0.1',
-  $rabbit_port                 = 5672,
-  $rabbit_hosts                = false,
-  $rabbit_virtual_host         = '/',
-  $rabbit_userid               = 'guest',
-  $rabbit_password             = false,
   $qpid_hostname               = 'localhost',
   $qpid_port                   = '5672',
   $qpid_username               = 'guest',
@@ -123,25 +117,8 @@ class sysinv (
 
   if $rpc_backend == 'sysinv.openstack.common.rpc.impl_kombu' {
 
-    if ! $rabbit_password {
-      fail('Please specify a rabbit_password parameter.')
-    }
-
     sysinv_config {
-      'DEFAULT/rabbit_password':     value => $rabbit_password, secret => true;
-      'DEFAULT/rabbit_userid':       value => $rabbit_userid;
-      'DEFAULT/rabbit_virtual_host': value => $rabbit_virtual_host;
       'DEFAULT/control_exchange':    value => $control_exchange;
-    }
-
-    if $rabbit_hosts {
-      sysinv_config { 'DEFAULT/rabbit_hosts':     value => join($rabbit_hosts, ',') }
-      sysinv_config { 'DEFAULT/rabbit_ha_queues': value => true }
-    } else {
-      sysinv_config { 'DEFAULT/rabbit_host':      value => $rabbit_host }
-      sysinv_config { 'DEFAULT/rabbit_port':      value => $rabbit_port }
-      sysinv_config { 'DEFAULT/rabbit_hosts':     value => "${rabbit_host}:${rabbit_port}" }
-      sysinv_config { 'DEFAULT/rabbit_ha_queues': value => false }
     }
   }
 
