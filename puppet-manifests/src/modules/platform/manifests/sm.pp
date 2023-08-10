@@ -832,6 +832,17 @@ class platform::sm
         command => 'sm-deprovision service-group-member cloud-services dbmon --apply'
     }
   }
+  # TODO(tcervi): The guest-agent service deprovision is only necessary to allow an upgrade
+  # from StarlingX releases 6 or 7 to new releases. This service was deprecated on Debian.
+  # Remove this deprovision when StarlingX releases 6 and 7 are not supported anymore.
+  exec { 'deprovision guest-agent service group member':
+      command => 'sm-deprovision service-group-member controller-services guest-agent --apply',
+      onlyif  => 'sm-query service guest-agent | grep -v disabled',
+  }
+  -> exec { 'deprovision guest-agent service':
+    command => 'sm-deprovision service guest-agent',
+  }
+
 
   # Configure Docker Distribution
   exec { 'Provision Docker Distribution (service-group-member)':
