@@ -294,6 +294,10 @@ class platform::ldap::secure::runtime
   # Local ldap server configuration with SSL certificate.
 
   class { '::platform::ldap::secure::config':}
+
+  -> exec { 'Restart openldap service':
+    command => 'sm-restart-safe service open-ldap',
+  }
 }
 
 # This class is intended to be used only at runtime to
