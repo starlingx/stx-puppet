@@ -765,7 +765,6 @@ class platform::kubernetes::firewall
       chain        => $chain,
       proto        => $transport,
       jump         => $jump,
-      ports        => $dports,
       host         => $s_mgmt_subnet,
       destination  => $d_mgmt_subnet,
       outiface     => $oam_interface,

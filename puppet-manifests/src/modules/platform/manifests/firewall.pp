@@ -42,6 +42,7 @@ define platform::firewall::rule (
       ensure      => $ensure,
       table       => $table,
       proto       => $proto,
+      dport       => $ports,
       outiface    => $outiface,
       jump        => $jump,
       tosource    => $tosource,
@@ -85,6 +86,7 @@ class platform::firewall::calico::controller {
   contain ::platform::firewall::calico::storage
   contain ::platform::firewall::calico::admin
   contain ::platform::firewall::calico::hostendpoint
+  contain ::platform::firewall::nat::admin
 
   Class['::platform::kubernetes::gate'] -> Class[$name]
 
@@ -96,6 +98,7 @@ class platform::firewall::calico::controller {
   -> Class['::platform::firewall::calico::storage']
   -> Class['::platform::firewall::calico::admin']
   -> Class['::platform::firewall::calico::hostendpoint']
+  -> Class['::platform::firewall::nat::admin']
 }
 
 class platform::firewall::calico::worker {
@@ -124,6 +127,7 @@ class platform::firewall::runtime {
   include ::platform::firewall::calico::storage
   include ::platform::firewall::calico::admin
   include ::platform::firewall::calico::hostendpoint
+  include ::platform::firewall::nat::admin
 
   Class['::platform::firewall::calico::oam']
   -> Class['::platform::firewall::calico::mgmt']
@@ -132,6 +136,7 @@ class platform::firewall::runtime {
   -> Class['::platform::firewall::calico::storage']
   -> Class['::platform::firewall::calico::admin']
   -> Class['::platform::firewall::calico::hostendpoint']
+  -> Class['::platform::firewall::nat::admin']
 }
 
 class platform::firewall::mgmt::runtime {
@@ -140,6 +145,7 @@ class platform::firewall::mgmt::runtime {
 
 class platform::firewall::admin::runtime {
   include ::platform::firewall::calico::admin
+  include ::platform::firewall::nat::admin
 }
 
 class platform::firewall::calico::oam (
@@ -373,3 +379,63 @@ class platform::firewall::calico::is_config_available {
   }
 }
 
+class platform::firewall::nat::admin::params (
+  $transport = 'tcp',
+  $table = 'nat',
+  # openLDAP ports 636, 389
+  $dports = [636, 389],
+  $chain = 'POSTROUTING',
+  $jump = 'SNAT',
+) {}
+
+class platform::firewall::nat::admin (
+  $enabled = true,
+) inherits ::platform::firewall::nat::admin::params {
+
+  include ::platform::params
+
+  if $::platform::params::distributed_cloud_role == 'subcloud' {
+    include ::platform::network::mgmt::params
+    include ::platform::network::admin::params
+
+    $system_mode = $::platform::params::system_mode
+    $mgmt_subnet = $::platform::network::mgmt::params::subnet_network
+    $mgmt_prefixlen = $::platform::network::mgmt::params::subnet_prefixlen
+    $admin_float_ip = $::platform::network::admin::params::controller_address
+    $admin_interface = $::platform::network::admin::params::interface_name
+    $s_mgmt_subnet = "${mgmt_subnet}/${mgmt_prefixlen}"
+
+    if $enabled {
+      $ensure = 'present'
+    } else {
+      $ensure = 'absent'
+    }
+
+    if $system_mode != 'simplex' and $admin_interface {
+      platform::firewall::rule { 'ldap-admin-nat':
+        ensure       => $ensure,
+        service_name => 'subcloud',
+        table        => $table,
+        chain        => $chain,
+        proto        => $transport,
+        jump         => $jump,
+        ports        => $dports,
+        host         => $s_mgmt_subnet,
+        outiface     => $admin_interface,
+        tosource     => $admin_float_ip,
+      }
+    }
+  }
+}
+
+class platform::firewall::nat::admin::runtime {
+  include ::platform::firewall::nat::admin
+}
+
+class platform::firewall::nat::admin::remove
+  inherits ::platform::firewall::nat::admin::params {
+
+  class { '::platform::firewall::nat::admin':
+    enabled    => false,
+  }
+}
