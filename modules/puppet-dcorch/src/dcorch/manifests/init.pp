@@ -59,6 +59,7 @@ class dcorch (
   $usm_remote_port             = 5497,
   $identity_bind_port          = 25000,
   $identity_remote_port        = 5000,
+  $use_usm                     = false
 ) {
 
   include dcorch::params
@@ -99,6 +100,11 @@ class dcorch (
     'DEFAULT/verbose':             value => $verbose;
     'DEFAULT/debug':               value => $debug;
     'DEFAULT/api_paste_config':    value => $api_paste_config;
+  }
+
+# TODO(cdeolive): remove this parameter when usm is fully integrated
+  dcorch_config {
+    'DEFAULT/use_usm':             value => $use_usm;
   }
 
   # Automatically add psycopg2 driver to postgresql (only does this if it is missing)
