@@ -169,6 +169,49 @@ mask_passwd() {
             ${LOGFILE}
 }
 
+virtual_env_whitelist() {
+    # For virtual environments it's possible to ignore Warnings in the manifest execution using a whitelist.
+    # To do so, add the text description to the whitelist following the example:
+    # warnings_whitelist=("Text of warning number 1" "Text of warning number 2" "Text of warning number 3")
+
+    warnings_whitelist=("Could not retrieve fact ipaddress")
+
+    # Check for errors before continuing with warnings whitelist check.
+    if grep -qE '^(.......)?Error|^....-..-..T..:..:..([.]...)?(.......)?.Error' "${LOGFILE}"; then
+        echo "[WARNING]"
+        echo "Errors found, not proceeding whit warnings whitelist check. See ${LOGFILE} for details"
+        exit 1
+    fi
+
+    # Extract Warnings from the manifest execution log:
+    WARNINGS_LOG_FILE="/tmp/${DATETIME}_${MANIFEST}_puppet_warnings.log"
+    grep -E '^(.......)?Warning|^....-..-..T..:..:..([.]...)?(.......)?.Warning' "${LOGFILE}" > "${WARNINGS_LOG_FILE}"
+
+    # Count of Warnings present in the manifest execution log:
+    warnings_in_log_count=$(wc -l <"${WARNINGS_LOG_FILE}")
+
+    # Count of Warnings present in the manifest execution log that matches with the whitelist:
+    warnings_matches_count=0
+
+    for warning in "${warnings_whitelist[@]}"; do
+        if grep -q "${warning}" "${WARNINGS_LOG_FILE}"; then
+            warnings_matches_count=$((warnings_matches_count+=1))
+        fi
+    done
+
+    if [[ ${warnings_matches_count} -ne 0 ]] && [[ ${warnings_matches_count} -eq ${warnings_in_log_count} ]]; then
+        # All warnings in the logs are in the whitelist, ignore warnings
+        echo "The warnings that appear in the manifest execution are the same of the whitelist;"\
+        "Ignoring warnings..."
+    else
+        # Warnings that appear in the log file are different from warnings on whitelist
+        echo "[WARNING] The warnings that appear in the manifest execution are different of the whitelist..."
+        echo "Warnings found. See ${LOGFILE} or ${WARNINGS_LOG_FILE} for details"
+        exit 1
+    fi
+
+}
+
 echo "Applying puppet ${MANIFEST} manifest..."
 
 # puppet wants to write to current directory. Need to move current directory to a writable place.
@@ -188,9 +231,15 @@ if [ ${rc} -ne 0 ]; then
 else
     grep -qE '^(.......)?Warning|^....-..-..T..:..:..([.]...)?(.......)?.Warning|^(.......)?Error|^....-..-..T..:..:..([.]...)?(.......)?.Error' ${LOGFILE}
     if [ $? -eq 0 ]; then
-        echo "[WARNING]"
-        echo "Warnings found. See ${LOGFILE} for details"
-        exit 1
+        # If in a virtual environment, check if the Warnings are present in the whitelist:
+        is_virtual=$(/usr/bin/facter is_virtual)
+        if ${is_virtual} ; then
+            virtual_env_whitelist
+        else
+            echo "[WARNING]"
+            echo "Warnings found. See ${LOGFILE} for details"
+            exit 1
+        fi
     fi
     echo "[DONE]"
 fi
