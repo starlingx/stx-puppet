@@ -1,9 +1,15 @@
 /bin/true # puppet requires this for correct template parsing
 
-ACC_CONFIG_FILE=/usr/share/pf-bb-config/acc200/acc200_config_16vf.cfg
-ETC_ACC_CONFIG_FILE=/etc/pf-bb-config/acc200/acc200_config_16vf.cfg
+ACC_CONFIG_FILE=/usr/share/pf-bb-config/vrb1/vrb1_config_1vf_5g.cfg
+ACC_COEFF_FILE=/usr/share/pf-bb-config/vrb1/srs_fft_windows_coefficient.bin
+ETC_ACC_CONFIG_FILE=/etc/pf-bb-config/vrb1/vrb1_config_1vf_5g.cfg
+ETC_ACC_COEFF_FILE=/etc/pf-bb-config/vrb1/srs_fft_windows_coefficient.bin
+
 NUM_VF_BUNDLES=<%= @num_vf_bundles -%>
 
 cp -R ${ACC_CONFIG_FILE} ${ETC_ACC_CONFIG_FILE}
+cp -R ${ACC_COEFF_FILE} ${ETC_ACC_COEFF_FILE}
 sed -i 's/num_vf_bundles\ =\ [0-9]*/num_vf_bundles\ =\ '${NUM_VF_BUNDLES}'/' ${ETC_ACC_CONFIG_FILE}
-/usr/bin/pf_bb_config ACC200 -c ${ETC_ACC_CONFIG_FILE}
+pushd /etc/pf-bb-config
+/usr/bin/pf_bb_config VRB1 -c ${ETC_ACC_CONFIG_FILE}
+popd

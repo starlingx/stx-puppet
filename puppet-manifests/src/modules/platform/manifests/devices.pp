@@ -234,13 +234,13 @@ class platform::devices::acc200::config (
   $num_vf_bundles
 ) inherits ::platform::devices::acc200::fec {
   if $enabled {
-    file { [ '/etc/pf-bb-config/', '/etc/pf-bb-config/acc200' ]:
+    file { [ '/etc/pf-bb-config/', '/etc/pf-bb-config/vrb1' ]:
       ensure => 'directory',
       owner  => 'root',
       group  => 'root',
       mode   => '0640',
     }
-    -> exec { "Configure ACC200 device with ${num_vf_bundles} VF bundles":
+    -> exec { "Configure ACC200/VRB1 device with ${num_vf_bundles} VF bundles":
         command   => template('platform/acc200-config.erb'),
         logoutput => true,
     }
