@@ -22,7 +22,7 @@ define platform::partitions::platform_manage_partition(
     # see https://docs.linbit.com/doc/users-guide-83/s-resizing/
     exec { "manage-partitions-${action}":
       logoutput => true,
-      command   => template('platform/partitions.manage.erb')
+      command   => "manage_partitions_pre_script.sh '${shutdown_drbd_resource}' '${::is_controller_active}' '${system_mode}' '${action}' '${config}'" # lint:ignore:140chars
     }
   }
 }
