@@ -44,12 +44,30 @@ ETCD_LISTEN_CLIENT_URL="${URLS[-1]}"
 status()
 {
     if [[ $ETCD_LISTEN_CLIENT_URL =~ "https" ]]; then
-        etcd_health="$(etcdctl --timeout 5s --ca-file /etc/etcd/ca.crt -cert-file /etc/etcd/etcd-server.crt --key-file /etc/etcd/etcd-server.key --endpoints="$ETCD_LISTEN_CLIENT_URL" cluster-health 2>&1 | head -n 1)"
+        etcd_health="$(etcdctl --timeout 5s --ca-file /etc/etcd/ca.crt -cert-file /etc/etcd/etcd-server.crt --key-file /etc/etcd/etcd-server.key --endpoints="$ETCD_LISTEN_CLIENT_URL" cluster-health 2>&1)"
     else
         etcd_health="$(etcdctl --timeout 5s --endpoints="$ETCD_LISTEN_CLIENT_URL" cluster-health 2>&1 | head -n 1)"
     fi
 
-    if [[ $etcd_health =~ "is healthy" ]]; then
+    # LP: 2033942. In case if the status method is called in between
+    # certs are replaced and etcd service is restarted, etcd health call
+    # will result negative even though service is running fine.
+    # In this case we rely on PID file for the status of the service.
+    if [[ $etcd_health =~ "bad certificate"  ]]; then
+        if [ -e $PIDFILE ]; then
+            PIDDIR=/proc/$(cat $PIDFILE)
+            if [ -d $PIDDIR ]; then
+                RETVAL=0
+                echo "$DESC is running but invalid certificates detected."
+                return
+            fi
+            echo "$DESC is Not running. Also, invalid certificates detected."
+            RETVAL=1
+        else
+            echo "$DESC is Not running. Also, invalid certificates detected."
+            RETVAL=1
+        fi
+    elif [[ $etcd_health =~ "is healthy" ]]; then
         RETVAL=0
         echo "$DESC is running"
         return
