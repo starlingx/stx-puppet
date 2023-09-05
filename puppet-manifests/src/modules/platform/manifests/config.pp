@@ -301,7 +301,28 @@ class platform::config::hosts
 
   $hosts_with_alias = deep_merge($hosts, $nfs_alias_controller)
   $merged_hosts = merge($localhost, $hosts_with_alias)
-  create_resources('host', $merged_hosts, {})
+
+  $dns_host_records = lookup({'name'  => 'platform::config::hosts::host_records', 'default_value' => []})
+
+  # The controller needs to add dns host records to /etc/hosts file for name resolution,
+  # before initial unlock when dnsmasq service is not running
+  if ($::personality != 'controller') or
+      ($dns_host_records == [] or str2bool($::is_dnsmasq_running)) {
+    create_resources('host', $merged_hosts, {})
+  } else {
+    $host_records_hash = $dns_host_records.map | $line | {
+      $ip_record = split($line, ' ')
+      $host_record = {
+        $ip_record[1] => {
+          ip => $ip_record[0],
+          host_aliases => $ip_record[2,-1]
+        }
+      }
+    }
+    $reduced_hosts_records = $host_records_hash.reduce({}) |$result, $resource| { $result + $resource }
+    $merged_host_records = merge($merged_hosts, $reduced_hosts_records)
+    create_resources('host', $merged_host_records, {})
+  }
 }
 
 
