@@ -114,6 +114,15 @@ class platform::kubernetes::configuration {
     mode   => '0644',
   }
 
+  # Add kubelet service override
+  -> file { '/etc/systemd/system/kubelet.service.d/kube-stx-override.conf':
+    ensure  => file,
+    content => template('platform/kube-stx-override.conf.erb'),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+  }
+
   if ($::personality == 'controller') {
     # Cron job to cleanup stale CNI cache files that are more than
     # 1 day old and are not associated with any currently running pod.
@@ -422,15 +431,6 @@ class platform::kubernetes::master::init
       onlyif    => "test '${::platform::params::system_type }' == 'All-in-one'",
     }
 
-    # Add kubelet service override
-    -> file { '/etc/systemd/system/kubelet.service.d/kube-stx-override.conf':
-      ensure  => file,
-      content => template('platform/kube-stx-override.conf.erb'),
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0644',
-    }
-
     # set kubelet monitored by pmond
     -> file { '/etc/pmon.d/kubelet.conf':
       ensure  => file,
@@ -438,12 +438,6 @@ class platform::kubernetes::master::init
       owner   => 'root',
       group   => 'root',
       mode    => '0644',
-    }
-
-    # Reload systemd
-    -> exec { 'perform systemctl daemon reload for kubelet override':
-      command   => 'systemctl daemon-reload',
-      logoutput => true,
     }
 
     # Update plugin directory for upgrade from 21.12 to 22.12 release
@@ -534,15 +528,6 @@ class platform::kubernetes::worker::init
     unless    => 'test -f /etc/kubernetes/kubelet.conf',
   }
 
-  # Add kubelet service override
-  -> file { '/etc/systemd/system/kubelet.service.d/kube-stx-override.conf':
-    ensure  => file,
-    content => template('platform/kube-stx-override.conf.erb'),
-    owner   => 'root',
-    group   => 'root',
-    mode    => '0644',
-  }
-
   # set kubelet monitored by pmond
   -> file { '/etc/pmon.d/kubelet.conf':
     ensure  => file,
@@ -550,12 +535,6 @@ class platform::kubernetes::worker::init
     owner   => 'root',
     group   => 'root',
     mode    => '0644',
-  }
-
-  # Reload systemd
-  -> exec { 'perform systemctl daemon reload for kubelet override':
-    command   => 'systemctl daemon-reload',
-    logoutput => true,
   }
 }
 
