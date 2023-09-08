@@ -35,6 +35,7 @@ include ::platform::containerd::storage
 include ::platform::ceph::storage
 include ::platform::rook
 include ::platform::tty
+include ::platform::crashdump
 
 class { '::platform::config::storage::post':
   stage => post,
