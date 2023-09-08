@@ -34,7 +34,7 @@ logger -t $0 "puppet-manifest-apply ${HIERADATA} ${HOST} ${SUBFUNCTIONS} ${MANIF
 PUPPET_MODULES_PATH=/usr/share/puppet/modules:/usr/share/openstack-puppet/modules
 PUPPET_MANIFEST=/etc/puppet/manifests/${MANIFEST}.pp
 PUPPET_TMP=/tmp/puppet
-FILEBUCKET_PATH=/var/lib/puppet/clientbucket
+FILEBUCKET_PATH=/var/cache/puppet/clientbucket
 
 # Setup log directory and file
 DATETIME=$(date -u +"%Y-%m-%d-%H-%M-%S")
