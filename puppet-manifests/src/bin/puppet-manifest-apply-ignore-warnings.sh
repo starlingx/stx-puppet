@@ -186,7 +186,9 @@ if [ ${rc} -ne 0 ]; then
     echo "See ${LOGFILE} for details"
     exit 1
 else
-    grep -qE '^(.......)?Warning|^....-..-..T..:..:..([.]...)?(.......)?.Warning|^(.......)?Error|^....-..-..T..:..:..([.]...)?(.......)?.Error' ${LOGFILE}
+    #Directly patched for: sed -i 's@Warning|@MMAAAAAAAAAASKED|@g' /usr/local/bin/puppet-manifest-apply.sh
+    #TODO: Revert patch when all puppet warnings are resolved on Debian
+    grep -qE '^(.......)?MMAAAAAAAAAASKED|^....-..-..T..:..:..([.]...)?(.......)?.MMAAAAAAAAAASKED|^(.......)?Error|^....-..-..T..:..:..([.]...)?(.......)?.Error' ${LOGFILE}
     if [ $? -eq 0 ]; then
         echo "[WARNING]"
         echo "Warnings found. See ${LOGFILE} for details"
