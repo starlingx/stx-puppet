@@ -95,7 +95,7 @@ class dcmanager::api (
   $keystone_identity_uri      = false,
   $keystone_user_domain       = 'Default',
   $keystone_project_domain    = 'Default',
-  $keystone_http_connect_timeout = '10',
+  $keystone_http_connect_timeout = '15',
   $keystone_http_request_max_retries = '3',
   $auth_type                  = 'password',
   $service_port               = '5000',

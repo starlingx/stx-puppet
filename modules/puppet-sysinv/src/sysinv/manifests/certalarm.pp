@@ -26,7 +26,7 @@ class sysinv::certalarm (
   $keystone_interface         = 'internal',
   $auth_type                  = 'password',
   $service_port               = '5000',
-  $keystone_http_connect_timeout = '10',
+  $keystone_http_connect_timeout = '15',
   $package_ensure             = 'latest',
   $bind_host                  = '::',
   $pxeboot_host               = undef,
