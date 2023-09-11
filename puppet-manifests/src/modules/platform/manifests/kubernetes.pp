@@ -864,15 +864,46 @@ class platform::kubernetes::upgrade_control_plane
   }
 }
 
+# Define for unmasking and starting a service
+define platform::kubernetes::unmask_start_service($service_name, $onlyif = undef) {
+  # Unmask the service and start it now
+  exec { "unmask ${service_name}":
+    command => "/usr/bin/systemctl unmask --runtime ${service_name}",
+    onlyif  => $onlyif,
+  }
+  # Tell pmon to start monitoring the service
+  -> exec { "start ${service_name} for upgrade":
+    command => "/usr/local/sbin/pmon-start ${service_name}",
+    onlyif  => $onlyif,
+  }
+}
+
+# Define for masking and stopping a service
+define platform::kubernetes::mask_stop_service($service_name, $onlyif) {
+  # Mask the service and stop it now
+  exec { "mask ${service_name}":
+    command => "/usr/bin/systemctl mask --runtime --now ${service_name}",
+    onlyif  => $onlyif,
+  }
+  # Tell pmon to stop the service so it doesn't try to restart it
+  -> exec { "stop ${service_name} for upgrade":
+    command => "/usr/local/sbin/pmon-stop ${service_name}",
+    onlyif  => $onlyif,
+  }
+}
+
 class platform::kubernetes::mask_stop_kubelet {
+  # Mask and stop isolcpu_plugin service first if it is configured to run
+  # on this node
+  platform::kubernetes::mask_stop_service { 'isolcpu_plugin':
+    service_name => 'isolcpu_plugin',
+    onlyif       => 'systemctl is-enabled isolcpu_plugin.service | grep -wq enabled',
+  }
+
   # Mask restarting kubelet and stop it now so that we can unmount
   # and re-mount the bind mount.
-  exec { 'mask kubelet for master upgrade':
-    command => '/usr/bin/systemctl mask --runtime --now kubelet',
-  }
-  # Tell pmon to stop kubelet so it doesn't try to restart it
-  -> exec { 'stop kubelet for upgrade':
-      command => '/usr/local/sbin/pmon-stop kubelet',
+  -> platform::kubernetes::mask_stop_service { 'kubelet':
+    service_name => 'kubelet',
   }
 }
 
@@ -911,11 +942,14 @@ class platform::kubernetes::unmask_start_kubelet
       timeout   => 10,
   }
   # Unmask and restart kubelet after the bind mount is updated.
-  -> exec { 'unmask kubelet for upgrade':
-      command => '/usr/bin/systemctl unmask --runtime kubelet',
+  -> platform::kubernetes::unmask_start_service { 'kubelet':
+    service_name => 'kubelet',
   }
-  -> exec { 'start kubelet':
-      command => '/usr/local/sbin/pmon-start kubelet'
+
+  # Unmask and start isolcpu_plugin service last
+  -> platform::kubernetes::unmask_start_service { 'isolcpu_plugin':
+    service_name => 'isolcpu_plugin',
+    onlyif       => 'systemctl is-enabled isolcpu_plugin',
   }
 }
 
