@@ -293,13 +293,33 @@ define platform::network::interfaces::sriov_bind (
   $max_tx_rate = undef
 ) {
   if ($driver != undef) {
-    ensure_resource(kmod::load, $driver)
-    exec { "sriov-vf-bind-device: ${title}":
-      command   => template('platform/sriov.bind-device.erb'),
-      logoutput => true,
-      require   => [ Kmod::Load[$driver] ],
+    if ($driver == 'vfio-pci') {
+      exec { "Load vfio-pci driver with sriov enabled: ${title}":
+        command   => 'modprobe vfio-pci enable_sriov=1 disable_idle_d3=1',
+        logoutput => true,
+      }
+      -> exec { "Ensure enable_sriov is set: ${title}":
+        command   => 'echo 1 > /sys/module/vfio_pci/parameters/enable_sriov',
+        logoutput => true,
+      }
+      -> exec { "Ensure disable_idle_d3 is set: ${title}":
+        command   => 'echo 1 > /sys/module/vfio_pci/parameters/disable_idle_d3',
+        logoutput => true,
+      }
+      -> exec { "sriov-vf-bind-device: ${title}":
+        command   => template('platform/sriov.bind-device.erb'),
+        logoutput => true,
+      }
+      -> Platform::Network::Interfaces::Sriov_ratelimit <| addr == $addr |>
+    } else {
+      ensure_resource(kmod::load, $driver)
+      exec { "sriov-vf-bind-device: ${title}":
+        command   => template('platform/sriov.bind-device.erb'),
+        logoutput => true,
+        require   => [ Kmod::Load[$driver] ],
+      }
+      -> Platform::Network::Interfaces::Sriov_ratelimit <| addr == $addr |>
     }
-    -> Platform::Network::Interfaces::Sriov_ratelimit <| addr == $addr |>
   }
 }
 
