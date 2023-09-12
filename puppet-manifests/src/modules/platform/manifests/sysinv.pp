@@ -12,7 +12,6 @@ class platform::sysinv
   Anchor['platform::services'] -> Class[$name]
 
   include ::platform::params
-  include ::platform::amqp::params
   include ::platform::drbd::platform::params
 
   # sysinv-agent is started on all hosts
@@ -46,10 +45,6 @@ class platform::sysinv
   }
 
   -> class { '::sysinv':
-    rabbit_host           => $::platform::amqp::params::host_url,
-    rabbit_port           => $::platform::amqp::params::port,
-    rabbit_userid         => $::platform::amqp::params::auth_user,
-    rabbit_password       => $::platform::amqp::params::auth_password,
     fm_catalog_info       => $fm_catalog_info,
     fernet_key_repository => "${keystone_key_repo_path}/fernet-keys",
   }
