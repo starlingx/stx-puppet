@@ -493,13 +493,41 @@ class platform::network::runtime {
 
 class platform::network::routes::runtime {
   include ::platform::network::routes
+  include ::platform::params
+  $dc_role = $::platform::params::distributed_cloud_role
 
   # Adding Network_route dependency separately, in case it's empty,
   # as puppet bug will remove dependency altogether if
   # Network_route is empty. See below.
   # https://projects.puppetlabs.com/issues/18399
-  Network_route <| |> -> Exec['apply-network-config route setup']
-  Platform::Network::Network_route6 <| |> -> Exec['apply-network-config route setup']
+
+  # in DC setups the firewall needs to be updated also in the controllers
+  if ($dc_role == 'systemcontroller' and $::personality == 'controller') {
+
+    # systemcontroller for the management network
+    include ::platform::firewall::mgmt::runtime
+
+    Network_route <| |> -> Exec['apply-network-config route setup']
+    Platform::Network::Network_route6 <| |> -> Exec['apply-network-config route setup']
+    -> Class['::platform::firewall::mgmt::runtime']
+
+  } elsif ($dc_role == 'subcloud' and $::personality == 'controller') {
+
+    # subcloud for the management and admin networks
+    include ::platform::firewall::mgmt::runtime
+    include ::platform::firewall::admin::runtime
+
+    Network_route <| |> -> Exec['apply-network-config route setup']
+    Platform::Network::Network_route6 <| |> -> Exec['apply-network-config route setup']
+    -> Class['::platform::firewall::mgmt::runtime']
+    -> Class['::platform::firewall::admin::runtime']
+
+  } else {
+
+    Network_route <| |> -> Exec['apply-network-config route setup']
+    Platform::Network::Network_route6 <| |> -> Exec['apply-network-config route setup']
+
+  }
 
   exec {'apply-network-config route setup':
     command => 'apply_network_config.sh --routes',
