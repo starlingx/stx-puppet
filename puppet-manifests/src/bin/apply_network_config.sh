@@ -316,8 +316,13 @@ else
 
         parse_interface_stanzas
 
-        update_interfaces
-        update_routes
+        if [[ ! -f /var/run/.network_upgrade_bootstrap ]]; then
+            update_interfaces
+            update_routes
+        else
+            log_it "Executing upgrade bootstrap, just add the config files into /etc/network/"
+            update_config
+        fi
 
     else
         log_it "Not using sysconfig or ifupdown, cannot advance!  Aborting..."
