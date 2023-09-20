@@ -555,6 +555,7 @@ function route_del {
 function update_routes {
     local etc_data
     local puppet_data
+    local ifaces=($@)
 
     if [ -f ${PUPPET_ROUTES6_FILE} ]; then
         log_it "add IPv6 routes generated in network.pp"
@@ -609,11 +610,26 @@ function update_routes {
                 eval ${grepCmd}
                 if [ $? -ne 0 ] ; then
                     route_add "${puppetRouteLine}"
+                elif [ ${#ifaces[@]} -ne 0 ] ; then
+                    ifname=$( echo "${puppetRouteLine}" | awk '{print $4}' )
+                    if printf '%s\0' "${ifaces[@]}" | grep -Fxqz -- ${ifname}; then
+                        log_it "Route is already present in ${ETC_ROUTES_FILE}, but is associated with an updated interface, adding"
+                        route_add "${puppetRouteLine}"
+                    fi
                 fi
             done <<< ${puppet_data}
 
             do_rm ${ETC_ROUTES_FILE}
             do_cp ${PUPPET_ROUTES_FILE} ${ETC_ROUTES_FILE}
+        elif [ ${#ifaces[@]} -ne 0 ] ; then
+            puppet_data=$(grep -v -E '(HEADER)|(^#)' ${PUPPET_ROUTES_FILE})
+            while read puppetRouteLine; do
+                ifname=$( echo "${puppetRouteLine}" | awk '{print $4}' )
+                if printf '%s\0' "${ifaces[@]}" | grep -Fxqz -- ${ifname}; then
+                    log_it "Route is associated with an updated interface, adding"
+                    route_add "${puppetRouteLine}"
+                fi
+            done <<< ${puppet_data}
         fi
 
     else
