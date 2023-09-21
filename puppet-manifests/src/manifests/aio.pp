@@ -43,6 +43,7 @@ include ::platform::kubernetes::gate
 include ::platform::helm
 include ::platform::tty
 include ::platform::coredump::k8s_token_handler::controller
+include ::platform::crashdump
 
 include ::platform::patching
 include ::platform::patching::api

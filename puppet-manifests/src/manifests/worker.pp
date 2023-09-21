@@ -51,6 +51,8 @@ include ::platform::worker::storage
 include ::platform::lmon
 include ::platform::rook
 include ::platform::tty
+include ::platform::crashdump
+
 
 class { '::platform::config::worker::post':
   stage => post,
