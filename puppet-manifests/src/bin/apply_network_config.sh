@@ -135,6 +135,7 @@ function update_interfaces {
     upDown=()
     changed=()
     vlans=()
+    updated_ifs=()
 
     # in DOR scenarios systemd might timeout to configure some interfaces since DHCP server
     # might not be ready yet on the controller. If this happens the next interfaces in
@@ -162,6 +163,7 @@ function update_interfaces {
                 # just add cfg to the upDown list because we know (from above) cfg file is changed
                 log_it "dhcp detected for ${cfg} - adding to upDown list"
                 upDown+=(${cfg})
+                updated_ifs+=(${cfg:6})
             else
                 # not in dhcp situation so check if any significant
                 # cfg attributes have changed to warrant an iface restart
@@ -185,6 +187,7 @@ function update_interfaces {
                     if [ ${found} -eq 0 ]; then
                         log_it "Adding ${base_cfg} to upDown list"
                         upDown+=(${base_cfg})
+                        updated_ifs+=(${base_cfg:6})
                     fi
                 fi
             fi
@@ -220,6 +223,7 @@ function update_interfaces {
                 if [[ ! " ${upDown[@]} " =~ " ${vlan} " ]]; then
                     log_it "Adding ${vlan} to up/down list since physdev ${cfg#ifcfg-} is changing"
                     upDown+=($vlan)
+                    updated_ifs+=(${vlan:6})
                 fi
             fi
         done
@@ -262,6 +266,8 @@ function update_interfaces {
 
     # unlock: synchronize with sysinv-agent audit
     sysinv_agent_lock ${RELEASE_LOCK}
+
+    echo "${updated_ifs[@]}"
 }
 
 if [ ${ROUTES_ONLY} = "yes" ]; then
@@ -301,7 +307,8 @@ else
         source /usr/local/bin/network_sysconfig.sh
 
         update_routes
-        update_interfaces
+        # capture echo in a dummy variable so it doesn't go to stdout
+        ifaces=$(update_interfaces)
 
     elif [ -d /etc/network/interfaces.d/ ] ; then
 
@@ -317,8 +324,8 @@ else
         parse_interface_stanzas
 
         if [[ ! -f /var/run/.network_upgrade_bootstrap ]]; then
-            update_interfaces
-            update_routes
+            ifaces=$(update_interfaces)
+            update_routes "${ifaces}"
         else
             log_it "Executing upgrade bootstrap, just add the config files into /etc/network/"
             update_config
