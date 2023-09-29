@@ -537,13 +537,13 @@ def generates_kubeadm_config_file(
         new_kubelet_cfg=None, cluster_cfg=None,
         only_kubelet_section=False):
     """The function generates a valid kubeadm config file
-    The kubeadmin config file must contain ClusterConfiguration and
+    The kubeadm config file must contain ClusterConfiguration and
     KubeletConfiguration sections.
     * ClusterConfiguration could be empty
     * KubeletConfiguration section is built from service-parameters kubelet section.
     For example:
     kind: ClusterConfiguration
-    apiVersion: kubeadm.k8s.io/v1beta2
+    apiVersion: kubeadm.k8s.io/v1beta3
     kubernetesVersion: v1.23.1
     ---
     kind: KubeletConfiguration
