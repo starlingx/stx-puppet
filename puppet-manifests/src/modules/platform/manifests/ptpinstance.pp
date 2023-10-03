@@ -186,7 +186,17 @@ class platform::ptpinstance::nic_clock (
 
   require ::platform::ptpinstance::nic_clock::nic_reset
 
-  file { 'ensure_clock_conf_present':
+  file {"${ptp_conf_dir}/ptpinstance":
+    ensure =>  directory,
+    mode   =>  '0755',
+  }
+  -> tidy { 'purge_conf':
+    path    => "${ptp_conf_dir}/ptpinstance",
+    matches => [ '[^clock]*.conf' ],
+    recurse => true,
+    rmdirs  => false
+  }
+  -> file { 'ensure_clock_conf_present':
     ensure  => present,
     path    => "${ptp_conf_dir}/ptpinstance/clock-conf.conf",
     mode    => '0644',
@@ -239,17 +249,7 @@ class platform::ptpinstance (
     $phc2sys_cmd_opts = ''
   }
 
-  file {"${ptp_conf_dir}/ptpinstance":
-    ensure =>  directory,
-    mode   =>  '0755',
-  }
-  -> tidy { 'purge_conf':
-    path    => "${ptp_conf_dir}/ptpinstance",
-    matches => [ '[^clock]*.conf' ],
-    recurse => true,
-    rmdirs  => false
-  }
-  -> file{"${ptp_options_dir}/ptpinstance":
+  file{"${ptp_options_dir}/ptpinstance":
     ensure =>  directory,
     mode   =>  '0755',
   }
@@ -349,8 +349,8 @@ class platform::ptpinstance (
 }
 
 class platform::ptpinstance::runtime {
-  class { 'platform::ptpinstance': runtime => true }
-  -> class { 'platform::ptpinstance::nic_clock': }
+  class { 'platform::ptpinstance::nic_clock': }
+  -> class { 'platform::ptpinstance': runtime => true }
   -> exec {'Ensure collectd is restarted':
     command => '/usr/local/sbin/pmon-restart collectd'
   }
