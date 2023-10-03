@@ -1,18 +1,17 @@
+[Unit]
+Description=etcd - highly-available key value store
+Documentation=https://etcd.io/docs
+Documentation=man:etcd
+
 [Service]
-EnvironmentFile=-/etc/etcd/etcd.conf
+EnvironmentFile=-/etc/default/etcd
 User=root
 NotifyAccess=all
 Type=notify
 ExecStart=
-ExecStart=-/bin/bash -c "GOMAXPROCS=<%= @etcd_max_procs %> /usr/bin/etcd \
-    --name=\"${ETCD_NAME}\" \
-    --data-dir=\"${ETCD_DATA_DIR}\" \
-    --listen-client-urls=\"${ETCD_LISTEN_CLIENT_URLS}\" \
-    --client-cert-auth=${ETCD_CLIENT_CERT_AUTH} \
-    --trusted-ca-file=\"${ETCD_TRUSTED_CA_FILE}\" \
-    --cert-file=\"${ETCD_CERT_FILE}\" \
-    --key-file=\"${ETCD_KEY_FILE}\" "
+ExecStart=-/bin/bash -c "GOMAXPROCS=<%= @etcd_max_procs %> /usr/bin/etcd"
 ExecStartPost=/bin/bash -c 'echo $MAINPID >/var/run/etcd.pid'
+ExecStop=
 ExecStopPost=/bin/bash -c 'rm -f /var/run/etcd.pid'
 Nice=-19
 IOSchedulingClass=best-effort
