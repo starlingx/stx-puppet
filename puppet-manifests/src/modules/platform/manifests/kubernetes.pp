@@ -255,8 +255,14 @@ class platform::kubernetes::kubeadm {
   $k8s_topology_mgr_policy = $::platform::kubernetes::params::k8s_topology_mgr_policy
   $k8s_pod_max_pids = $::platform::kubernetes::params::k8s_pod_max_pids
 
-  $iptables_file = "net.bridge.bridge-nf-call-ip6tables = 1
-    net.bridge.bridge-nf-call-iptables = 1"
+  $iptables_file = @("IPTABLE"/L)
+    net.bridge.bridge-nf-call-ip6tables = 1
+    net.bridge.bridge-nf-call-iptables = 1
+    net.ipv4.ip_forward = 1
+    net.ipv4.conf.default.rp_filter = 0
+    net.ipv4.conf.all.rp_filter = 0
+    net.ipv6.conf.all.forwarding = 1
+    | IPTABLE
 
   # Configure kubelet cpumanager options
   $opts_sys_res = join(['--system-reserved=',
