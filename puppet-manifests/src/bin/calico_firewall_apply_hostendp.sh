@@ -18,8 +18,8 @@ function log_it {
 
 hep_name=${1}
 file_name_hep=${2}
+kubeconfig=${3}
 
-kubeconfig='/etc/kubernetes/admin.conf';
 resource_name='hostendpoints.crd.projectcalico.org';
 
 if [[ ! -f ${file_name_hep} ]]; then

@@ -87,6 +87,7 @@ class platform::firewall::calico::controller {
   contain ::platform::firewall::calico::admin
   contain ::platform::firewall::calico::hostendpoint
   contain ::platform::firewall::nat::admin
+  contain ::platform::firewall::rbac::worker
 
   Class['::platform::kubernetes::gate'] -> Class[$name]
 
@@ -99,6 +100,7 @@ class platform::firewall::calico::controller {
   -> Class['::platform::firewall::calico::admin']
   -> Class['::platform::firewall::calico::hostendpoint']
   -> Class['::platform::firewall::nat::admin']
+  -> Class['::platform::firewall::rbac::worker']
 }
 
 class platform::firewall::calico::worker {
@@ -128,6 +130,7 @@ class platform::firewall::runtime {
   include ::platform::firewall::calico::admin
   include ::platform::firewall::calico::hostendpoint
   include ::platform::firewall::nat::admin
+  include ::platform::firewall::rbac::worker
 
   Class['::platform::firewall::calico::oam']
   -> Class['::platform::firewall::calico::mgmt']
@@ -137,6 +140,7 @@ class platform::firewall::runtime {
   -> Class['::platform::firewall::calico::admin']
   -> Class['::platform::firewall::calico::hostendpoint']
   -> Class['::platform::firewall::nat::admin']
+  -> Class['::platform::firewall::rbac::worker']
 }
 
 class platform::firewall::mgmt::runtime {
@@ -175,10 +179,11 @@ class platform::firewall::calico::mgmt (
   $config = {}
 ) {
   if $config != {} {
+    $apply_script = 'calico_firewall_apply_policy.sh'
     if $::personality == 'worker' {
-      $apply_script = 'calico_firewall_remote_apply_policy.sh'
+      $cfgf = '/etc/kubernetes/kubelet.conf'
     } elsif $::personality == 'controller' {
-      $apply_script = 'calico_firewall_apply_policy.sh'
+      $cfgf = '/etc/kubernetes/admin.conf'
     }
     $yaml_config = hash2yaml($config)
     $gnp_name = "${::personality}-mgmt-if-gnp"
@@ -192,7 +197,7 @@ class platform::firewall::calico::mgmt (
     }
     -> exec { "apply globalnetworkpolicies ${gnp_name} with ${file_name_gnp}":
       path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
-      command   => "${apply_script} ${gnp_name} ${file_name_gnp}",
+      command   => "${apply_script} ${gnp_name} ${file_name_gnp} ${cfgf}",
       logoutput => true
     }
   }
@@ -202,10 +207,11 @@ class platform::firewall::calico::cluster_host  (
   $config = {}
 ) {
   if $config != {} {
+    $apply_script = 'calico_firewall_apply_policy.sh'
     if $::personality == 'worker' {
-      $apply_script = 'calico_firewall_remote_apply_policy.sh'
+      $cfgf = '/etc/kubernetes/kubelet.conf'
     } elsif $::personality == 'controller' {
-      $apply_script = 'calico_firewall_apply_policy.sh'
+      $cfgf = '/etc/kubernetes/admin.conf'
     }
     $yaml_config = hash2yaml($config)
     $gnp_name = "${::personality}-cluster-host-if-gnp"
@@ -219,7 +225,7 @@ class platform::firewall::calico::cluster_host  (
     }
     -> exec { "apply globalnetworkpolicies ${gnp_name} with ${file_name_gnp}":
       path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
-      command   => "${apply_script} ${gnp_name} ${file_name_gnp}",
+      command   => "${apply_script} ${gnp_name} ${file_name_gnp} ${cfgf}",
       logoutput => true
     }
   }
@@ -229,10 +235,11 @@ class platform::firewall::calico::pxeboot  (
   $config = {}
 ) {
   if $config != {} {
+    $apply_script = 'calico_firewall_apply_policy.sh'
     if $::personality == 'worker' {
-      $apply_script = 'calico_firewall_remote_apply_policy.sh'
+      $cfgf = '/etc/kubernetes/kubelet.conf'
     } elsif $::personality == 'controller' {
-      $apply_script = 'calico_firewall_apply_policy.sh'
+      $cfgf = '/etc/kubernetes/admin.conf'
     }
     $yaml_config = hash2yaml($config)
     $gnp_name = "${::personality}-pxeboot-if-gnp"
@@ -246,7 +253,7 @@ class platform::firewall::calico::pxeboot  (
     }
     -> exec { "apply globalnetworkpolicies ${gnp_name} with ${file_name_gnp}":
       path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
-      command   => "${apply_script} ${gnp_name} ${file_name_gnp}",
+      command   => "${apply_script} ${gnp_name} ${file_name_gnp} ${cfgf}",
       logoutput => true
     }
   }
@@ -256,10 +263,11 @@ class platform::firewall::calico::storage  (
   $config = {}
 ) {
   if $config != {} {
+    $apply_script = 'calico_firewall_apply_policy.sh'
     if $::personality == 'worker' {
-      $apply_script = 'calico_firewall_remote_apply_policy.sh'
+      $cfgf = '/etc/kubernetes/kubelet.conf'
     } elsif $::personality == 'controller' {
-      $apply_script = 'calico_firewall_apply_policy.sh'
+      $cfgf = '/etc/kubernetes/admin.conf'
     }
     $yaml_config = hash2yaml($config)
     $gnp_name = "${::personality}-storage-if-gnp"
@@ -273,7 +281,7 @@ class platform::firewall::calico::storage  (
     }
     -> exec { "apply globalnetworkpolicies ${gnp_name} with ${file_name_gnp}":
       path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
-      command   => "${apply_script} ${gnp_name} ${file_name_gnp}",
+      command   => "${apply_script} ${gnp_name} ${file_name_gnp} ${cfgf}",
       logoutput => true
     }
   }
@@ -283,10 +291,11 @@ class platform::firewall::calico::admin  (
   $config = {}
 ) {
   if $config != {} {
+    $apply_script = 'calico_firewall_apply_policy.sh'
     if $::personality == 'worker' {
-      $apply_script = 'calico_firewall_remote_apply_policy.sh'
+      $cfgf = '/etc/kubernetes/kubelet.conf'
     } elsif $::personality == 'controller' {
-      $apply_script = 'calico_firewall_apply_policy.sh'
+      $cfgf = '/etc/kubernetes/admin.conf'
     }
     $yaml_config = hash2yaml($config)
     $gnp_name = "${::personality}-admin-if-gnp"
@@ -300,7 +309,7 @@ class platform::firewall::calico::admin  (
     }
     -> exec { "apply globalnetworkpolicies ${gnp_name} with ${file_name_gnp}":
       path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
-      command   => "${apply_script} ${gnp_name} ${file_name_gnp}",
+      command   => "${apply_script} ${gnp_name} ${file_name_gnp} ${cfgf}",
       logoutput => true
     }
   }
@@ -310,12 +319,14 @@ class platform::firewall::calico::hostendpoint (
   $config = {}
 ) {
   $active_heps = keys($config)
+  if $::personality == 'worker' {
+    $cfgf = '/etc/kubernetes/kubelet.conf'
+  } elsif $::personality == 'controller' {
+    $cfgf = '/etc/kubernetes/admin.conf'
+  }
+
   if $config != {} {
-    if $::personality == 'worker' {
-      $apply_script = 'calico_firewall_remote_apply_hostendp.sh'
-    } elsif $::personality == 'controller' {
-      $apply_script = 'calico_firewall_apply_hostendp.sh'
-    }
+    $apply_script = 'calico_firewall_apply_hostendp.sh'
     $config.each |$key, $value| {
       # create/update host endpoint
       $file_name_hep = "/tmp/hep_${key}.yaml"
@@ -329,26 +340,23 @@ class platform::firewall::calico::hostendpoint (
       }
       -> exec { "apply hostendpoints ${key} with ${file_name_hep}":
         path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
-        command   => "${apply_script} ${key} ${file_name_hep}",
+        command   => "${apply_script} ${key} ${file_name_hep} ${cfgf}",
         logoutput => true
       }
     }
   }
+
   # storage nodes do not run k8s
   if $::personality != 'storage' {
 
-    if $::personality == 'worker' {
-      $remove_script = 'remove_remote_unused_calico_hostendpoints.sh'
-    } elsif $::personality == 'controller' {
-      $remove_script = 'remove_unused_calico_hostendpoints.sh'
-    }
+    $remove_script = 'remove_unused_calico_hostendpoints.sh'
     $file_hep_active = '/tmp/hep_active.txt'
     exec { "get active hostendepoints: ${active_heps}":
       command => "echo ${active_heps} > ${file_hep_active}",
     }
     -> exec { "remove unused hostendepoints ${::hostname} ${file_hep_active}":
       path    => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
-      command => "${remove_script} ${::hostname} ${file_hep_active}",
+      command => "${remove_script} ${::hostname} ${file_hep_active} ${cfgf}",
       onlyif  => "test -f ${file_hep_active} && test ! -f /etc/platform/.platform_firewall_config_required"
     }
   }
@@ -437,5 +445,27 @@ class platform::firewall::nat::admin::remove
 
   class { '::platform::firewall::nat::admin':
     enabled    => false,
+  }
+}
+
+class platform::firewall::rbac::worker {
+  if $::personality == 'controller' {
+    $k8cfg = '--kubeconfig=/etc/kubernetes/admin.conf'
+    $k8api = 'rbac.authorization.k8s.io'
+    $reconfig = '/etc/platform/.platform_firewall_config_required'
+    $file_name = '/tmp/rbac_worker_permission_for_firewall.yaml'
+    file { $file_name:
+      ensure  => file,
+      content => template('platform/calico_platform_firewall_worker_permission.yaml.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0640',
+    }
+    -> exec { 'apply permission to worker node firewall configuration':
+      path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+      command   => "kubectl ${k8cfg} apply -f ${file_name} && if [ -f ${reconfig} ]; then rm -f ${reconfig}; fi",
+      onlyif    => "kubectl ${k8cfg} get clusterrolebindings.${k8api} cluster-admin || (touch ${reconfig} && exit 1)",
+      logoutput => true
+    }
   }
 }
