@@ -23,13 +23,12 @@ function log_it {
 
 hostname=${1}
 hep_active_file=${2}
+kubeconfig=${3}
 
 if [ ! -f ${hep_active_file} ]; then
     log_it "file ${hep_active_file} does not exist, cannot proceed";
     exit 1
 fi
-
-kubeconfig="/etc/kubernetes/admin.conf"
 
 # the HostEndpoint format is [hostname]-[ifname]-if-hep
 for hep in $(kubectl --kubeconfig=${kubeconfig} get hostendpoints --no-headers | grep ${hostname} | awk '{print $1}'); do

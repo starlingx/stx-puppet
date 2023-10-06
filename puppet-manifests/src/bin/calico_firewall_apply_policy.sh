@@ -19,8 +19,8 @@ function log_it {
 
 gnp_name=${1}
 file_name_gnp=${2}
+kubeconfig=${3}
 
-kubeconfig='/etc/kubernetes/admin.conf';
 resource_name='globalnetworkpolicies.crd.projectcalico.org';
 
 resource_exist=$(kubectl --kubeconfig=${kubeconfig} get --no-headers customresourcedefinitions.apiextensions.k8s.io ${resource_name} | awk '{print $1}');

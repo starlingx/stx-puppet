@@ -22,11 +22,8 @@ endif
 	install -m 755 -D bin/puppet-update-default-grub.sh $(BINDIR)/puppet-update-default-grub.sh
 	install -m 755 -D bin/puppet-update-grub-env.py $(BINDIR)/puppet-update-grub-env.py
 	install -m 755 -D bin/remove_unused_calico_hostendpoints.sh $(BINDIR)/remove_unused_calico_hostendpoints.sh
-	install -m 755 -D bin/remove_remote_unused_calico_hostendpoints.sh $(BINDIR)/remove_remote_unused_calico_hostendpoints.sh
 	install -m 755 -D bin/calico_firewall_apply_hostendp.sh $(BINDIR)/calico_firewall_apply_hostendp.sh
 	install -m 755 -D bin/calico_firewall_apply_policy.sh $(BINDIR)/calico_firewall_apply_policy.sh
-	install -m 755 -D bin/calico_firewall_remote_apply_hostendp.sh $(BINDIR)/calico_firewall_remote_apply_hostendp.sh
-	install -m 755 -D bin/calico_firewall_remote_apply_policy.sh $(BINDIR)/calico_firewall_remote_apply_policy.sh
 	install -m 755 -D bin/kubelet-cleanup-orphaned-volumes.sh $(BINDIR)/kubelet-cleanup-orphaned-volumes.sh
 	install -m 755 -D bin/check_ipv6_tentative_addresses.py $(BINDIR)/check_ipv6_tentative_addresses.py
 	install -m 755 -D bin/manage_partitions_pre_script.sh $(BINDIR)/manage_partitions_pre_script.sh
