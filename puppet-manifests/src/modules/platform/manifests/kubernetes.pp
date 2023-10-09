@@ -879,7 +879,7 @@ define platform::kubernetes::unmask_start_service($service_name, $onlyif = undef
 }
 
 # Define for masking and stopping a service
-define platform::kubernetes::mask_stop_service($service_name, $onlyif) {
+define platform::kubernetes::mask_stop_service($service_name, $onlyif = undef) {
   # Mask the service and stop it now
   exec { "mask ${service_name}":
     command => "/usr/bin/systemctl mask --runtime --now ${service_name}",
