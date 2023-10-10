@@ -157,6 +157,11 @@ class platform::firewall::calico::oam (
 ) {
   if $config != {} {
     $apply_script = 'calico_firewall_apply_policy.sh'
+    if $::personality == 'worker' {
+      $cfgf = '/etc/kubernetes/kubelet.conf'
+    } elsif $::personality == 'controller' {
+      $cfgf = '/etc/kubernetes/admin.conf'
+    }
     $yaml_config = hash2yaml($config)
     $gnp_name = "${::personality}-oam-if-gnp"
     $file_name_gnp = "/tmp/gnp_${gnp_name}.yaml"
@@ -169,7 +174,7 @@ class platform::firewall::calico::oam (
     }
     -> exec { "apply globalnetworkpolicies ${gnp_name} with ${file_name_gnp}":
       path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
-      command   => "${apply_script} ${gnp_name} ${file_name_gnp}",
+      command   => "${apply_script} ${gnp_name} ${file_name_gnp} ${cfgf}",
       logoutput => true
     }
   }
