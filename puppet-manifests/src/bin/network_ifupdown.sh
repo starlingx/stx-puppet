@@ -18,53 +18,31 @@ export ETC_ROUTES_FILE="/etc/network/routes"
 export ETC_DIR="/etc/network/interfaces.d/"
 
 #
-# Execute ifup script
-# returns $(false) if argument $1 is invalid
+# Sets interface to UP state
 #
 function do_if_up {
-    local cfg=$1
-    local search_file=''
-    local iface=''
-    local if_name=''
-    if [ -f ${cfg} ]; then
-        search_file=${cfg}
-    elif [ -f ${PUPPET_DIR}/${cfg} ]; then
-        search_file=${PUPPET_DIR}/${cfg}
-    elif [ -f ${PUPPET_DIR}/ifcfg-${cfg} ]; then
-        search_file=${PUPPET_DIR}/ifcfg-${cfg}
-    else
-        log_it "do_if_up: cannot process argument ${cfg}"
-        return $(false)
-    fi
-    iface=$( grep iface ${search_file} )
-    if_name=$( echo "${iface}" | awk '{print $2}' )
+    local if_name=$1
+
     log_it "Bringing ${if_name} up"
+
     /sbin/ifup ${if_name} || log_it "Failed bringing ${if_name} up"
 }
 
 #
-# Execute ifdown script
-# returns $(false) if argument $1 is invalid
+# Sets interface to DOWN state
 #
 function do_if_down {
-    local cfg=$1
-    local search_file=''
-    local iface=''
-    local if_name=''
-    if [ -f ${cfg} ]; then
-        search_file=${cfg}
-    elif [ -f ${ETC_DIR}/${cfg} ]; then
-        search_file=${ETC_DIR}/${cfg}
-    elif [ -f ${ETC_DIR}/ifcfg-${cfg} ]; then
-        search_file=${ETC_DIR}/ifcfg-${cfg}
-    else
-        log_it "do_if_down: cannot process argument ${cfg}"
-        return $(false)
-    fi
-    iface=$( grep iface ${search_file} )
-    if_name=$( echo "${iface}" | awk '{print $2}' )
+    local if_name=$1
+
     log_it "Bringing ${if_name} down"
-    /sbin/ifdown ${if_name} || log_it "Failed bringing ${if_name} down"
+
+    # ifdown may fail if the interface is not currently managed by ifupdown,
+    # or if the ifcfg- file was changed or erased
+    /sbin/ifdown ${if_name} > /dev/null 2>&1
+
+    # force link to down and erase any remaining IP addresses
+    /usr/sbin/ip link set down dev ${if_name} > /dev/null 2>&1
+    /usr/sbin/ip addr flush dev ${if_name} > /dev/null 2>&1
 }
 
 #
@@ -639,36 +617,6 @@ function update_routes {
             route_add "${puppetRouteLine}"
         done <<< ${puppet_data}
 
-        do_cp ${PUPPET_ROUTES_FILE} ${ETC_ROUTES_FILE}
-    fi
-}
-
-function update_config {
-
-    # process interfaces
-    auto_puppet=( $(grep -v HEADER ${PUPPET_DIR}/auto) )
-    for auto_if in ${auto_puppet[@]:1}; do
-        cfg="ifcfg-${auto_if}"
-        do_cp ${PUPPET_DIR}/${cfg} ${ETC_DIR}/${cfg}
-    done
-    do_cp ${PUPPET_DIR}/auto ${ETC_DIR}/auto
-
-    # process routes
-    if [ -f ${PUPPET_ROUTES6_FILE} ]; then
-        log_it "add IPv6 routes generated in network.pp"
-        if [ -f ${PUPPET_ROUTES_FILE} ]; then
-            puppet_data=$(grep -v HEADER ${PUPPET_ROUTES6_FILE})
-            while read route6Line; do
-                route_exists=$( grep -E "${route6Line}" ${PUPPET_ROUTES_FILE} )
-                if [ "${route_exists}" == "" ]; then
-                    echo "${route6Line}" >> ${PUPPET_ROUTES_FILE}
-                fi
-            done <<< ${puppet_data}
-        else
-            cat ${PUPPET_ROUTES6_FILE} >> ${PUPPET_ROUTES_FILE}
-        fi
-    fi
-    if [ -f ${PUPPET_ROUTES_FILE} ]; then
         do_cp ${PUPPET_ROUTES_FILE} ${ETC_ROUTES_FILE}
     fi
 }

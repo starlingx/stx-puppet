@@ -106,6 +106,7 @@ function array_diff {
 function sysinv_agent_lock {
     case $1 in
     ${ACQUIRE_LOCK})
+        log_it "Acquiring lock to synchronize with sysinv-agent audit"
         local lock_file="/var/run/apply_network_config.lock"
         # Lock file should be the same as defined in sysinv agent code
         local lock_timeout=5
@@ -126,12 +127,14 @@ function sysinv_agent_lock {
         fi
         ;;
     ${RELEASE_LOCK})
+        log_it "Releasing lock"
         [[ ${LOCK_FD} -gt 0 ]] && flock -u ${LOCK_FD}
         ;;
     esac
 }
 
 function update_interfaces {
+    skip_lock=$(($1))
     upDown=()
     changed=()
     vlans=()
@@ -195,23 +198,24 @@ function update_interfaces {
     done
 
     current=()
-    if [ -x ${ETC_DIR}/auto ]; then
+    if [ -f ${ETC_DIR}/auto ]; then
         auto_etc=( $(grep -v HEADER ${ETC_DIR}/auto) )
         current=( ${auto_etc[@]:1} )
     fi
 
     active=( ${auto_puppet[@]} )
 
-    # synchronize with sysinv-agent audit
-    sysinv_agent_lock ${ACQUIRE_LOCK}
+    if [ ${skip_lock} -ne 0 ]; then
+        # synchronize with sysinv-agent audit
+        sysinv_agent_lock ${ACQUIRE_LOCK}
+    fi
 
     remove=$(array_diff current[@] active[@])
-    for r in ${remove[@]}; do
+    for iface in ${remove[@]}; do
         # Bring down interface before we execute network restart, interfaces
         # that do not have an ifcfg are not managed by init script
-        iface=${r#ifcfg-}
         do_if_down ${iface}
-        do_rm ${ETC_DIR}/${r}
+        do_rm ${ETC_DIR}/ifcfg-${iface}
     done
 
     # If a lower ethernet interface is being changed, the upper vlan interface(s) will lose
@@ -234,9 +238,9 @@ function update_interfaces {
     # away unexpectedly).
     for iftype in vlan ethernet; do
         for cfg in ${upDown[@]}; do
-            ifcfg=${ETC_DIR}/${cfg}
+            ifcfg=${PUPPET_DIR}/${cfg}
             if iftype_filter ${iftype} ${ifcfg}; then
-                do_if_down ${ifcfg#ifcfg-}
+                do_if_down ${cfg:6}
             fi
         done
     done
@@ -259,13 +263,15 @@ function update_interfaces {
         for cfg in ${upDown[@]}; do
             ifcfg=${PUPPET_DIR}/${cfg}
             if iftype_filter ${iftype} ${ifcfg}; then
-                do_if_up ${ifcfg#ifcfg-}
+                do_if_up ${cfg:6}
             fi
         done
     done
 
-    # unlock: synchronize with sysinv-agent audit
-    sysinv_agent_lock ${RELEASE_LOCK}
+    if [ ${skip_lock} -ne 0 ]; then
+        # unlock: synchronize with sysinv-agent audit
+        sysinv_agent_lock ${RELEASE_LOCK}
+    fi
 
     echo "${updated_ifs[@]}"
 }
@@ -323,13 +329,15 @@ else
 
         parse_interface_stanzas
 
-        if [[ ! -f /var/run/.network_upgrade_bootstrap ]]; then
-            ifaces=$(update_interfaces)
-            update_routes "${ifaces}"
-        else
-            log_it "Executing upgrade bootstrap, just add the config files into /etc/network/"
-            update_config
+        [ -f /var/run/.network_upgrade_bootstrap ]
+        upgr_bootstrap=$?
+
+        if [ ${upgr_bootstrap} -eq 0 ]; then
+            log_it "Upgrade bootstrap is in execution"
         fi
+
+        ifaces=$(update_interfaces ${upgr_bootstrap})
+        update_routes "${ifaces}"
 
     else
         log_it "Not using sysconfig or ifupdown, cannot advance!  Aborting..."
