@@ -114,15 +114,6 @@ class platform::kubernetes::configuration {
     mode   => '0644',
   }
 
-  # Add kubelet service override
-  file { '/etc/systemd/system/kubelet.service.d/kube-stx-override.conf':
-    ensure  => file,
-    content => template('platform/kube-stx-override.conf.erb'),
-    owner   => 'root',
-    group   => 'root',
-    mode    => '0644',
-  }
-
   if ($::personality == 'controller') {
     # Cron job to cleanup stale CNI cache files that are more than
     # 1 day old and are not associated with any currently running pod.
