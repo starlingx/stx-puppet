@@ -73,7 +73,7 @@
           else
             gem install rake -n ./.bundled_gems/
             gem install puppet-lint:2.3.6
-            gem install puppetlabs_spec_helper
+            gem install puppetlabs_spec_helper:6.0.3
             # We'll run puppet-lint from tox
             #./.bundled_gems/rake lint 2>&1
           fi
