@@ -44,9 +44,9 @@ ETCD_LISTEN_CLIENT_URL="${URLS[-1]}"
 status()
 {
     if [[ $ETCD_LISTEN_CLIENT_URL =~ "https" ]]; then
-        etcd_health="$(etcdctl --timeout 5s --ca-file /etc/etcd/ca.crt -cert-file /etc/etcd/etcd-server.crt --key-file /etc/etcd/etcd-server.key --endpoints="$ETCD_LISTEN_CLIENT_URL" cluster-health 2>&1)"
+        etcd_health="$(ETCDCTL_API=2 etcdctl --timeout 5s --ca-file /etc/etcd/ca.crt -cert-file /etc/etcd/etcd-server.crt --key-file /etc/etcd/etcd-server.key --endpoints="$ETCD_LISTEN_CLIENT_URL" cluster-health 2>&1)"
     else
-        etcd_health="$(etcdctl --timeout 5s --endpoints="$ETCD_LISTEN_CLIENT_URL" cluster-health 2>&1 | head -n 1)"
+        etcd_health="$(ETCDCTL_API=2 etcdctl --timeout 5s --endpoints="$ETCD_LISTEN_CLIENT_URL" cluster-health 2>&1 | head -n 1)"
     fi
 
     # LP: 2033942. In case if the status method is called in between
