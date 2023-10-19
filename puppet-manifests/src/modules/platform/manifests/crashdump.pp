@@ -23,9 +23,9 @@ class platform::crashdump::reload {
   exec { 'systemd-reload-daemon':
     command => '/usr/bin/systemctl daemon-reload',
   }
-  # Restart crashDumpMgr
-  -> exec { 'restart crashDumpMgr':
-    command => '/usr/bin/systemctl restart crashDumpMgr',
+  # Restart crash-dump-manager
+  -> exec { 'restart crash-dump-manager':
+    command => '/usr/bin/systemctl restart crash-dump-manager',
   }
 }
 
