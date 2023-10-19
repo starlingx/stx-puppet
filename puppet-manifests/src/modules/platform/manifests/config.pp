@@ -270,6 +270,61 @@ class platform::config::system_name {
   }
 }
 
+class platform::config::iscsi::params (
+  $initiator_name = '',
+) { }
+
+class platform::config::iscsi
+  inherits platform::config::iscsi::params {
+
+  if ! empty($initiator_name) {
+    file { '/etc/iscsi/initiatorname.iscsi':
+      ensure  => present,
+      owner   => root,
+      group   => root,
+      mode    => '0600',
+      content => "InitiatorName=${initiator_name}\n",
+    }
+    -> service { 'start-iscsid':
+      ensure     => 'running',
+      enable     => true,
+      name       => 'iscsid',
+      hasstatus  => true,
+      hasrestart => true,
+      subscribe  => File['/etc/iscsi/initiatorname.iscsi'],
+    }
+  }
+}
+
+class platform::config::nvme::params (
+  $host_id = '',
+  $host_nqn = '',
+) { }
+
+class platform::config::nvme
+  inherits platform::config::nvme::params {
+
+  if ! empty($host_id) {
+    file { '/etc/nvme/hostid':
+      ensure  => present,
+      owner   => root,
+      group   => root,
+      mode    => '0644',
+      content => "${host_id}\n",
+    }
+  }
+
+  if ! empty($host_nqn) {
+    file { '/etc/nvme/hostnqn':
+      ensure  => present,
+      owner   => root,
+      group   => root,
+      mode    => '0644',
+      content => "${host_nqn}\n",
+    }
+  }
+}
+
 class platform::config::apparmor {
   include ::platform::params
 
@@ -579,6 +634,7 @@ class platform::config::pre {
   include ::platform::config::tpm
   include ::platform::config::kdump
   include ::platform::config::certs::ssl_ca
+
   if (($::platform::params::distributed_cloud_role =='systemcontroller' or
         $::platform::params::distributed_cloud_role =='subcloud') and
       $::personality == 'controller') {
