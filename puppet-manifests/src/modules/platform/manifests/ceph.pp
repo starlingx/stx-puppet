@@ -42,6 +42,7 @@ class platform::ceph::params(
   $ceph_config_file = '/etc/ceph/ceph.conf',
   $ceph_config_ready_path = '/var/run/.ceph_started',
   $node_ceph_configured_flag = '/etc/platform/.node_ceph_configured',
+  $ceph_mon_reconfig_flag = '/etc/platform/.ceph_mon_reconfig_required',
   $pmond_ceph_file = '/etc/pmon.d/ceph.conf',
   $auth_id_reclaim = false,
 ) { }
@@ -220,6 +221,36 @@ class platform::ceph::monitor
   $system_type = $::platform::params::system_type
 
   if $service_enabled {
+    # Check if it is necessary to reconfigure ceph mon ip due to mgmt network reconfiguration.
+    $ceph_mon_ip_reconfig = find_file($ceph_mon_reconfig_flag)
+
+    if $ceph_mon_ip_reconfig {
+      if $system_type == 'All-in-one' and 'simplex' in $system_mode {
+        include ::platform::network::mgmt::params
+
+        $controller0_mgmt_adress = $::platform::network::mgmt::params::controller0_address
+
+        exec { 'Stop ceph-mon':
+          command => '/etc/init.d/ceph-init-wrapper stop mon',
+        }
+        -> exec { 'Extract controller-0 monmap':
+          command => 'ceph-mon -i controller-0 --extract-monmap ./monmap.bin',
+        }
+        -> exec { 'Remove controller-0 monmap':
+          command => 'monmaptool --rm controller-0 ./monmap.bin',
+        }
+        -> exec { 'Add new controller-0 ip on monmap':
+          command => "monmaptool --add controller-0 ${controller0_mgmt_adress} ./monmap.bin",
+        }
+        -> exec { 'Inject controller-0 monmap':
+          command => 'ceph-mon --name mon.controller-0 --inject-monmap ./monmap.bin',
+        }
+      }
+      exec { "Remove ${ceph_mon_reconfig_flag}" :
+          command => "rm -f ${ceph_mon_reconfig_flag}",
+      }
+    }
+
     if $system_type == 'All-in-one' and 'duplex' in $system_mode {
 
       if $::personality == 'controller' {
