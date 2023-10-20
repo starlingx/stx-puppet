@@ -101,6 +101,20 @@ define platform::kubernetes::pull_images_from_registry (
 
 class platform::kubernetes::configuration {
 
+  # Check to ensure that this code is not executed
+  # during install and reinstall.  We want to
+  # only execute this block for lock and unlock
+  if ! str2bool($::is_initial_k8s_config) {
+    # Add kubelet service override
+    file { '/etc/systemd/system/kubelet.service.d/kube-stx-override.conf':
+      ensure  => file,
+      content => template('platform/kube-stx-override.conf.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0644',
+    }
+  }
+
   if ($::personality == 'controller') {
     # Cron job to cleanup stale CNI cache files that are more than
     # 1 day old and are not associated with any currently running pod.
