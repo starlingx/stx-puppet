@@ -15,6 +15,7 @@ class platform::config
   include ::platform::params
   include ::platform::anchors
   include ::platform::config::pam_systemd
+  include ::platform::config::system_name
 
   stage { 'pre':
     before => Stage['main'],
@@ -254,6 +255,18 @@ class platform::config::hostname {
   exec { 'set-hostname':
     command => 'hostname -F /etc/hostname',
     unless  => 'test `hostname` = `cat /etc/hostname`',
+  }
+}
+
+class platform::config::system_name {
+  $system_name = $platform::params::system_name
+
+  file { '/etc/sysinv/motd.system':
+    ensure  => present,
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+    content => template('platform/system_name.erb'),
   }
 }
 
