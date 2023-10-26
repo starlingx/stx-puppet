@@ -21,11 +21,15 @@ tos orphan 12 minclock 4
 <%- if @system_mode != 'simplex' -%>
 # Use the other controller node as a peer, this is especially important if
 # there are no external servers
-peer <%= @peer_server %>
+# Set maxpoll 7 for the shorter interval time
+# to raise/clear alarm
+peer <%= @peer_server %> maxpoll 7
 <%- end -%>
 
+# Set maxpoll 7 for the shorter interval time
+# to raise/clear alarm
 <%- scope['platform::ntp::servers'].each do |server| -%>
-server <%= server %>
+server <%= server %> maxpoll 7
 <%- end -%>
 
 <%- end -%>

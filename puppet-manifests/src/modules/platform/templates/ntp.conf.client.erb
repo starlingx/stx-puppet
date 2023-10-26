@@ -15,8 +15,10 @@ restrict -6 ::1
 # Use orphan mode if external servers are unavailable (or not configured)
 tos orphan 12
 
+# Set maxpoll 7 for the shorter interval time
+# to raise/clear alarm
 <%- scope['platform::ntp::servers'].each do |server| -%>
-server <%= server %>
+server <%= server %> maxpoll 7
 <%- end -%>
 
 <%- end -%>
