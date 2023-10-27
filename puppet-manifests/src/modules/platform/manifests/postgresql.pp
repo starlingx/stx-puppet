@@ -90,6 +90,12 @@ class platform::postgresql::server
   inherits ::platform::postgresql::params {
 
   include ::platform::params
+  include ::platform::config::params
+
+  # Set up TimeZone
+  postgresql::server::config_entry { 'timezone':
+    value => $::platform::config::params::timezone,
+  }
 
   # Set up autovacuum
   postgresql::server::config_entry { 'track_counts':
@@ -148,6 +154,11 @@ class platform::postgresql::server
   # log postgres operations that exceed 1 second
   postgresql::server::config_entry { 'log_min_duration_statement':
     value => '1000',
+  }
+
+  # Set up logging timezone
+  postgresql::server::config_entry { 'log_timezone':
+    value => $::platform::config::params::timezone,
   }
 
   # turn jit 'off' on Debian (it is on by default) since it negatively impacts performance
