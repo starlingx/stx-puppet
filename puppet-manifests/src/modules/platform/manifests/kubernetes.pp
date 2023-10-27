@@ -955,7 +955,7 @@ class platform::kubernetes::unmask_start_kubelet
   # Unmask and start isolcpu_plugin service last
   -> platform::kubernetes::unmask_start_service { 'isolcpu_plugin':
     service_name => 'isolcpu_plugin',
-    onlyif       => 'systemctl is-enabled isolcpu_plugin',
+    onlyif       => 'systemctl is-enabled isolcpu_plugin | grep -wq masked',
   }
 }
 
