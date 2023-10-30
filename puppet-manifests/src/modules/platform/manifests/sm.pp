@@ -265,7 +265,7 @@ class platform::sm
 
     if $admin_my_unit_ip {
       exec { 'Deprovision admin-ip service group member':
-        command => 'sm-deprovision service-group-member admin-services admin-ip',
+        command => 'sm-deprovision service-group-member controller-services admin-ip',
       }
       -> exec { 'Deprovision admin-ip service':
         command => 'sm-deprovision service admin-ip',
@@ -378,27 +378,17 @@ class platform::sm
       }
   }
 
-  if $::platform::params::distributed_cloud_role =='subcloud' {
-    exec { 'Provision admin-services (service-domain-member admin-services)':
-      command => 'sm-provision service-domain-member controller admin-services',
-    }
-    -> exec { 'Provision admin-services (service-group admin-services)':
-      command => 'sm-provision service-group admin-services',
-    }
-  }
-
   # Create the Admin IP service if it is configured
   if $admin_ip_interface {
-      # Provision and configure admin-subcloud
-      exec { 'Configure Admin IP service in SM (service-group-member admin-ip)':
-          command => 'sm-provision service-group-member admin-services admin-ip',
-      }
-      -> exec { 'Configure Admin IP service in SM (service admin-ip)':
-          command => 'sm-provision service admin-ip',
-      }
-      -> exec { 'Configure Admin IP':
-          command => "sm-configure service_instance admin-ip admin-ip \"ip=${admin_ip_param_ip},cidr_netmask=${admin_ip_param_mask},nic=${admin_ip_interface},arp_count=7\"",
-      }
+    exec { 'Configure Admin IP service in SM (service-group-member admin-ip)':
+      command => 'sm-provision service-group-member controller-services admin-ip',
+    }
+    -> exec { 'Configure Admin IP service in SM (service admin-ip)':
+      command => 'sm-provision service admin-ip',
+    }
+    -> exec { 'Configure Admin IP':
+      command => "sm-configure service_instance admin-ip admin-ip \"ip=${admin_ip_param_ip},cidr_netmask=${admin_ip_param_mask},nic=${admin_ip_interface},arp_count=7\"",
+    }
   }
 
   exec { 'Configure Postgres DRBD':
@@ -698,9 +688,6 @@ class platform::sm
         exec { 'Configure distributed-cloud-services redundancy model':
             command => "sm-configure service_group yes controller distributed-cloud-services N 1 0 \"\" \"\"",
         }
-        exec { 'Configure admin-service redundancy model':
-          command => "sm-configure service_group yes controller admin-services N 1 0 \"\" directory-services",
-        }
     }
   } else {
     exec { 'Provision oam-ip service group member':
@@ -716,7 +703,7 @@ class platform::sm
 
     if $admin_ip_interface {
       exec { 'Provision admin-ip service group member':
-        command => 'sm-provision service-group-member admin-services admin-ip',
+        command => 'sm-provision service-group-member controller-services admin-ip',
       }
       -> exec { 'Provision admin-ip service':
         command => 'sm-provision service admin-ip',
@@ -758,9 +745,6 @@ class platform::sm
     if $::platform::params::distributed_cloud_role == 'subcloud' {
         exec { 'Configure distributed-cloud-services redundancy model to DX':
             command => "sm-configure service_group yes controller distributed-cloud-services 'N + M' 1 1 \"controller-aggregate\" \"\"",
-        }
-        exec { 'Configure admin-service redundancy model to DX':
-            command => "sm-configure service_group yes controller admin-services 'N + M' 1 1 \"controller-aggregate\" directory-services",
         }
     }
   }
@@ -1218,7 +1202,7 @@ class platform::sm::enable_admin_config::runtime {
     command => 'sm-manage service admin-ip'
   }
   -> exec { 'Provision admin-ip service':
-    command => 'sm-provision service-group-member admin-services admin-ip --apply'
+    command => 'sm-provision service-group-member controller-services admin-ip --apply'
   }
   -> exec { 'Provision service domain admin-interface':
     command => 'sm-provision service-domain-interface controller admin-interface --apply'
@@ -1232,7 +1216,7 @@ class platform::sm::disable_admin_config::runtime {
     command => 'sm-unmanage service admin-ip'
   }
   -> exec { 'Deprovision admin-ip service':
-    command => 'sm-deprovision service-group-member admin-services admin-ip --apply'
+    command => 'sm-deprovision service-group-member controller-services admin-ip --apply'
   }
   -> exec { 'Deprovision service domain admin-interface':
     command => 'sm-deprovision service-domain-interface controller admin-interface --apply'
