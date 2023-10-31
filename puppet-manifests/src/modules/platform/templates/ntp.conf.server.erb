@@ -18,9 +18,11 @@ restrict -6 ::1
 #            (3 external plus peer controller). Default value is 3.
 tos orphan 12 minclock 4
 
+<%- if @system_mode != 'simplex' -%>
 # Use the other controller node as a peer, this is especially important if
 # there are no external servers
 peer <%= @peer_server %>
+<%- end -%>
 
 <%- scope['platform::ntp::servers'].each do |server| -%>
 server <%= server %>

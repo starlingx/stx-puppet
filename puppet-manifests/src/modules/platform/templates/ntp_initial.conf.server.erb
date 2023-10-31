@@ -4,6 +4,8 @@
 server <%= server %>
 <%- end -%>
 
+<%- if @system_mode != 'simplex' -%>
 # Use the other controller node for initial time synchronization in case
 # none of the external servers are available.
 server <%= @peer_server %>
+<%- end -%>

@@ -93,6 +93,7 @@ class platform::ntp::server {
 
     include ::platform::params
     $peer_server = $::platform::params::mate_hostname
+    $system_mode = $::platform::params::system_mode
 
     file { 'ntp_config':
       ensure  => file,
