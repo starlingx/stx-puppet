@@ -15,17 +15,37 @@ export PUPPET_FILE="/var/run/network-scripts.puppet/interfaces"
 export PUPPET_ROUTES_FILE="/var/run/network-scripts.puppet/routes"
 export PUPPET_ROUTES6_FILE="/var/run/network-scripts.puppet/routes6"
 export ETC_ROUTES_FILE="/etc/network/routes"
-export ETC_DIR="/etc/network/interfaces.d/"
+export ETC_DIR="/etc/network/interfaces.d"
+export PUPPET_DIR="/var/run/network-scripts.puppet"
+export CFG_PREFIX="ifcfg-"
 
 #
 # Sets interface to UP state
 #
 function do_if_up {
     local if_name=$1
+    local output
 
     log_it "Bringing ${if_name} up"
 
-    /sbin/ifup ${if_name} || log_it "Failed bringing ${if_name} up"
+    output=$( /sbin/ifup ${if_name} 2>&1 )
+    if [ $? -ne 0 ]; then
+        log_it "Failed bringing ${if_name} up, output: '${output}'"
+    fi
+}
+
+#
+# Remove all IP adresses from the interface if it exists in the kernel
+#
+function reset_ips {
+    local iface=$1
+    local response
+    if [ -d /sys/class/net/${iface} ]; then
+        response=$(/usr/sbin/ip addr flush dev ${iface} 2>&1)
+        if [ $? -ne 0 ]; then
+            log_it "Command 'ip addr flush' failed for interface ${iface}: '${result}'"
+        fi
+    fi
 }
 
 #
@@ -33,16 +53,26 @@ function do_if_up {
 #
 function do_if_down {
     local if_name=$1
+    local st_file="/run/network/ifstate.${if_name}"
+    local response
 
     log_it "Bringing ${if_name} down"
 
-    # ifdown may fail if the interface is not currently managed by ifupdown,
-    # or if the ifcfg- file was changed or erased
-    /sbin/ifdown ${if_name} > /dev/null 2>&1
+    if [ -f ${st_file} ] && [[ $(< ${st_file}) == "${if_name}" ]]; then
+        response=$(/sbin/ifdown ${if_name} 2>&1)
+        if [ $? -ne 0 ]; then
+            log_it "Command 'ifdown' failed for interface ${if_name}: '${response}'"
+        fi
+    fi
 
-    # force link to down and erase any remaining IP addresses
-    /usr/sbin/ip link set down dev ${if_name} > /dev/null 2>&1
-    /usr/sbin/ip addr flush dev ${if_name} > /dev/null 2>&1
+    if [ -d /sys/class/net/${iface} ]; then
+        response=$(/usr/sbin/ip link set down dev ${if_name} 2>&1)
+        if [ $? -ne 0 ]; then
+            log_it "Command 'ip link set down' failed for interface ${if_name}: '${response}'"
+        fi
+    fi
+
+    reset_ips ${if_name}
 }
 
 #
@@ -208,7 +238,7 @@ function verify_all_vlans_created {
                 is_vlan_device_present_on_kernel ${cfg_path}
                 if [ $? -ne 0 ] ; then
                     log_it "${cfg} - not present on the kernel, bring up before proceeding"
-                    do_if_up ${cfg_path}
+                    do_if_up ${cfg:6}
                     is_vlan_device_present_on_kernel ${ETC_DIR}/${cfg}
                     if [ $? -ne 0 ] ; then
                         log_it "${cfg} - failed to add VLAN interface on kernel"
@@ -272,12 +302,40 @@ function is_ethernet {
 }
 
 #
+# gets the master interface of a bond-slave
+# returns $(true) if there is one or $(false) if not
+#
+function get_master {
+    local cfg=$1
+    local result
+    if [ -f ${cfg} ]; then
+        result=$( grep bond-master ${cfg} )
+        if [ $? -eq 0 ]; then
+            echo "${result}" | awk '{print $2}'
+            return $(true)
+        fi
+    fi
+    return $(false)
+}
+
+#
 # returns $(true) if interface is the interface is part of a bond
 #
 function is_slave {
+    master=$( get_master $1 )
+}
+
+#
+# gets the slave interfaces of a bonding
+# returns $(true) if it has slaves or $(false) if not
+#
+function get_slaves {
     local cfg=$1
+    local slaves
     if [ -f ${cfg} ]; then
-        if [[ $( grep -c bond-master ${cfg} ) == '1' ]]; then
+        slaves=($( grep bond-slaves ${cfg} ))
+        if [ $? -eq 0 ]; then
+            echo "${slaves[@]:1}"
             return $(true)
         fi
     fi
@@ -482,6 +540,8 @@ function route_add {
     local prefix
     local metric
     local linux_network
+    local output
+    local prot=""
 
     route=$( echo "${routeLine}" | awk '{print $1}' )
     netmask=$( echo "${routeLine}" | awk '{print $2}' )
@@ -491,11 +551,20 @@ function route_add {
     prefix=$(get_prefix_length ${netmask})
     linux_network=$(get_linux_network ${route} ${prefix})
 
+    if [[ "${nexthop}" =~ ":" ]]; then
+        prot="-6"
+    fi
+
     if [ "$linux_network" != "" ] && [ "$nexthop" != "" ] && [ "$ifname" != "" ] && [ "$metric" != "" ]; then
         log_it "Adding route: ${linux_network} via ${nexthop} dev ${ifname} netmask ${netmask} metric ${metric}"
-        /usr/sbin/ip route add ${linux_network} via ${nexthop} dev ${ifname} metric ${metric}
-        if [ $? -ne 0 ] ; then
-            log_it "Failed adding route: ${linux_network} via ${nexthop} dev ${ifname} netmask ${netmask} metric ${metric}"
+        output=$( /usr/sbin/ip ${prot} route show ${linux_network} via ${nexthop} dev ${ifname} metric ${metric} 2>&1 )
+        if [ $? -eq 0 ] && [[ " ${output} " =~ " ${linux_network} " ]] ; then
+            log_it "Route already exists, skipping"
+        else
+            output=$( /usr/sbin/ip route add ${linux_network} via ${nexthop} dev ${ifname} metric ${metric} 2>&1 )
+            if [ $? -ne 0 ] ; then
+                log_it "Failed adding route: ${linux_network} via ${nexthop} dev ${ifname} netmask ${netmask} metric ${metric}, output: '${output}'"
+            fi
         fi
     else
         log_it "Route add with invalid parameter: ${linux_network} via ${nexthop} dev ${ifname} netmask ${netmask} metric ${metric}."
@@ -535,6 +604,12 @@ function update_routes {
     local puppet_data
     local ifaces=($@)
 
+    if [ ${#ifaces[@]} -ne 0 ]; then
+        log_it "Updating routes, modified interfaces: '${ifaces[*]}'"
+    else
+        log_it "Updating routes, no modified interfaces"
+    fi
+
     if [ -f ${PUPPET_ROUTES6_FILE} ]; then
         log_it "add IPv6 routes generated in network.pp"
         if [ -f ${PUPPET_ROUTES_FILE} ]; then
@@ -554,10 +629,12 @@ function update_routes {
         log_it "no puppet routes to process, remove existing ones and return"
         if [ -f ${ETC_ROUTES_FILE} ] ; then
             log_it "process routes in ${ETC_ROUTES_FILE}"
-            etc_data=$(grep -v -E '(HEADER)|(^#)' ${ETC_ROUTES_FILE})
+            etc_data=$(grep -v -E '^\s*#' ${ETC_ROUTES_FILE})
             while read etcRouteLine; do
-                route_del "${etcRouteLine}"
-                sed -i "s/${etcRouteLine}//g" ${ETC_ROUTES_FILE}
+                if [ -n "${etcRouteLine}" ]; then
+                    route_del "${etcRouteLine}"
+                    sed -i "s/${etcRouteLine}//g" ${ETC_ROUTES_FILE}
+                fi
             done <<< ${etc_data}
         fi
         return $(true)
@@ -569,10 +646,10 @@ function update_routes {
         diff -I ".*Last generated.*" -q ${PUPPET_ROUTES_FILE} \
                                         ${ETC_ROUTES_FILE} >/dev/null 2>&1
         if [ $? -ne 0 ] ; then
-            log_it "diff found between ${PUPPET_ROUTES_FILE} and ${ETC_ROUTES_FILE}"
+            log_it "Differences found between ${PUPPET_ROUTES_FILE} and ${ETC_ROUTES_FILE}"
 
             # process deleted routes
-            etc_data=$(grep -v -E '(HEADER)|(^#)' ${ETC_ROUTES_FILE})
+            etc_data=$(grep -v -E '^\s*#' ${ETC_ROUTES_FILE})
             while read etcRouteLine; do
                 grepCmd="grep -q '${etcRouteLine}' ${PUPPET_ROUTES_FILE} > /dev/null"
                 eval ${grepCmd}
@@ -582,7 +659,7 @@ function update_routes {
             done <<< ${etc_data}
 
             # process added routes
-            puppet_data=$(grep -v -E '(HEADER)|(^#)' ${PUPPET_ROUTES_FILE})
+            puppet_data=$(grep -v -E '^\s*#' ${PUPPET_ROUTES_FILE})
             while read puppetRouteLine; do
                 grepCmd="grep -q '${puppetRouteLine}' ${ETC_ROUTES_FILE} > /dev/null"
                 eval ${grepCmd}
@@ -590,7 +667,7 @@ function update_routes {
                     route_add "${puppetRouteLine}"
                 elif [ ${#ifaces[@]} -ne 0 ] ; then
                     ifname=$( echo "${puppetRouteLine}" | awk '{print $4}' )
-                    if printf '%s\0' "${ifaces[@]}" | grep -Fxqz -- ${ifname}; then
+                    if [[ " ${ifaces[@]} " =~ " ${ifname} " ]]; then
                         log_it "Route is already present in ${ETC_ROUTES_FILE}, but is associated with an updated interface, adding"
                         route_add "${puppetRouteLine}"
                     fi
@@ -600,10 +677,11 @@ function update_routes {
             do_rm ${ETC_ROUTES_FILE}
             do_cp ${PUPPET_ROUTES_FILE} ${ETC_ROUTES_FILE}
         elif [ ${#ifaces[@]} -ne 0 ] ; then
-            puppet_data=$(grep -v -E '(HEADER)|(^#)' ${PUPPET_ROUTES_FILE})
+            log_it "No difference found between ${PUPPET_ROUTES_FILE} and ${ETC_ROUTES_FILE}"
+            puppet_data=$(grep -v -E '^\s*#' ${PUPPET_ROUTES_FILE})
             while read puppetRouteLine; do
                 ifname=$( echo "${puppetRouteLine}" | awk '{print $4}' )
-                if printf '%s\0' "${ifaces[@]}" | grep -Fxqz -- ${ifname}; then
+                if [[ " ${ifaces[@]} " =~ " ${ifname} " ]]; then
                     log_it "Route is associated with an updated interface, adding"
                     route_add "${puppetRouteLine}"
                 fi
@@ -611,12 +689,194 @@ function update_routes {
         fi
 
     else
+        log_it "File /etc/network/routes missing, adding routes from puppet"
         # process added routes
-        puppet_data=$(grep -v -E '(HEADER)|(^#)' ${PUPPET_ROUTES_FILE})
+        puppet_data=$(grep -v -E '^\s*#' ${PUPPET_ROUTES_FILE})
         while read puppetRouteLine; do
             route_add "${puppetRouteLine}"
         done <<< ${puppet_data}
 
         do_cp ${PUPPET_ROUTES_FILE} ${ETC_ROUTES_FILE}
     fi
+}
+
+#
+# Return $(true) if interface is missing or in DOWN state
+#
+function is_interface_missing_or_down {
+    local iface=$1
+    local state
+
+    if [ ! -f /sys/class/net/${iface}/operstate ]; then
+        return $(true)
+    fi
+
+    state=$(</sys/class/net/${iface}/operstate)
+
+    if [[ "${state}" == "down" ]]; then
+        return $(true)
+    fi
+
+    return $(false)
+}
+
+#
+# Add an IP address to an interface if it's not yet present
+#
+function add_ip_to_iface {
+    local iface=$1
+    local new_addr=$2
+    local response
+    local result
+
+    log_it "Adding IP ${new_addr} to interface ${iface}"
+
+    response=$( /usr/sbin/ip -br addr show dev "${iface}" 2>&1 )
+
+    if [ $? -eq 0 ]; then
+        local addresses=($response)
+        for addr in "${addresses[@]:2}"; do
+            if [ "${addr}" == "${new_addr}" ]; then
+                log_it "Interface ${iface} already has address ${new_addr}, skipping"
+                return $(true)
+            fi
+        done
+
+        result=$( /usr/sbin/ip address add ${new_addr} dev ${iface} 2>&1 )
+        if [ $? -ne 0 ]; then
+            log_it "Failed to add IP address to interface ${iface}: '${result}'"
+            return $(false)
+        fi
+
+        return $(true)
+    else
+        log_it "Failed to get IP address list from ${iface}: '${response}'"
+        return $(false)
+    fi
+}
+
+#
+# Add a default route to an interface if it's not yet present
+#
+function add_default_route {
+    local iface=$1
+    local nexthop=$2
+    local prot=""
+    local routes
+    local result
+
+    log_it "Adding default route via ${nexthop} to interface ${iface}"
+
+    if [[ "${nexthop}" =~ ":" ]]; then
+        prot="-6"
+    fi
+
+    routes=$( /usr/sbin/ip ${prot} route show dev ${iface} | grep default )
+
+    if [ $? -eq 0 ]; then
+        while IFS= read -r line; do
+            if [[ "${line} " =~ " ${nexthop} " ]]; then
+                log_it "Default route via ${nexthop} for ${iface} already exists, skipping"
+                return $(true)
+            fi
+        done <<< "$routes"
+    fi
+
+    result=$( /usr/sbin/ip route add default via ${nexthop} dev ${iface} 2>&1 )
+
+    if [ $? -ne 0 ]; then
+        log_it "Failed to add default route to interface ${iface}: '${result}'"
+        return $(false)
+    fi
+
+    return $(true)
+}
+
+#
+# Check if interface has its IP address and default route configured, add them if needed
+#
+function ensure_iface_configured {
+    local iface=$1
+    local cfgfile=${ETC_DIR}/ifcfg-${iface}
+    local addr_line
+    local netmask_line
+    local address
+    local netmask
+    local prefix
+    local gateway_line
+    local gateway
+
+    log_it "Ensuring that interface ${iface} is properly configured"
+
+    addr_line=$( grep "^address" ${cfgfile} )
+    if [ $? -eq 0 ]; then
+        netmask_line=$( grep netmask ${cfgfile} )
+
+        if [ $? -eq 0 ]; then
+            address=$( echo "${addr_line}" | awk '{print $2}' )
+            netmask=$( echo "${netmask_line}" | awk '{print $2}' )
+            prefix=$( get_prefix_length ${netmask} )
+            add_ip_to_iface "${iface}" "${address}${prefix}"
+        else
+            log_it "Unable to get netmask of ${iface} interface"
+        fi
+    fi
+
+    gateway_line=$( grep gateway ${cfgfile} )
+
+    if [ $? -eq 0 ]; then
+        gateway=$( echo "${gateway_line}" | awk '{print $2}' )
+        add_default_route ${iface} ${gateway}
+    fi
+}
+
+#
+# Check if interface is part of a bonding, return all related interfaces
+#
+function get_bonding_compound {
+    local iface=$1
+    local master
+    local slaves
+
+    master=$( get_master ${PUPPET_DIR}/${CFG_PREFIX}${iface} )
+    if [ $? -eq 0 ]; then
+        slaves=$( get_slaves ${PUPPET_DIR}/${CFG_PREFIX}${master} )
+        echo ${master} ${slaves}
+        return $(true)
+    fi
+
+    slaves=$( get_slaves ${PUPPET_DIR}/${CFG_PREFIX}${iface} )
+    if [ $? -eq 0 ]; then
+        echo ${iface} ${slaves}
+        return $(true)
+    fi
+
+    return $(false)
+}
+
+#
+# Check if interface is loopback or a VLAN on top of the loopback
+#
+function is_loopback {
+    [[ "$1" =~ ^lo(:[0-9]+)?$ ]]
+}
+
+#
+# Log network info
+#
+function log_network_info {
+    local contents
+    contents=$(
+        {
+            echo
+            echo "************ Links/addresses ************"
+            /usr/sbin/ip addr show
+            echo "************ IPv4 routes ****************"
+            /usr/sbin/ip route show
+            echo "************ IPv6 routes ****************"
+            /usr/sbin/ip -6 route show
+            echo "*****************************************"
+        }
+    )
+    logger -S 64KiB "Network info:${contents}"
 }

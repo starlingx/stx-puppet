@@ -25,8 +25,6 @@
 ACQUIRE_LOCK=1
 RELEASE_LOCK=0
 
-export PUPPET_DIR="/var/run/network-scripts.puppet/"
-
 declare ROUTES_ONLY="no"
 
 function usage {
@@ -134,11 +132,10 @@ function sysinv_agent_lock {
 }
 
 function update_interfaces {
-    skip_lock=$(($1))
+    is_upgrade=$(($1))
     upDown=()
     changed=()
     vlans=()
-    updated_ifs=()
 
     # in DOR scenarios systemd might timeout to configure some interfaces since DHCP server
     # might not be ready yet on the controller. If this happens the next interfaces in
@@ -149,10 +146,10 @@ function update_interfaces {
     # the auto file contains the correct ordered execution list
     auto_puppet=( $(grep -v HEADER ${PUPPET_DIR}/auto) )
     for auto_if in ${auto_puppet[@]:1}; do
-        cfg="ifcfg-${auto_if}"
+        cfg="${CFG_PREFIX}${auto_if}"
 
         if is_vlan ${ETC_DIR}/${cfg}; then
-            vlans+=(${cfg})
+            vlans+=(${auto_if})
         fi
 
         diff -I ".*Last generated.*" -q ${PUPPET_DIR}/${cfg} ${ETC_DIR}/${cfg} >/dev/null 2>&1
@@ -160,13 +157,13 @@ function update_interfaces {
         if [ $? -ne 0 ] ; then
             # puppet file needs to be copied to network dir because diff detected
             changed+=(${cfg})
-            # but do we need to actually start the iface?
+
+            to_add=""
             if is_dhcp ${PUPPET_DIR}/${cfg} || is_dhcp ${ETC_DIR}/${cfg}  ; then
-                # if dhcp type iface, then too many possible attr's to compare against, so
-                # just add cfg to the upDown list because we know (from above) cfg file is changed
-                log_it "dhcp detected for ${cfg} - adding to upDown list"
-                upDown+=(${cfg})
-                updated_ifs+=(${cfg:6})
+                # if dhcp type iface, then too many possible attr's to compare against, so just add
+                # the interface to the upDown list because we know (from above) cfg file is changed
+                log_it "DHCP detected for ${auto_if}, adding to upDown list"
+                to_add=${auto_if}
             else
                 # not in dhcp situation so check if any significant
                 # cfg attributes have changed to warrant an iface restart
@@ -178,7 +175,7 @@ function update_interfaces {
                     # If in CentOS, remove alias portion in the interface name if any.
                     #               The alias interface does not need to be restarted.
                     # If in Debian, use the interface name, with or without label
-                    base_cfg=$(get_search_ifname ${cfg})
+                    base_cfg=$(get_search_ifname ${auto_if})
                     found=0
                     for chk in ${upDown[@]}; do
                         if [ "${base_cfg}" = "${chk}" ]; then
@@ -188,11 +185,31 @@ function update_interfaces {
                     done
 
                     if [ ${found} -eq 0 ]; then
-                        log_it "Adding ${base_cfg} to upDown list"
-                        upDown+=(${base_cfg})
-                        updated_ifs+=(${base_cfg:6})
+                        to_add=${base_cfg}
                     fi
                 fi
+            fi
+
+            # skip if already in list
+            if [ -n "${to_add}" ] && [[ " ${upDown[@]} " =~ " ${to_add} " ]]; then
+                to_add=""
+            fi
+
+            if [ -n "${to_add}" ]; then
+                # check if is part of a bonding
+                if_list=($( get_bonding_compound ${to_add} ))
+                if [ $? -ne 0 ]; then
+                    if_list=(${to_add})
+                else
+                    log_it "Bonding compound detected: '${if_list[*]}'"
+                fi
+
+                for iface in ${if_list[@]}; do
+                    if [[ ! " ${upDown[@]} " =~ " ${iface} " ]]; then
+                        log_it "Adding ${iface} to upDown list"
+                        upDown+=("${iface}")
+                    fi
+                done
             fi
         fi
     done
@@ -205,45 +222,48 @@ function update_interfaces {
 
     active=( ${auto_puppet[@]} )
 
-    if [ ${skip_lock} -ne 0 ]; then
+    if [ ${is_upgrade} -ne 0 ]; then
         # synchronize with sysinv-agent audit
         sysinv_agent_lock ${ACQUIRE_LOCK}
     fi
 
     remove=$(array_diff current[@] active[@])
     for iface in ${remove[@]}; do
-        # Bring down interface before we execute network restart, interfaces
-        # that do not have an ifcfg are not managed by init script
-        do_if_down ${iface}
-        do_rm ${ETC_DIR}/ifcfg-${iface}
+        if [ ${is_upgrade} -ne 0 ]; then
+            # Bring down interface before we execute network restart, interfaces
+            # that do not have an ifcfg are not managed by init script
+            do_if_down ${iface}
+        fi
+        do_rm ${ETC_DIR}/${CFG_PREFIX}${iface}
     done
 
     # If a lower ethernet interface is being changed, the upper vlan interface(s) will lose
     # configuration such as (IPv6) addresses and (IPv4, IPv6) default routes.  If the vlan
     # interface is not already in the up/down list, then explicitly add it.
-    for cfg in ${upDown[@]}; do
+    for iface in ${upDown[@]}; do
         for vlan in ${vlans[@]}; do
-            if has_physdev ${PUPPET_DIR}/${vlan} ${cfg#ifcfg-}; then
+            if has_physdev ${PUPPET_DIR}/${CFG_PREFIX}${vlan} ${iface}; then
                 if [[ ! " ${upDown[@]} " =~ " ${vlan} " ]]; then
-                    log_it "Adding ${vlan} to up/down list since physdev ${cfg#ifcfg-} is changing"
+                    log_it "Adding ${vlan} to up/down list since physdev ${iface} is changing"
                     upDown+=($vlan)
-                    updated_ifs+=(${vlan:6})
                 fi
             fi
         done
     done
 
-    # now down the changed ifaces by dealing with vlan interfaces first so that
-    # they are brought down gracefully (i.e., without taking their dependencies
-    # away unexpectedly).
-    for iftype in vlan ethernet; do
-        for cfg in ${upDown[@]}; do
-            ifcfg=${PUPPET_DIR}/${cfg}
-            if iftype_filter ${iftype} ${ifcfg}; then
-                do_if_down ${cfg:6}
-            fi
+    if [ ${is_upgrade} -ne 0 ]; then
+        # now down the changed ifaces by dealing with vlan interfaces first so that
+        # they are brought down gracefully (i.e., without taking their dependencies
+        # away unexpectedly).
+        for iftype in vlan ethernet slave; do
+            for iface in ${upDown[@]}; do
+                ifcfg=${PUPPET_DIR}/${CFG_PREFIX}${iface}
+                if iftype_filter ${iftype} ${ifcfg}; then
+                    do_if_down ${iface}
+                fi
+            done
         done
-    done
+    fi
 
     # now copy the puppet changed interfaces to ${ETC_DIR}
     for cfg in ${changed[@]}; do
@@ -258,22 +278,34 @@ function update_interfaces {
     fi
 
     # now ifup changed ifaces by dealing with vlan interfaces last so that their
-    # dependencies are met before they are configured.
+    # dependencies are met before they are configured. Bonding slaves are not
+    # included because ifup deals with them automatically.
     for iftype in ethernet vlan; do
-        for cfg in ${upDown[@]}; do
-            ifcfg=${PUPPET_DIR}/${cfg}
+        for iface in ${upDown[@]}; do
+            ifcfg=${PUPPET_DIR}/${CFG_PREFIX}${iface}
             if iftype_filter ${iftype} ${ifcfg}; then
-                do_if_up ${cfg:6}
+                if [ ${is_upgrade} -eq 0 ]; then
+                    if is_loopback ${iface}; then
+                        log_it "Interface '${iface}' is loopback, skipping"
+                    elif is_interface_missing_or_down ${iface}; then
+                        reset_ips ${iface}
+                        do_if_up ${iface}
+                    else
+                        ensure_iface_configured ${iface}
+                    fi
+                else
+                    do_if_up ${iface}
+                fi
             fi
         done
     done
 
-    if [ ${skip_lock} -ne 0 ]; then
+    if [ ${is_upgrade} -ne 0 ]; then
         # unlock: synchronize with sysinv-agent audit
         sysinv_agent_lock ${RELEASE_LOCK}
     fi
 
-    echo "${updated_ifs[@]}"
+    echo "${upDown[@]}"
 }
 
 if [ ${ROUTES_ONLY} = "yes" ]; then
@@ -327,6 +359,8 @@ else
             exit 1
         fi
 
+        log_network_info
+
         parse_interface_stanzas
 
         [ -f /var/run/.network_upgrade_bootstrap ]
@@ -339,6 +373,8 @@ else
         ifaces=$(update_interfaces ${upgr_bootstrap})
         update_routes "${ifaces}"
 
+        log_network_info
+
     else
         log_it "Not using sysconfig or ifupdown, cannot advance!  Aborting..."
         exit 1
@@ -346,3 +382,4 @@ else
 
 fi
 
+log_it "Finished"
