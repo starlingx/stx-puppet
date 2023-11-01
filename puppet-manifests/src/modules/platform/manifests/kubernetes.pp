@@ -1641,7 +1641,10 @@ class platform::kubernetes::update_kubelet_config::runtime
 
 class platform::kubernetes::cordon_node {
   exec { 'drain the node':
-    command   => "kubectl --kubeconfig=/etc/kubernetes/admin.conf drain ${::platform::params::hostname} --ignore-daemonsets --delete-emptydir-data --force --skip-wait-for-delete-timeout=10", # lint:ignore:140chars
+    command   => "stdbuf -oL -eL kubectl \
+                  --kubeconfig=/etc/kubernetes/admin.conf drain ${::platform::params::hostname} \
+                  --ignore-daemonsets --delete-emptydir-data  --skip-wait-for-delete-timeout=10 \
+                  --force --timeout=60s |& tee /var/log/puppet/latest/cordon.log",
     logoutput => true,
     onlyif    => "kubectl --kubeconfig=/etc/kubernetes/admin.conf get node ${::platform::params::hostname}"
   }
