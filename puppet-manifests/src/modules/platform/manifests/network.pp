@@ -40,6 +40,7 @@ class platform::network::mgmt::params(
   # network type specific parameters
   # TODO: remove platform_nfs_address when StarlingX rel 6 and 7 are not being used anymore
   $platform_nfs_address = undef,
+  $fqdn_ready = undef,
 ) { }
 
 class platform::network::oam::params(

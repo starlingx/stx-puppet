@@ -609,6 +609,10 @@ class platform::config::controller::post
     }
   }
 
+  file { '/etc/platform/.bootstrap_completed':
+    ensure => present,
+  }
+
   file { '/etc/platform/.initial_controller_config_complete':
     ensure => present,
   }
@@ -635,6 +639,10 @@ class platform::config::worker::post
     file { '/etc/platform/.initial_config_complete':
       ensure => present,
     }
+  }
+
+  file { '/etc/platform/.bootstrap_completed':
+    ensure => present,
   }
 
   file { '/etc/platform/.initial_worker_config_complete':
@@ -665,6 +673,10 @@ class platform::config::storage::post
   file { '/var/run/.storage_config_complete':
     ensure => present,
   }
+
+  file { '/etc/platform/.bootstrap_completed':
+    ensure => present,
+  }
 }
 
 class platform::config::aio::post
@@ -676,6 +688,7 @@ class platform::config::aio::post
   file { '/var/run/.controller_config_complete':
     ensure => present,
   }
+
   include ::platform::config::worker::post
 }
 

@@ -21,7 +21,20 @@ class platform::dcorch::params (
   include ::platform::params
 
   include ::platform::network::mgmt::params
-  $api_host = $::platform::network::mgmt::params::controller_address
+
+  if ($::platform::network::mgmt::params::fqdn_ready != undef) {
+    $fqdn_ready = $::platform::network::mgmt::params::fqdn_ready
+  }
+  else {
+    $fqdn_ready = false
+  }
+
+  if (str2bool($::is_bootstrap_completed) or
+      $fqdn_ready) {
+    $api_host = $::platform::params::controller_fqdn
+  } else {
+    $api_host = $::platform::network::mgmt::params::controller_address
+  }
 }
 
 
@@ -30,13 +43,24 @@ class platform::dcorch
   if $::platform::params::distributed_cloud_role =='systemcontroller' {
     include ::platform::params
     include ::platform::amqp::params
+    include ::platform::network::mgmt::params
 
     if $::platform::params::init_database {
       include ::dcorch::db::postgresql
     }
 
+    if ($::platform::network::mgmt::params::fqdn_ready != undef) {
+      $fqdn_ready = $::platform::network::mgmt::params::fqdn_ready
+    }
+    else {
+      $fqdn_ready = false
+    }
+
     class { '::dcorch':
-      rabbit_host       => $::platform::amqp::params::host_url,
+      rabbit_host       => (str2bool($::is_bootstrap_completed) or $fqdn_ready) ? {
+                              true    => $::platform::amqp::params::host,
+                              default => $::platform::amqp::params::host_url,
+                            },
       rabbit_port       => $::platform::amqp::params::port,
       rabbit_userid     => $::platform::amqp::params::auth_user,
       rabbit_password   => $::platform::amqp::params::auth_password,

@@ -7,7 +7,6 @@ class platform::dockerdistribution::params (
 define platform::dockerdistribution::write_config (
   $registry_readonly = false,
   $file_path = '/etc/docker-distribution/registry/runtime_config.yml',
-  $docker_registry_ip = undef,
   $docker_registry_host = undef,
   $docker_realm_host = undef,
 ){
@@ -71,8 +70,21 @@ class platform::dockerdistribution::config
   include ::platform::haproxy::params
   include ::platform::dockerdistribution::registries
 
-  $docker_registry_ip = $::platform::network::mgmt::params::controller_address
-  $docker_registry_host = $::platform::network::mgmt::params::controller_address_url
+  $system_mode = $::platform::params::system_mode
+  if ($::platform::network::mgmt::params::fqdn_ready != undef) {
+    $fqdn_ready = $::platform::network::mgmt::params::fqdn_ready
+  }
+  else {
+    $fqdn_ready = false
+  }
+
+  if (str2bool($::is_bootstrap_completed) or
+      $fqdn_ready == true) {
+    $docker_registry_host = $::platform::params::controller_fqdn
+  } else {
+    $docker_registry_host = $::platform::network::mgmt::params::controller_address_url
+  }
+
   $insecure_registries = $::platform::dockerdistribution::registries::insecure_registries
 
   if $::platform::params::distributed_cloud_role == 'subcloud' {
@@ -106,7 +118,6 @@ class platform::dockerdistribution::config
   }
 
   platform::dockerdistribution::write_config { 'runtime_config':
-    docker_registry_ip   => $docker_registry_ip,
     docker_registry_host => $docker_registry_host,
     docker_realm_host    => $docker_realm_host,
   }
@@ -118,7 +129,6 @@ class platform::dockerdistribution::config
   platform::dockerdistribution::write_config { 'readonly_config':
     registry_readonly    => true,
     file_path            => '/etc/docker-distribution/registry/readonly_config.yml',
-    docker_registry_ip   => $docker_registry_ip,
     docker_registry_host => $docker_registry_host,
     docker_realm_host    => $docker_realm_host,
   }
@@ -199,8 +209,6 @@ class platform::dockerdistribution::config
 class platform::dockerdistribution::compute
   inherits ::platform::dockerdistribution::params {
   include ::platform::kubernetes::params
-
-  include ::platform::network::mgmt::params
 
   include ::platform::dockerdistribution::registries
   $insecure_registries = $::platform::dockerdistribution::registries::insecure_registries

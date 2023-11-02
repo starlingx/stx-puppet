@@ -106,6 +106,7 @@ max-cache-ttl=5
 # is not forwarded in all cases, regardless of record type being
 # requested.
 local=/local/
+local=/internal/
 port=53
 bogus-priv
 clear-on-reload
@@ -131,11 +132,9 @@ server=/<%= @service_domain %>/<%= @dns_service_ip %>
 cname=registry.local,controller
 cname=registry-token-server.local,controller
 
-<%- if @system_mode == 'simplex' -%>
 cname=controller,controller.internal
 cname=controller-0,controller-0.internal
 cname=controller-1,controller-1.internal
-<%- end -%>
 
 <%- if @distributed_cloud_role == 'systemcontroller' -%>
 cname=registry.central,controller

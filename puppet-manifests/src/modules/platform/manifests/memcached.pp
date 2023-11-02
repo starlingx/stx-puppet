@@ -13,8 +13,9 @@ class platform::memcached::params(
   $controller_0_hostname = $::platform::params::controller_0_hostname
   $controller_1_hostname = $::platform::params::controller_1_hostname
   $system_mode           = $::platform::params::system_mode
+  $system_type           = $::platform::params::system_type
 
-  if $::platform::params::system_type == 'All-in-one' and
+  if $system_type == 'All-in-one' and
     $::platform::params::distributed_cloud_role != 'systemcontroller' {
     $processorcount = $::platform::params::eng_workers
   } else {
@@ -22,22 +23,20 @@ class platform::memcached::params(
   }
 
   if $system_mode == 'simplex' {
-    $listen_ip = $::platform::network::mgmt::params::controller0_address
+    $listen = $controller_0_hostname
   } else {
     case $::hostname {
       $controller_0_hostname: {
-        $listen_ip = $::platform::network::mgmt::params::controller0_address
+        $listen = $controller_0_hostname
       }
       $controller_1_hostname: {
-        $listen_ip = $::platform::network::mgmt::params::controller1_address
+        $listen = $controller_1_hostname
       }
       default: {
         fail("Hostname must be either ${controller_0_hostname} or ${controller_1_hostname}")
       }
     }
   }
-
-  $listen_ip_version = $::platform::network::mgmt::params::subnet_version
 }
 
 
@@ -49,7 +48,7 @@ class platform::memcached
   -> class { '::memcached':
     package_ensure  => $package_ensure,
     logfile         => $logfile,
-    listen_ip       => $listen_ip,
+    listen          => $listen,
     tcp_port        => $tcp_port,
     udp_port        => $udp_port,
     max_connections => $max_connections,

@@ -30,9 +30,19 @@ class platform::dcdbsync::api
     if $service_create {
       include ::platform::network::mgmt::params
 
-      $api_host = $::platform::network::mgmt::params::controller_address
-      $api_fqdn = $::platform::params::controller_hostname
-      $url_host = "http://${api_fqdn}:${api_port}"
+      if ($::platform::network::mgmt::params::fqdn_ready != undef) {
+        $fqdn_ready = $::platform::network::mgmt::params::fqdn_ready
+      }
+      else {
+        $fqdn_ready = false
+      }
+
+      if (str2bool($::is_bootstrap_completed) or
+          $fqdn_ready) {
+          $api_host = $::platform::params::controller_fqdn
+      } else {
+          $api_host = $::platform::network::mgmt::params::controller_address
+      }
 
       class { '::dcdbsync::api':
         bind_host => $api_host,
@@ -72,9 +82,19 @@ class platform::dcdbsync::stx_openstack::runtime
 
       include ::platform::network::mgmt::params
 
-      $api_host = $::platform::network::mgmt::params::controller_address
-      $api_fqdn = $::platform::params::controller_hostname
-      $url_host = "http://${api_fqdn}:${api_openstack_port}"
+      if ($::platform::network::mgmt::params::fqdn_ready != undef) {
+        $fqdn_ready = $::platform::network::mgmt::params::fqdn_ready
+      }
+      else {
+        $fqdn_ready = false
+      }
+
+      if (str2bool($::is_bootstrap_completed) or
+          $fqdn_ready) {
+            $api_host = $::platform::params::controller_fqdn
+      } else {
+            $api_host = $::platform::network::mgmt::params::controller_address
+      }
 
       class { '::dcdbsync::openstack_init': }
       class { '::dcdbsync::openstack_api':
