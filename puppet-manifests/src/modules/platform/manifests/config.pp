@@ -339,6 +339,20 @@ class platform::config::hosts
 }
 
 
+class platform::config::dnsmasq {
+  include ::platform::params
+
+  $config_path = $::platform::params::config_path
+  $path_exists = find_file($config_path)
+
+  if $path_exists and $::personality == 'controller' {
+    file { "${config_path}/dnsmasq.addn_conf":
+      ensure  => present,
+    }
+  }
+}
+
+
 class platform::config::timezone
   inherits ::platform::config::params {
   exec { 'Configure Timezone':
@@ -538,6 +552,7 @@ class platform::config::pre {
   include ::platform::config::timezone
   include ::platform::config::hostname
   include ::platform::config::hosts
+  include ::platform::config::dnsmasq
   include ::platform::config::file
   include ::platform::config::tpm
   include ::platform::config::kdump
