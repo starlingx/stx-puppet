@@ -1066,6 +1066,7 @@ class platform::kubernetes::certsans::runtime
 
   if $::platform::params::system_mode == 'simplex' {
     $certsans = "\"${platform::network::cluster_host::params::controller_address}, \
+                   ${platform::network::cluster_host::params::controller0_address}, \
                    ${localhost_address}, \
                    ${platform::network::oam::params::controller_address}\""
   } else {
