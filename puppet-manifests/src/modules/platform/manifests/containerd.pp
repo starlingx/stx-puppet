@@ -119,6 +119,8 @@ class platform::containerd::config
 
   $kubeadm_version = $::platform::kubernetes::params::kubeadm_version
 
+  $registry = 'registry.local:9001'
+
   file { '/etc/containerd':
     ensure => 'directory',
     owner  => 'root',
@@ -132,7 +134,43 @@ class platform::containerd::config
     mode    => '0600',
     content => template('platform/config.toml.erb'),
   }
-  -> exec { 'set containerd sandbox pause image':
+  -> file { '/etc/containerd/certs.d':
+    ensure => 'directory',
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0700',
+  }
+  -> file { "/etc/containerd/certs.d/${registry}":
+    ensure => 'directory',
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0700',
+  }
+  -> file { "/etc/containerd/certs.d/${registry}/hosts.toml":
+    ensure  => present,
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0600',
+    content => template('platform/hosts.toml.erb'),
+  }
+  if $::platform::params::distributed_cloud_role == 'subcloud' {
+    $registry = 'registry.central:9001'
+
+    file { "/etc/containerd/certs.d/${registry}":
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => '0700',
+    }
+    -> file { "/etc/containerd/certs.d/${registry}/hosts.toml":
+      ensure  => present,
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0600',
+      content => template('platform/hosts.toml.erb'),
+    }
+  }
+  exec { 'set containerd sandbox pause image':
     # The full path to kubeadm is used so we do not rely on bindmounts.
     # Determine the appropriate sandbox image.
     command   => "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm config images list --kubernetes-version ${kubeadm_version} 2>/dev/null | grep pause: | xargs -I '{}' sed -i -e '/sandbox_image =/ s|= .*|= \"registry.local:9001/{}\"|' /etc/containerd/config.toml", # lint:ignore:140chars

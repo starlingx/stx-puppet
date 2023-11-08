@@ -1,0 +1,11 @@
+# explicitly use v2 config format for identification
+version = 2
+
+# Central and local cloud registry config for distributed cloud subclouds
+server = "<%= @registry %>"
+[host."<%= @registry %>"]
+  capabilities = ["pull", "resolve", "push"]
+  ca = "/etc/docker/certs.d/<%= @registry %>/registry-cert.crt"
+  [host."<%= @registry %>".header]
+    authorization = "Basic <%= @registry_auth %>"
+# End central and local cloud registry config for distributed cloud subclouds
