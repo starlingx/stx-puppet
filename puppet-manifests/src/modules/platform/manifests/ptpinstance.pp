@@ -118,14 +118,18 @@ define platform::ptpinstance::nic_clock_handler (
     command  => "echo base_port [${base_port}] >> ${ptp_conf_dir}/ptpinstance/clock-conf.conf",
   }
   $parameters.each |String $parm, String $value| {
-    exec { "${ifname}_${parm}":
-      command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
-        echo ${wpc_commands[$parm][$value]}",
-      provider => shell,
-      require  => [ Exec["${ifname}_heading"], Exec["${ifname}_${base_port}_heading"] ]
-    }
-    -> exec { "${ifname}_${parm}_to_file":
-      command  => "echo ${parm} ${value} >> ${ptp_conf_dir}/ptpinstance/clock-conf.conf"
+    if $wpc_commands[$parm] {
+      exec { "${ifname}_${parm}":
+        command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
+          echo ${wpc_commands[$parm][$value]}",
+        provider => shell,
+        require  => [ Exec["${ifname}_heading"], Exec["${ifname}_${base_port}_heading"] ]
+      }
+      -> exec { "${ifname}_${parm}_to_file":
+        command  => "echo ${parm} ${value} >> ${ptp_conf_dir}/ptpinstance/clock-conf.conf"
+      }
+    } else {
+      notice("Skipped invalid clock parameter ${parm}.")
     }
   }
 }
