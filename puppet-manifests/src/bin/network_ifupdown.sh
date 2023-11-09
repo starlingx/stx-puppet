@@ -24,13 +24,13 @@ export CFG_PREFIX="ifcfg-"
 #
 function do_if_up {
     local if_name=$1
-    local output
 
     log_it "Bringing ${if_name} up"
 
-    output=$( /sbin/ifup ${if_name} 2>&1 )
+    /sbin/ifup ${if_name} > /dev/null 2>&1
+
     if [ $? -ne 0 ]; then
-        log_it "Failed bringing ${if_name} up, output: '${output}'"
+        log_it "Failed bringing ${if_name} up"
     fi
 }
 
@@ -59,9 +59,9 @@ function do_if_down {
     log_it "Bringing ${if_name} down"
 
     if [ -f ${st_file} ] && [[ $(< ${st_file}) == "${if_name}" ]]; then
-        response=$(/sbin/ifdown ${if_name} 2>&1)
+        /sbin/ifdown ${if_name} > /dev/null 2>&1
         if [ $? -ne 0 ]; then
-            log_it "Command 'ifdown' failed for interface ${if_name}: '${response}'"
+            log_it "Command 'ifdown' failed for interface ${if_name}"
         fi
     fi
 
