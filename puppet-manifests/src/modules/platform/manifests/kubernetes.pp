@@ -1645,7 +1645,7 @@ class platform::kubernetes::cordon_node {
     command   => "stdbuf -oL -eL kubectl \
                   --kubeconfig=/etc/kubernetes/admin.conf drain ${::platform::params::hostname} \
                   --ignore-daemonsets --delete-emptydir-data  --skip-wait-for-delete-timeout=10 \
-                  --force --timeout=60s |& tee /var/log/puppet/latest/cordon.log",
+                  --force --timeout=150s |& tee /var/log/puppet/latest/cordon.log",
     logoutput => true,
     onlyif    => "kubectl --kubeconfig=/etc/kubernetes/admin.conf get node ${::platform::params::hostname}"
   }
