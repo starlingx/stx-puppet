@@ -347,6 +347,18 @@ class platform::kubernetes::kubeadm {
     group  => 'root',
     mode   => '0700',
   }
+  # Turn off --allocate-node-cidrs as pods' CIDRs address allocation is done
+  # by calico (it does not uses the ones allocated by kube-controller-mgr).
+  # When the cluster-pod network (used in --cluster-cidr) is the same size of
+  # --node-cidr-mask-size (default is 64 for IPv6 and 24 for IPv4) it has
+  # enough range to only allocate for controller-0 and starts generating
+  # the event CIDRNotAvailable for the other k8s nodes.
+  -> exec { 'Turn off allocate-node-cidrs in kube-controller-manager':
+    command => "/bin/sed -i \\
+                -e 's|allocate-node-cidrs=true|allocate-node-cidrs=false|' \\
+                /etc/kubernetes/manifests/kube-controller-manager.yaml",
+    onlyif  => 'test -f /etc/kubernetes/manifests/kube-controller-manager.yaml'
+  }
   # A seperate enable is required since we have modified the service resource
   # to never enable services.
   -> exec { 'enable-kubelet':
