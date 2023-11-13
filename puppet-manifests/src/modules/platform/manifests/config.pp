@@ -461,12 +461,14 @@ class platform::config::certs::ssl_ca
   -> exec { 'restart containerd':
     command     => $containerd_restart_cmd,
     subscribe   => File[$ssl_ca_file],
+    onlyif      => 'systemctl is-enabled containerd.service | grep -wq enabled',
     refreshonly => true
   }
   # Restart docker.
   -> exec { 'restart dockerd':
     command     => $dockerd_restart_cmd,
     subscribe   => File[$ssl_ca_file],
+    onlyif      => 'systemctl is-enabled dockerd.service | grep -wq enabled',
     refreshonly => true
   }
   -> exec { 'restart sssd service on cert install/uninstall':

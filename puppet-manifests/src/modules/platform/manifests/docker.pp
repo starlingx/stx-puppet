@@ -63,7 +63,10 @@ class platform::docker::proxyconfig
     ensure  => 'running',
     name    => 'docker',
     enable  => true,
-    require => Package['docker']
+    require => [
+      Package['docker'],
+      Mount['docker-lv'],
+    ],
   }
 }
 
@@ -78,7 +81,7 @@ class platform::docker::config
   # the same here to align config/restart times for both containerd and docker.
   Anchor['platform::networking'] -> Class[$name]
 
-  Class['::platform::filesystem::docker'] ~> Class[$name]
+  Class['::platform::filesystem::docker'] -> Class[$name]
 
   Service['docker']
   -> exec { 'enable-docker':
@@ -128,7 +131,10 @@ class platform::docker::config::bootstrap
     ensure  => 'running',
     name    => 'docker',
     enable  => true,
-    require => Package['docker']
+    require => [
+      Package['docker'],
+      Mount['docker-lv'],
+    ],
   }
   -> exec { 'enable-docker':
     command => '/usr/bin/systemctl enable docker.service',

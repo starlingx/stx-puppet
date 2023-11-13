@@ -330,6 +330,24 @@ class platform::filesystem::docker
     fs_use_all => $fs_use_all,
     mode       => '0711',
   }
+
+  $docker_overrides = '/etc/systemd/system/docker.service.d/docker-stx-override.conf'
+  file_line { "${docker_overrides}: add unit section":
+    path => $docker_overrides,
+    line => '[Unit]',
+  }
+  -> file_line { "${docker_overrides}: add mount After dependency":
+    path => $docker_overrides,
+    line => 'After=var-lib-docker.mount',
+  }
+  -> file_line { "${docker_overrides}: add mount Requires dependency":
+    path => $docker_overrides,
+    line => 'Requires=var-lib-docker.mount',
+  }
+  -> exec { 'perform systemctl daemon reload for docker override':
+    command   => 'systemctl daemon-reload',
+    logoutput => true,
+  }
 }
 
 class platform::filesystem::storage {
