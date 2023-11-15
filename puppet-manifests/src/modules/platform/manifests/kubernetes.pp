@@ -1008,6 +1008,14 @@ class platform::kubernetes::master::change_apiserver_parameters (
   $etcd_keyfile = $platform::kubernetes::params::etcd_keyfile,
   $etcd_servers = $platform::kubernetes::params::etcd_servers,
 ) inherits ::platform::kubernetes::params {
+  include ::platform::params
+  include ::platform::network::cluster_host::params
+
+  if $::platform::params::hostname == 'controller-0' {
+    $cluster_host_addr = $::platform::network::cluster_host::params::controller0_address
+  } else {
+    $cluster_host_addr = $::platform::network::cluster_host::params::controller1_address
+  }
 
   # Update ownership/permissions for files.
   # We want it readable by sysinv and sysadmin.
@@ -1042,11 +1050,11 @@ class platform::kubernetes::master::change_apiserver_parameters (
 
   if $etcd_cafile and $etcd_certfile and $etcd_keyfile and $etcd_servers {
     exec { 'update configmap and apply changes to control plane components':
-      command => "python /usr/share/puppet/modules/platform/files/change_k8s_control_plane_params.py --etcd_cafile ${etcd_cafile} --etcd_certfile ${etcd_certfile} --etcd_keyfile ${etcd_keyfile} --etcd_servers ${etcd_servers}",  # lint:ignore:140chars
+      command => "python /usr/share/puppet/modules/platform/files/change_k8s_control_plane_params.py --etcd_cafile ${etcd_cafile} --etcd_certfile ${etcd_certfile} --etcd_keyfile ${etcd_keyfile} --etcd_servers ${etcd_servers} ${cluster_host_addr}",  # lint:ignore:140chars
       timeout => 600}
   } else {
     exec { 'update configmap and apply changes to control plane components':
-      command => 'python /usr/share/puppet/modules/platform/files/change_k8s_control_plane_params.py',
+      command => "python /usr/share/puppet/modules/platform/files/change_k8s_control_plane_params.py ${cluster_host_addr}",
       timeout => 600}
   }
 }
