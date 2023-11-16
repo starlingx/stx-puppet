@@ -8,7 +8,6 @@ from distutils.version import LooseVersion
 import json
 import logging
 import os
-import re
 import requests
 import ruamel.yaml as yaml
 import shutil
@@ -41,7 +40,6 @@ LOG.addHandler(fileHandler)
 LOG.debug('Starting k8s update process.')
 
 post_k8s_tasks = []
-parameters_to_preserve = {}
 
 DEFAULT_TAG = 'platform::kubernetes::params::'
 KUBE_APISERVER_TAG = 'platform::kubernetes::kube_apiserver::params::'
@@ -56,7 +54,6 @@ KUBE_APISERVER_VOLUMES_TAG = 'platform::kubernetes::kube_apiserver_volumes::para
 CONTROLLER_MANAGER_VOLUMES_TAG = 'platform::kubernetes::kube_controller_manager_volumes::params::'
 SCHEDULER_VOLUMES_TAG = 'platform::kubernetes::kube_scheduler_volumes::params::'
 
-REGEXPR_ADVERTISE_ADDRESS = r"advertise-address=(.*)\s"
 APISERVER_READYZ_ENDPOINT = 'https://localhost:6443/readyz'
 SCHEDULER_HEALTHZ_ENDPOINT = "https://127.0.0.1:10259/healthz"
 CONTROLLER_MANAGER_HEALTHZ_ENDPOINT = "https://127.0.0.1:10257/healthz"
@@ -65,6 +62,12 @@ KUBELET_HEALTHZ_ENDPOINT = "http://localhost:10248/healthz"
 RECOVERY_TIMEOUT = 5
 RECOVERY_TRIES = 30
 RECOVERY_TRY_SLEEP = 5
+
+INITCONFIG_TEMPLATE = '''---
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: {}'''
 
 
 class TimeoutException(Exception):
@@ -122,12 +125,31 @@ def _search_string_on_file(file_path, word):
     return False
 
 
-def update_k8s_control_plane_components(config_filename,
+def update_k8s_control_plane_components(config_filename, cluster_host_addr,
                                         target_component='apiserver'):
     """The function updates a k8s control-plane component."""
     LOG.debug('Updating %s ...', target_component)
+    tmp_config_filename = config_filename + '.tmp'
+
+    # Copy the original file.
+    try:
+        shutil.copyfile(config_filename, tmp_config_filename)
+    except Exception as e:
+        LOG.error('Problem copying K8s control plane config file. %s', e)
+        return -1
+
+    # Append the InitConfiguration to specify the local API endpoint
+    try:
+        with open(tmp_config_filename, 'a') as file:
+            file.write(INITCONFIG_TEMPLATE.format(cluster_host_addr))
+    except Exception as e:
+        LOG.error('Problem initializing kubeadm config file with '
+                  'InitConfiguration: %s', e)
+        return -1
+
+    # Generate the static manifest for the target component
     cmd = ["kubeadm", "init", "phase", "control-plane",
-           target_component, "--config", config_filename]
+           target_component, "--config", tmp_config_filename]
     rc = _exec_cmd(cmd)
     return rc
 
@@ -356,11 +378,11 @@ def merge_configmap_files(lastest_configmap_file, bak_configmap_file,
         raise
 
 
-def pre_k8s_updating_tasks(post_tasks, params_to_preserve):
+def pre_k8s_updating_tasks(post_tasks):
     """The function execute a group of tasks that are needed before the
     k8s cluster is updated.
     Args:
-        post_tasks: is anarray that contains callable object to be ejecuted
+        post_tasks: is an array that contains callable object to be executed
         in post_k8s_updating_tasks method
     Return:
      - rc = 0, task completed successful.
@@ -369,44 +391,11 @@ def pre_k8s_updating_tasks(post_tasks, params_to_preserve):
     # pylint: disable-msg=broad-except
     rc = 0
     LOG.debug('Running mandatory tasks before update proccess start.')
-    try:
-        with open(KUBE_APISERVER_CONFIG) as f:
-            lines = f.read()
-    except Exception as e:
-        LOG.error('Loading kube_apiserver config [Detail %s].', e)
-        return 1
-
-    m = re.search(REGEXPR_ADVERTISE_ADDRESS, lines)
-    if m:
-        advertise_address = m.group(1)
-        LOG.debug('  advertise_address = %s', advertise_address)
-        params_to_preserve['advertise-address'] = advertise_address
-
-    def _post_task_update_advertise_address():
-        """This method will be executed in right after control plane has been initialized and it
-        will update advertise_address in manifests/kube-apiserver.yaml to use mgmt address
-        instead of oam address due to https://bugs.launchpad.net/starlingx/+bug/1900153
-        """
-        default_network_interface = None
-
-        with open(KUBE_APISERVER_CONFIG) as f:
-            lines = f.read()
-        m = re.search(REGEXPR_ADVERTISE_ADDRESS, lines)
-        if m:
-            default_network_interface = m.group(1)
-            LOG.debug('  default_network_interface = %s', default_network_interface)
-
-        if advertise_address and default_network_interface \
-           and advertise_address != default_network_interface:
-            cmd = ["sed", "-i", "/oidc-issuer-url/! s/{}/{}/g".format(default_network_interface, advertise_address),
-                   KUBE_APISERVER_CONFIG]
-            _ = _exec_cmd(cmd)
 
     def _post_task_security_context():
         cmd = ["sed", "-i", "/securityContext:/,/type: RuntimeDefault/d", KUBE_APISERVER_CONFIG]
         _ = _exec_cmd(cmd)
 
-    post_tasks.append(_post_task_update_advertise_address)
     post_tasks.append(_post_task_security_context)
 
     return rc
@@ -424,7 +413,7 @@ def post_k8s_updating_tasks(post_tasks=None):
 
 
 def restore_k8s_control_plane_config(kubeadm_cm_bak_file, cluster_config_bak_file,
-                                     configmap_patched_file, **kwargs):
+                                     configmap_patched_file, cluster_host_addr, **kwargs):
     """The function restores the k8s control-plane configuration and updates the kubeadm
     configmap with the backup configuration to keep it sync.
     Return:
@@ -445,7 +434,7 @@ def restore_k8s_control_plane_config(kubeadm_cm_bak_file, cluster_config_bak_fil
     # -------------------------------------------------------------------------
     # First we need to restore apiserver with saved cluster_configuration
     update_k8s_control_plane_components(
-        cluster_config_bak_file, target_component='apiserver')
+        cluster_config_bak_file, cluster_host_addr, target_component='apiserver')
 
     # Run mandatory tasks after the update proccess has finished
     post_k8s_updating_tasks(post_k8s_tasks)
@@ -467,7 +456,7 @@ def restore_k8s_control_plane_config(kubeadm_cm_bak_file, cluster_config_bak_fil
 
     # Restore controller_manager
     update_k8s_control_plane_components(
-        cluster_config_bak_file, target_component='controller-manager')
+        cluster_config_bak_file, cluster_host_addr, target_component='controller-manager')
 
     if restart_kubelet_service() != 0:
         return 2
@@ -480,7 +469,7 @@ def restore_k8s_control_plane_config(kubeadm_cm_bak_file, cluster_config_bak_fil
 
     # Restore scheduler
     update_k8s_control_plane_components(
-        cluster_config_bak_file, target_component='scheduler')
+        cluster_config_bak_file, cluster_host_addr, target_component='scheduler')
 
     if restart_kubelet_service() != 0:
         return 2
@@ -1177,6 +1166,9 @@ def main():
     parser.add_argument("--etcd_certfile", default='')
     parser.add_argument("--etcd_keyfile", default='')
     parser.add_argument("--etcd_servers", default='')
+
+    # this is mandatory
+    parser.add_argument("cluster_host_addr")
     args = parser.parse_args()
 
     hieradata_file = os.path.join(args.hieradata_path, args.hieradata_file)
@@ -1202,6 +1194,8 @@ def main():
     etcd_certfile = args.etcd_certfile
     etcd_keyfile = args.etcd_keyfile
     etcd_servers = args.etcd_servers
+
+    cluster_host_addr = args.cluster_host_addr
 
     rc = 2
 
@@ -1277,7 +1271,7 @@ def main():
     # Pre updating tasks
     # -----------------------------------------------------------------------------
     # Run mandatory tasks before the update proccess starts
-    if pre_k8s_updating_tasks(post_k8s_tasks, parameters_to_preserve) != 0:
+    if pre_k8s_updating_tasks(post_k8s_tasks) != 0:
         LOG.error('Running pre updating tasks.')
         return 3
 
@@ -1329,11 +1323,6 @@ def main():
         for param in list(cluster_cfg['apiServer']['extraArgs'].keys()):
             if param not in service_params['apiServer']:
                 cluster_cfg['apiServer']['extraArgs'].pop(param)
-
-    # add/replace parameters from last valid k8s manifests that are required
-    # not to be modified during the upgrade process
-    for param, value in parameters_to_preserve.items():
-        cluster_cfg['apiServer']['extraArgs'][param] = value
 
     # apiserver_volumes section
     if cluster_cfg['apiServer'] and 'extraVolumes' in cluster_cfg['apiServer']:
@@ -1456,7 +1445,7 @@ def main():
     # Update k8s kube-apiserver
     # -----------------------------------------------------------------------------
     update_k8s_control_plane_components(
-        cluster_config_file, target_component='apiserver')
+        cluster_config_file, cluster_host_addr, target_component='apiserver')
 
     # Wait for kube-apiserver to be up before executing next steps
     is_k8s_apiserver_healthy = k8s_health_check(
@@ -1469,7 +1458,7 @@ def main():
             LOG.debug('kube-apiserver is not responding, intializing restore.')
             restore_rc = restore_k8s_control_plane_config(
                 kubeadm_cm_bak_file, cluster_config_bak_file, configmap_patched_file,
-                tries=tries, try_sleep=try_sleep, timeout=timeout)
+                cluster_host_addr, tries=tries, try_sleep=try_sleep, timeout=timeout)
             if restore_rc == 2:
                 LOG.error("kube-apiserver has failed to start using backup configuration.")
                 return 2
@@ -1483,7 +1472,7 @@ def main():
     # Update k8s kube-controller-manager
     # -----------------------------------------------------------------------------
     update_k8s_control_plane_components(
-        cluster_config_file, target_component='controller-manager')
+        cluster_config_file, cluster_host_addr, target_component='controller-manager')
 
     # Wait for controller-manager to be up
     is_k8s_component_healthy = k8s_health_check(
@@ -1496,7 +1485,7 @@ def main():
             LOG.debug('kube-controller-manager is not responding, intializing restore.')
             restore_rc = restore_k8s_control_plane_config(
                 kubeadm_cm_bak_file, cluster_config_bak_file, configmap_patched_file,
-                tries=tries, try_sleep=try_sleep, timeout=timeout)
+                cluster_host_addr, tries=tries, try_sleep=try_sleep, timeout=timeout)
 
             if restore_rc == 2:
                 msg = "kube-controller-manager has failed to start " +\
@@ -1510,7 +1499,7 @@ def main():
     # Update k8s kube-scheduler
     # -----------------------------------------------------------------------------
     update_k8s_control_plane_components(
-        cluster_config_file, target_component='scheduler')
+        cluster_config_file, cluster_host_addr, target_component='scheduler')
 
     # Wait for scheduler to be up
     LOG.debug('Waiting for kube-scheduler be online.')
@@ -1524,7 +1513,7 @@ def main():
             LOG.debug('kube-scheduler is not responding, intializing restore.')
             restore_rc = restore_k8s_control_plane_config(
                 kubeadm_cm_bak_file, cluster_config_bak_file, configmap_patched_file,
-                tries=tries, try_sleep=try_sleep, timeout=timeout)
+                cluster_host_addr, tries=tries, try_sleep=try_sleep, timeout=timeout)
             if restore_rc == 2:
                 LOG.error("kube-scheduler has failed to start using backup configuration.")
                 return 2
