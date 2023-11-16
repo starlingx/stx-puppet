@@ -148,7 +148,7 @@ define platform::network::network_address (
   # will configure them on the active controller.
   exec { "Configuring ${name} IP address":
     command => "ip addr replace ${address} dev ${ifname} ${options}",
-    onlyif  => 'test -f /etc/platform/simplex',
+    onlyif  => ['test -f /etc/platform/simplex', 'test ! -f /var/run/.network_upgrade_bootstrap'],
   }
 }
 
