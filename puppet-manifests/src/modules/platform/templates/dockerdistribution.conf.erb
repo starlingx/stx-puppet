@@ -18,6 +18,7 @@ http:
   tls:
     certificate: /etc/ssl/private/registry-cert.crt
     key: /etc/ssl/private/registry-cert.key
+    minimumtls: tls1.2
   headers:
     X-Content-Type-Options: [nosniff]
 health:
