@@ -458,6 +458,7 @@ class platform::network::apply {
     logoutput => true,
     tries     => 10,
     try_sleep => 1,
+    onlyif    => 'test ! -f /var/run/.network_upgrade_bootstrap',
   }
 }
 
