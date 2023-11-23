@@ -821,15 +821,18 @@ class platform::kubernetes::pre_pull_control_plane_images
   inherits ::platform::kubernetes::params {
   include ::platform::dockerdistribution::params
 
-  # Get the short kubernetes version without the leading 'v'.
-  $short_version = regsubst($upgrade_to_version, '^v(.*)', '\1')
   $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
   $creds_command = '$(cat /tmp/puppet/registry_credentials)'
 
   $resource_title = 'pre pull images'
-  $command = "/usr/local/kubernetes/${short_version}/stage1/usr/bin/kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${upgrade_to_version} | xargs -i crictl pull --creds ${creds_command} registry.local:9001/{}" # lint:ignore:140chars
+  $command = "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${kubeadm_version} | xargs -i crictl pull --creds ${creds_command} registry.local:9001/{}" # lint:ignore:140chars
 
-  platform::kubernetes::pull_images_from_registry { 'pull images from private registry':
+  # Disable garbage collection so that we don't accidentally lose any of the images we're about to download.
+  exec { 'disable image garbage collection':
+    command   => 'bash /usr/share/puppet/modules/platform/files/disable_image_gc.sh',
+  }
+
+  -> platform::kubernetes::pull_images_from_registry { 'pull images from private registry':
     resource_title      => $resource_title,
     command             => $command,
     before_exec         => undef,
@@ -956,6 +959,8 @@ class platform::kubernetes::unmask_start_kubelet
   inherits ::platform::kubernetes::params {
 
   $kubelet_version = $::platform::kubernetes::params::kubelet_version
+  $short_upgrade_to_version = regsubst($upgrade_to_version, '^v(.*)', '\1')
+
   # The next three steps are a hack.  While stress-testing in the lab it
   # was discovered that intermittently the attempt to remount the
   # "stage2" mountpoint fails due to it being busy.  Waiting for kubelet
@@ -985,6 +990,13 @@ class platform::kubernetes::unmask_start_kubelet
       tries     => 30,
       try_sleep => 1,
       timeout   => 10,
+  }
+  # In case we're upgrading K8s, remove any image GC override and revert to defaults.
+  # We only want to do this here for duplex systems, for simplex we'll do it at the uncordon.
+  # NOTE: we'll need to modify this when we bring in optimised multi-version K8s upgrades for duplex.
+  -> exec { 're-enable default image garbage collect':
+      command => '/usr/bin/sed -i "s/--image-gc-high-threshold 100 //" /var/lib/kubelet/kubeadm-flags.env',
+      onlyif  => "test '${kubelet_version}' = '${short_upgrade_to_version}'"
   }
   # Unmask and restart kubelet after the bind mount is updated.
   -> platform::kubernetes::unmask_start_service { 'kubelet':
@@ -1020,8 +1032,8 @@ class platform::kubernetes::worker::upgrade_kubelet
   $creds_command = '$(cat /tmp/puppet/registry_credentials)'
 
   $resource_title = 'pull pause image'
-  # Needs to use the newer version in case the kubeadm configmap format has changed.
-  $command = "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf config images list --kubernetes-version ${upgrade_to_version} 2>/dev/null | grep pause: | xargs -i crictl pull --creds ${creds_command} registry.local:9001/{}" # lint:ignore:140chars
+  # Use the upgrade version of kubeadm and kubelet to ensure we get the proper image versions.
+  $command = "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf config images list --kubernetes-version ${kubelet_version} 2>/dev/null | grep pause: | xargs -i crictl pull --creds ${creds_command} registry.local:9001/{}" # lint:ignore:140chars
   $before_exec = 'upgrade kubelet for worker'
 
   platform::kubernetes::pull_images_from_registry { 'pull images from private registry':
@@ -1032,7 +1044,7 @@ class platform::kubernetes::worker::upgrade_kubelet
   }
 
   platform::kubernetes::kube_command { 'upgrade kubelet for worker':
-    # Use the newer version of kubeadm in case the kubeadm configmap format has changed.
+    # Use the upgrade version of kubeadm in case the kubeadm configmap format has changed.
     # The -v6 gives verbose debug output includes health, GET response, delay.
     command     => "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm -v6 upgrade node",
     logname     => 'kubeadm-upgrade-node.log',
