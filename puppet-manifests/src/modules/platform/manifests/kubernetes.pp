@@ -235,6 +235,32 @@ class platform::kubernetes::cgroup
   }
 }
 
+define platform::kubernetes::kube_command (
+  $command,
+  $logname,
+  $environment = undef,
+  $timeout = undef,
+  $onlyif = undef
+) {
+  # Execute kubernetes command with instrumentation.
+  # Note that puppet captures no command output on timeout.
+  # Workaround:
+  # - use 'stdbuf' to flush line buffer for stdout and stderr
+  # - redirect stderr to stdout
+  # - use 'tee' so we write output to both stdout and file
+  # The symlink /var/log/puppet/latest points to new directory created
+  # by puppet-manifest-apply.sh command.
+
+  exec { "${title}": # lint:ignore:only_variable_string
+    environment => [ $environment ],
+    provider    => shell,
+    command     => "stdbuf -oL -eL ${command} |& tee /var/log/puppet/latest/${logname}",
+    timeout     => $timeout,
+    onlyif      => $onlyif,
+    logoutput   => true,
+  }
+}
+
 class platform::kubernetes::kubeadm {
 
   include ::platform::docker::params
@@ -826,16 +852,14 @@ class platform::kubernetes::upgrade_first_control_plane
 
   # The --allow-*-upgrades options allow us to upgrade to any k8s release if necessary
   # The -v6 gives verbose debug output includes health, GET response, delay.
-  # Puppet captures no command output on timeout. Workaround:
-  # - use 'stdbuf' to flush line buffer for stdout and stderr
-  # - redirect stderr to stdout
-  # - use 'tee' so we write output to both stdout and file
   # Since we hit default 300 second timeout under load (i.e., upgrade 250 subclouds
   # in parallel), specify larger timeout.
-  exec { 'upgrade first control plane':
-    command   => "stdbuf -oL -eL kubeadm -v6 --kubeconfig=/etc/kubernetes/admin.conf upgrade apply ${version} --allow-experimental-upgrades --allow-release-candidate-upgrades -y 2>&1 | tee /var/log/puppet/latest/kubeadm-upgrade-apply.log", # lint:ignore:140chars
-    logoutput => true,
-    timeout   => 600,
+  platform::kubernetes::kube_command { 'upgrade first control plane':
+    command     => "kubeadm -v6 upgrade apply ${version} \
+                    --allow-experimental-upgrades --allow-release-candidate-upgrades -y",
+    logname     => 'kubeadm-upgrade-apply.log',
+    environment => 'KUBECONFIG=/etc/kubernetes/admin.conf',
+    timeout     => 600,
   }
   -> exec { 'purge all kubelet-config except most recent':
       environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
@@ -876,9 +900,12 @@ class platform::kubernetes::upgrade_control_plane
   require platform::kubernetes::pre_pull_control_plane_images
 
   # control plane is only upgraded on a controller
-  exec { 'upgrade control plane':
-    command   => 'kubeadm upgrade node',
-    logoutput => true,
+  # The -v6 gives verbose debug output includes health, GET response, delay.
+  platform::kubernetes::kube_command { 'upgrade_control_plane':
+    command     => 'kubeadm -v6 upgrade node',
+    logname     => 'kubeadm-upgrade-node.log',
+    environment => 'KUBECONFIG=/etc/kubernetes/admin.conf:/etc/kubernetes/kubelet.conf',
+    timeout     => 300,
   }
 }
 
@@ -1004,10 +1031,13 @@ class platform::kubernetes::worker::upgrade_kubelet
     local_registry_auth => $local_registry_auth,
   }
 
-  exec { 'upgrade kubelet for worker':
+  platform::kubernetes::kube_command { 'upgrade kubelet for worker':
     # Use the newer version of kubeadm in case the kubeadm configmap format has changed.
-    command   => "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf upgrade node",
-    logoutput => true,
+    # The -v6 gives verbose debug output includes health, GET response, delay.
+    command     => "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm -v6 upgrade node",
+    logname     => 'kubeadm-upgrade-node.log',
+    environment => 'KUBECONFIG=/etc/kubernetes/kubelet.conf',
+    timeout     => 300,
   }
   -> Class['platform::kubernetes::mask_stop_kubelet']
   -> Class['platform::kubernetes::unmask_start_kubelet']
@@ -1648,12 +1678,11 @@ class platform::kubernetes::update_kubelet_config::runtime
 
   # Regenerate /var/lib/kubelet/config.yaml based on current kubelet-config
   # ConfigMap. This does not regenerate /var/lib/kubelet/kubeadm-flags.env.
-  exec { 'update kubelet config':
-    environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf:/etc/kubernetes/kubelet.conf' ],
-    provider    => shell,
+  platform::kubernetes::kube_command { 'update kubelet config':
     command     => 'kubeadm upgrade node phase kubelet-config',
+    logname     => 'kubeadm-upgrade-node-phase-kubelet-config.log',
+    environment => 'KUBECONFIG=/etc/kubernetes/admin.conf:/etc/kubernetes/kubelet.conf',
     timeout     => 60,
-    logoutput   => true,
   }
   -> exec { 'restart kubelet':
       command => '/usr/local/sbin/pmon-restart kubelet'
@@ -1661,13 +1690,17 @@ class platform::kubernetes::update_kubelet_config::runtime
 }
 
 class platform::kubernetes::cordon_node {
-  exec { 'drain the node':
-    command   => "stdbuf -oL -eL kubectl \
-                  --kubeconfig=/etc/kubernetes/admin.conf drain ${::platform::params::hostname} \
-                  --ignore-daemonsets --delete-emptydir-data  --skip-wait-for-delete-timeout=10 \
-                  --force --timeout=150s |& tee /var/log/puppet/latest/cordon.log",
-    logoutput => true,
-    onlyif    => "kubectl --kubeconfig=/etc/kubernetes/admin.conf get node ${::platform::params::hostname}"
+  # Cordon will poll indefinitely every 5 seconds if there is
+  # unsatisfied pod-disruption-budget, and may also run long if there
+  # are lots of pods to drain, so limit operation to 150 seconds.
+  platform::kubernetes::kube_command { 'drain the node':
+    command     => "kubectl -drain ${::platform::params::hostname} \
+                    --ignore-daemonsets --delete-emptydir-data \
+                    --skip-wait-for-delete-timeout=10 \
+                    --force --timeout=150s",
+    logname     => 'cordon.log',
+    environment => 'KUBECONFIG=/etc/kubernetes/admin.conf:/etc/kubernetes/kubelet.conf',
+    onlyif      => "kubectl get node ${::platform::params::hostname}",
   }
 }
 
