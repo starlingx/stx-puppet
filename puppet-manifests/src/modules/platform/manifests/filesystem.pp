@@ -372,6 +372,7 @@ class platform::filesystem::controller {
   include ::platform::filesystem::docker
   include ::platform::filesystem::kubelet
   include ::platform::filesystem::log_bind
+  include ::platform::filesystem::luks
 }
 
 class platform::filesystem::log_bind {
@@ -597,5 +598,17 @@ class platform::filesystem::root::runtime {
       lv_name   => $lv_name,
       lv_size   => $lv_size,
       devmapper => $devmapper,
+  }
+}
+
+class platform::filesystem::luks {
+
+  if !str2bool($::is_controller_active) and !str2bool($::is_standalone_controller) {
+
+    # Execute rsync command only on the standby controller
+    exec { 'rsync_luks_folder':
+      command   => '/usr/bin/rsync -v -acv --delete rsync://controller/luksdata/ /var/luks/stx/luks_fs/controller/',
+      logoutput => true,
+    }
   }
 }
