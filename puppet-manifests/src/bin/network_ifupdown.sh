@@ -227,21 +227,32 @@ function is_vlan_device_present_on_kernel {
 
 #
 # Compare files in ETC_DIR to check if all VLANs are created on the kernel
+# only search over platform interfaces, from the ${ETC_DIR}/auto file
 #
 function verify_all_vlans_created {
+
+    local auto_etc=( )
+    if [ -f ${ETC_DIR}/auto ]; then
+        auto_etc=( $(grep -v HEADER ${ETC_DIR}/auto) )
+    fi
+
     for cfg_path in $(find ${ETC_DIR} -name "${IFNAME_INCLUDE}"); do
         cfg=$(basename ${cfg_path})
-        # do not process labeled interfaces
-        if [[ $cfg != *":"* ]]; then
-            log_it "verify_all_vlans_created process $cfg"
-            if is_vlan ${ETC_DIR}/${cfg}; then
-                is_vlan_device_present_on_kernel ${cfg_path}
-                if [ $? -ne 0 ] ; then
-                    log_it "${cfg} - not present on the kernel, bring up before proceeding"
-                    do_if_up ${cfg:6}
-                    is_vlan_device_present_on_kernel ${ETC_DIR}/${cfg}
+        iface_name="${cfg#ifcfg-}"
+        # only process interfaces that are in the generated auto file
+        if grep -q "${iface_name}" <<< "${auto_etc[@]}"; then
+            # do not process labeled interfaces
+            if [[ $cfg != *":"* ]]; then
+                if is_vlan ${ETC_DIR}/${cfg}; then
+                    log_it "verify_all_vlans_created process $cfg"
+                    is_vlan_device_present_on_kernel ${cfg_path}
                     if [ $? -ne 0 ] ; then
-                        log_it "${cfg} - failed to add VLAN interface on kernel"
+                        log_it "${cfg} - not present on the kernel, bring up before proceeding"
+                        do_if_up ${cfg:6}
+                        is_vlan_device_present_on_kernel ${ETC_DIR}/${cfg}
+                        if [ $? -ne 0 ] ; then
+                            log_it "${cfg} - failed to add VLAN interface on kernel"
+                        fi
                     fi
                 fi
             fi
@@ -257,11 +268,15 @@ function is_vlan {
     local iface=''
     local if_name=''
     local regex=''
+    local regex2=''
     if [ -f ${cfg} ]; then
         iface=$( grep iface ${cfg} )
         if_name=$( echo "${iface}" | awk '{print $2}' )
         regex="(vlan.*)|(.*\..*)"
+        regex2="pre-up .*ip link add link.*type vlan"
         if [[ ${if_name} =~ ${regex} ]]; then
+            return $(true)
+        elif [[ $( grep -c -E "${regex2}" ${cfg} ) == '1' ]]; then
             return $(true)
         else
             if [[ $( grep -c vlan-raw-device ${cfg} ) == '1' ]]; then
