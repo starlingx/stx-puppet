@@ -146,7 +146,7 @@ define platform::network::network_address (
 
   # addresses should only be configured if running in simplex, otherwise SM
   # will configure them on the active controller.
-  exec { "Configuring ${name} IP address":
+  exec { "Configuring ${name} IP address to ${address}":
     command => "ip addr replace ${address} dev ${ifname} ${options}",
     onlyif  => ['test -f /etc/platform/simplex', 'test ! -f /var/run/.network_upgrade_bootstrap'],
   }
