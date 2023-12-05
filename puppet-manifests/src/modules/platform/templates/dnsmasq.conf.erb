@@ -1,13 +1,18 @@
 # Only listen on the following interfaces
+# This is required for pxebooting system nodes
+# pxeboot_interface should be the physical management interface
 <%- if @pxeboot_interface != nil -%>
 interface=<%= @pxeboot_interface %>
 <%- end -%>
+# If the pxeboot interface is not set ! Use mgmt for now.
 interface=<%= @mgmt_interface %>
 bind-interfaces
+listen-address=<%= @pxeboot_controller_address %>
+
 listen-address=<%= @mgmt_controller_address %>
 
 # Serve addresses from the pxeboot subnet
-dhcp-range=set:pxeboot,<%= @pxeboot_subnet_start %>,<%= @pxeboot_subnet_end %>,<%= @pxeboot_subnet_netmask %>,1h
+dhcp-range=set:pxeboot,<%= @pxeboot_subnet_start %>,<%= @pxeboot_subnet_end %>,<%= @pxeboot_subnet_netmask %>,1d
 
 # Serve addresses from the management subnet
 dhcp-range=set:mgmt,<%= @mgmt_subnet_start %>,static,<%= @mgmt_subnet_netmask %>,1d
@@ -21,8 +26,9 @@ dhcp-option=tag:mgmt,option:router,<%= @mgmt_controller_address %>
 <%- end -%>
 <%- end -%>
 
-# Provide DNS services on the floating pxeboot address
+# Provide DNS services on the pxecontroller address
 dhcp-option=tag:pxeboot,option:dns-server,<%= @pxeboot_controller_address %>
+dhcp-option=tag:pxeboot,option:mtu,<%= @mgmt_network_mtu %>
 
 <%- if @mgmt_subnet_version == 4 -%>
 # Provide DNS services on the floating management address
@@ -73,17 +79,13 @@ tftp-max=200
 <%- if @pxeboot_interface != nil -%>
 tftp-root=/var/pxeboot,<%= @pxeboot_interface %>
 <%- else -%>
+# The pxeboot interface is not set ! Use mgmt for now.
 tftp-root=/var/pxeboot,<%= @mgmt_interface %>
 <%- end -%>
 
 dhcp-boot=tag:bios,tag:pxeboot,pxelinux.0,<%= @pxeboot_hostname %>,<%= @pxeboot_controller_address %>
-dhcp-boot=tag:bios,tag:mgmt,pxelinux.0,<%= @mgmt_hostname %>,<%= @mgmt_controller_address %>
-
 dhcp-boot=tag:efi,tag:pxeboot,<%= @efi_bootloader %>,<%= @pxeboot_hostname %>,<%= @pxeboot_controller_address %>
-dhcp-boot=tag:efi,tag:mgmt,<%= @efi_bootloader %>,<%= @mgmt_hostname %>,<%= @mgmt_controller_address %>
-
 dhcp-boot=tag:uefi,tag:pxeboot,<%= @uefi_bootloader %>,<%= @pxeboot_hostname %>,<%= @pxeboot_controller_address %>
-dhcp-boot=tag:uefi,tag:mgmt,<%= @uefi_bootloader %>,<%= @mgmt_hostname %>,<%= @mgmt_controller_address %>
 
 # Do not forward queries for plain names (no dots)
 domain-needed
