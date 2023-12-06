@@ -87,6 +87,7 @@ class platform::firewall::calico::controller {
   contain ::platform::firewall::calico::admin
   contain ::platform::firewall::calico::hostendpoint
   contain ::platform::firewall::nat::admin
+  contain ::platform::firewall::extra
   contain ::platform::firewall::rbac::worker
 
   Class['::platform::kubernetes::gate'] -> Class[$name]
@@ -100,6 +101,7 @@ class platform::firewall::calico::controller {
   -> Class['::platform::firewall::calico::admin']
   -> Class['::platform::firewall::calico::hostendpoint']
   -> Class['::platform::firewall::nat::admin']
+  -> Class['::platform::firewall::extra']
   -> Class['::platform::firewall::rbac::worker']
 }
 
@@ -110,6 +112,7 @@ class platform::firewall::calico::worker {
   contain ::platform::firewall::calico::pxeboot
   contain ::platform::firewall::calico::storage
   contain ::platform::firewall::calico::hostendpoint
+  contain ::platform::firewall::extra
 
   Class['::platform::kubernetes::worker'] -> Class[$name]
 
@@ -119,6 +122,7 @@ class platform::firewall::calico::worker {
   -> Class['::platform::firewall::calico::pxeboot']
   -> Class['::platform::firewall::calico::storage']
   -> Class['::platform::firewall::calico::hostendpoint']
+  -> Class['::platform::firewall::extra']
 }
 
 class platform::firewall::runtime {
@@ -130,6 +134,7 @@ class platform::firewall::runtime {
   include ::platform::firewall::calico::admin
   include ::platform::firewall::calico::hostendpoint
   include ::platform::firewall::nat::admin
+  include ::platform::firewall::extra
   include ::platform::firewall::rbac::worker
 
   Class['::platform::firewall::calico::oam']
@@ -140,6 +145,7 @@ class platform::firewall::runtime {
   -> Class['::platform::firewall::calico::admin']
   -> Class['::platform::firewall::calico::hostendpoint']
   -> Class['::platform::firewall::nat::admin']
+  -> Class['::platform::firewall::extra']
   -> Class['::platform::firewall::rbac::worker']
 }
 
@@ -387,6 +393,25 @@ class platform::firewall::calico::is_config_available {
         path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
         command   => 'touch /etc/platform/.platform_firewall_config_required',
         logoutput => true
+      }
+    }
+  }
+}
+
+class platform::firewall::extra (
+  $config = {}
+) {
+  if $config != {} {
+    $config.each |$key, $value| {
+      if $key == 'ingress-ipv6-for-ipv4-install' {
+        $value.each |$interface| {
+          exec { "install ingress-ipv6-for-ipv4 in ${interface}" :
+            path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+            command   => "ip6tables -t filter -A INPUT -i ${interface} -m comment --comment \"stx: block ingress IPv6 traffic for ${interface}\" -j DROP", # lint:ignore:140chars
+            logoutput => true,
+            onlyif    => "[ $(ip6tables -n -L INPUT -t filter | grep -c \"stx: block ingress IPv6 traffic for ${interface}\") -eq 0 ]" # lint:ignore:140chars
+          }
+        }
       }
     }
   }
