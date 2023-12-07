@@ -554,7 +554,6 @@ class platform::config::pre {
   include ::platform::config::timezone
   include ::platform::config::hostname
   include ::platform::config::hosts
-  include ::platform::config::dnsmasq
   include ::platform::config::file
   include ::platform::config::tpm
   include ::platform::config::kdump
@@ -572,6 +571,7 @@ class platform::config::post
   inherits ::platform::config::params {
 
   include ::platform::params
+  include ::platform::config::dnsmasq
 
   case $::osfamily {
     'RedHat': {
