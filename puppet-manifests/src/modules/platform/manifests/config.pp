@@ -291,6 +291,27 @@ class platform::config::apparmor::runtime {
 }
 
 
+class platform::config::mgmt_network_reconfig_update_runtime {
+  include ::sysinv
+  include ::platform::params
+
+  $platform_sw_version    = $::platform::params::software_version
+  $zeromq_bind_ip         = $::sysinv::rpc_zeromq_bind_ip
+
+  # update hosts file to be used for all reboots
+  exec { "Copy /etc/hosts to /opt/platform/config/${platform_sw_version}/hosts" :
+        command => "cp -f /etc/hosts /opt/platform/config/${platform_sw_version}/hosts",
+  }
+
+  file_line { "mgmt_reconfig update rpc_zeromq_bind_ip to ${zeromq_bind_ip}":
+    path               => "/opt/platform/sysinv/${platform_sw_version}/sysinv.conf.default",
+    line               => "rpc_zeromq_bind_ip=${zeromq_bind_ip}",
+    match              => '^rpc_zeromq_bind_ip=',
+    append_on_no_match => false,
+  }
+}
+
+
 class platform::config::hosts
   inherits ::platform::config::params {
 
