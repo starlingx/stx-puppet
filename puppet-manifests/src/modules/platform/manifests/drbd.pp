@@ -8,6 +8,9 @@ class platform::drbd::params (
   $initial_setup = false,
   $fs_type       = 'ext4',
   $cpumask = false,
+  $hmac = undef,
+  $secret = undef,
+  $secure = false,
 ) {
   include ::platform::params
   $host1 = $::platform::params::controller_0_hostname
@@ -65,7 +68,10 @@ define platform::drbd::filesystem (
   } else {
     $ip2 = $ip2_override
   }
-
+  if $::platform::drbd::params::secure == true {
+    $drbd_hmac = $::platform::drbd::params::hmac
+    $drbd_secret = $::platform::drbd::params::secret
+  }
   if ($ensure == 'absent') {
     exec { "umount drbd device ${device}":
       command => "umount ${device}",
@@ -137,6 +143,8 @@ define platform::drbd::filesystem (
       rtt_ms        => $::platform::drbd::params::rtt_ms,
       cpumask       => $::platform::drbd::params::cpumask,
       resync_after  => $resync_after,
+      hmac          => $drbd_hmac,
+      secret        => $drbd_secret,
     }
   }
 }
