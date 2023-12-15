@@ -14,6 +14,7 @@ include ::platform::dhclient
 include ::platform::partitions
 include ::platform::lvm::storage
 include ::platform::network
+include ::platform::dns
 include ::platform::fstab
 include ::platform::password
 include ::platform::ldap::client

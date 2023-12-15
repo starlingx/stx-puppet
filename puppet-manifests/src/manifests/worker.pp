@@ -20,6 +20,7 @@ include ::platform::lvm::compute
 include ::platform::compute
 include ::platform::vswitch
 include ::platform::network
+include ::platform::dns
 include ::platform::fstab
 include ::platform::password
 include ::platform::ldap::client
