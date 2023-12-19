@@ -58,7 +58,7 @@ class platform::ntp (
       command => "/usr/bin/systemctl enable ${ntp_service_name}.service",
     }
     -> exec { 'ntp-initial-config':
-      command => "timeout ${ntpdate_timeout} /usr/sbin/ntpd -g -q -n -c /etc/ntp_initial.conf",
+      command => "timeout ${ntpdate_timeout} /usr/sbin/ntpd -g -q -n -c /etc/ntp_initial.conf && /usr/sbin/hwclock --systohc",
       returns => [ 0, 1, 124 ],
       onlyif  => "test ! -f /etc/platform/simplex || grep -q '^server' /etc/ntp.conf",
     }
