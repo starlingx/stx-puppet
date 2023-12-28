@@ -10,7 +10,8 @@ define platform::ptpinstance::ptp_config_files(
   $ptp_conf_dir,
   $ptp_options_dir,
   $pmc_gm_settings = '',
-  $device_parameters = ''
+  $device_parameters = '',
+  $gnss_uart_disable = '',
 ) {
   file { $_name:
     ensure  => file,
@@ -55,7 +56,8 @@ define platform::ptpinstance::set_ptp4l_pmc_parameters(
   $ptp_conf_dir,
   $ptp_options_dir,
   $pmc_gm_settings = '',
-  $device_parameters = ''
+  $device_parameters = '',
+  $gnss_uart_disable = '',
 ) {
   if ($service == 'ptp4l') and ($pmc_gm_settings != '') {
     exec { "${_name}_set_initial_pmc_paramters":
@@ -227,6 +229,43 @@ class platform::ptpinstance::nic_clock::nic_reset (
   }
 }
 
+define platform::ptpinstance::disable_e810_gnss_uart_interfaces (
+  $_name,
+  $global_parameters,
+  $service,
+  $gnss_uart_disable,
+  $cmdline_opts = '',
+  $device_parameters = '',
+  $id = '',
+  $interfaces = '',
+  $pmc_gm_settings = '',
+) {
+
+  $gnss_device = $global_parameters['ts2phc.nmea_serialport']
+
+  if empty($gnss_device) {
+    notice("ts2phc.nmea_serialport not set for ${_name}")
+  }
+  elsif $service == 'ts2phc' and $gnss_uart_disable {
+    # These values were obtained from Intel's User Guide for the E810 NIC
+    $uart1_cmd = '\xb5\x62\x06\x8a\x09\x00\x00\x05\x00\x00\x05\x00\x52\x10\x00\x05\x80'
+    $uart2_cmd = '\xb5\x62\x06\x8a\x09\x00\x00\x05\x00\x00\x05\x00\x53\x10\x00\x06\x83'
+
+    notice("Trying to disable UART devices for serial port ${gnss_device}")
+
+    exec {"${_name}_disable_gnss_uart1":
+      command => "echo -ne \"${uart1_cmd}\" > ${gnss_device}",
+      timeout => 3,
+      onlyif  => "/usr/bin/test -c ${gnss_device}",
+    }
+    exec {"${_name}_disable_gnss_uart2":
+      command => "echo -ne \"${uart2_cmd}\" > ${gnss_device}",
+      timeout => 3,
+      onlyif  => "/usr/bin/test -c ${gnss_device}",
+    }
+  }
+}
+
 class platform::ptpinstance (
   $enabled = false,
   $runtime = false,
@@ -251,6 +290,10 @@ class platform::ptpinstance (
     $phc2sys_cmd_opts = '-F 0'
   } else {
     $phc2sys_cmd_opts = ''
+
+    # Older E810 cards have unconnected UART interfaces enabled and this can cause noise
+    # and GNNS errors. To avoid this we try to disable the UART interfaces during startup.
+    create_resources('platform::ptpinstance::disable_e810_gnss_uart_interfaces', $config)
   }
 
   file{"${ptp_options_dir}/ptpinstance":
