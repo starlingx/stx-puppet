@@ -24,8 +24,8 @@ class platform::sysctl
   $ip_version = $::platform::network::mgmt::params::subnet_version
 
   # Set sched_nr_migrate to standard linux default
-  sysctl::value { 'kernel.sched_nr_migrate':
-    value => '8',
+  exec { 'Set sched_nr_migrate to standard linux default':
+    command => "bash -c 'echo 8 2>/dev/null >/sys/kernel/debug/sched/nr_migrate'",
   }
 
   # Enable br_netfilter (required to allow setting bridge-nf-call-arptables)
