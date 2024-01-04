@@ -1,3 +1,4 @@
+# Service is enabled by default now in 90-default.preset
 class platform::multipath::params (
   $enabled = true,
 ) {
@@ -17,6 +18,7 @@ class platform::multipath
       name       => 'multipathd',
       hasstatus  => true,
       hasrestart => true,
+      subscribe  => File['/etc/multipath.conf'],
     }
     -> exec { 'systemctl-enable-multipathd':
       command => '/usr/bin/systemctl enable multipathd.service',
