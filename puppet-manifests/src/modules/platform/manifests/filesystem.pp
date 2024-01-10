@@ -627,6 +627,7 @@ class platform::filesystem::luks {
     exec { 'rsync_luks_folder':
       command   => '/usr/bin/rsync -v -acv --delete rsync://controller/luksdata/ /var/luks/stx/luks_fs/controller/',
       logoutput => true,
+      onlyif    => [ "test ${::controller_sw_versions_match} = true", '/usr/local/bin/connectivity_test -t 10 controller', ],
     }
   }
 }
