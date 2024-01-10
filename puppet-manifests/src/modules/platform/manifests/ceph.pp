@@ -103,7 +103,8 @@ class platform::ceph
         # Floating monitor, running on active controller.
         Class['::ceph']
         -> ceph_config {
-          "mon.${floating_mon_host}/host":      value => $floating_mon_host;
+          "mon.${floating_mon_host}/host":          value => $floating_mon_host;
+          "mon.${floating_mon_host}/public_addr":   value => $floating_mon_ip;
         }
       } else {
         # Simplex case, a single monitor binded to the controller.
