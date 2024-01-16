@@ -1706,7 +1706,7 @@ class platform::kubernetes::cordon_node {
   # unsatisfied pod-disruption-budget, and may also run long if there
   # are lots of pods to drain, so limit operation to 150 seconds.
   platform::kubernetes::kube_command { 'drain the node':
-    command     => "kubectl -drain ${::platform::params::hostname} \
+    command     => "kubectl drain ${::platform::params::hostname} \
                     --ignore-daemonsets --delete-emptydir-data \
                     --skip-wait-for-delete-timeout=10 \
                     --force --timeout=150s",
