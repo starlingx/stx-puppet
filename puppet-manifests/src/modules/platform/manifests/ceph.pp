@@ -104,7 +104,6 @@ class platform::ceph
         Class['::ceph']
         -> ceph_config {
           "mon.${floating_mon_host}/host":          value => $floating_mon_host;
-          "mon.${floating_mon_host}/public_addr":   value => $floating_mon_ip;
         }
       } else {
         # Simplex case, a single monitor binded to the controller.
@@ -267,6 +266,11 @@ class platform::ceph::monitor
         $configure_ceph_mon = true
       } else {
         $configure_ceph_mon = false
+        # Ensures public_addr on controllers when mon configuration is not required.
+        Class['::ceph']
+        -> ceph_config {
+          "mon.${floating_mon_host}/public_addr":   value => $floating_mon_ip;
+        }
       }
     } else {
       if $::hostname == $mon_0_host or $::hostname == $mon_1_host or $::hostname == $mon_2_host {
