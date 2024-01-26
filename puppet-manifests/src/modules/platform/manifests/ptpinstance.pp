@@ -291,9 +291,11 @@ class platform::ptpinstance (
   } else {
     $phc2sys_cmd_opts = ''
 
-    # Older E810 cards have unconnected UART interfaces enabled and this can cause noise
-    # and GNNS errors. To avoid this we try to disable the UART interfaces during startup.
-    create_resources('platform::ptpinstance::disable_e810_gnss_uart_interfaces', $config)
+    if $enabled {
+      # Older E810 cards have unconnected UART interfaces enabled and this can cause noise
+      # and GNNS errors. To avoid this we try to disable the UART interfaces during startup.
+      create_resources('platform::ptpinstance::disable_e810_gnss_uart_interfaces', $config)
+    }
   }
 
   file{"${ptp_options_dir}/ptpinstance":
