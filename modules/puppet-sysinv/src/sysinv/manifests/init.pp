@@ -74,7 +74,8 @@ class sysinv (
                                     image_conversion => 60,
                                     storage_backend_failure => 400,
                                     k8s_application => 60,
-                                    device_image_update => 300 },
+                                    device_image_update => 300,
+                                    k8s_cluster_health => 180 },
   $periodic_interval_agent     = {  default => 60,
                                     inventory_audit => 60,
                                     lldp_audit => 300 }
@@ -232,6 +233,8 @@ class sysinv (
         value => $periodic_interval_conductor[k8s_application];
     'conductor_periodic_task_intervals/device_image_update':
         value => $periodic_interval_conductor[device_image_update];
+    'conductor_periodic_task_intervals/k8s_cluster_health':
+        value => $periodic_interval_conductor[k8s_cluster_health];
   }
 
   sysinv_config {
