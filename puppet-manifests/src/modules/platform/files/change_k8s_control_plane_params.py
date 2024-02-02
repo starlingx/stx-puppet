@@ -10,6 +10,7 @@ import logging
 import os
 import requests
 import ruamel.yaml as yaml
+from ruamel.yaml.compat import StringIO
 import shutil
 import signal
 import subprocess
@@ -21,8 +22,6 @@ from sysinv.common import kubernetes  # pylint: disable=import-error
 from sysinv.common import service_parameter as sp  # pylint: disable=import-error
 
 # pylint: disable-msg=broad-except
-
-kube_operator = kubernetes.KubeOperator()
 
 # Logging
 LOGGER_FORMAT = "%(asctime)s.%(msecs)03d %(process)d [%(levelname)s] %(message)s"
@@ -54,6 +53,7 @@ KUBE_APISERVER_VOLUMES_TAG = 'platform::kubernetes::kube_apiserver_volumes::para
 CONTROLLER_MANAGER_VOLUMES_TAG = 'platform::kubernetes::kube_controller_manager_volumes::params::'
 SCHEDULER_VOLUMES_TAG = 'platform::kubernetes::kube_scheduler_volumes::params::'
 
+APISERVER_API_ENDPOINT = 'https://localhost:6443'
 APISERVER_READYZ_ENDPOINT = 'https://localhost:6443/readyz'
 SCHEDULER_HEALTHZ_ENDPOINT = "https://127.0.0.1:10259/healthz"
 CONTROLLER_MANAGER_HEALTHZ_ENDPOINT = "https://127.0.0.1:10257/healthz"
@@ -62,6 +62,9 @@ KUBELET_HEALTHZ_ENDPOINT = "http://localhost:10248/healthz"
 RECOVERY_TIMEOUT = 5
 RECOVERY_TRIES = 30
 RECOVERY_TRY_SLEEP = 5
+
+kube_operator = kubernetes.KubeOperator(host=APISERVER_API_ENDPOINT)
+
 
 INITCONFIG_TEMPLATE = '''---
 apiVersion: kubeadm.k8s.io/v1beta2
@@ -217,65 +220,92 @@ def update_k8s_kubelet(config_filename, error_log_file):
         return 1
 
 
-def patch_k8s_kubeadm_configmap(configmap_filename):
-    """The function patches the kubeadm-config configmap."""
-    LOG.debug('Patching k8s kubeadm configmap.')
-    cmd = ["kubectl", "--kubeconfig=/etc/kubernetes/admin.conf", "-n", "kube-system",
-           "patch", "configmap", "kubeadm-config", "--patch-file", configmap_filename]
-    rc = _exec_cmd(cmd)
-    return rc
+def patch_kubeadmin_configmap(new_data, is_controller_active):
+    """The function patch the kubeadm-config configmap on the active controller.
+    Return:
+     - rc = 0, update process successful.
+     - rc = 1, update process failed.
+    """
+    if not is_controller_active:
+        LOG.debug('Skipping kubeadm-config configmap patching due non active controller.')
+        return 0
+    try:
+        configmap_name = 'kubeadm-config'
+        newyaml = yaml.YAML()
+        outstream = StringIO()
+        newyaml.dump(new_data, outstream)
+        configmap_data = {'data': {'ClusterConfiguration': outstream.getvalue()}}
+
+        kube_operator.kube_patch_config_map(configmap_name, 'kube-system', configmap_data)
+        LOG.debug('Successfully patched kubeadm configmap.')
+    except Exception as e:
+        LOG.error("Unable to patch kubeadm config_map: %s", e)
+        return 1
+    return 0
 
 
-def export_k8s_cluster_configuration(target_filename):
-    """The function extracts from k8s kubeadm-config configmap the
-    cluster configuration section and save it to a file.
+def get_k8s_cluster_configuration():
+    """The function gets k8s cluster-config from kubeadm configmap.
+    Return:
+     - ruamel.yaml.comments.CommentedMap, get process successful.
+     - False, get process failed.
+    """
+    LOG.debug('Getting cluster-config from k8s kubeadm configmap.')
+    try:
+        configmap = get_k8s_configmap('kubeadm-config')
+        if not configmap:
+            LOG.error('Getting kubeadm-config configmap.')
+            return False
+        cluster_config = yaml.load(
+            configmap.data['ClusterConfiguration'], Loader=yaml.RoundTripLoader)
+        return cluster_config
+    except Exception as e:
+        LOG.error("Getting cluster-config. %s", e)
+        return False
+
+
+def export_k8s_cluster_configuration(target_filename, cluster_cfg=None):
+    """The function exports k8s cluster-config to a file.
     Return:
      - rc = 0, export process successful.
-     - rc = returncode or 1, export process failed.
+     - rc = 1, export process failed.
     """
-    LOG.debug('Exporting k8s cluster configuration.')
+    LOG.debug('Exporting k8s cluster-config.')
+    if cluster_cfg is None:
+        cluster_cfg = get_k8s_cluster_configuration()
+        if not cluster_cfg:
+            return 1
     try:
-        with open(target_filename, "w") as f:
-            cmd = ["kubectl", "--kubeconfig=/etc/kubernetes/admin.conf",
-                   "get", "cm", "-n", "kube-system", "kubeadm-config",
-                   "-o=jsonpath={.data.ClusterConfiguration}"]
-            return _exec_cmd(cmd, stdout=f)
+        with open(target_filename, 'w') as file:
+            yaml.dump(cluster_cfg, file, Dumper=yaml.RoundTripDumper, default_flow_style=False)
     except Exception as e:
-        LOG.error(e)
+        LOG.error('Saving cluster-config file. %s', e)
         return 1
-
-
-def _export_k8s_configmap(target_filename, cmd):
-    """The function exports a k8s configmap to a file.
-    Return:
-     - rc = 0, export process successful.
-     - rc = returncode or 1, export process failed.
-    """
-    try:
-        with open(target_filename, "w") as f:
-            return _exec_cmd(cmd, stdout=f)
-    except Exception as e:
-        LOG.error(e)
-        return 1
+    return 0
 
 
 def export_k8s_kubeadm_configmap(target_filename):
     """The function exports k8s kubeadm-config configmap to a file.
     Return:
      - rc = 0, export process successful.
-     - rc = returncode or 1, export process failed.
+     - rc = 1, export process failed.
     """
     LOG.debug('Exporting k8s kubeadm configmap.')
     cmd = ["kubectl", "--kubeconfig=/etc/kubernetes/admin.conf", "get",
            "configmap", "kubeadm-config", "-o=yaml", "-n", "kube-system"]
-    return _export_k8s_configmap(target_filename, cmd)
+    try:
+        with open(target_filename, "w") as f:
+            return _exec_cmd(cmd, stdout=f)
+    except Exception as e:
+        LOG.error(e)
+        return 1
 
 
-def export_configmap_from_volume(volume_dict, section):
+def export_volume_configmap(volume_dict, section):
     """The function exports a configmap data to a file.
     Return:
      - rc = 0, export process successful.
-     - rc = returncode or 1, export process failed.
+     - rc = 1, export process failed.
     """
     # only export configmap in case of volume with 'File' type
     if volume_dict['pathType'] != 'File':
@@ -285,10 +315,44 @@ def export_configmap_from_volume(volume_dict, section):
     configmap_name = sp.get_k8s_configmap_name(_vol)
     target_filename = volume_dict['hostPath']
 
-    LOG.debug("Exporting k8s configmap '%s'.", configmap_name)
-    cmd = ["kubectl", "--kubeconfig=/etc/kubernetes/admin.conf", "get",
-           "cm", "-n", "kube-system", configmap_name, "-o=jsonpath={.data.*}"]
-    return _export_k8s_configmap(target_filename, cmd)
+    if export_k8s_configmap(target_filename, configmap_name) != 0:
+        return 1
+    return 0
+
+
+def export_k8s_configmap(target_filename, configmap_name, namespace='kube-system'):
+    """The function exports a k8s configmap to a file.
+    Return:
+     - rc = 0, export process successful.
+     - rc = 1, export process failed.
+    """
+    LOG.debug('Exporting %s configmap.', configmap_name)
+    try:
+        configmap = get_k8s_configmap(configmap_name, namespace=namespace)
+        if not configmap:
+            LOG.error('Getting %s configmap.', configmap_name)
+            return 1
+
+        if not (isinstance(configmap.data, dict) and len(configmap.data) == 1):
+            LOG.error('Configmap format not expected.')
+            return 1
+        # Extracting the first (and expected to be the only) value
+        # from the configmap's data.
+        _, value = next(iter(configmap.data.items()))
+
+        try:
+            # Assuming the values are valid YAML strings
+            with open(target_filename, 'w') as file:
+                file.write(value)
+        except Exception as e:
+            LOG.error('Saving cluster-config file. %s', e)
+            return 1
+
+        return 0
+
+    except Exception as e:
+        LOG.error("Exporting cluster-config. %s", e)
+        return 1
 
 
 def k8s_health_check(timeout, tries, try_sleep, healthz_endpoint):
@@ -336,48 +400,6 @@ def k8s_health_check(timeout, tries, try_sleep, healthz_endpoint):
     return rc
 
 
-def merge_configmap_files(lastest_configmap_file, bak_configmap_file,
-                          new_configmap_file):
-    """This function merges two kubeadmin-config configmap files and generates
-    a new one as result. The first configmap is taken as reference and the
-    cluster config section is replaced using the info of the second configmap.
-    """
-    # To patch the kubeadm-config configmap is neccesary to
-    # start the mods from the last saved configmap (it is saved with a
-    # version number), so we will take as source the last saved
-    # configmap and we will replace in it only the cluster config section taken
-    # from the backup kubeadm-config configmap.
-    LOG.debug('Merging configmap files.')
-    try:
-        with open(lastest_configmap_file, 'r') as file:
-            lastest_configmap = yaml.load(file, Loader=yaml.RoundTripLoader)
-
-        with open(bak_configmap_file, 'r') as file:
-            bak_configmap = yaml.load(file, Loader=yaml.RoundTripLoader)
-            bak_cluster_config = yaml.load(
-                bak_configmap['data']['ClusterConfiguration'],
-                Loader=yaml.RoundTripLoader)
-    except Exception as e:
-        LOG.error('ERROR loading configmap file. %s ', e)
-        raise
-
-    cluster_cfg_str = yaml.dump(
-        bak_cluster_config, Dumper=yaml.RoundTripDumper,
-        default_flow_style=False)
-    # ensure the yaml is constructed with proper formatting and tabbing
-    cluster_cfg_str = yaml.scalarstring.PreservedScalarString(cluster_cfg_str)
-
-    lastest_configmap['data']['ClusterConfiguration'] = cluster_cfg_str
-
-    try:
-        with open(new_configmap_file, 'w') as file:
-            yaml.dump(lastest_configmap, file, Dumper=yaml.RoundTripDumper,
-                      default_flow_style=False)
-    except Exception as e:
-        LOG.error('ERROR saving configmap file. %s', e)
-        raise
-
-
 def pre_k8s_updating_tasks(post_tasks):
     """The function execute a group of tasks that are needed before the
     k8s cluster is updated.
@@ -412,10 +434,9 @@ def post_k8s_updating_tasks(post_tasks=None):
     LOG.debug('Running mandatory tasks after updating proccess has finished.')
 
 
-def restore_k8s_control_plane_config(kubeadm_cm_bak_file, cluster_config_bak_file,
-                                     configmap_patched_file, cluster_host_addr, **kwargs):
-    """The function restores the k8s control-plane configuration and updates the kubeadm
-    configmap with the backup configuration to keep it sync.
+def restore_k8s_control_plane_config(cluster_config_bak_file,
+                                     cluster_host_addr, **kwargs):
+    """The function restores the k8s control-plane configuration.
     Return:
      - 1, Backup configuration has been restored successfully.
      - 2, Restore process has failed.
@@ -423,8 +444,6 @@ def restore_k8s_control_plane_config(kubeadm_cm_bak_file, cluster_config_bak_fil
     # pylint: disable-msg=too-many-return-statements
     LOG.debug('Initializing control-plane restore')
 
-    configmap_latest_file = kwargs.get(
-        'configmap_latest_file', '/tmp/cluster_configmap_latest.yaml')
     tries = kwargs.get('tries')
     try_sleep = kwargs.get('try_sleep')
     timeout = kwargs.get('timeout')
@@ -479,15 +498,6 @@ def restore_k8s_control_plane_config(kubeadm_cm_bak_file, cluster_config_bak_fil
         healthz_endpoint=SCHEDULER_HEALTHZ_ENDPOINT)
     if not k8s_component_healthy:
         return 2
-
-    # Patch kubeadm configmap to keep it consistent with the applied config.
-    LOG.debug('k8s control-plane is healthy: initializing configmap patching.')
-    export_k8s_kubeadm_configmap(configmap_latest_file)
-
-    merge_configmap_files(configmap_latest_file, kubeadm_cm_bak_file,
-                          configmap_patched_file)
-
-    patch_k8s_kubeadm_configmap(configmap_patched_file)
 
     LOG.debug("Automatic k8s control-plane recovery completed successfully.")
     return 1
@@ -752,7 +762,7 @@ def get_kubelet_cfg_from_service_parameters(service_params):
 
 
 def get_k8s_version(timeout=None, tries=None, try_sleep=None):
-    """The function gets the k8s version from kubeadm-config configmap.
+    """The function gets the k8s version using the kubernetes API.
     Return:
      - k8s_version : str or False.
        str: returning k8s_version value.
@@ -788,7 +798,7 @@ def get_k8s_configmap(configmap, namespace='kube-system',
     Return:
      - k8s configmap : str or False.
        str: returning k8s configmap.
-       False: k8s version get process failed.
+       False: k8s configmap get process failed.
     """
     timeout = RECOVERY_TIMEOUT if timeout is None else timeout
     tries = RECOVERY_TRIES if tries is None else tries
@@ -817,12 +827,16 @@ def get_k8s_configmap(configmap, namespace='kube-system',
         return False
 
 
-def update_kubelet_configmap(latest_config):
-    """The function updates the k8s configmap for kubelet component.
+def update_kubelet_configmap(latest_config, is_controller_active):
+    """The function updates the k8s configmap for kubelet component on the active controller.
     Return:
      - rc = 0, update process successful.
      - rc = 1, update process failed.
     """
+    if not is_controller_active:
+        LOG.debug('Skipping kubelet configmap update on non-active controller')
+        return 0
+
     LOG.debug('Updating kubelet configmap')
 
     namespace = 'kube-system'
@@ -916,22 +930,13 @@ def _check_if_configmap_exist(
     LOG.debug(msg)
     while tries:
         try:
-            cmd = ["kubectl", "--kubeconfig=/etc/kubernetes/admin.conf",
-                   "get", "configmap", "-n", "kube-system", configmap_name]
-            configmap_exists = subprocess.check_output(
-                cmd, stderr=subprocess.STDOUT, universal_newlines=True)
+            configmap_exists = get_k8s_configmap(configmap_name)
             if configmap_exists:
                 LOG.debug('Configmap exists, skipping.')
                 return True
-        except subprocess.CalledProcessError as e:
-            error_msg = e.output
-            if error_msg.find('Error from server (NotFound): configmaps') != -1:
+            if configmap_exists is None:
                 LOG.debug('Configmap does not exist.')
                 return False
-            msg = "Checking configmap [%s]: %s" % (tries, e)
-            LOG.error(msg)
-            tries -= 1
-            time.sleep(try_sleep)
         except Exception as e:
             msg = "Checking configmap [%s]: %s" % (tries, e)
             LOG.error(msg)
@@ -1143,10 +1148,7 @@ def main():
     parser.add_argument("--hieradata_path", default="/tmp/puppet/hieradata")
     parser.add_argument("--hieradata_file", default="system.yaml")
     parser.add_argument("--backup_path", default="/etc/kubernetes/backup")
-    parser.add_argument("--kubeadm_cm_file", default="/tmp/cluster_configmap.yaml")
     parser.add_argument("--kubeadm_cm_bak_file", default="configmap.yaml")
-    parser.add_argument("--configmap_patched_file",
-                        default="/tmp/cluster_configmap_patched.yaml")
     parser.add_argument("--cluster_config_file", default="/tmp/cluster_config.yaml")
     parser.add_argument("--cluster_config_bak_file", default="cluster_config.yaml")
     parser.add_argument("--kubeadm_kubelet_config_file", default="/tmp/kubeadm_kubelet_config.yaml")
@@ -1169,14 +1171,14 @@ def main():
 
     # this is mandatory
     parser.add_argument("cluster_host_addr")
+    parser.add_argument("is_controller_active")
+
     args = parser.parse_args()
 
     hieradata_file = os.path.join(args.hieradata_path, args.hieradata_file)
-    kubeadm_cm_file = args.kubeadm_cm_file
     kubeadm_cm_bak_file = os.path.join(args.backup_path, args.kubeadm_cm_bak_file)
     cluster_config_file = args.cluster_config_file
     cluster_config_bak_file = os.path.join(args.backup_path, args.cluster_config_bak_file)
-    configmap_patched_file = args.configmap_patched_file
 
     kubeadm_kubelet_config_file = args.kubeadm_kubelet_config_file
     kubeadm_kubelet_config_bak_file = args.kubeadm_kubelet_config_bak_file
@@ -1196,6 +1198,7 @@ def main():
     etcd_servers = args.etcd_servers
 
     cluster_host_addr = args.cluster_host_addr
+    is_controller_active = args.is_controller_active == 'true'
 
     rc = 2
 
@@ -1246,26 +1249,18 @@ def main():
     # -----------------------------------------------------------------------------
     # Load current applied k8s cluster configuration
     # -----------------------------------------------------------------------------
-    LOG.debug('Exporting current config to file.')
-    if export_k8s_kubeadm_configmap(kubeadm_cm_file) != 0:
-        LOG.debug("k8s is not running, copy configmap backup file")
-        cmd = ["cp", kubeadm_cm_bak_file, kubeadm_cm_file]
-
-        if _exec_cmd(cmd) != 0:
-            msg = "Fail copying configmap backup file."
+    cluster_cfg = get_k8s_cluster_configuration()
+    if not cluster_cfg:
+        LOG.debug('Loading cluster_cfg from bak file.')
+        try:
+            with open(kubeadm_cm_bak_file, 'r') as file:
+                _kubeadm_cfg = yaml.load(file, Loader=yaml.RoundTripLoader)
+                cluster_cfg = yaml.load(_kubeadm_cfg['data']['ClusterConfiguration'],
+                                        Loader=yaml.RoundTripLoader)
+        except Exception as e:
+            msg = str('Loading cluster_cfg from bak file. {}'.format(e))
             LOG.error(msg)
             return 3
-
-    try:
-        LOG.debug('Loading current config from file.')
-        with open(kubeadm_cm_file, 'r') as file:
-            kubeadm_cfg = yaml.load(file, Loader=yaml.RoundTripLoader)
-            cluster_cfg = yaml.load(
-                kubeadm_cfg['data']['ClusterConfiguration'], Loader=yaml.RoundTripLoader)
-    except Exception as e:
-        msg = str('Loading configmap from file. {}'.format(e))
-        LOG.error(msg)
-        return 3
 
     # -----------------------------------------------------------------------------
     # Pre updating tasks
@@ -1332,7 +1327,7 @@ def main():
             cluster_cfg['apiServer']['extraVolumes'] = []
         volume_dict, _ = sp.parse_volume_string_to_dict({'name': param, 'value': value})
         cluster_cfg['apiServer']['extraVolumes'].append(volume_dict)
-        if export_configmap_from_volume(volume_dict, 'kube_apiserver_volumes') != 0:
+        if export_volume_configmap(volume_dict, 'kube_apiserver_volumes') != 0:
             LOG.error('Exporting configmap from volume: %s', str(volume_dict))
             return 3
 
@@ -1361,7 +1356,7 @@ def main():
             cluster_cfg['controllerManager']['extraVolumes'] = []
         volume_dict, _ = sp.parse_volume_string_to_dict({'name': param, 'value': value})
         cluster_cfg['controllerManager']['extraVolumes'].append(volume_dict)
-        if export_configmap_from_volume(volume_dict, 'kube_controller_manager_volumes') != 0:
+        if export_volume_configmap(volume_dict, 'kube_controller_manager_volumes') != 0:
             LOG.error('Exporting configmap from volume: %s', str(volume_dict))
             return 3
 
@@ -1390,7 +1385,7 @@ def main():
             cluster_cfg['scheduler']['extraVolumes'] = []
         volume_dict, _ = sp.parse_volume_string_to_dict({'name': param, 'value': value})
         cluster_cfg['scheduler']['extraVolumes'].append(volume_dict)
-        if export_configmap_from_volume(volume_dict, 'kube_scheduler_volumes') != 0:
+        if export_volume_configmap(volume_dict, 'kube_scheduler_volumes') != 0:
             LOG.error('Exporting configmap from volume: %s', str(volume_dict))
             return 3
 
@@ -1413,32 +1408,9 @@ def main():
             else:
                 cluster_cfg['etcd']['external'][param] = value
 
-    # -----------------------------------------------------------------------------
-    # Patch kubeadm configmap
-    # -----------------------------------------------------------------------------
-    # Ensure the yaml is constructed with proper formatting and tabbing
-    cluster_cfg_str = yaml.dump(
-        cluster_cfg, Dumper=yaml.RoundTripDumper, default_flow_style=False)
-    cluster_cfg_str = yaml.scalarstring.PreservedScalarString(cluster_cfg_str)
-    kubeadm_cfg['data']['ClusterConfiguration'] = cluster_cfg_str
-
-    # Save updated kubeadm-config into file
-    try:
-        with open(kubeadm_cm_file, 'w') as file:
-            yaml.dump(kubeadm_cfg, file, Dumper=yaml.RoundTripDumper,
-                      default_flow_style=False)
-    except Exception as e:
-        LOG.error('Saving updated kubeadm-config into file. %s', e)
-        return 3
-
-    # Patch kubeadm-config configmap with the updated configuration.
-    if patch_k8s_kubeadm_configmap(kubeadm_cm_file) != 0:
-        LOG.error('Patching kubeadm-config configmap.')
-        return 3
-
     # Export the updated k8s cluster configuration
-    if export_k8s_cluster_configuration(cluster_config_file) != 0:
-        LOG.error('Exportando k8s cluster configuration.')
+    if export_k8s_cluster_configuration(cluster_config_file, cluster_cfg) != 0:
+        LOG.error('Exporting k8s cluster configuration.')
         return 3
 
     # -----------------------------------------------------------------------------
@@ -1457,8 +1429,8 @@ def main():
         if not is_k8s_apiserver_healthy:
             LOG.debug('kube-apiserver is not responding, intializing restore.')
             restore_rc = restore_k8s_control_plane_config(
-                kubeadm_cm_bak_file, cluster_config_bak_file, configmap_patched_file,
-                cluster_host_addr, tries=tries, try_sleep=try_sleep, timeout=timeout)
+                cluster_config_bak_file, cluster_host_addr,
+                tries=tries, try_sleep=try_sleep, timeout=timeout)
             if restore_rc == 2:
                 LOG.error("kube-apiserver has failed to start using backup configuration.")
                 return 2
@@ -1484,8 +1456,8 @@ def main():
         if not is_k8s_component_healthy:
             LOG.debug('kube-controller-manager is not responding, intializing restore.')
             restore_rc = restore_k8s_control_plane_config(
-                kubeadm_cm_bak_file, cluster_config_bak_file, configmap_patched_file,
-                cluster_host_addr, tries=tries, try_sleep=try_sleep, timeout=timeout)
+                cluster_config_bak_file, cluster_host_addr,
+                tries=tries, try_sleep=try_sleep, timeout=timeout)
 
             if restore_rc == 2:
                 msg = "kube-controller-manager has failed to start " +\
@@ -1512,8 +1484,8 @@ def main():
         if not is_k8s_component_healthy:
             LOG.debug('kube-scheduler is not responding, intializing restore.')
             restore_rc = restore_k8s_control_plane_config(
-                kubeadm_cm_bak_file, cluster_config_bak_file, configmap_patched_file,
-                cluster_host_addr, tries=tries, try_sleep=try_sleep, timeout=timeout)
+                cluster_config_bak_file, cluster_host_addr,
+                tries=tries, try_sleep=try_sleep, timeout=timeout)
             if restore_rc == 2:
                 LOG.error("kube-scheduler has failed to start using backup configuration.")
                 return 2
@@ -1563,9 +1535,6 @@ def main():
             return 1
         return 2
 
-    # -----------------------------------------------------------------------------
-    # Update backup files with latest configuration
-    # -----------------------------------------------------------------------------
     LOG.debug("Check all k8s control-plane components are up and running.")
     is_k8s_apiserver_healthy = k8s_health_check(
         timeout=timeout, try_sleep=try_sleep, tries=tries,
@@ -1579,24 +1548,36 @@ def main():
     is_k8s_kubelet_healthy = k8s_health_check(
         timeout=timeout, try_sleep=try_sleep, tries=tries,
         healthz_endpoint=KUBELET_HEALTHZ_ENDPOINT)
+    if not (is_k8s_apiserver_healthy and is_k8s_controller_manager_healthy and
+            is_k8s_scheduler_healthy and is_k8s_kubelet_healthy):
+        LOG.error('One or more k8s control-plane components are not healthy.')
+        return 3
 
+    # -----------------------------------------------------------------------------
+    # Update backup files with latest configuration
+    # -----------------------------------------------------------------------------
     LOG.debug("Updating backup files with latest configuration ...")
-    if is_k8s_apiserver_healthy and is_k8s_controller_manager_healthy and\
-            is_k8s_scheduler_healthy and is_k8s_kubelet_healthy:
-        # Update kubelet configmap and backup config file
-        update_kubelet_bak_config_files(
-            kubeadm_kubelet_config_file, kubeadm_kubelet_config_bak_file,
-            kubelet_latest_config_file, kubelet_bak_config_file)
-        update_kubelet_configmap(kubelet_latest_config_file)
 
-        # Update control-plane backup files
-        export_k8s_kubeadm_configmap(kubeadm_cm_bak_file)
-        export_k8s_cluster_configuration(cluster_config_bak_file)
+    # Update kubelet configmap and backup config file
+    update_kubelet_bak_config_files(
+        kubeadm_kubelet_config_file, kubeadm_kubelet_config_bak_file,
+        kubelet_latest_config_file, kubelet_bak_config_file)
+    update_kubelet_configmap(kubelet_latest_config_file, is_controller_active)
 
-        LOG.debug("Successfully Updated.")
-        return 0
+    # Update cluster configuration backup file
+    if export_k8s_cluster_configuration(cluster_config_bak_file, cluster_cfg) != 0:
+        LOG.error('Updating cluster configuration backup file.')
+        return 3
 
-    return rc
+    # -----------------------------------------------------------------------------
+    # Update kubeadm-config configMap
+    # -----------------------------------------------------------------------------
+    if patch_kubeadmin_configmap(cluster_cfg, is_controller_active) != 0:
+        LOG.error('Updating kubeadm-config configmap.')
+        return 3
+
+    LOG.debug("Successfully Updated.")
+    return 0
 
 
 if __name__ == "__main__":
