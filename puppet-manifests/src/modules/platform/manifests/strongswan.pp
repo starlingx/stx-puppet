@@ -31,8 +31,49 @@ class platform::strongswan::params (
 class platform::strongswan::config
   inherits ::platform::strongswan::params {
 
+  $strongswan_override_dir = '/etc/systemd/system/strongswan-starter.service.d'
+  $initial_config_file = find_file('/etc/platform/.initial_config_complete')
+
+  # Restart charon
+  if $initial_config_file {
+    $ipsec_restart_cmd = '/usr/local/sbin/pmon-restart charon'
+  } else {
+    $ipsec_restart_cmd =  '/usr/bin/systemctl restart ipsec'
+  }
+
+  # Create systemd override directory
+  file { $strongswan_override_dir:
+    ensure => 'directory',
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0755',
+  }
+
+  # Add strongswan-starter service override
+  -> file { "${strongswan_override_dir}/strongswan-stx-override.conf":
+    content => template('platform/strongswan.systemd.override.conf.erb'),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+  }
+
+  # Reload systemd
+  -> exec { 'perform systemctl daemon reload for strongswan-starter override':
+    command   => '/usr/bin/systemctl daemon-reload',
+    logoutput => true,
+  }
+
+  # set strongswan-starter monitored by pmond
+  -> file { '/etc/pmon.d/strongswan-starter.conf':
+    ensure  => file,
+    content => template('platform/strongswan-starter-pmond-conf.erb'),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+  }
+
   # Update strongswan configuration
-  class { 'strongswan':
+  -> class { 'strongswan':
     charon             => $::platform::strongswan::params::strongswan,
     strongswan_include => $strongswan_include,
   }
@@ -54,7 +95,7 @@ class platform::strongswan::config
 
   # Restart charon
   -> exec { 'Restart charon to take updated configs':
-    command => '/usr/bin/systemctl restart ipsec',
+    command => $ipsec_restart_cmd,
   }
 }
 
