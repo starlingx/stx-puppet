@@ -67,20 +67,19 @@ while true; do
 done
 
 function log_it {
-    logger "${BASH_SOURCE[1]} ${1}"
+    logger -p "$1" $(basename "${BASH_SOURCE[1]}"): "${@:2}"
 }
-
 
 function do_rm {
     local theFile=$1
-    log_it "Removing ${theFile}"
-    /bin/rm  ${theFile}
+    log_it notice "Removing ${theFile}"
+    /bin/rm "${theFile}"
 }
 
 function do_cp {
     local srcFile=$1
     local dstFile=$2
-    log_it "copying network cfg ${srcFile} to ${dstFile}"
+    log_it notice "copying network cfg ${srcFile} to ${dstFile}"
     cp  ${srcFile} ${dstFile}
 }
 
@@ -104,7 +103,7 @@ function array_diff {
 function sysinv_agent_lock {
     case $1 in
     ${ACQUIRE_LOCK})
-        log_it "Acquiring lock to synchronize with sysinv-agent audit"
+        log_it notice "Acquiring lock to synchronize with sysinv-agent audit"
         local lock_file="/var/run/apply_network_config.lock"
         # Lock file should be the same as defined in sysinv agent code
         local lock_timeout=5
@@ -115,17 +114,17 @@ function sysinv_agent_lock {
         while [[ ${n} -le ${max} ]]; do
 
             flock -w ${lock_timeout} ${LOCK_FD} && break
-            log_it "Failed to get lock(${LOCK_FD}) after ${lock_timeout} seconds (${n}/${max}), will retry"
+            log_it warning "Failed to get lock(${LOCK_FD}) after ${lock_timeout} seconds (${n}/${max}), will retry"
             sleep 1
             n=$((${n}+1))
         done
         if [[ ${n} -gt ${max} ]]; then
-            log_it "Failed to acquire lock(${LOCK_FD}) even after ${max} retries"
+            log_it err "Failed to acquire lock(${LOCK_FD}) even after ${max} retries"
             exit 1
         fi
         ;;
     ${RELEASE_LOCK})
-        log_it "Releasing lock"
+        log_it notice "Releasing lock"
         [[ ${LOCK_FD} -gt 0 ]] && flock -u ${LOCK_FD}
         ;;
     esac
@@ -162,14 +161,14 @@ function update_interfaces {
             if is_dhcp ${PUPPET_DIR}/${cfg} || is_dhcp ${ETC_DIR}/${cfg}  ; then
                 # if dhcp type iface, then too many possible attr's to compare against, so just add
                 # the interface to the upDown list because we know (from above) cfg file is changed
-                log_it "DHCP detected for ${auto_if}, adding to upDown list"
+                log_it notice "DHCP detected for ${auto_if}, adding to upDown list"
                 to_add=${auto_if}
             else
                 # not in dhcp situation so check if any significant
                 # cfg attributes have changed to warrant an iface restart
                 is_eq_ifcfg ${PUPPET_DIR}/${cfg} ${ETC_DIR}/${cfg}
                 if [ $? -ne 0 ] ; then
-                    log_it "${cfg} changed"
+                    log_it notice "${cfg} changed"
                     # Check if the base interface is already on the list for
                     # restart. If not, add it to the list.
                     # If in CentOS, remove alias portion in the interface name if any.
@@ -201,12 +200,12 @@ function update_interfaces {
                 if [ $? -ne 0 ]; then
                     if_list=(${to_add})
                 else
-                    log_it "Bonding compound detected: '${if_list[*]}'"
+                    log_it info "Bonding compound detected: '${if_list[*]}'"
                 fi
 
                 for iface in ${if_list[@]}; do
                     if [[ ! " ${upDown[@]} " =~ " ${iface} " ]]; then
-                        log_it "Adding ${iface} to upDown list"
+                        log_it notice "Adding ${iface} to upDown list"
                         upDown+=("${iface}")
                     fi
                 done
@@ -244,7 +243,7 @@ function update_interfaces {
         for vlan in ${vlans[@]}; do
             if has_physdev ${PUPPET_DIR}/${CFG_PREFIX}${vlan} ${iface}; then
                 if [[ ! " ${upDown[@]} " =~ " ${vlan} " ]]; then
-                    log_it "Adding ${vlan} to up/down list since physdev ${iface} is changing"
+                    log_it notice "Adding ${vlan} to up/down list since physdev ${iface} is changing"
                     upDown+=($vlan)
                 fi
             fi
@@ -286,7 +285,7 @@ function update_interfaces {
             if iftype_filter ${iftype} ${ifcfg}; then
                 if [ ${is_upgrade} -eq 0 ]; then
                     if is_loopback ${iface}; then
-                        log_it "Interface '${iface}' is loopback, skipping"
+                        log_it info "Interface '${iface}' is loopback, skipping"
                     elif is_interface_missing_or_down ${iface}; then
                         reset_ips ${iface}
                         do_if_up ${iface}
@@ -311,20 +310,20 @@ function update_interfaces {
 if [ ${ROUTES_ONLY} = "yes" ]; then
     if [ -d /etc/sysconfig/network-scripts/ ] ; then
 
-        log_it "process CentOS route config"
+        log_it info "process CentOS route config"
 
         # shellcheck disable=SC1091
         source /usr/local/bin/network_sysconfig.sh
 
     elif [ -d /etc/network/interfaces.d/ ] ; then
 
-        log_it "process Debian route config"
+        log_it info "process Debian route config"
 
         # shellcheck disable=SC1091
         source /usr/local/bin/network_ifupdown.sh
 
     else
-        log_it "Not using sysconfig or ifupdown, cannot go further! Aborting..."
+        log_it err "Not using sysconfig or ifupdown, cannot go further! Aborting..."
         exit 1
     fi
 
@@ -333,13 +332,13 @@ else
 
     if [ ! -d /var/run/network-scripts.puppet/ ] ; then
         # No puppet files? Nothing to do!
-        log_it "No puppet files? Nothing to do!  Aborting..."
+        log_it err "No puppet files? Nothing to do! Aborting..."
         exit 1
     fi
 
     if [ -d /etc/sysconfig/network-scripts/ ] ; then
 
-        log_it "process CentOS network config"
+        log_it info "process CentOS network config"
 
         # shellcheck disable=SC1091
         source /usr/local/bin/network_sysconfig.sh
@@ -350,12 +349,12 @@ else
 
     elif [ -d /etc/network/interfaces.d/ ] ; then
 
-        log_it "process Debian network config"
+        log_it info "process Debian network config"
 
         # shellcheck disable=SC1091
         source /usr/local/bin/network_ifupdown.sh
         if [ ! -f ${PUPPET_FILE} ] ; then
-            log_it "${PUPPET_FILE} not found"
+            log_it err "${PUPPET_FILE} not found"
             exit 1
         fi
 
@@ -375,7 +374,7 @@ else
         upgr_bootstrap=$?
 
         if [ ${upgr_bootstrap} -eq 0 ]; then
-            log_it "Upgrade bootstrap is in execution"
+            log_it info "Upgrade bootstrap is in execution"
         fi
 
         ifaces=$(update_interfaces ${upgr_bootstrap})
@@ -384,10 +383,10 @@ else
         log_network_info
 
     else
-        log_it "Not using sysconfig or ifupdown, cannot advance!  Aborting..."
+        log_it err "Not using sysconfig or ifupdown, cannot advance!  Aborting..."
         exit 1
     fi
 
 fi
 
-log_it "Finished"
+log_it info "Finished"
