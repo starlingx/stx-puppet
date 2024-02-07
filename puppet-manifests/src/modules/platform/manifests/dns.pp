@@ -101,7 +101,9 @@ class platform::dns {
   # complete, as per the anchor dependency above. This is necessary because
   # the networking configuration can wipe the /etc/resolv.conf file.
   contain ::platform::dns::resolv
-  contain ::platform::dns::dnsmasq
+  if $::personality == 'controller' {
+    contain ::platform::dns::dnsmasq
+  }
 }
 
 
