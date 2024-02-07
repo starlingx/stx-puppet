@@ -359,6 +359,14 @@ else
             exit 1
         fi
 
+        if [ -f /etc/network/interfaces.d/ifcfg-pxeboot ]; then
+            iface_name=$( cat /etc/network/interfaces.d/ifcfg-pxeboot | grep iface | awk '{print $2}' )
+            log_it "turn off pxeboot install config, will be turned on later"
+            do_if_down ${iface_name}
+            log_it "remove ifcfg-pxeboot, left from pxeboot install phase"
+            rm /etc/network/interfaces.d/ifcfg-pxeboot
+        fi
+
         log_network_info
 
         parse_interface_stanzas
