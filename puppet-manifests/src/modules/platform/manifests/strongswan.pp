@@ -72,6 +72,15 @@ class platform::strongswan::config
     mode    => '0644',
   }
 
+  # Add charon log rotate configuration
+  -> file { '/etc/logrotate.d/charon.conf':
+    ensure  => present,
+    content => template('platform/charon-logrotate.erb'),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+  }
+
   # Update strongswan configuration
   -> class { 'strongswan':
     charon             => $::platform::strongswan::params::strongswan,
