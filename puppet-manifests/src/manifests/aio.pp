@@ -12,6 +12,8 @@ class { '::firewall':
 }
 
 include ::platform::config
+include ::platform::config::iscsi
+include ::platform::config::nvme
 include ::platform::users
 include ::platform::sysctl::controller
 include ::platform::filesystem::controller
