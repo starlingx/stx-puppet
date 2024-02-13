@@ -585,6 +585,7 @@ class platform::config::pre {
     include ::platform::config::dc_root_ca
   }
   include ::platform::coredump::k8s_token_handler::config
+  include ::platform::coredump::runtime
 }
 
 
