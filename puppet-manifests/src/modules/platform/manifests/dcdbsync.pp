@@ -30,15 +30,34 @@ class platform::dcdbsync::api
     if $service_create {
       include ::platform::network::mgmt::params
 
-      if ($::platform::network::mgmt::params::fqdn_ready != undef) {
-        $fqdn_ready = $::platform::network::mgmt::params::fqdn_ready
+      include ::platform::params
+
+      $system_mode = $::platform::params::system_mode
+
+      # FQDN can be used after:
+      # - after the bootstrap for any installation
+      # - mate controller uses FQDN if mgmt::params::fqdn_ready is present
+      #     mate controller can use FQDN before the bootstrap flag
+      # - just AIO-SX can use FQDN during the an upgrade. For other installs
+      #     the active controller in older release can resolve the .internal FQDN
+      #     when the mate controller is updated to N+1 version
+      if (!str2bool($::is_upgrade_do_not_use_fqdn) or $system_mode == 'simplex') {
+        if (str2bool($::is_bootstrap_completed)) {
+          $fqdn_ready = true
+        } else {
+          if ($::platform::network::mgmt::params::fqdn_ready != undef) {
+            $fqdn_ready = $::platform::network::mgmt::params::fqdn_ready
+          }
+          else {
+            $fqdn_ready = false
+          }
+        }
       }
       else {
         $fqdn_ready = false
       }
 
-      if (str2bool($::is_bootstrap_completed) or
-          $fqdn_ready) {
+      if ($fqdn_ready) {
           $api_host = $::platform::params::controller_fqdn
       } else {
           $api_host = $::platform::network::mgmt::params::controller_address
@@ -80,17 +99,34 @@ class platform::dcdbsync::stx_openstack::runtime
     if $service_create and
       $::platform::params::stx_openstack_applied {
 
-      include ::platform::network::mgmt::params
+      include ::platform::params
 
-      if ($::platform::network::mgmt::params::fqdn_ready != undef) {
-        $fqdn_ready = $::platform::network::mgmt::params::fqdn_ready
+      $system_mode = $::platform::params::system_mode
+
+      # FQDN can be used after:
+      # - after the bootstrap for any installation
+      # - mate controller uses FQDN if mgmt::params::fqdn_ready is present
+      #     mate controller can use FQDN before the bootstrap flag
+      # - just AIO-SX can use FQDN during the an upgrade. For other installs
+      #     the active controller in older release can resolve the .internal FQDN
+      #     when the mate controller is updated to N+1 version
+      if (!str2bool($::is_upgrade_do_not_use_fqdn) or $system_mode == 'simplex') {
+        if (str2bool($::is_bootstrap_completed)) {
+          $fqdn_ready = true
+        } else {
+          if ($::platform::network::mgmt::params::fqdn_ready != undef) {
+            $fqdn_ready = $::platform::network::mgmt::params::fqdn_ready
+          }
+          else {
+            $fqdn_ready = false
+          }
+        }
       }
       else {
         $fqdn_ready = false
       }
 
-      if (str2bool($::is_bootstrap_completed) or
-          $fqdn_ready) {
+      if ($fqdn_ready) {
             $api_host = $::platform::params::controller_fqdn
       } else {
             $api_host = $::platform::network::mgmt::params::controller_address

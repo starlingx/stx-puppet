@@ -160,6 +160,17 @@ class platform::network::addresses (
 }
 
 
+class platform::network::upgrade_fqdn_cleanup {
+    # Remove this flag after the upgrade complete/abort
+    # during the upgrade the controller-0 runs version X
+    # and controller-1 runs version X+1
+    # to use the FQDN the active controller must run dnsmasq
+    # with the FQDN entries. It doesn't happen during an upgrade
+    file {'/etc/platform/.upgrade_do_not_use_fqdn':
+      ensure => absent,
+    }
+}
+
 # TODO(fcorream): update_platform_nfs_ip_references is just necessary to allow
 # an upgrade from StarlingX releases 6 or 7 to new releases.
 # remove this class when StarlingX rel. 6 or 7 are not being used anymore
@@ -534,4 +545,8 @@ class platform::network::routes::runtime {
   exec {'apply-network-config route setup':
     command => 'apply_network_config.sh --routes',
   }
+}
+
+class platform::network::upgrade_fqdn_cleanup::runtime {
+  include platform::network::upgrade_fqdn_cleanup
 }

@@ -9,23 +9,7 @@ class platform::amqp::params (
   $protocol = 'tcp',
   $ssl_enabled = false,
 ) {
-  include ::platform::params
-  include ::platform::network::mgmt::params
-
-  $system_mode = $::platform::params::system_mode
-
-  if ($::platform::network::mgmt::params::fqdn_ready != undef) {
-    $fqdn_ready = $::platform::network::mgmt::params::fqdn_ready
-  }
-  else {
-    $fqdn_ready = false
-  }
-
-  if (str2bool($::is_bootstrap_completed) or $fqdn_ready) {
-    $transport_url = "rabbit://${auth_user}:${auth_password}@${host}:${port}"
-  } else {
-    $transport_url = "rabbit://${auth_user}:${auth_password}@${host_url}:${port}"
-  }
+  $transport_url = "rabbit://${auth_user}:${auth_password}@${host_url}:${port}"
 }
 
 class platform::amqp::rabbitmq (
