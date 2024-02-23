@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023 Wind River Systems, Inc.
+# Copyright (c) 2021-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -67,7 +67,7 @@ kube_operator = kubernetes.KubeOperator(host=APISERVER_API_ENDPOINT)
 
 
 INITCONFIG_TEMPLATE = '''---
-apiVersion: kubeadm.k8s.io/v1beta2
+apiVersion: kubeadm.k8s.io/v1beta3
 kind: InitConfiguration
 localAPIEndpoint:
   advertiseAddress: {}'''
