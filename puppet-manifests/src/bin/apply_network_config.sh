@@ -363,10 +363,10 @@ else
 
         parse_interface_stanzas
 
-        [ -f /var/run/.network_upgrade_bootstrap ]
-        upgr_bootstrap=$?
+        upgr_bootstrap=1
 
-        if [ ${upgr_bootstrap} -eq 0 ]; then
+        if [ -f /var/run/.network_upgrade_bootstrap ]; then
+            upgr_bootstrap=0
             log_it "Upgrade bootstrap is in execution"
         fi
 
