@@ -101,19 +101,6 @@ define platform::kubernetes::pull_images_from_registry (
 
 class platform::kubernetes::configuration {
 
-  if 'kube-ignore-isol-cpus=enabled' in $::platform::kubernetes::params::host_labels {
-    $ensure = 'present'
-  } else {
-    $ensure = 'absent'
-  }
-
-  file { '/etc/kubernetes/ignore_isolcpus':
-    ensure => $ensure,
-    owner  => 'root',
-    group  => 'root',
-    mode   => '0644',
-  }
-
   if ($::personality == 'controller') {
     # Cron job to cleanup stale CNI cache files that are more than
     # 1 day old and are not associated with any currently running pod.
