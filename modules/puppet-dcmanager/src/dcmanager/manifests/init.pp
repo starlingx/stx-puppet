@@ -51,8 +51,7 @@ class dcmanager (
   $state_workers               = 4,
   $audit_workers               = 1,
   $audit_worker_workers        = 4,
-  $playbook_timeout            = 3600,
-  $use_usm                     = false
+  $playbook_timeout            = 3600
 ) {
 
   include dcmanager::params
@@ -119,7 +118,6 @@ class dcmanager (
     'DEFAULT/audit_workers':             value => $audit_workers;
     'DEFAULT/audit_worker_workers':      value => $audit_worker_workers;
     'DEFAULT/playbook_timeout':          value => $playbook_timeout;
-    'DEFAULT/use_usm':                   value => $use_usm;
   }
 
   file {'/etc/bash_completion.d/dcmanager.bash_completion':
