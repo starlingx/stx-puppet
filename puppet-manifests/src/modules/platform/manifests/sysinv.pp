@@ -61,6 +61,12 @@ class platform::sysinv
     'DEFAULT/logging_default_format_string': value =>
       'sysinv %(asctime)s.%(msecs)03d %(process)d %(levelname)s %(name)s [-] %(instance)s%(message)s';
   }
+
+  # Setup app framework behavior
+  sysinv_config {
+    'app_framework/fluxcd_hr_reconcile_check_delay': value => 60;
+    'app_framework/missing_auto_update': value => true;
+  }
 }
 
 
