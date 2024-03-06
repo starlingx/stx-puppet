@@ -155,7 +155,7 @@ class platform::docker::haproxy
     public_port       => $registry_port,
     private_port      => $registry_port,
     x_forwarded_proto => false,
-    tcp_mode          => true,
+    mode_option       => 'tcp',
   }
 
   platform::haproxy::proxy { 'docker-token':
@@ -163,7 +163,7 @@ class platform::docker::haproxy
     public_port       => $token_port,
     private_port      => $token_port,
     x_forwarded_proto => false,
-    tcp_mode          => true,
+    mode_option       => 'tcp',
   }
 }
 

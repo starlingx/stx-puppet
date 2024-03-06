@@ -1,5 +1,6 @@
 class platform::usm::params (
   $private_port = 5497,
+  $private_slow_port = 5499,
   $public_port = undef,
   $server_timeout = '600s',
   $region_name = undef,
@@ -40,16 +41,52 @@ class platform::usm::haproxy
   include ::platform::params
   include ::platform::haproxy::params
 
+  # set up alternate backend for handling slow requests.
+  # slow requests are PUT, POST or DELETE + precheck requests
+  # which are anticipated to take multiple seconds to process.
+  # USM API handles the slow requests in a separated thread, so that
+  # typical queries are not blocked.
+  $alt_backend_name = 'alt-usm-restapi-internal'
+  platform::haproxy::alt_backend { 'usm-restapi':
+    backend_name     => $alt_backend_name,
+    server_name      => 's-usm',
+    alt_private_port => $private_slow_port,
+    server_timeout   => $server_timeout,
+    mode_option      => 'http',
+  }
+
+  $acl_option = {
+    acl         => ['is_get method GET', 'precheck path_beg /v1/software/deploy_precheck'],
+    use_backend => "${alt_backend_name} if !is_get || precheck",
+  }
+
   platform::haproxy::proxy { 'usm-restapi':
     server_name    => 's-usm',
     public_port    => $public_port,
     private_port   => $private_port,
     server_timeout => $server_timeout,
+    mode_option    => 'http',
+    acl_option     => $acl_option,
   }
 
   # Configure rules for DC https enabled admin endpoint.
   if ($::platform::params::distributed_cloud_role == 'systemcontroller' or
       $::platform::params::distributed_cloud_role == 'subcloud') {
+
+    $alt_admin_backend_name = 'alt-usm-restapi-admin-internal'
+    platform::haproxy::alt_backend { 'usm-restapi-admin':
+      backend_name     => $alt_admin_backend_name,
+      server_name      => 's-usm',
+      alt_private_port => $private_slow_port,
+      server_timeout   => $server_timeout,
+      mode_option      => 'http',
+    }
+
+    $acl_option_admin = {
+      acl         => ['is_get method GET', 'precheck path_beg /v1/software/deploy_precheck'],
+      use_backend => "${alt_admin_backend_name} if !is_get || precheck",
+    }
+
     platform::haproxy::proxy { 'usm-restapi-admin':
       https_ep_type     => 'admin',
       server_name       => 's-usm',
@@ -57,6 +94,8 @@ class platform::usm::haproxy
       public_port       => $private_port + 1,
       private_port      => $private_port,
       server_timeout    => $server_timeout,
+      mode_option       => 'http',
+      acl_option        => $acl_option_admin,
     }
   }
 }

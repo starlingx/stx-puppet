@@ -25,7 +25,8 @@ define platform::haproxy::proxy (
   $enable_https = undef,
   $https_ep_type = undef,
   $public_api = true,
-  $tcp_mode = false,
+  $mode_option = undef,
+  $acl_option = {},
 ) {
   include ::platform::haproxy::params
 
@@ -63,12 +64,6 @@ define platform::haproxy::proxy (
       $hsts_option = undef
   }
 
-  if $tcp_mode {
-    $mode_option = 'tcp'
-  } else {
-    $mode_option = undef
-  }
-
   if $public_ip_address {
     $public_ip = $public_ip_address
   } else {
@@ -102,19 +97,22 @@ define platform::haproxy::proxy (
       $hsts_option_header = undef
     }
 
+    $options = {
+      'default_backend' => "${name}-internal",
+      'timeout'         => $real_client_timeout,
+      'mode'            => $mode_option,
+      'http-request'    => $proto_header,
+      'http-response'   => $hsts_option_header,
+    }
+
+    $all_options = $options + $acl_option
     haproxy::frontend { $name:
       collect_exported => false,
       name             => $name,
       bind             => {
         "${public_ip}:${public_port}" => $ssl_option,
       },
-      options          => {
-        'default_backend' => "${name}-internal",
-        'timeout'         => $real_client_timeout,
-        'mode'            => $mode_option,
-        'http-request'    => $proto_header,
-        'http-response'   => $hsts_option_header,
-      }
+      options          => $all_options
     }
   } else {
     haproxy::frontend { $name:
@@ -151,6 +149,39 @@ define platform::haproxy::proxy (
   }
 }
 
+define platform::haproxy::alt_backend (
+  $backend_name,
+  $server_name,
+  $alt_private_port = undef,
+  $private_ip_address = undef,
+  $server_timeout = undef,
+  $retry_on = undef,
+  $mode_option = undef,
+) {
+
+  if $private_ip_address {
+    $private_ip = $private_ip_address
+  } else {
+    $private_ip = $::platform::haproxy::params::private_ip_address
+  }
+
+  if $server_timeout {
+    $timeout_option = "server ${server_timeout}"
+  } else {
+    $timeout_option = undef
+  }
+
+  haproxy::backend { $backend_name:
+    collect_exported => false,
+    name             => $backend_name,
+    options          => {
+      'server'   => "${server_name} ${private_ip}:${alt_private_port}",
+      'timeout'  => $timeout_option,
+      'mode'     => $mode_option,
+      'retry-on' => $retry_on
+    }
+  }
+}
 
 class platform::haproxy::server {
 
