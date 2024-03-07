@@ -849,7 +849,7 @@ class platform::kubernetes::upgrade_first_control_plane
                     --allow-experimental-upgrades --allow-release-candidate-upgrades -y",
     logname     => 'kubeadm-upgrade-apply.log',
     environment => 'KUBECONFIG=/etc/kubernetes/admin.conf',
-    timeout     => 600,
+    timeout     => 210,
   }
   -> exec { 'purge all kubelet-config except most recent':
       environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
@@ -895,7 +895,7 @@ class platform::kubernetes::upgrade_control_plane
     command     => 'kubeadm -v6 upgrade node',
     logname     => 'kubeadm-upgrade-node.log',
     environment => 'KUBECONFIG=/etc/kubernetes/admin.conf:/etc/kubernetes/kubelet.conf',
-    timeout     => 300,
+    timeout     => 210,
   }
 }
 
