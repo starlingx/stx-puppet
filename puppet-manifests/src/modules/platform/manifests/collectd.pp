@@ -131,6 +131,37 @@ class platform::collectd
     group   => 'sys_protected',
     mode    => '0644',
   }
+
+  # Crontab entry for iotop daily log.
+  cron { 'iotop-logs':
+  ensure      => 'present',
+  command     => '/usr/sbin/iotop -o -n 1 -b -t -a -k >> /var/log/iotop.log', # lint:ignore:140chars
+  environment => 'PATH=/bin:/usr/bin:/usr/sbin',
+  minute      => '05',
+  hour        => '1',
+  user        => 'root',
+  }
+
+  # Crontab entry for schedtop daily log.
+  cron { 'schedtop-logs':
+  ensure      => 'present',
+  command     => '/usr/bin/schedtop --delay=5 --repeat=1 >> /var/log/schedtop.log', # lint:ignore:140chars
+  environment => 'PATH=/bin:/usr/bin:/usr/sbin',
+  minute      => '10',
+  hour        => '1',
+  user        => 'root',
+  }
+
+  # Crontab entry for top daily log.
+  cron { 'top-logs':
+  ensure      => 'present',
+  command     => 'date --rfc-3339=ns >> /var/log/top.log; top -d1 -b -c -H -i -S -w240 -n299 >> /var/log/top.log', # lint:ignore:140chars
+  environment => 'PATH=/bin:/usr/bin:/usr/sbin',
+  minute      => '15',
+  hour        => '1',
+  user        => 'root',
+  }
+
 }
 
 class platform::collectd::runtime {
