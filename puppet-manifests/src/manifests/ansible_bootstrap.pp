@@ -30,8 +30,4 @@ include ::platform::drbd::dockerdistribution::bootstrap
 include ::platform::filesystem::scratch
 include ::platform::filesystem::backup
 include ::platform::filesystem::kubelet
-include ::platform::mtce::bootstrap
 include ::platform::fm::bootstrap
-
-# Puppet class to config the dcmanager user on subclouds
-include ::platform::dcmanager::bootstrap
