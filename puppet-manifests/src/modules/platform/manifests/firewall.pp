@@ -86,7 +86,7 @@ class platform::firewall::calico::controller {
   contain ::platform::firewall::calico::storage
   contain ::platform::firewall::calico::admin
   contain ::platform::firewall::calico::hostendpoint
-  contain ::platform::firewall::nat::admin
+  contain ::platform::firewall::dc::nat::ldap
   contain ::platform::firewall::extra
   contain ::platform::firewall::rbac::worker
 
@@ -100,7 +100,7 @@ class platform::firewall::calico::controller {
   -> Class['::platform::firewall::calico::storage']
   -> Class['::platform::firewall::calico::admin']
   -> Class['::platform::firewall::calico::hostendpoint']
-  -> Class['::platform::firewall::nat::admin']
+  -> Class['::platform::firewall::dc::nat::ldap']
   -> Class['::platform::firewall::extra']
   -> Class['::platform::firewall::rbac::worker']
 }
@@ -133,7 +133,7 @@ class platform::firewall::runtime {
   include ::platform::firewall::calico::storage
   include ::platform::firewall::calico::admin
   include ::platform::firewall::calico::hostendpoint
-  include ::platform::firewall::nat::admin
+  include ::platform::firewall::dc::nat::ldap
   include ::platform::firewall::extra
   include ::platform::firewall::rbac::worker
 
@@ -144,18 +144,19 @@ class platform::firewall::runtime {
   -> Class['::platform::firewall::calico::storage']
   -> Class['::platform::firewall::calico::admin']
   -> Class['::platform::firewall::calico::hostendpoint']
-  -> Class['::platform::firewall::nat::admin']
+  -> Class['::platform::firewall::dc::nat::ldap']
   -> Class['::platform::firewall::extra']
   -> Class['::platform::firewall::rbac::worker']
 }
 
 class platform::firewall::mgmt::runtime {
   include ::platform::firewall::calico::mgmt
+  include ::platform::firewall::dc::nat::ldap
 }
 
 class platform::firewall::admin::runtime {
   include ::platform::firewall::calico::admin
-  include ::platform::firewall::nat::admin
+  include ::platform::firewall::dc::nat::ldap
 }
 
 class platform::firewall::calico::oam (
@@ -417,7 +418,7 @@ class platform::firewall::extra (
   }
 }
 
-class platform::firewall::nat::admin::params (
+class platform::firewall::dc::nat::ldap::params (
   $transport = 'tcp',
   $table = 'nat',
   # openLDAP ports 636, 389
@@ -426,56 +427,95 @@ class platform::firewall::nat::admin::params (
   $jump = 'SNAT',
 ) {}
 
-class platform::firewall::nat::admin (
+class platform::firewall::dc::nat::ldap::rule (
   $enabled = true,
-) inherits ::platform::firewall::nat::admin::params {
+  $outiface = undef,
+  $tosource = undef,
+) inherits ::platform::firewall::dc::nat::ldap::params {
 
   include ::platform::params
+  include ::platform::ldap::params
+  include ::platform::network::mgmt::params
 
-  if $::platform::params::distributed_cloud_role == 'subcloud' {
-    include ::platform::network::mgmt::params
+  if $enabled {
+    $ensure = 'present'
+  } else {
+    $ensure = 'absent'
+  }
+
+  $destination = $::platform::ldap::params::ldapserver_host
+  $mgmt_subnet = $::platform::network::mgmt::params::subnet_network
+  $mgmt_prefixlen = $::platform::network::mgmt::params::subnet_prefixlen
+  $s_mgmt_subnet = "${mgmt_subnet}/${mgmt_prefixlen}"
+
+  # SNAT rule is used to get worker / storage LDAP traffic to
+  # the system controller.
+  platform::firewall::rule { 'ldap-nat':
+    ensure       => $ensure,
+    service_name => 'subcloud',
+    table        => $table,
+    chain        => $chain,
+    proto        => $transport,
+    jump         => $jump,
+    ports        => $dports,
+    host         => $s_mgmt_subnet,
+    destination  => $destination,
+    outiface     => $outiface,
+    tosource     => $tosource,
+  }
+}
+
+class platform::firewall::dc::nat::ldap (
+  $enabled = true,
+) {
+  include ::platform::params
+  $system_mode  = $::platform::params::system_mode
+  $dc_role      = $::platform::params::distributed_cloud_role
+
+  if ($system_mode != 'simplex' and $dc_role == 'subcloud') {
     include ::platform::network::admin::params
+    include ::platform::network::mgmt::params
 
-    $system_mode = $::platform::params::system_mode
-    $mgmt_subnet = $::platform::network::mgmt::params::subnet_network
-    $mgmt_prefixlen = $::platform::network::mgmt::params::subnet_prefixlen
-    $admin_float_ip = $::platform::network::admin::params::controller_address
+    $controller_0_hostname = $::platform::params::controller_0_hostname
+    $controller_1_hostname = $::platform::params::controller_1_hostname
     $admin_interface = $::platform::network::admin::params::interface_name
-    $s_mgmt_subnet = "${mgmt_subnet}/${mgmt_prefixlen}"
+    $mgmt_interface = $::platform::network::mgmt::params::interface_name
 
-    if $enabled {
-      $ensure = 'present'
-    } else {
-      $ensure = 'absent'
-    }
-
-    if $system_mode != 'simplex' and $admin_interface {
-      platform::firewall::rule { 'ldap-admin-nat':
-        ensure       => $ensure,
-        service_name => 'subcloud',
-        table        => $table,
-        chain        => $chain,
-        proto        => $transport,
-        jump         => $jump,
-        ports        => $dports,
-        host         => $s_mgmt_subnet,
-        outiface     => $admin_interface,
-        tosource     => $admin_float_ip,
+    $hostname = $::platform::params::hostname
+    case $::hostname {
+      $controller_0_hostname: {
+        $mgmt_unit_ip  = $::platform::network::mgmt::params::controller0_address
+        $admin_unit_ip = $::platform::network::admin::params::controller0_address
+      }
+      $controller_1_hostname: {
+        $mgmt_unit_ip  = $::platform::network::mgmt::params::controller1_address
+        $admin_unit_ip = $::platform::network::admin::params::controller1_address
+      }
+      default: {
+        fail("Hostname must be either ${controller_0_hostname} or ${controller_1_hostname}")
       }
     }
+
+    if ($admin_interface and $admin_unit_ip) {
+      $outiface = $admin_interface
+      $tosource = $admin_unit_ip
+    } else {
+      $outiface = $mgmt_interface
+      $tosource = $mgmt_unit_ip
+    }
+
+    # Worker/Storage LDAP traffic from the subcloud management network
+    # is SNAT to the system controller.
+    class { '::platform::firewall::dc::nat::ldap::rule':
+        enabled  => $enabled,
+        outiface => $outiface,
+        tosource => $tosource
+    }
   }
 }
 
-class platform::firewall::nat::admin::runtime {
-  include ::platform::firewall::nat::admin
-}
-
-class platform::firewall::nat::admin::remove
-  inherits ::platform::firewall::nat::admin::params {
-
-  class { '::platform::firewall::nat::admin':
-    enabled    => false,
-  }
+class platform::firewall::dc::nat::ldap::runtime {
+  include ::platform::firewall::dc::nat::ldap
 }
 
 class platform::firewall::rbac::worker {
