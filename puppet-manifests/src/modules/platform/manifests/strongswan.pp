@@ -106,6 +106,16 @@ class platform::strongswan::config
   -> exec { 'Restart charon to take updated configs':
     command => $ipsec_restart_cmd,
   }
+
+  # Run ipsec-cert-renew.sh daily
+  cron { 'ipsec-cert-renew':
+    ensure      => 'present',
+    command     => '/usr/bin/ipsec-cert-renew.sh',
+    environment => 'PATH=/bin:/usr/bin:/usr/sbin',
+    minute      => '20',
+    hour        => '*/24',
+    user        => 'root',
+  }
 }
 
 class platform::strongswan
