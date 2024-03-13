@@ -21,7 +21,6 @@
 
 # TODO(kmacleod): playbook_timeout should be exposed to persist and modify
 #                 via 'system service-parameter...'
-# TODO(cdeolive): remove use_usm parameter when usm is fully integrated
 class dcmanager (
   $database_connection         = '',
   $database_idle_timeout       = 3600,
