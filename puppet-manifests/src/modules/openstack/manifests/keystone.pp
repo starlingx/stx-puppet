@@ -304,8 +304,7 @@ class openstack::keystone::bootstrap(
             include ::keystone::disable_admin_token_auth
             $dc_required_classes = [ Class['::keystone::roles::admin'],
                     Class['::openstack::barbican::bootstrap'],
-                    Class['::platform::sysinv::bootstrap'],
-                    Class['::platform::fm::bootstrap']]
+                    Class['::platform::sysinv::bootstrap'] ]
         }
 
         default: {
@@ -326,8 +325,7 @@ class openstack::keystone::bootstrap(
             }
             $dc_required_classes = [ Class['::keystone::bootstrap'],
                     Class['::openstack::barbican::bootstrap'],
-                    Class['::platform::sysinv::bootstrap'],
-                    Class['::platform::fm::bootstrap']]
+                    Class['::platform::sysinv::bootstrap'] ]
         }
     }
 

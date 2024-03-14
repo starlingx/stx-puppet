@@ -109,20 +109,3 @@ class platform::fm::runtime {
     onlyif  => 'pgrep fmManager'
   }
 }
-
-class platform::fm::bootstrap {
-  # Set up needed config to enable launching of fmManager later
-  include ::platform::params
-  include ::platform::fm::params
-  include ::platform::fm::config
-  include ::fm::client
-  include ::fm::keystone::authtoken
-  include ::fm::db::postgresql
-  include ::fm::keystone::auth
-
-  class { '::fm::api':
-    host    => $::platform::fm::params::api_host,
-    workers => $::platform::params::eng_workers,
-    sync_db => true,
-  }
-}
