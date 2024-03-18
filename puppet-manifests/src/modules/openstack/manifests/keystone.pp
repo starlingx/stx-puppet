@@ -303,7 +303,6 @@ class openstack::keystone::bootstrap(
             # disabling the admin token per openstack recommendation
             include ::keystone::disable_admin_token_auth
             $dc_required_classes = [ Class['::keystone::roles::admin'],
-                    Class['::openstack::barbican::bootstrap'],
                     Class['::platform::sysinv::bootstrap'] ]
         }
 
@@ -324,7 +323,6 @@ class openstack::keystone::bootstrap(
               password => lookup('keystone::roles::admin::password'),
             }
             $dc_required_classes = [ Class['::keystone::bootstrap'],
-                    Class['::openstack::barbican::bootstrap'],
                     Class['::platform::sysinv::bootstrap'] ]
         }
     }

@@ -16,7 +16,6 @@ include ::platform::postgresql::bootstrap
 include ::platform::amqp::bootstrap
 
 include ::openstack::keystone::bootstrap
-include ::openstack::barbican::bootstrap
 include ::platform::client::bootstrap
 
 include ::platform::sysinv::bootstrap

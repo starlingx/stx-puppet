@@ -214,37 +214,6 @@ class openstack::barbican::api
   include ::openstack::barbican::haproxy
 }
 
-class openstack::barbican::bootstrap
-  inherits ::openstack::barbican::params {
-
-  class { '::barbican::keystone::auth':
-    configure_user_role => false,
-  }
-  class { '::barbican::keystone::authtoken':
-    auth_url            => 'http://localhost:5000',
-    project_name        => 'services',
-    user_domain_name    => 'Default',
-    project_domain_name => 'Default',
-  }
-
-  $bu_name = $::barbican::keystone::auth::auth_name
-  $bu_tenant = $::barbican::keystone::auth::tenant
-  keystone_role { 'creator':
-    ensure => present,
-  }
-  keystone_user_role { "${bu_name}@${bu_tenant}":
-    ensure => present,
-    roles  => ['admin', 'creator'],
-  }
-
-  include ::barbican::db::postgresql
-
-  include ::openstack::barbican
-  class { '::openstack::barbican::service':
-    service_enabled => true,
-  }
-}
-
 class openstack::barbican::runtime
   inherits ::openstack::barbican::params {
 
