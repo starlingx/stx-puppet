@@ -1399,10 +1399,11 @@ class platform::sm::ceph::runtime {
 
   if $rook_configured {
     if $system_type == 'All-in-one' and 'duplex' in $system_mode {
-      exec { 'Provision Cephmon FS in SM (service-group-member cephmon-fs)':
+      Class[platform::drbd::rookmon] -> Class[$name]
+      exec { 'Provision Rookmon FS in SM (service-group-member rookmon-fs)':
         command => 'sm-provision service-group-member controller-services rookmon-fs --apply',
       }
-      -> exec { 'Provision Cephmon DRBD in SM (service-group-member drbd-cephmon':
+      -> exec { 'Provision Rookmon DRBD in SM (service-group-member drbd-rookmon)':
         command => 'sm-provision service-group-member controller-services drbd-rookmon --apply',
       }
       -> exec { 'Provision Rook-mon-exit in SM (service-group-member rook-mon-exit)':
