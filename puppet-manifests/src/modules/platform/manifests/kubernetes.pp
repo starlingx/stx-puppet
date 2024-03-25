@@ -290,13 +290,8 @@ class platform::kubernetes::kubeadm {
     if !$::platform::params::virtual_system {
       if str2bool($::is_worker_subfunction)
         and !('openstack-compute-node=enabled' in $host_labels) {
-        # Enable TopologyManager for hosts with the worker subfunction.
-        # Exceptions are:
-        #   - DC System controllers
-        #   - Virtualized nodes (lab environment only)
 
-        $opts = join(['--feature-gates TopologyManager=true',
-                      "--cpu-manager-policy=${k8s_cpu_mgr_policy}",
+        $opts = join(["--cpu-manager-policy=${k8s_cpu_mgr_policy}",
                       "--topology-manager-policy=${k8s_topology_mgr_policy}"], ' ')
 
         if $k8s_cpu_mgr_policy == 'none' {
