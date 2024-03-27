@@ -30,4 +30,3 @@ include ::platform::drbd::dockerdistribution::bootstrap
 include ::platform::filesystem::scratch
 include ::platform::filesystem::backup
 include ::platform::filesystem::kubelet
-include ::platform::fm::bootstrap
