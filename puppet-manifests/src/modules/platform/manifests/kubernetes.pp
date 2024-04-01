@@ -55,6 +55,7 @@ class platform::kubernetes::params (
   $etcd_snapshot_file = '/opt/backups/k8s-control-plane/etcd/stx_etcd.snap',
   $static_pod_manifests_initial = '/opt/backups/k8s-control-plane/static-pod-manifests',
   $static_pod_manifests_abort = '/opt/backups/k8s-control-plane/static-pod-manifests-abort',
+  $kube_config_backup_path = '/opt/backups/k8s-control-plane/k8s-config',
   $etcd_name = 'controller',
   $etcd_initial_cluster = 'controller=http://localhost:2380',
   # The file holding the root CA cert/key to update to
@@ -492,6 +493,16 @@ class platform::kubernetes::master::init
     -> file { '/etc/platform/.initial_k8s_config_complete':
       ensure => present,
     }
+  } else {
+    # K8s control plane upgrade from 1.28 to 1.29 changes the ownership/permission
+    # of kube config file. We are resetting it after the control plane upgrade.
+    # In case of any failure before resetting it, this sets the correct ownership/permission
+    # to kube config during the host reboots after the initial install.
+    file { '/etc/kubernetes/admin.conf':
+      owner => 'root',
+      group => 'sys_protected',
+      mode  => '0640',
+    }
   }
 
   # Run kube-cert-rotation daily
@@ -857,6 +868,14 @@ class platform::kubernetes::upgrade_first_control_plane
       environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
       command     => 'kubectl -n kube-system get configmaps -oname --sort-by=.metadata.creationTimestamp | grep -e kubelet-config | head -n -1 | xargs -r -i kubectl -n kube-system delete {}', # lint:ignore:140chars
       logoutput   => true,
+  }
+  # Control plane upgrade from 1.28 to 1.29 changed the ownership and permission
+  # of kube config file. Setting the ownership & permission to the old state.
+  # This issue not present in the fresh install with K8s 1.29.
+  -> file { '/etc/kubernetes/admin.conf':
+    owner => 'root',
+    group => 'sys_protected',
+    mode  => '0640',
   }
 
   if $::platform::params::system_mode != 'simplex' {
@@ -1713,13 +1732,42 @@ class platform::kubernetes::unmask_start_services
   }
 }
 
+class platform::kubernetes::refresh_admin_config {
+  # Remove and regenerate the kube config file /etc/kubernetes/admin.conf
+  exec { 'remove the /etc/kubernetes/admin.conf':
+    command => 'rm -f /etc/kubernetes/admin.conf',
+  }
+  -> exec { 'remove the /etc/kubernetes/super-admin.conf':
+    command => 'rm -f /etc/kubernetes/super-admin.conf',
+    onlyif  => 'test -f /etc/kubernetes/super-admin.conf',
+  }
+  # K8s version upgrade abort of 1.28 to 1.29 removes some of the permission & priviledge
+  # of kubernetes-admin user. Following command will regenerate admin.conf file and
+  # ensure the required permissions & priviledges.
+  -> exec { 'regenerate the /etc/kubernetes/admin.conf':
+    command => 'kubeadm init phase kubeconfig admin',
+  }
+  -> file { '/etc/kubernetes/admin.conf':
+    owner => 'root',
+    group => 'sys_protected',
+    mode  => '0640',
+  }
+}
+
 class platform::kubernetes::upgrade_abort
   inherits ::platform::kubernetes::params {
   $software_version = $::platform::params::software_version
   include platform::kubernetes::cordon_node
   include platform::kubernetes::mask_stop_kubelet
   include platform::kubernetes::unmask_start_services
+  include platform::kubernetes::refresh_admin_config
 
+  # Keep a backup of the current Kubernetes config files so that if abort fails,
+  # we can restore to that state with upgrade_abort_recovery.
+  exec { 'backup the kubernetes admin and super-admin config':
+    command => "mkdir -p ${kube_config_backup_path} && cp -p /etc/kubernetes/*admin.conf ${kube_config_backup_path}/.",
+    onlyif  => ['test -f /etc/kubernetes/admin.conf'],
+  }
   # Take latest static manifest files backup for recovery if upgrade_abort fail
   exec { 'remove the control-plane pods':
       command => "mkdir -p ${static_pod_manifests_abort} && mv -f  /etc/kubernetes/manifests/*.yaml ${static_pod_manifests_abort}/.",
@@ -1765,6 +1813,12 @@ class platform::kubernetes::upgrade_abort
       environment => [ 'ETCDCTL_API=3' ],
       onlyif      => "test -f ${etcd_snapshot_file}"
   }
+  -> exec { 'restore static manifest files':
+      command => "/usr/bin/cp -f  ${static_pod_manifests_initial}/*.yaml /etc/kubernetes/manifests",
+      onlyif  => "test -d ${static_pod_manifests_initial}",
+  }
+  -> Class['platform::kubernetes::unmask_start_services']
+  -> Class['platform::kubernetes::refresh_admin_config']
   # Remove recover static manifest files backup if snapshot restore succeeded
   -> exec { 'remove recover static manifest files':
       command => "rm -rf ${static_pod_manifests_abort}",
@@ -1775,11 +1829,11 @@ class platform::kubernetes::upgrade_abort
       command => "rm -rf /opt/etcd/${software_version}/controller.etcd.bck",
       onlyif  => "test -d /opt/etcd/${software_version}/controller.etcd.bck",
   }
-  -> exec { 'restore static manifest files':
-      command => "/usr/bin/cp -f  ${static_pod_manifests_initial}/*.yaml /etc/kubernetes/manifests",
-      onlyif  => "test -d ${static_pod_manifests_initial}",
+  # Remove kube config files backup after the abort
+  -> exec { 'remove kube config files backup':
+      command => "rm -rf ${kube_config_backup_path}",
+      onlyif  => "test -d ${kube_config_backup_path}",
   }
-  -> Class['platform::kubernetes::unmask_start_services']
 }
 
 class platform::kubernetes::upgrade_abort_recovery
@@ -1793,6 +1847,9 @@ class platform::kubernetes::upgrade_abort_recovery
   }
   -> exec { 'restore recover static manifest files':
       command => "mv -f  ${static_pod_manifests_abort}/*.yaml /etc/kubernetes/manifests/",
+  }
+  -> exec { 'restore the admin and super-admin config files':
+    command => "mv -f ${kube_config_backup_path}/*admin.conf /etc/kubernetes/",
   }
   -> Class['platform::kubernetes::unmask_start_services']
   -> exec { 'uncordon the node':
