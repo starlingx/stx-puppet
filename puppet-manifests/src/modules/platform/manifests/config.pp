@@ -43,6 +43,7 @@ class platform::config::file {
   include ::platform::network::cluster_host::params
   include ::platform::network::admin::params
   include ::openstack::horizon::params
+  include ::platform::ceph::params
 
   # dependent template variables
   $management_interface = $::platform::network::mgmt::params::interface_name
@@ -200,6 +201,14 @@ class platform::config::file {
   }
 
   include platform::config::file::subfunctions::lowlatency
+
+  if $::platform::ceph::params::service_enabled {
+    file_line { "${platform_conf} storage_network":
+      path  => $platform_conf,
+      line  => "ceph_network=${::platform::ceph::params::ceph_network}",
+      match => '^ceph_network=',
+    }
+  }
 }
 
 # update the subfunctions in /etc/platform/platform.conf
