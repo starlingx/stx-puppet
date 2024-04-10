@@ -3,7 +3,7 @@ define platform::worker::storage::wipe_new_pv {
   $cmd = join(['/sbin/pvs --nosuffix --noheadings ',$name,' 2>/dev/null | grep nova-local || true'])
   $result = generate('/bin/sh', '-c', $cmd)
   if $result !~ /nova-local/ {
-    exec { 'vgchange -an nova-local':
+    exec { "vgchange -an nova-local - ${name}":
       command  => 'vgchange -an nova-local || true'
     }
     -> exec { "Wipe New PV not in VG - ${name}":
@@ -11,6 +11,9 @@ define platform::worker::storage::wipe_new_pv {
       command  => "wipefs -a ${name}",
       before   => Lvm::Volume[instances_lv],
       require  => Exec['remove device mapper mapping']
+    }
+    -> exec { "vgchange -ay nova-local - ${name}":
+      command  => 'vgchange -ay nova-local || true'
     }
   }
 }
