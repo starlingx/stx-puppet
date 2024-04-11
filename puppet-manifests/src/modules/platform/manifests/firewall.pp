@@ -404,16 +404,9 @@ class platform::firewall::extra (
 ) {
   if $config != {} {
     $config.each |$key, $value| {
-      if $key == 'ingress-ipv6-for-ipv4-install' {
-        $value.each |$interface| {
-          exec { "install ingress-ipv6-for-ipv4 in ${interface}" :
-            path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
-            command   => "ip6tables -t filter -A INPUT -i ${interface} -m comment --comment \"stx: block ingress IPv6 traffic for ${interface}\" -j DROP", # lint:ignore:140chars
-            logoutput => true,
-            onlyif    => "[ $(ip6tables -n -L INPUT -t filter | grep -c \"stx: block ingress IPv6 traffic for ${interface}\") -eq 0 ]" # lint:ignore:140chars
-          }
-        }
-      }
+      # if $key == <key placeholder> {
+      #   <process extra>
+      # }
     }
   }
 }
