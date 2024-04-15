@@ -191,24 +191,6 @@ define openstack::keystone::delete_endpoints (
   }
 }
 
-define openstack::keystone::user::option (
-  $admin_username,
-  $admin_password,
-  $auth_url,
-  $username,
-  $option,
-  String $option_value,
-) {
-  exec { "Set user ${username} option ${option} to ${option_value}":
-    command   => @("EOC"/L),
-      /usr/local/bin/set_keystone_user_option.sh \
-      ${admin_username} '${admin_password}' ${auth_url} ${username} ${option} ${option_value}
-      | EOC
-    logoutput => true,
-    provider  => shell,
-  }
-}
-
 class openstack::keystone::api
   inherits ::openstack::keystone::params {
 
@@ -302,8 +284,7 @@ class openstack::keystone::bootstrap(
             include ::keystone::roles::admin
             # disabling the admin token per openstack recommendation
             include ::keystone::disable_admin_token_auth
-            $dc_required_classes = [ Class['::keystone::roles::admin'],
-                    Class['::platform::sysinv::bootstrap'] ]
+            $dc_required_classes = [ Class['::keystone::roles::admin'] ]
         }
 
         default: {
@@ -322,26 +303,13 @@ class openstack::keystone::bootstrap(
             class { '::keystone::bootstrap':
               password => lookup('keystone::roles::admin::password'),
             }
-            $dc_required_classes = [ Class['::keystone::bootstrap'],
-                    Class['::platform::sysinv::bootstrap'] ]
+            $dc_required_classes = [ Class['::keystone::bootstrap'] ]
         }
     }
 
     # Ensure the default _member_ role is present
     keystone_role { '_member_':
       ensure => present,
-    }
-
-    # set admin ignore_lockout_failure_attempts option to true to exempt
-    # admin user from auth fail lockout.
-    Keystone::Resource::Service_identity <||>
-    -> openstack::keystone::user::option { 'Set user option':
-      admin_username => $::platform::client::params::admin_username,
-      admin_password => $::platform::client::params::admin_password,
-      auth_url       => $::platform::client::params::identity_auth_url,
-      username       => $::platform::client::params::admin_username,
-      option         => 'ignore_lockout_failure_attempts',
-      option_value   => bool2str(true),
     }
   }
 }

@@ -18,8 +18,6 @@ include ::platform::amqp::bootstrap
 include ::openstack::keystone::bootstrap
 include ::platform::client::bootstrap
 
-include ::platform::sysinv::bootstrap
-
 # Puppet classes to enable the bring up of kubernetes master
 include ::platform::docker::bootstrap
 include ::platform::etcd::bootstrap
