@@ -191,6 +191,7 @@ define openstack::keystone::delete_endpoints (
   }
 }
 
+
 class openstack::keystone::api
   inherits ::openstack::keystone::params {
 
@@ -217,109 +218,6 @@ class openstack::keystone::api
   }
 
   include ::openstack::keystone::haproxy
-}
-
-
-class openstack::keystone::bootstrap(
-  $default_domain = 'Default',
-  $dc_services_project_id = undef,
-) {
-  include ::platform::params
-  include ::platform::amqp::params
-  include ::platform::drbd::platform::params
-  include ::platform::client::params
-
-  $keystone_key_repo_path = "${::platform::drbd::platform::params::mountpoint}/keystone"
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
-    $eng_workers = min($::platform::params::eng_workers, 10)
-  } else {
-    $eng_workers = $::platform::params::eng_workers
-  }
-  $bind_host = '[::]'
-
-  # In the case of a classical Multi-Region deployment, apply the Keystone
-  # controller configuration for Primary Region ONLY
-  # (i.e. on which region_config is False), since Keystone is a Shared service
-  #
-  # In the case of a Distributed Cloud deployment, apply the Keystone
-  # controller configuration for each SubCloud, since Keystone is also
-  # a localized service.
-
-  if (!$::platform::params::region_config or
-      $::platform::params::distributed_cloud_role == 'subcloud') {
-
-    include ::keystone::db::postgresql
-
-    Class[$name] -> Class['::platform::client']
-
-    # Create the parent directory for fernet keys repository
-    file { $keystone_key_repo_path:
-      ensure  => 'directory',
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0755',
-      require => Class['::platform::drbd::platform'],
-    }
-    -> file { '/etc/keystone/keystone-extra.conf':
-      ensure  => present,
-      owner   => 'root',
-      group   => 'keystone',
-      mode    => '0640',
-      content => template('openstack/keystone-extra.conf.erb'),
-      before  => Class['::keystone']
-    }
-
-    case $::osfamily {
-        'RedHat': {
-            class { '::keystone':
-              enabled               => true,
-              enable_bootstrap      => true,
-              fernet_key_repository => "${keystone_key_repo_path}/fernet-keys",
-              sync_db               => true,
-              default_domain        => $default_domain,
-              default_transport_url => $::platform::amqp::params::transport_url,
-            }
-            include ::keystone::client
-            include ::keystone::endpoint
-            include ::keystone::roles::admin
-            # disabling the admin token per openstack recommendation
-            include ::keystone::disable_admin_token_auth
-            $dc_required_classes = [ Class['::keystone::roles::admin'] ]
-        }
-
-        default: {
-            # overrides keystone class, including hieradata service_name
-            #  service_name          => 'keystone',
-
-            class { '::keystone':
-              enabled               => true,
-              service_name          => 'keystone',
-              fernet_key_repository => "${keystone_key_repo_path}/fernet-keys",
-              sync_db               => true,
-              default_domain        => $default_domain,
-              default_transport_url => $::platform::amqp::params::transport_url,
-            }
-
-            class { '::keystone::bootstrap':
-              password => lookup('keystone::roles::admin::password'),
-            }
-            $dc_required_classes = [ Class['::keystone::bootstrap'] ]
-        }
-    }
-
-    # Ensure the default _member_ role is present
-    keystone_role { '_member_':
-      ensure => present,
-    }
-
-    ini_setting { 'Set keystone default log level to INFO':
-      ensure  => present,
-      path    => '/etc/keystone/logging.conf',
-      section => 'logger_root',
-      setting => 'level',
-      value   => 'INFO',
-    }
-  }
 }
 
 
