@@ -18,12 +18,11 @@ class platform::containerd::proxyconfig{
   # inherit the proxy setting from docker
   $http_proxy = $::platform::docker::params::http_proxy
   $https_proxy = $::platform::docker::params::https_proxy
-  if $::platform::docker::params::no_proxy {
-    # Containerd doesn't work with the NO_PROXY environment
-    # variable if it has IPv6 addresses with square brackets,
-    # remove the square brackets
-    $no_proxy = regsubst($::platform::docker::params::no_proxy, '\\[|\\]', '', 'G')
-  }
+
+  # Containerd doesn't work with the NO_PROXY environment
+  # variable if it has IPv6 addresses with square brackets,
+  # remove the square brackets
+  $no_proxy = regsubst($::platform::docker::params::no_proxy_complete_list, '\\[|\\]', '', 'G')
 
   if $http_proxy or $https_proxy {
     file { '/etc/systemd/system/containerd.service.d':
@@ -39,6 +38,15 @@ class platform::containerd::proxyconfig{
       mode    => '0644',
       # share the same template as docker, since the conf file is the same
       content => template('platform/dockerproxy.conf.erb'),
+    }
+    ~> exec { 'perform systemctl daemon reload for containerd proxy':
+      command     => 'systemctl daemon-reload',
+      logoutput   => true,
+      refreshonly => true,
+    } ~> Service['containerd']
+  } else {
+    file { '/etc/systemd/system/containerd.service.d/http-proxy.conf':
+      ensure  => absent,
     }
     ~> exec { 'perform systemctl daemon reload for containerd proxy':
       command     => 'systemctl daemon-reload',

@@ -8,6 +8,7 @@ class platform::kubernetes::params (
   $kubelet_version = undef,
   $node_ip = undef,
   $service_domain = undef,
+  $apiserver_cluster_ip = undef,
   $dns_service_ip = undef,
   $host_labels = [],
   $k8s_cpuset = undef,
