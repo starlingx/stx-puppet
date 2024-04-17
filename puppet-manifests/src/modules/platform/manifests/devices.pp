@@ -247,7 +247,39 @@ class platform::devices::acc200::config (
   }
 }
 
+class platform::devices::qat::qat_4xxx {
+  if $::is_qat_device_present {
+    notice('QAT device found.')
+
+    $vf_driver = 'vfio-pci'
+    kmod::load { $vf_driver: }
+
+    exec { 'config_qat':
+      command   => 'bash /usr/share/puppet/modules/platform/files/config_qat.sh',
+      logoutput => true,
+      timeout   => 5,
+      notify    => Service['qat_service'],
+    }
+
+    service { 'qat_service':
+      ensure     => 'running',
+      enable     => true,
+      hasrestart => true,
+      notify     => Service['sysinv-agent'],
+      require    => Kmod::Load[$vf_driver],
+    }
+
+    exec { 'qat_systemctl_enable':
+        command => 'systemctl enable qat_service.service',
+        unless  => 'systemctl is-enabled qat_service.service'
+    }
+  } else {
+    notice('QAT device not found.')
+  }
+}
+
 class platform::devices {
   include ::platform::devices::qat
+  include ::platform::devices::qat::qat_4xxx
   include ::platform::devices::fpga::fec
 }
