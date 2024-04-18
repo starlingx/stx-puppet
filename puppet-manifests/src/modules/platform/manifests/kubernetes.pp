@@ -18,6 +18,7 @@ class platform::kubernetes::params (
   $k8s_reserved_mem = undef,
   $k8s_all_reserved_cpuset = undef,
   $k8s_cpu_mgr_policy = 'static',
+  $k8s_memory_mgr_policy = 'None',
   $k8s_topology_mgr_policy = 'best-effort',
   $k8s_cni_bin_dir = '/var/opt/cni/bin',
   $k8s_vol_plugin_dir = '/var/opt/libexec/kubernetes/kubelet-plugins/volume/exec/',
@@ -65,6 +66,7 @@ class platform::kubernetes::params (
   $kubelet_image_gc_low_threshold_percent = 75,
   $kubelet_image_gc_high_threshold_percent = 79,
   $kubelet_eviction_hard_imagefs_available = '2Gi',
+  $k8s_reserved_memory = '',
 ) { }
 
 define platform::kubernetes::pull_images_from_registry (
@@ -277,6 +279,9 @@ class platform::kubernetes::kubeadm {
   $k8s_cpu_mgr_policy = $::platform::kubernetes::params::k8s_cpu_mgr_policy
   $k8s_topology_mgr_policy = $::platform::kubernetes::params::k8s_topology_mgr_policy
   $k8s_pod_max_pids = $::platform::kubernetes::params::k8s_pod_max_pids
+  $k8s_memory_mgr_policy = $::platform::kubernetes::params::k8s_memory_mgr_policy
+  $k8s_reserved_memory = $::platform::kubernetes::params::k8s_reserved_memory
+
 
   $iptables_file = @("IPTABLE"/L)
     net.bridge.bridge-nf-call-ip6tables = 1
@@ -312,9 +317,19 @@ class platform::kubernetes::kubeadm {
         }
 
         $opts_res_cpus = "--reserved-cpus=${k8s_reserved_cpus}"
-        $k8s_cpu_manager_opts = join([$opts,
+
+        if ( $k8s_memory_mgr_policy == 'None' ){
+          $k8s_cpu_manager_opts = join([$opts,
+                                        $opts_sys_res,
+                                        $opts_res_cpus], ' ')
+        } else {
+          $opts_reserved_memory = join(["--memory-manager-policy=${k8s_memory_mgr_policy}",
+                                        '--reserved-memory ',$k8s_reserved_memory], ' ')
+          $k8s_cpu_manager_opts = join([$opts,
                                       $opts_sys_res,
-                                      $opts_res_cpus], ' ')
+                                      $opts_res_cpus,
+                                      $opts_reserved_memory], ' ')
+        }
       } else {
         $opts = '--cpu-manager-policy=none'
         $k8s_cpu_manager_opts = join([$opts,
@@ -342,6 +357,12 @@ class platform::kubernetes::kubeadm {
   # when we offline/online CPUs or change the number of reserved cpus.
   -> exec { 'remove cpu_manager_state':
     command => 'rm -f /var/lib/kubelet/cpu_manager_state || true',
+  }
+
+  # The memory_manager_state file is regenerated when memory manager starts or
+  # changes allocations so it is safe to remove before kubelet starts.
+  -> exec { 'remove memory_manager_state':
+    command => 'rm -f /var/lib/kubelet/memory_manager_state || true',
   }
 
   # Update iptables config. This is required based on:
