@@ -335,7 +335,7 @@ class platform::network::admin::params(
 ) { }
 
 define platform::network::network_address (
-  $address,
+  $addresses,
   $ifname,
 ) {
   # In AIO simplex configurations, the management addresses are assigned to the
@@ -343,22 +343,26 @@ define platform::network::network_address (
   # or assignment is prevented (can't have multiple global scope addresses on
   # the loopback interface).
 
-  # For ipv6 the only way to initiate outgoing connections
-  # over the fixed ips is to set preferred_lft to 0 for the
-  # floating ips so that they are not used
-  if $ifname == 'lo' {
-    $options = 'scope host'
-  } elsif $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
-    $options = 'preferred_lft 0'
-  } else {
-    $options = ''
-  }
+  $addresses.each |$address| {
+    # For ipv6 the only way to initiate outgoing connections
+    # over the fixed ips is to set preferred_lft to 0 for the
+    # floating ips so that they are not used
+    if $ifname == 'lo' {
+      $options = 'scope host'
+    } elsif $address =~ Stdlib::IP::Address::V6 {
+      $options = 'preferred_lft 0'
+    } else {
+      $options = ''
+    }
 
-  # addresses should only be configured if running in simplex, otherwise SM
-  # will configure them on the active controller.
-  exec { "Configuring ${name} IP address to ${address}":
-    command => "ip addr replace ${address} dev ${ifname} ${options}",
-    onlyif  => ['test -f /etc/platform/simplex', 'test ! -f /var/run/.network_upgrade_bootstrap'],
+    # addresses should only be configured if running in simplex, otherwise SM
+    # will configure them on the active controller.
+    exec { "Configuring ${name} IP address to ${address}":
+      command   => "ip addr replace ${address} dev ${ifname} ${options}",
+      logoutput => true,
+      onlyif    => ['test -f /etc/platform/simplex', 'test ! -f /var/run/.network_upgrade_bootstrap'],
+    }
+
   }
 }
 
