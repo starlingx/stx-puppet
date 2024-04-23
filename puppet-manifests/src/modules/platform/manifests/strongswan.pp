@@ -18,6 +18,7 @@ class platform::strongswan::params (
   $sw_collector = {},
   $starter = {},
   $swanctl = {},
+  $swanctl_active = {},
   $authorities = {},
   $connections = {},
   $secrets = {},
@@ -25,7 +26,60 @@ class platform::strongswan::params (
   $strongswan_include = 'strongswan.d/*.conf',
   $charon_logging = {},
   $strongswan = {},
+  $is_active_controller = false,
 ) {
+}
+
+class platform::strongswan::swanctl_config (
+  $connections = {},
+  $connections_active = {},
+  $is_active_controller = undef,
+) {
+  file { '/etc/swanctl/swanctl.conf':
+    owner   => 'root',
+    mode    => '0600',
+    content => strongswan::hash_to_strongswan_config({
+        connections => $connections,
+    }),
+  }
+
+  # If connections_active is not empty, the node is a controller.
+  # For controller node, the swanctl.conf will be a symlink to
+  # one of swanctl_active.conf and swanctl_standby.conf, depending
+  # on their role (active or standby) at the time it is configed.
+  # During swact, the symlink will be updated accordingly.
+  if !empty($connections_active) {
+    $swanctl_dir='/etc/swanctl'
+    $swanctl_current_conf="${swanctl_dir}/swanctl.conf"
+    $swanctl_active_conf="${swanctl_dir}/swanctl_active.conf"
+    $swanctl_standby_conf="${swanctl_dir}/swanctl_standby.conf"
+
+    file { $swanctl_active_conf:
+      owner   => 'root',
+      mode    => '0600',
+      content => strongswan::hash_to_strongswan_config({
+          connections => $connections_active,
+      }),
+    }
+
+    # Symlink swanctl.conf based on the role of the controller
+    if $is_active_controller {
+      $swanctl_config=$swanctl_active_conf
+    } else {
+      $swanctl_config=$swanctl_standby_conf
+    }
+
+    exec { "Move ${swanctl_current_conf} to ${swanctl_standby_conf}":
+      command => "/usr/bin/mv ${swanctl_current_conf} ${swanctl_standby_conf}",
+      require => [
+        File[$swanctl_current_conf],
+        File[$swanctl_active_conf],
+      ],
+    }
+    -> exec { "Symlink ${swanctl_current_conf}":
+      command => "/usr/bin/ln -sf ${swanctl_config} ${swanctl_current_conf}",
+    }
+  }
 }
 
 class platform::strongswan::config
@@ -98,8 +152,10 @@ class platform::strongswan::config
   }
 
   # Update swanctl configuration
-  -> class { '::strongswan::swanctl':
-    connections => $::platform::strongswan::params::swanctl,
+  -> class { '::platform::strongswan::swanctl_config':
+    connections          => $::platform::strongswan::params::swanctl,
+    connections_active   => $::platform::strongswan::params::swanctl_active,
+    is_active_controller => $::platform::strongswan::params::is_active_controller,
   }
 
   # Restart charon
