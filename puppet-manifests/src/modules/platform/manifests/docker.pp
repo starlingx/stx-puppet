@@ -24,19 +24,67 @@ class platform::docker::params (
   $ghcr_registry_secure        = true,
   $registryk8s_registry_secure = true,
   $icr_registry_secure         = true,
-) { }
+) {
+
+  include ::platform::network::oam::params
+  include ::platform::network::mgmt::params
+  include ::platform::network::cluster_host::params
+  include ::platform::kubernetes::params
+
+  if $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
+    $localhost_address = '::1'
+  } else {
+    $localhost_address = '127.0.0.1'
+  }
+
+  if $::platform::params::system_mode == 'simplex' {
+    $no_proxy_unfiltered_list = @("EOL"/L)
+      localhost,${localhost_address},registry.local,\
+      ${platform::network::oam::params::gateway_address},\
+      ${platform::network::oam::params::controller_address},\
+      ${platform::network::oam::params::controller0_address},\
+      ${platform::network::mgmt::params::gateway_address},\
+      ${platform::network::mgmt::params::controller_address},\
+      ${platform::network::mgmt::params::controller0_address},\
+      ${platform::network::cluster_host::params::gateway_address},\
+      ${platform::network::cluster_host::params::controller_address},\
+      ${platform::network::cluster_host::params::controller0_address},\
+      ${platform::kubernetes::params::apiserver_cluster_ip},\
+      ${platform::kubernetes::params::dns_service_ip},\
+      cluster.local,${no_proxy}
+      | -EOL
+  } else {
+    $no_proxy_unfiltered_list = @("EOL"/L)
+      localhost,${localhost_address},registry.local,\
+      ${platform::network::oam::params::gateway_address},\
+      ${platform::network::oam::params::controller_address},\
+      ${platform::network::oam::params::controller0_address},\
+      ${platform::network::oam::params::controller1_address},\
+      ${platform::network::mgmt::params::gateway_address},\
+      ${platform::network::mgmt::params::controller_address},\
+      ${platform::network::mgmt::params::controller0_address},\
+      ${platform::network::mgmt::params::controller1_address},\
+      ${platform::network::cluster_host::params::gateway_address},\
+      ${platform::network::cluster_host::params::controller_address},\
+      ${platform::network::cluster_host::params::controller0_address},\
+      ${platform::network::cluster_host::params::controller1_address},\
+      ${platform::kubernetes::params::apiserver_cluster_ip},\
+      ${platform::kubernetes::params::dns_service_ip},\
+      cluster.local,${no_proxy}
+      | -EOL
+  }
+
+  # Remove duplicates.
+  $no_proxy_complete_list = split($no_proxy_unfiltered_list, ',').unique.join(',')
+}
 
 class platform::docker::proxyconfig
   inherits ::platform::docker::params {
   include ::platform::docker::install
 
-  if $::osfamily == 'Debian' {
-    if $::platform::docker::params::no_proxy {
-      # Docker on Debian doesn't work with the NO_PROXY environment variable if it
-      # has IPv6 addresses with square brackets, thus remove the square brackets
-      $no_proxy = regsubst($::platform::docker::params::no_proxy, '\\[|\\]', '', 'G')
-    }
-  }
+  # Docker on Debian doesn't work with the NO_PROXY environment variable if it
+  # has IPv6 addresses with square brackets, thus remove the square brackets
+  $no_proxy = regsubst($::platform::docker::params::no_proxy_complete_list, '\\[|\\]', '', 'G')
 
   if $http_proxy or $https_proxy {
     file { '/etc/systemd/system/docker.service.d':
@@ -51,6 +99,15 @@ class platform::docker::proxyconfig
       group   => 'root',
       mode    => '0644',
       content => template('platform/dockerproxy.conf.erb'),
+    }
+    ~> exec { 'perform systemctl daemon reload for docker proxy':
+      command     => 'systemctl daemon-reload',
+      logoutput   => true,
+      refreshonly => true,
+    } ~> Service['docker']
+  } else {
+    file { '/etc/systemd/system/docker.service.d/http-proxy.conf':
+      ensure  => absent,
     }
     ~> exec { 'perform systemctl daemon reload for docker proxy':
       command     => 'systemctl daemon-reload',
