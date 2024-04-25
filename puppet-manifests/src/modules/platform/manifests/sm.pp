@@ -18,6 +18,8 @@ class platform::sm
   $dc_role                       = $::platform::params::distributed_cloud_role
 
   include ::platform::network::pxeboot::params
+  include ::platform::network::pxeboot::ipv4::params
+  include ::platform::network::pxeboot::ipv6::params
   if $::platform::network::pxeboot::params::interface_name {
     $pxeboot_ip_interface = $::platform::network::pxeboot::params::interface_name
   } else {
@@ -28,26 +30,36 @@ class platform::sm
   $pxeboot_ip_param_mask         = $::platform::network::pxeboot::params::subnet_prefixlen
 
   include ::platform::network::mgmt::params
+  include ::platform::network::mgmt::ipv4::params
+  include ::platform::network::mgmt::ipv6::params
   $mgmt_ip_interface             = $::platform::network::mgmt::params::interface_name
   $mgmt_ip_param_ip              = $::platform::network::mgmt::params::controller_address
   $mgmt_ip_param_mask            = $::platform::network::mgmt::params::subnet_prefixlen
 
   include ::platform::network::cluster_host::params
+  include ::platform::network::cluster_host::ipv4::params
+  include ::platform::network::cluster_host::ipv6::params
   $cluster_host_ip_interface     = $::platform::network::cluster_host::params::interface_name
   $cluster_host_ip_param_ip      = $::platform::network::cluster_host::params::controller_address
   $cluster_host_ip_param_mask    = $::platform::network::cluster_host::params::subnet_prefixlen
 
   include ::platform::network::oam::params
+  include ::platform::network::oam::ipv4::params
+  include ::platform::network::oam::ipv6::params
   $oam_ip_interface              = $::platform::network::oam::params::interface_name
   $oam_ip_param_ip               = $::platform::network::oam::params::controller_address
   $oam_ip_param_mask             = $::platform::network::oam::params::subnet_prefixlen
 
   include ::platform::network::ironic::params
+  include ::platform::network::ironic::ipv4::params
+  include ::platform::network::ironic::ipv6::params
   $ironic_ip_interface           = $::platform::network::ironic::params::interface_name
   $ironic_ip_param_ip            = $::platform::network::ironic::params::controller_address
   $ironic_ip_param_mask          = $::platform::network::ironic::params::subnet_prefixlen
 
   include ::platform::network::admin::params
+  include ::platform::network::admin::ipv4::params
+  include ::platform::network::admin::ipv6::params
   $admin_ip_interface           = $::platform::network::admin::params::interface_name
   $admin_ip_param_ip            = $::platform::network::admin::params::controller_address
   $admin_ip_param_mask          = $::platform::network::admin::params::subnet_prefixlen
@@ -185,6 +197,7 @@ class platform::sm
   $rook_configured = $::platform::rook::params::service_enabled
   $rgw_configured = $::platform::ceph::params::rgw_enabled
 
+  # by using platform::network::.*::params it is using the primary pool addresses
   if $system_mode == 'simplex' {
     $hostunit = '0'
     $management_my_unit_ip   = $::platform::network::mgmt::params::controller0_address
@@ -244,11 +257,21 @@ class platform::sm
   }
 
   if $system_mode == 'simplex' {
-    exec { 'Deprovision oam-ip service group member':
-      command => 'sm-deprovision service-group-member oam-services oam-ip',
+    if $::platform::network::oam::ipv4::params::subnet_version == $::platform::params::ipv4 {
+      exec { 'Deprovision oam-ipv4 service group member':
+        command => 'sm-deprovision service-group-member oam-services oam-ipv4',
+      }
+      -> exec { 'Deprovision oam-ipv4 service':
+        command => 'sm-deprovision service oam-ipv4',
+      }
     }
-    -> exec { 'Deprovision oam-ip service':
-      command => 'sm-deprovision service oam-ip',
+    if $::platform::network::oam::ipv6::params::subnet_version == $::platform::params::ipv6 {
+      exec { 'Deprovision oam-ipv6 service group member':
+        command => 'sm-deprovision service-group-member oam-services oam-ipv6',
+      }
+      -> exec { 'Deprovision oam-ipv6 service':
+        command => 'sm-deprovision service oam-ipv6',
+      }
     }
 
     exec { 'Configure OAM Interface':
@@ -264,11 +287,17 @@ class platform::sm
     }
 
     if $admin_my_unit_ip {
-      exec { 'Deprovision admin-ip service group member':
-        command => 'sm-deprovision service-group-member controller-services admin-ip',
+      exec { 'Deprovision admin-ipv4 service group member':
+        command => 'sm-deprovision service-group-member controller-services admin-ipv4',
       }
-      -> exec { 'Deprovision admin-ip service':
-        command => 'sm-deprovision service admin-ip',
+      -> exec { 'Deprovision admin-ipv4 service':
+        command => 'sm-deprovision service admin-ipv4',
+      }
+      exec { 'Deprovision admin-ipv6 service group member':
+        command => 'sm-deprovision service-group-member controller-services admin-ipv6',
+      }
+      -> exec { 'Deprovision admin-ipv6 service':
+        command => 'sm-deprovision service admin-ipv6',
       }
       -> exec { 'Provision Admin Interface':
         command => 'sm-provision service-domain-interface controller admin-interface',
@@ -298,96 +327,284 @@ class platform::sm
     }
   }
 
-  exec { 'Configure OAM IP':
-    command => "sm-configure service_instance oam-ip oam-ip \"ip=${oam_ip_param_ip},cidr_netmask=${oam_ip_param_mask},nic=${oam_ip_interface},arp_count=7\"",
+  ############################
+  # OAM
+  if $::platform::network::oam::ipv4::params::subnet_version == $::platform::params::ipv4 {
+    $oam_ipv4_param_ip   = $::platform::network::oam::ipv4::params::controller_address
+    $oam_ipv4_param_mask = $::platform::network::oam::ipv4::params::subnet_prefixlen
+    exec { 'Configure OAM IPv4':
+      command => "sm-configure service_instance oam-ipv4 oam-ipv4 \"ip=${oam_ipv4_param_ip},cidr_netmask=${oam_ipv4_param_mask},nic=${oam_ip_interface},arp_count=7\"",
+    }
+  }
+  if $::platform::network::oam::ipv6::params::subnet_version == $::platform::params::ipv6 {
+    $oam_ipv6_param_ip   = $::platform::network::oam::ipv6::params::controller_address
+    $oam_ipv6_param_mask = $::platform::network::oam::ipv6::params::subnet_prefixlen
+    exec { 'Configure OAM IPv6':
+      command => "sm-configure service_instance oam-ipv6 oam-ipv6 \"ip=${oam_ipv6_param_ip},cidr_netmask=${oam_ipv6_param_mask},nic=${oam_ip_interface},arp_count=7\"",
+    }
+  }
+
+  ############################
+  # MGMT
+  if $system_mode == 'duplex-direct' or $system_mode == 'simplex' {
+    if $::platform::network::mgmt::ipv4::params::subnet_version == $::platform::params::ipv4 {
+      $mgmt_ipv4_param_ip   = $::platform::network::mgmt::ipv4::params::controller_address
+      $mgmt_ipv4_param_mask = $::platform::network::mgmt::ipv4::params::subnet_prefixlen
+      exec { 'Configure Management IPv4 service instance':
+        command => "sm-configure service_instance management-ipv4 management-ipv4 \"ip=${mgmt_ipv4_param_ip},cidr_netmask=${mgmt_ipv4_param_mask},nic=${mgmt_ip_interface},arp_count=7,dc=yes\"",
+      }
+    }
+    if $::platform::network::mgmt::ipv6::params::subnet_version == $::platform::params::ipv6 {
+      $mgmt_ipv6_param_ip   = $::platform::network::mgmt::ipv6::params::controller_address
+      $mgmt_ipv6_param_mask = $::platform::network::mgmt::ipv6::params::subnet_prefixlen
+      exec { 'Configure Management IPv6 service instance':
+        command => "sm-configure service_instance management-ipv6 management-ipv6 \"ip=${mgmt_ipv6_param_ip},cidr_netmask=${mgmt_ipv6_param_mask},nic=${mgmt_ip_interface},arp_count=7,dc=yes\"",
+      }
+    }
+  } else {
+    if $::platform::network::mgmt::ipv4::params::subnet_version == $::platform::params::ipv4 {
+      $mgmt_ipv4_param_ip   = $::platform::network::mgmt::ipv4::params::controller_address
+      $mgmt_ipv4_param_mask = $::platform::network::mgmt::ipv4::params::subnet_prefixlen
+      exec { 'Configure Management IPv4 service instance':
+        command => "sm-configure service_instance management-ipv4 management-ipv4 \"ip=${mgmt_ipv4_param_ip},cidr_netmask=${mgmt_ipv4_param_mask},nic=${mgmt_ip_interface},arp_count=7,preferred_lft=forever\"",
+      }
+    }
+    if $::platform::network::mgmt::ipv6::params::subnet_version == $::platform::params::ipv6 {
+      $mgmt_ipv6_param_ip   = $::platform::network::mgmt::ipv6::params::controller_address
+      $mgmt_ipv6_param_mask = $::platform::network::mgmt::ipv6::params::subnet_prefixlen
+      exec { 'Configure Management IPv6 service instance':
+        command => "sm-configure service_instance management-ipv6 management-ipv6 \"ip=${mgmt_ipv6_param_ip},cidr_netmask=${mgmt_ipv6_param_mask},nic=${mgmt_ip_interface},arp_count=7,preferred_lft=0\"",
+      }
+    }
+  }
+  if $::platform::network::mgmt::ipv4::params::subnet_version == $::platform::params::ipv4 {
+    exec { 'Provision management-ipv4 service group member':
+      command => 'sm-provision service-group-member controller-services management-ipv4',
+    }
+    -> exec { 'Provision management-ipv4 service':
+      command => 'sm-provision service management-ipv4',
+    }
+  } elsif $::platform::network::mgmt::ipv4::params::subnet_version == undef {
+      exec { 'Deprovision management-ipv4 service group member':
+        command => 'sm-deprovision service-group-member controller-services management-ipv4',
+      }
+      -> exec { 'Deprovision management-ipv4 service':
+        command => 'sm-deprovision service management-ipv4',
+      }
+  }
+  if $::platform::network::mgmt::ipv6::params::subnet_version == $::platform::params::ipv6 {
+    exec { 'Provision management-ipv6 service group member':
+      command => 'sm-provision service-group-member controller-services management-ipv6',
+    }
+    -> exec { 'Provision management-ipv6 service':
+      command => 'sm-provision service management-ipv6',
+    }
+  } elsif $::platform::network::mgmt::ipv6::params::subnet_version == undef {
+      exec { 'Deprovision management-ipv6 service group member':
+        command => 'sm-deprovision service-group-member controller-services management-ipv6',
+      }
+      -> exec { 'Deprovision management-ipv6 service':
+        command => 'sm-deprovision service management-ipv6',
+      }
   }
 
   if $system_mode == 'duplex-direct' or $system_mode == 'simplex' {
-      exec { 'Configure Management IP':
-        command => "sm-configure service_instance management-ip management-ip \"ip=${mgmt_ip_param_ip},cidr_netmask=${mgmt_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7,dc=yes\"",
+
+    if $::platform::network::cluster_host::ipv4::params::subnet_version == $::platform::params::ipv4 {
+      $cluster_host_ipv4_param_ip   = $::platform::network::cluster_host::ipv4::params::controller_address
+      $cluster_host_ipv4_param_mask = $::platform::network::cluster_host::ipv4::params::subnet_prefixlen
+      exec { 'Configure Cluster Host IPv4 service instance':
+        command =>
+            "sm-configure service_instance cluster-host-ipv4 cluster-host-ipv4 \"ip=${cluster_host_ipv4_param_ip},cidr_netmask=${cluster_host_ipv4_param_mask},nic=${cluster_host_ip_interface},arp_count=7,dc=yes\"",
       }
+    }
+
+    if $::platform::network::cluster_host::ipv6::params::subnet_version == $::platform::params::ipv6 {
+      $cluster_host_ipv6_param_ip   = $::platform::network::cluster_host::ipv6::params::controller_address
+      $cluster_host_ipv6_param_mask = $::platform::network::cluster_host::ipv6::params::subnet_prefixlen
+      exec { 'Configure Cluster Host IPv6 service instance':
+        command =>
+            "sm-configure service_instance cluster-host-ipv6 cluster-host-ipv6 \"ip=${cluster_host_ipv6_param_ip},cidr_netmask=${cluster_host_ipv6_param_mask},nic=${cluster_host_ip_interface},arp_count=7,dc=yes\"",
+      }
+    }
   } else {
-      # For ipv6 the only way to initiate outgoing connections
-      # over the fixed ips is to set preferred_lft to 0 for the
-      # floating ips so that they are not used
-      if $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
-        $preferred_lft = '0'
-      } else {
-        $preferred_lft = 'forever'
+
+    if $::platform::network::cluster_host::ipv4::params::subnet_version == $::platform::params::ipv4 {
+      $cluster_host_ipv4_param_ip   = $::platform::network::cluster_host::ipv4::params::controller_address
+      $cluster_host_ipv4_param_mask = $::platform::network::cluster_host::ipv4::params::subnet_prefixlen
+      exec { 'Configure Cluster Host IPv4 service instance':
+        command =>
+            "sm-configure service_instance cluster-host-ipv4 cluster-host-ipv4 \"ip=${cluster_host_ipv4_param_ip},cidr_netmask=${cluster_host_ipv4_param_mask},nic=${cluster_host_ip_interface},arp_count=7,preferred_lft=forever\"",
       }
-      exec { 'Configure Management IP':
-        command => "sm-configure service_instance management-ip management-ip \"ip=${mgmt_ip_param_ip},cidr_netmask=${mgmt_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7,preferred_lft=${preferred_lft}\"",
+    }
+
+    if $::platform::network::cluster_host::ipv6::params::subnet_version == $::platform::params::ipv6 {
+      $cluster_host_ipv6_param_ip   = $::platform::network::cluster_host::ipv6::params::controller_address
+      $cluster_host_ipv6_param_mask = $::platform::network::cluster_host::ipv6::params::subnet_prefixlen
+      exec { 'Configure Cluster Host IPv6 service instance':
+        command =>
+            "sm-configure service_instance cluster-host-ipv6 cluster-host-ipv6 \"ip=${cluster_host_ipv6_param_ip},cidr_netmask=${cluster_host_ipv6_param_mask},nic=${cluster_host_ip_interface},arp_count=7,preferred_lft=0\"",
       }
+    }
   }
 
-
-  if $system_mode == 'duplex-direct' or $system_mode == 'simplex' {
-    exec { 'Configure Cluster Host IP service instance':
-      command =>
-          "sm-configure service_instance cluster-host-ip cluster-host-ip \"ip=${cluster_host_ip_param_ip},cidr_netmask=${cluster_host_ip_param_mask},nic=${cluster_host_ip_interface},arp_count=7,dc=yes\"",
+  ############################
+  # CLUSTER-HOST
+  if $::platform::network::cluster_host::ipv4::params::subnet_version == $::platform::params::ipv4 {
+    exec { 'Provision cluster-host-ipv4 service group member':
+      command => 'sm-provision service-group-member controller-services cluster-host-ipv4',
     }
-  } else {
-    # For ipv6 the only way to initiate outgoing connections
-    # over the fixed ips is to set preferred_lft to 0 for the
-    # floating ips so that they are not used
-    if $::platform::network::cluster_host::params::subnet_version == $::platform::params::ipv6 {
-      $preferred_lft_cluster = '0'
-    } else {
-      $preferred_lft_cluster = 'forever'
+    -> exec { 'Provision cluster-host-ipv4 service':
+      command => 'sm-provision service cluster-host-ipv4',
     }
-    exec { 'Configure Cluster Host IP service instance':
-      command =>
-          "sm-configure service_instance cluster-host-ip cluster-host-ip \"ip=${cluster_host_ip_param_ip},cidr_netmask=${cluster_host_ip_param_mask},nic=${cluster_host_ip_interface},arp_count=7,preferred_lft=${preferred_lft_cluster}\"",
+  } elsif $::platform::network::cluster_host::ipv4::params::subnet_version == undef {
+      exec { 'Deprovision cluster-host-ipv4 service group member':
+        command => 'sm-deprovision service-group-member controller-services cluster-host-ipv4',
+      }
+      -> exec { 'Deprovision cluster-host-ipv4 service':
+        command => 'sm-deprovision service cluster-host-ipv4',
+      }
+  }
+  if $::platform::network::cluster_host::ipv6::params::subnet_version == $::platform::params::ipv6 {
+    exec { 'Provision cluster-host-ipv6 service group member':
+      command => 'sm-provision service-group-member controller-services cluster-host-ipv6',
     }
+    -> exec { 'Provision cluster-host-ipv6 service':
+      command => 'sm-provision service cluster-host-ipv6',
+    }
+  } elsif $::platform::network::cluster_host::ipv6::params::subnet_version == undef {
+      exec { 'Deprovision cluster-host-ipv6 service group member':
+        command => 'sm-deprovision service-group-member controller-services cluster-host-ipv6',
+      }
+      -> exec { 'Deprovision cluster-host-ipv6 service':
+        command => 'sm-deprovision service cluster-host-ipv6',
+      }
   }
 
   exec { 'Configure sm server and client port':
       command => "sm-configure system --sm_client_port=${sm_client_port} --sm_server_port=${sm_server_port}",
   }
 
+  ############################
+  # PXEBOOT
   # Create the PXEBoot IP service if it is configured
+  # PXEBoot only supports IPv4 config
   if str2bool($::is_initial_config) {
-      exec { 'Configure PXEBoot IP service in SM (service-group-member pxeboot-ip)':
-          command => 'sm-provision service-group-member controller-services pxeboot-ip',
-      }
-      -> exec { 'Configure PXEBoot IP service in SM (service pxeboot-ip)':
-          command => 'sm-provision service pxeboot-ip',
-      }
+    exec { 'Configure PXEBoot IPv4 service in SM (service-group-member pxeboot-ipv4)':
+        command => 'sm-provision service-group-member controller-services pxeboot-ipv4',
+    }
+    -> exec { 'Configure PXEBoot IPv4 service in SM (service pxeboot-ipv4)':
+        command => 'sm-provision service pxeboot-ipv4',
+    }
   }
 
   if $system_mode == 'duplex-direct' or $system_mode == 'simplex' {
-      exec { 'Configure PXEBoot IP':
-          command => "sm-configure service_instance pxeboot-ip pxeboot-ip \"ip=${pxeboot_ip_param_ip},cidr_netmask=${pxeboot_ip_param_mask},nic=${pxeboot_ip_interface},arp_count=7,dc=yes\"",
+    if $::platform::network::pxeboot::ipv4::params::subnet_version == $::platform::params::ipv4 {
+      $pxeboot_ipv4_param_ip   = $::platform::network::pxeboot::ipv4::params::controller_address
+      $pxeboot_ipv4_param_mask = $::platform::network::pxeboot::ipv4::params::subnet_prefixlen
+      exec { 'Configure PXEBoot IPv4 service instance':
+          command => "sm-configure service_instance pxeboot-ipv4 pxeboot-ipv4 \"ip=${pxeboot_ipv4_param_ip},cidr_netmask=${pxeboot_ipv4_param_mask},nic=${pxeboot_ip_interface},arp_count=7,dc=yes\"",
       }
+    }
   } else {
-      exec { 'Configure PXEBoot IP':
-          command => "sm-configure service_instance pxeboot-ip pxeboot-ip \"ip=${pxeboot_ip_param_ip},cidr_netmask=${pxeboot_ip_param_mask},nic=${pxeboot_ip_interface},arp_count=7\"",
+    if $::platform::network::pxeboot::ipv4::params::subnet_version == $::platform::params::ipv4 {
+      $pxeboot_ipv4_param_ip   = $::platform::network::pxeboot::ipv4::params::controller_address
+      $pxeboot_ipv4_param_mask = $::platform::network::pxeboot::ipv4::params::subnet_prefixlen
+      exec { 'Configure PXEBoot IPv4 service instance':
+          command => "sm-configure service_instance pxeboot-ipv4 pxeboot-ipv4 \"ip=${pxeboot_ipv4_param_ip},cidr_netmask=${pxeboot_ipv4_param_mask},nic=${pxeboot_ip_interface},arp_count=7\"",
       }
+    }
   }
 
+  ############################
+  # IRONIC
   # Create the Ironic IP service if it is configured
   if $ironic_ip_interface and $system_mode != 'simplex' {
-      exec { 'Configure Ironic IP service in SM (service-group-member ironic-ip)':
-          command => 'sm-provision service-group-member controller-services ironic-ip',
+    if $::platform::network::ironic::ipv4::params::subnet_version == $::platform::params::ipv4 {
+      $ironic_ipv4_param_ip   = $::platform::network::ironic::ipv4::params::controller_address
+      $ironic_ipv4_param_mask = $::platform::network::ironic::ipv4::params::subnet_prefixlen
+      exec { 'Configure Ironic IPv4 service in SM (service-group-member ironic-ipv4)':
+          command => 'sm-provision service-group-member controller-services ironic-ipv4',
       }
-      -> exec { 'Configure Ironic IP service in SM (service ironic-ip)':
-          command => 'sm-provision service ironic-ip',
+      -> exec { 'Configure Ironic IPv4 service in SM (service ironic-ipv4)':
+          command => 'sm-provision service ironic-ipv4',
       }
-      -> exec { 'Configure Ironic IP':
-          command => "sm-configure service_instance ironic-ip ironic-ip \"ip=${ironic_ip_param_ip},cidr_netmask=${ironic_ip_param_mask},nic=${ironic_ip_interface},arp_count=7\"",
+      -> exec { 'Configure Ironic IPv4 service instance':
+          command => "sm-configure service_instance ironic-ipv4 ironic-ipv4 \"ip=${ironic_ipv4_param_ip},cidr_netmask=${ironic_ipv4_param_mask},nic=${ironic_ip_interface},arp_count=7\"",
       }
+    } elsif $::platform::network::ironic::ipv4::params::subnet_version == undef {
+      exec { 'Deprovision ironic-ipv4 service group member':
+        command => 'sm-deprovision service-group-member controller-services ironic-ipv4',
+      }
+      -> exec { 'Deprovision ironic-ipv4 service':
+        command => 'sm-deprovision service ironic-ipv4',
+      }
+    }
+    if $::platform::network::ironic::ipv6::params::subnet_version == $::platform::params::ipv6 {
+      $ironic_ipv6_param_ip   = $::platform::network::ironic::ipv6::params::controller_address
+      $ironic_ipv6_param_mask = $::platform::network::ironic::ipv6::params::subnet_prefixlen
+      exec { 'Configure Ironic IPv6 service in SM (service-group-member ironic-ipv6)':
+          command => 'sm-provision service-group-member controller-services ironic-ipv6',
+      }
+      -> exec { 'Configure Ironic IPv6 service in SM (service ironic-ipv6)':
+          command => 'sm-provision service ironic-ipv6',
+      }
+      -> exec { 'Configure Ironic IPv6 service instance':
+          command => "sm-configure service_instance ironic-ipv6 ironic-ipv6 \"ip=${ironic_ipv6_param_ip},cidr_netmask=${ironic_ipv6_param_mask},nic=${ironic_ip_interface},arp_count=7\"",
+      }
+    } elsif $::platform::network::ironic::ipv6::params::subnet_version == undef {
+      exec { 'Deprovision ironic-ipv6 service group member':
+        command => 'sm-deprovision service-group-member controller-services ironic-ipv6',
+      }
+      -> exec { 'Deprovision ironic-ipv6 service':
+        command => 'sm-deprovision service ironic-ipv6',
+      }
+    }
   }
 
+  ############################
+  # ADMIN
   # Create the Admin IP service if it is configured
   if $admin_ip_interface {
-    exec { 'Configure Admin IP service in SM (service-group-member admin-ip)':
-      command => 'sm-provision service-group-member controller-services admin-ip',
+    if $::platform::network::admin::ipv4::params::subnet_version == $::platform::params::ipv4 {
+      $admin_ipv4_param_ip   = $::platform::network::admin::ipv4::params::controller_address
+      $admin_ipv4_param_mask = $::platform::network::admin::ipv4::params::subnet_prefixlen
+      exec { 'Configure Admin IPv4 service in SM (service-group-member admin-ipv4)':
+        command => 'sm-provision service-group-member controller-services admin-ipv4',
+      }
+      -> exec { 'Configure Admin IPv4 service in SM (service admin-ipv4)':
+        command => 'sm-provision service admin-ipv4',
+      }
+      -> exec { 'Configure Admin IPv4':
+        command => "sm-configure service_instance admin-ipv4 admin-ipv4 \"ip=${admin_ipv4_param_ip},cidr_netmask=${admin_ipv4_param_mask},nic=${admin_ip_interface},arp_count=7\"",
+      }
+    } elsif $::platform::network::admin::ipv4::params::subnet_version == undef {
+      exec { 'Deprovision unused admin-ipv4 service group member':
+        command => 'sm-deprovision service-group-member controller-services admin-ipv4',
+      }
+      -> exec { 'Deprovision unused admin-ipv4 service':
+        command => 'sm-deprovision service admin-ipv4',
+      }
     }
-    -> exec { 'Configure Admin IP service in SM (service admin-ip)':
-      command => 'sm-provision service admin-ip',
-    }
-    -> exec { 'Configure Admin IP':
-      command => "sm-configure service_instance admin-ip admin-ip \"ip=${admin_ip_param_ip},cidr_netmask=${admin_ip_param_mask},nic=${admin_ip_interface},arp_count=7\"",
+    if $::platform::network::admin::ipv6::params::subnet_version == $::platform::params::ipv6 {
+      $admin_ipv6_param_ip   = $::platform::network::admin::ipv6::params::controller_address
+      $admin_ipv6_param_mask = $::platform::network::admin::ipv6::params::subnet_prefixlen
+      exec { 'Configure Admin IPv6 service in SM (service-group-member admin-ipv6)':
+        command => 'sm-provision service-group-member controller-services admin-ipv6',
+      }
+      -> exec { 'Configure Admin IPv6 service in SM (service admin-ipv6)':
+        command => 'sm-provision service admin-ipv6',
+      }
+      -> exec { 'Configure Admin IPv6 service instance':
+        command => "sm-configure service_instance admin-ipv6 admin-ipv6 \"ip=${admin_ipv6_param_ip},cidr_netmask=${admin_ipv6_param_mask},nic=${admin_ip_interface},arp_count=7\"",
+      }
+    } elsif $::platform::network::admin::ipv6::params::subnet_version == undef {
+      exec { 'Deprovision unused admin-ipv6 service group member':
+        command => 'sm-deprovision service-group-member controller-services admin-ipv6',
+      }
+      -> exec { 'Deprovision unused admin-ipv6 service':
+        command => 'sm-deprovision service admin-ipv6',
+      }
     }
   }
 
@@ -603,6 +820,11 @@ class platform::sm
         command => "sm-configure service_instance platform-nfs-ip platform-nfs-ip \"ip=${platform_nfs_ip_param_ip},cidr_netmask=${platform_nfs_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7,dc=yes\"",
       }
     } else {
+      if $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
+        $preferred_lft = '0'
+      } else {
+        $preferred_lft = 'forever'
+      }
       exec { 'Configure Platform NFS':
         command => "sm-configure service_instance platform-nfs-ip platform-nfs-ip \"ip=${platform_nfs_ip_param_ip},cidr_netmask=${platform_nfs_ip_param_mask},nic=${mgmt_ip_interface},arp_count=7,preferred_lft=${preferred_lft}\"",
       }
@@ -690,11 +912,35 @@ class platform::sm
         }
     }
   } else {
-    exec { 'Provision oam-ip service group member':
-      command => 'sm-provision service-group-member oam-services oam-ip',
+    if $::platform::network::oam::ipv4::params::subnet_version == $::platform::params::ipv4 {
+      exec { 'Provision oam-ipv4 service group member':
+        command => 'sm-provision service-group-member oam-services oam-ipv4',
+      }
+      -> exec { 'Provision oam-ipv4 service':
+        command => 'sm-provision service oam-ipv4',
+      }
+    } elsif $::platform::network::oam::ipv4::params::subnet_version == undef {
+      exec { 'Deprovision oam-ipv4 service group member':
+        command => 'sm-deprovision service-group-member oam-services oam-ipv4',
+      }
+      -> exec { 'Deprovision oam-ipv4 service':
+        command => 'sm-deprovision service oam-ipv4',
+      }
     }
-    -> exec { 'Provision oam-ip service':
-      command => 'sm-provision service oam-ip',
+    if $::platform::network::oam::ipv6::params::subnet_version == $::platform::params::ipv6 {
+      exec { 'Provision oam-ipv6 service group member':
+        command => 'sm-provision service-group-member oam-services oam-ipv6',
+      }
+      -> exec { 'Provision oam-ipv6 service':
+        command => 'sm-provision service oam-ipv6',
+      }
+    } elsif $::platform::network::oam::ipv6::params::subnet_version == undef {
+      exec { 'Deprovision oam-ipv6 service group member':
+        command => 'sm-deprovision service-group-member oam-services oam-ipv6',
+      }
+      -> exec { 'Deprovision oam-ipv6 service':
+        command => 'sm-deprovision service oam-ipv6',
+      }
     }
 
     exec { 'Configure oam-service redundancy model to DX':
@@ -702,11 +948,35 @@ class platform::sm
     }
 
     if $admin_ip_interface {
-      exec { 'Provision admin-ip service group member':
-        command => 'sm-provision service-group-member controller-services admin-ip',
+      if $::platform::network::admin::ipv4::params::subnet_version == $::platform::params::ipv4 {
+        exec { 'Provision admin-ipv4 service group member':
+          command => 'sm-provision service-group-member controller-services admin-ipv4',
+        }
+        -> exec { 'Provision admin-ipv4 service':
+          command => 'sm-provision service admin-ipv4',
+        }
+      } elsif $::platform::network::admin::ipv4::params::subnet_version == undef {
+        exec { 'Deprovision unused non-SX admin-ipv4 service group member':
+          command => 'sm-deprovision service-group-member controller-services admin-ipv4',
+        }
+        -> exec { 'Deprovision unused non-SX admin-ipv4 service':
+          command => 'sm-deprovision service admin-ipv4',
+        }
       }
-      -> exec { 'Provision admin-ip service':
-        command => 'sm-provision service admin-ip',
+      if $::platform::network::admin::ipv6::params::subnet_version == $::platform::params::ipv6 {
+        exec { 'Provision admin-ipv6 service group member':
+          command => 'sm-provision service-group-member controller-services admin-ipv6',
+        }
+        -> exec { 'Provision admin-ipv6 service':
+          command => 'sm-provision service admin-ipv6',
+        }
+      } elsif $::platform::network::admin::ipv6::params::subnet_version == undef {
+        exec { 'Deprovision unused non-SX admin-ipv6 service group member':
+          command => 'sm-deprovision service-group-member controller-services admin-ipv6',
+        }
+        -> exec { 'Deprovision unused non-SX admin-ipv6 service':
+          command => 'sm-deprovision service admin-ipv6',
+        }
       }
     }
 
@@ -1135,11 +1405,25 @@ class platform::sm::update_oam_config::runtime {
   if $system_mode == 'simplex' {
 
     include ::platform::network::oam::params
+    include ::platform::network::oam::ipv4::params
+    include ::platform::network::oam::ipv6::params
     $oam_my_unit_ip    = $::platform::network::oam::params::controller_address
     $oam_ip_interface  = $::platform::network::oam::params::interface_name
-    $oam_ip_param_ip   = $::platform::network::oam::params::controller_address
-    $oam_ip_param_mask = $::platform::network::oam::params::subnet_prefixlen
+    $oam_ipv4_param_ip   = $::platform::network::oam::ipv4::params::controller_address
+    $oam_ipv4_param_mask = $::platform::network::oam::ipv4::params::subnet_prefixlen
+    $oam_ipv6_param_ip   = $::platform::network::oam::ipv6::params::controller_address
+    $oam_ipv6_param_mask = $::platform::network::oam::ipv6::params::subnet_prefixlen
 
+    if $::platform::network::oam::ipv6::params::subnet_version == 4 {
+      exec { 'mark oam ipv4 addresses presence':
+        command => 'touch /var/run/.network_oam_with_ipv4_addresses',
+      }
+    }
+    if $::platform::network::oam::ipv6::params::subnet_version == 6 {
+      exec { 'mark oam ipv6 addresses presence':
+        command => 'touch /var/run/.network_oam_with_ipv6_addresses',
+      }
+    }
     exec { 'pmon-stop-sm-api':
       command => 'pmon-stop sm-api',
     }
@@ -1157,8 +1441,13 @@ class platform::sm::update_oam_config::runtime {
       ensure => absent
     }
     # will write the config values to /var/lib/sm/sm.db
-    -> exec { 'Configure OAM IP':
-      command => "sm-configure service_instance oam-ip oam-ip \"ip=${oam_ip_param_ip},cidr_netmask=${oam_ip_param_mask},nic=${oam_ip_interface},arp_count=7\"",
+    -> exec { 'Configure OAM IPv4':
+      command => "sm-configure service_instance oam-ipv4 oam-ipv4 \"ip=${oam_ipv4_param_ip},cidr_netmask=${oam_ipv4_param_mask},nic=${oam_ip_interface},arp_count=7\"",
+      onlyif  => 'test -f /var/run/.network_oam_with_ipv4_addresses'
+    }
+    -> exec { 'Configure OAM IPv6':
+      command => "sm-configure service_instance oam-ipv6 oam-ipv6 \"ip=${oam_ipv6_param_ip},cidr_netmask=${oam_ipv6_param_mask},nic=${oam_ip_interface},arp_count=7\"",
+      onlyif  => 'test -f /var/run/.network_oam_with_ipv6_addresses'
     }
     -> exec { 'Configure OAM Interface':
       command => "sm-configure interface controller oam-interface \"\" ${oam_my_unit_ip} 2222 2223 \"\" 2222 2223",
@@ -1191,6 +1480,15 @@ class platform::sm::update_oam_config::runtime {
       tries     => 15,
       try_sleep => 1,
     }
+    -> exec {'address family ipv4 indicator':
+      command => 'rm -f /var/run/.network_oam_with_ipv4_addresses',
+      onlyif  => 'test -f /var/run/.network_oam_with_ipv4_addresses'
+    }
+    -> exec {'address family ipv6 indicator':
+      command => 'rm -f /var/run/.network_oam_with_ipv6_addresses',
+      onlyif  => 'test -f /var/run/.network_oam_with_ipv6_addresses'
+    }
+
   }
   # lint:endignore:140chars
 }
@@ -1198,13 +1496,23 @@ class platform::sm::update_oam_config::runtime {
 class platform::sm::enable_admin_config::runtime {
   include ::platform::network::admin::params
   $admin_ip_interface  = $::platform::network::admin::params::interface_name
-  exec { 'Manage admin-ip service':
-    command => 'sm-manage service admin-ip'
+  if $::platform::network::admin::ipv4::params::subnet_version == $::platform::params::ipv4 {
+    exec { 'Manage admin-ipv4 service':
+      command => 'sm-manage service admin-ipv4'
+    }
+    -> exec { 'Provision admin-ipv4 service':
+      command => 'sm-provision service-group-member controller-services admin-ipv4 --apply'
+    }
   }
-  -> exec { 'Provision admin-ip service':
-    command => 'sm-provision service-group-member controller-services admin-ip --apply'
+  if $::platform::network::admin::ipv6::params::subnet_version == $::platform::params::ipv6 {
+    exec { 'Manage admin-ipv6 service':
+      command => 'sm-manage service admin-ipv6'
+    }
+    -> exec { 'Provision admin-ipv6 service':
+      command => 'sm-provision service-group-member controller-services admin-ipv6 --apply'
+    }
   }
-  -> exec { 'Provision service domain admin-interface':
+  exec { 'Provision service domain admin-interface':
     command => 'sm-provision service-domain-interface controller admin-interface --apply'
   }
 }
@@ -1212,13 +1520,23 @@ class platform::sm::enable_admin_config::runtime {
 class platform::sm::disable_admin_config::runtime {
   include ::platform::network::admin::params
   $admin_ip_interface  = $::platform::network::admin::params::interface_name
-  exec { 'Unmanage admin-ip service':
-    command => 'sm-unmanage service admin-ip'
+  if $::platform::network::admin::ipv4::params::subnet_version == $::platform::params::ipv4 {
+    exec { 'Unmanage admin-ipv4 service':
+      command => 'sm-unmanage service admin-ipv4'
+    }
+    -> exec { 'Deprovision admin-ipv4 service':
+      command => 'sm-deprovision service-group-member controller-services admin-ipv4 --apply'
+    }
   }
-  -> exec { 'Deprovision admin-ip service':
-    command => 'sm-deprovision service-group-member controller-services admin-ip --apply'
+  if $::platform::network::admin::ipv6::params::subnet_version == $::platform::params::ipv6 {
+    exec { 'Unmanage admin-ipv6 service':
+      command => 'sm-unmanage service admin-ipv6'
+    }
+    -> exec { 'Deprovision admin-ipv6 service':
+      command => 'sm-deprovision service-group-member controller-services admin-ipv6 --apply'
+    }
   }
-  -> exec { 'Deprovision service domain admin-interface':
+  exec { 'Deprovision service domain admin-interface':
     command => 'sm-deprovision service-domain-interface controller admin-interface --apply'
   }
 }
@@ -1255,10 +1573,21 @@ class platform::sm::update_admin_config::runtime {
     $sm_cmd = "sm-configure interface controller admin-interface \"\" ${admin_my_unit_ip} 2222 2223 ${admin_peer_unit_ip} 2222 2223 --apply"
   }
 
-  exec { 'Reconfigure Admin IP':
-    command => "sm-configure service_instance admin-ip admin-ip \"ip=${admin_ip_param_ip},cidr_netmask=${admin_ip_param_mask},nic=${admin_ip_interface},arp_count=7\" --apply",
+  if $::platform::network::admin::ipv4::params::subnet_version == $::platform::params::ipv4 {
+    $admin_ipv4_param_ip   = $::platform::network::admin::ipv4::params::controller_address
+    $admin_ipv4_param_mask = $::platform::network::admin::ipv4::params::subnet_prefixlen
+    exec { 'Reconfigure Admin IPv4':
+      command => "sm-configure service_instance admin-ipv4 admin-ipv4 \"ip=${admin_ipv4_param_ip},cidr_netmask=${admin_ipv4_param_mask},nic=${admin_ip_interface},arp_count=7\" --apply",
+    }
   }
-  -> exec { 'Configure Admin Interface':
+  if $::platform::network::admin::ipv6::params::subnet_version == $::platform::params::ipv6 {
+    $admin_ipv6_param_ip   = $::platform::network::admin::ipv6::params::controller_address
+    $admin_ipv6_param_mask = $::platform::network::admin::ipv6::params::subnet_prefixlen
+    exec { 'Reconfigure Admin IPv6':
+      command => "sm-configure service_instance admin-ipv6 admin-ipv6 \"ip=${admin_ipv6_param_ip},cidr_netmask=${admin_ipv6_param_mask},nic=${admin_ip_interface},arp_count=7\" --apply",
+    }
+  }
+  exec { 'Configure Admin Interface':
     command => $sm_cmd,
   }
   # lint:endignore:140chars
