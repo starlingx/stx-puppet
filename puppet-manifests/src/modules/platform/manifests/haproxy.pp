@@ -9,6 +9,7 @@ class platform::haproxy::params (
   $global_options = undef,
   $tpm_object = undef,
   $tpm_engine = '/usr/lib64/openssl/engines/libtpm2.so',
+  $public_secondary_ip_address = undef,
 ) { }
 
 
@@ -27,6 +28,7 @@ define platform::haproxy::proxy (
   $public_api = true,
   $mode_option = undef,
   $acl_option = {},
+  $public_secondary_ip_address = undef,
 ) {
   include ::platform::haproxy::params
 
@@ -64,10 +66,15 @@ define platform::haproxy::proxy (
       $hsts_option = undef
   }
 
-  if $public_ip_address {
+  if $public_ip_address != undef and $public_secondary_ip_address == undef {
     $public_ip = $public_ip_address
+    $public_secondary_ip = undef
+  } elsif $public_ip_address != undef and $public_secondary_ip_address != undef{
+    $public_ip = $public_ip_address
+    $public_secondary_ip = $public_secondary_ip_address
   } else {
     $public_ip = $::platform::haproxy::params::public_ip_address
+    $public_secondary_ip = $::platform::haproxy::params::public_secondary_ip_address
   }
 
   if $private_ip_address {
@@ -82,30 +89,31 @@ define platform::haproxy::proxy (
     $real_client_timeout = undef
   }
 
-  if $::osfamily == 'Debian' {
-    if $proto != undef {
-      $header = regsubst($proto, ':\\\ ', ' ')
-      $proto_header = "add-header ${header}"
-    } else {
-      $proto_header = undef
-    }
+  if $proto != undef {
+    $header = regsubst($proto, ':\\\ ', ' ')
+    $proto_header = "add-header ${header}"
+  } else {
+    $proto_header = undef
+  }
 
-    if $hsts_option != undef {
-      $htst_header = regsubst($hsts_option, ':\\\ ', ' ')
-      $hsts_option_header = "add-header ${htst_header}"
-    } else {
-      $hsts_option_header = undef
-    }
+  if $hsts_option != undef {
+    $htst_header = regsubst($hsts_option, ':\\\ ', ' ')
+    $hsts_option_header = "add-header ${htst_header}"
+  } else {
+    $hsts_option_header = undef
+  }
 
-    $options = {
-      'default_backend' => "${name}-internal",
-      'timeout'         => $real_client_timeout,
-      'mode'            => $mode_option,
-      'http-request'    => $proto_header,
-      'http-response'   => $hsts_option_header,
-    }
+  $options = {
+    'default_backend' => "${name}-internal",
+    'timeout'         => $real_client_timeout,
+    'mode'            => $mode_option,
+    'http-request'    => $proto_header,
+    'http-response'   => $hsts_option_header,
+  }
 
-    $all_options = $options + $acl_option
+  $all_options = $options + $acl_option
+
+  if $public_ip != undef and $public_secondary_ip == undef {
     haproxy::frontend { $name:
       collect_exported => false,
       name             => $name,
@@ -114,20 +122,15 @@ define platform::haproxy::proxy (
       },
       options          => $all_options
     }
-  } else {
+  } elsif $public_ip != undef and $public_secondary_ip != undef {
     haproxy::frontend { $name:
       collect_exported => false,
       name             => $name,
       bind             => {
-        "${public_ip}:${public_port}" => $ssl_option,
+        "${public_ip}:${public_port}"           => $ssl_option,
+        "${public_secondary_ip}:${public_port}" => $ssl_option,
       },
-      options          => {
-        'default_backend' => "${name}-internal",
-        'reqadd'          => $proto,
-        'timeout'         => $real_client_timeout,
-        'rspadd'          => $hsts_option,
-        'mode'            => $mode_option,
-      },
+      options          => $all_options
     }
   }
 
