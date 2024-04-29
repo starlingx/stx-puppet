@@ -980,6 +980,12 @@ class platform::sm
       }
     }
 
+    # Provision ipsec-config service
+    exec { 'Provision ipsec-config service in SM (service-group-member )':
+        command => 'sm-provision service-group-member controller-services ipsec-config',
+        onlyif  => ['test -f /etc/swanctl/swanctl_active.conf', 'test -f /etc/swanctl/swanctl_standby.conf'],
+    }
+
     exec { 'Configure controller-services redundancy model to DX':
       command => "sm-configure service_group yes controller controller-services 'N + M' 1 1 \"controller-aggregate\" directory-services",
     }
