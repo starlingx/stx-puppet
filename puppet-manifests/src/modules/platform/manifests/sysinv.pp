@@ -4,6 +4,7 @@ class platform::sysinv::params (
   $service_create = false,
   $fm_catalog_info = 'faultmanagement:fm:internalURL',
   $server_timeout = '600s',
+  $sysinv_api_workers = undef,
 ) { }
 
 class platform::sysinv
@@ -132,15 +133,23 @@ class platform::sysinv::api
     }
   }
 
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+  if ($::platform::sysinv::params::sysinv_api_workers != undef) {
+
     sysinv_config{
-      'DEFAULT/sysinv_api_workers': value => min($::platform::params::eng_workers_by_5, 6);
+      'DEFAULT/sysinv_api_workers': value => $::platform::sysinv::params::sysinv_api_workers
     }
   } else {
-  # TODO(mpeters): move to sysinv puppet module parameters
-    sysinv_config {
-      'DEFAULT/sysinv_api_workers': value => $::platform::params::eng_workers_by_5;
+    if $::platform::params::distributed_cloud_role =='systemcontroller' {
+      sysinv_config{
+        'DEFAULT/sysinv_api_workers': value => min($::platform::params::eng_workers_by_5, 6);
+      }
+    } else {
+      # TODO(mpeters): move to sysinv puppet module parameters
+      sysinv_config {
+        'DEFAULT/sysinv_api_workers': value => $::platform::params::eng_workers_by_5;
+      }
     }
   }
+
   include ::platform::sysinv::haproxy
 }
