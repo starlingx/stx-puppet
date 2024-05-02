@@ -366,6 +366,7 @@ class platform::filesystem::storage {
 class platform::filesystem::compute {
   if $::personality == 'worker' {
     include ::platform::filesystem::instances
+    include ::platform::filesystem::ceph
 
     # The default docker size for controller is 20G
     # other than 30G. To prevent the docker size to
@@ -391,6 +392,7 @@ class platform::filesystem::controller {
   include ::platform::filesystem::kubelet
   include ::platform::filesystem::log_bind
   include ::platform::filesystem::luks
+  include ::platform::filesystem::ceph
 }
 
 class platform::filesystem::log_bind {
@@ -631,5 +633,72 @@ class platform::filesystem::luks {
       returns   => [0, 5],
       onlyif    => [ "test ${::controller_sw_versions_match} = true", '/usr/local/bin/connectivity_test -t 10 controller', ],
     }
+  }
+}
+
+class platform::filesystem::ceph::mountpoint {
+  file { '/var/lib/ceph':
+    ensure => 'directory',
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0755',
+  }
+}
+
+class platform::filesystem::ceph::params (
+  $ceph_enabled = false,
+  $ensure = absent,
+  $lv_size = '1',
+  $lv_name = 'ceph-lv',
+  $mountpoint = '/var/lib/ceph/data',
+  $devmapper = '/dev/mapper/cgts--vg-ceph--lv',
+  $fs_type = 'ext4',
+  $fs_options = ' ',
+  $mode = '0750',
+) { }
+
+class platform::filesystem::ceph
+  inherits ::platform::filesystem::ceph::params {
+  include ::platform::filesystem::ceph::mountpoint
+
+  if $ceph_enabled {
+    $ensure = present
+    $mode = '0777'
+  }
+
+  Class['::platform::filesystem::ceph::mountpoint']
+  -> platform::filesystem { $lv_name:
+    ensure     => $ensure,
+    lv_name    => $lv_name,
+    lv_size    => $lv_size,
+    mountpoint => $mountpoint,
+    fs_type    => $fs_type,
+    fs_options => $fs_options,
+    mode       => $mode
+  }
+}
+
+class platform::filesystem::ceph::runtime {
+  include ::platform::filesystem::ceph
+  include ::platform::filesystem::ceph::params
+
+  $ceph_enabled = $::platform::filesystem::ceph::params::ceph_enabled
+  $lv_name = $::platform::filesystem::ceph::params::lv_name
+  $lv_size = $::platform::filesystem::ceph::params::lv_size
+  $devmapper = $::platform::filesystem::ceph::params::devmapper
+
+  if $ceph_enabled {
+    Class['::platform::filesystem::ceph']
+    -> platform::filesystem::resize { $lv_name:
+      lv_name   => $lv_name,
+      lv_size   => $lv_size,
+      devmapper => $devmapper,
+    }
+  } else {
+    $mountpoint = $::platform::filesystem::ceph::params::mountpoint
+    exec { "umount ${lv_name} mountpoint ${mountpoint}":
+      command => "umount ${mountpoint}; true",
+      onlyif  => "mountpoint -q ${mountpoint}",
+    } -> Mount[$lv_name]
   }
 }

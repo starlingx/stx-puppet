@@ -294,12 +294,7 @@ class platform::ceph::monitor
   }
 
   if $configure_ceph_mon {
-    file { '/var/lib/ceph':
-      ensure => 'directory',
-      owner  => 'root',
-      group  => 'root',
-      mode   => '0755',
-    }
+    include ::platform::filesystem::ceph::mountpoint
 
     if $system_type == 'All-in-one' and 'duplex' in $system_mode {
       # if transition from AIO-SX to AIO-DX has started, we need to
