@@ -130,35 +130,27 @@ class platform::kubernetes::configuration {
   }
 }
 
-class platform::kubernetes::bindmounts {
+class platform::kubernetes::symlinks {
   include ::platform::kubernetes::params
 
   $kubeadm_version = $::platform::kubernetes::params::kubeadm_version
   $kubelet_version = $::platform::kubernetes::params::kubelet_version
 
-  # In the following two bind mounts, the "remounts" option *must* be
-  # set to 'false' otherwise it doesn't work reliably.  In my testing
-  # (as of July 2021) it will update /etc/fstab but any existing
-  # mounts will be left untouched.  This sort of makes sense, as
-  # the mount man page specifies that the "remount" option does not
-  # change device or mount point and we may want to change the device.
+  # We are using symlinks here, we tried bind mounts originally but
+  # the Puppet mount class does not deal well with bind mounts
+  # and it was causing robustness issues if there was anything
+  # running in one of the mounts when we wanted to change it.
 
-  notice("setting stage1 bind mount, kubeadm_version is ${kubeadm_version}")
-  mount { '/usr/local/kubernetes/current/stage1':
-    ensure   => mounted,
-    device   => "/usr/local/kubernetes/${kubeadm_version}/stage1",
-    fstype   => 'none',
-    options  => 'x-systemd.after=ostree-remount,rw,bind',
-    remounts => false,
+  notice("setting stage1 symlink, kubeadm_version is ${kubeadm_version}")
+  file { '/var/lib/kubernetes/stage1':
+    ensure => link,
+    target => "/usr/local/kubernetes/${kubeadm_version}/stage1",
   }
 
-  notice("setting stage2 bind mount, kubelet_version is ${kubelet_version}")
-  mount { '/usr/local/kubernetes/current/stage2':
-    ensure   => mounted,
-    device   => "/usr/local/kubernetes/${kubelet_version}/stage2",
-    fstype   => 'none',
-    options  => 'x-systemd.after=ostree-remount,rw,bind',
-    remounts => false,
+  notice("setting stage2 symlink, kubelet_version is ${kubelet_version}")
+  file { '/var/lib/kubernetes/stage2':
+    ensure => link,
+    target => "/usr/local/kubernetes/${kubelet_version}/stage2",
   }
 }
 
@@ -269,8 +261,8 @@ class platform::kubernetes::kubeadm {
   include ::platform::kubernetes::params
   include ::platform::params
 
-  # Update kubeadm/kubelet bindmounts if needed.
-  require platform::kubernetes::bindmounts
+  # Update kubeadm/kubelet symlinks if needed.
+  require platform::kubernetes::symlinks
 
   $node_ip = $::platform::kubernetes::params::node_ip
   $host_labels = $::platform::kubernetes::params::host_labels
@@ -842,8 +834,8 @@ class platform::kubernetes::upgrade_first_control_plane
 
   include ::platform::params
 
-  # Update kubeadm bindmount if needed.
-  require platform::kubernetes::bindmounts
+  # Update kubeadm symlink if needed.
+  require platform::kubernetes::symlinks
 
   # The kubeadm command below doesn't have the credentials to download the
   # images from local registry when they are not present in the cache, so we
@@ -891,8 +883,8 @@ class platform::kubernetes::upgrade_first_control_plane
 class platform::kubernetes::upgrade_control_plane
   inherits ::platform::kubernetes::params {
 
-  # Update kubeadm bindmount if needed.
-  require platform::kubernetes::bindmounts
+  # Update kubeadm symlink if needed.
+  require platform::kubernetes::symlinks
 
   # The kubeadm command below doesn't have the credentials to download the
   # images from local registry when they are not present in the cache, so we
@@ -945,8 +937,7 @@ class platform::kubernetes::mask_stop_kubelet {
     onlyif       => 'systemctl is-enabled isolcpu_plugin.service | grep -wq enabled',
   }
 
-  # Mask restarting kubelet and stop it now so that we can unmount
-  # and re-mount the bind mount.
+  # Mask restarting kubelet and stop it now so that we can update the symlink.
   -> platform::kubernetes::mask_stop_service { 'kubelet':
     service_name => 'kubelet',
   }
@@ -955,39 +946,19 @@ class platform::kubernetes::mask_stop_kubelet {
 class platform::kubernetes::unmask_start_kubelet
   inherits ::platform::kubernetes::params {
 
+  # Update kubelet symlink if needed.
+  include platform::kubernetes::symlinks
+
   $kubelet_version = $::platform::kubernetes::params::kubelet_version
   $short_upgrade_to_version = regsubst($upgrade_to_version, '^v(.*)', '\1')
 
-  # The next three steps are a hack.  While stress-testing in the lab it
-  # was discovered that intermittently the attempt to remount the
-  # "stage2" mountpoint fails due to it being busy.  Waiting for kubelet
-  # to exit is not sufficient, as occasionally the remount attempt
-  # happens while kubectl is running.  The best solution found so far
-  # is to retry the unmount repeatedly until it succeeds, and then
-  # explicitly update the /etc/fstab file and mount the filesystem
-  # again.
-  # The worst case seen so far is a 16-second delay before the unmount
-  # actually succeeds.  In the future we should probably switch to using
-  # symlinks instead of bindmounts so that they can be changed
-  # atomically.
+  # Reload configs since /etc/systemd/system/kubelet.service.d/kubeadm.conf
+  # is a symlink to a versioned file.  (In practice it rarely changes.)
+  exec { 'Reload systemd configs for master upgrade':
+    command => '/usr/bin/systemctl daemon-reload',
+    require => File['/var/lib/kubernetes/stage2'],
+  }
 
-  # Try unmounting stage2 until it succeeds
-  exec { 'unmount k8s stage2 for upgrade':
-    command   => '/usr/bin/umount /usr/local/kubernetes/current/stage2',
-    tries     => 30,
-    try_sleep => 1,
-    timeout   => 10,
-  }
-  -> exec { 'update fstab for upgrade':
-      command => "/usr/bin/sed -i \"s#/usr/local/kubernetes/[0-9]\\.[0-9]\\+\\.[0-9]\\+/stage2#/usr/local/kubernetes/${kubelet_version}/stage2#\" /etc/fstab", # lint:ignore:140chars
-  }
-  # Remount k8s stage2 so that the puppet mount class works
-  -> exec { 'mount k8s stage2 for upgrade':
-      command   => '/usr/bin/mount /usr/local/kubernetes/current/stage2',
-      tries     => 30,
-      try_sleep => 1,
-      timeout   => 10,
-  }
   # In case we're upgrading K8s, remove any image GC override and revert to defaults.
   # We only want to do this here for duplex systems, for simplex we'll do it at the uncordon.
   # NOTE: we'll need to modify this when we bring in optimised multi-version K8s upgrades for duplex.
@@ -995,9 +966,11 @@ class platform::kubernetes::unmask_start_kubelet
       command => '/usr/bin/sed -i "s/--image-gc-high-threshold 100 //" /var/lib/kubelet/kubeadm-flags.env',
       onlyif  => "test '${kubelet_version}' = '${short_upgrade_to_version}'"
   }
-  # Unmask and restart kubelet after the bind mount is updated.
+
+  # Unmask and start kubelet after the symlink is updated.
   -> platform::kubernetes::unmask_start_service { 'kubelet':
     service_name => 'kubelet',
+    require      => File['/var/lib/kubernetes/stage2'],
   }
 
   # Unmask and start isolcpu_plugin service last
@@ -1013,7 +986,6 @@ class platform::kubernetes::master::upgrade_kubelet
     include platform::kubernetes::unmask_start_kubelet
 
     Class['platform::kubernetes::mask_stop_kubelet'] -> Class['platform::kubernetes::unmask_start_kubelet']
-
 }
 
 class platform::kubernetes::worker::upgrade_kubelet
@@ -1662,8 +1634,8 @@ class platform::kubernetes::master::apiserver::runtime{
 class platform::kubernetes::master::update_kubelet_params::runtime
   inherits ::platform::kubernetes::params {
 
-  # Update kubeadm bindmount if needed.
-  require platform::kubernetes::bindmounts
+  # Ensure kubectl symlink is up to date.  May not actually be needed.
+  require platform::kubernetes::symlinks
 
   $kubelet_image_gc_low_threshold_percent = $::platform::kubernetes::params::kubelet_image_gc_low_threshold_percent
   $kubelet_image_gc_high_threshold_percent = $::platform::kubernetes::params::kubelet_image_gc_high_threshold_percent
@@ -1682,8 +1654,8 @@ class platform::kubernetes::master::update_kubelet_params::runtime
 class platform::kubernetes::update_kubelet_config::runtime
   inherits ::platform::kubernetes::params {
 
-  # Update kubeadm/kubelet bindmounts if needed.
-  include platform::kubernetes::bindmounts
+  # Update kubeadm/kubelet symlinks.   May not actually be needed.
+  require platform::kubernetes::symlinks
 
   # Regenerate /var/lib/kubelet/config.yaml based on current kubelet-config
   # ConfigMap. This does not regenerate /var/lib/kubelet/kubeadm-flags.env.
@@ -1715,7 +1687,6 @@ class platform::kubernetes::cordon_node {
 
 class platform::kubernetes::unmask_start_services
   inherits ::platform::kubernetes::params {
-  include platform::kubernetes::bindmounts
   include platform::kubernetes::unmask_start_kubelet
 
   exec { 'unmask etcd service ':
@@ -1736,7 +1707,6 @@ class platform::kubernetes::unmask_start_services
   -> exec { 'start containerd service':
       command => '/usr/local/sbin/pmon-start containerd'
   }
-  -> Class['platform::kubernetes::bindmounts']
   -> Class['platform::kubernetes::unmask_start_kubelet']
   -> exec { 'wait for kubernetes endpoints health check':
       command => '/usr/local/bin/k8s_wait_for_endpoints_health.py',
