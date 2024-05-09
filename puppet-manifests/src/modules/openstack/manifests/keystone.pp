@@ -311,6 +311,14 @@ class openstack::keystone::bootstrap(
     keystone_role { '_member_':
       ensure => present,
     }
+
+    ini_setting { 'Set keystone default log level to INFO':
+      ensure  => present,
+      path    => '/etc/keystone/logging.conf',
+      section => 'logger_root',
+      setting => 'level',
+      value   => 'INFO',
+    }
   }
 }
 
