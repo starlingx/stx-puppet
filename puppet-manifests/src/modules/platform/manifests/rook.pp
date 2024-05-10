@@ -1,7 +1,6 @@
 class platform::rook::params(
   $service_enabled = false,
-  $mon_lv_size = 20,
-  $node_rook_ceph_configured_flag = '/etc/platform/.node_rook_ceph_configured',
+  $node_rook_configured_flag = '/etc/platform/.node_rook_configured',
 ) { }
 
 
@@ -48,29 +47,23 @@ class platform::rook::post
 
   if $service_enabled {
     # Ceph configuration on this node is done
-    file { $node_rook_ceph_configured_flag:
+    file { $node_rook_configured_flag:
       ensure => present
     }
   }
 }
 
-class platform::rook_base
-  inherits ::platform::ceph::params {
+class platform::rook::base
+  inherits ::platform::rook::params {
 
   $system_mode = $::platform::params::system_mode
   $system_type = $::platform::params::system_type
 
   if $service_enabled {
-    file { '/var/lib/ceph/mon-a':
-      ensure => 'directory',
-      owner  => 'root',
-      group  => 'root',
-      mode   => '0755',
-    }
+    include ::platform::filesystem::ceph::mountpoint
 
     if $system_type == 'All-in-one' and 'duplex' in $system_mode {
-      # ensure DRBD config init only once
-      Drbd::Resource <| |> -> Class[$name]
+      File['/var/lib/ceph'] -> Drbd::Resource <| |> -> Class[$name]
     }
 
     class { '::platform::rook::post':
@@ -81,10 +74,10 @@ class platform::rook_base
 
 class platform::rook {
   include ::platform::rook::storage
-  include ::platform::rook_base
+  include ::platform::rook::base
 }
 
 class platform::rook::runtime {
 
-  include ::platform::rook_base
+  include ::platform::rook::base
 }

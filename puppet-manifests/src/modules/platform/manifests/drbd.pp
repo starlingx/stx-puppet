@@ -28,6 +28,8 @@ define platform::drbd::filesystem (
   $port,
   $device,
   $mountpoint,
+  $resource_name = undef,
+  $ensure = present,
   $resync_after = undef,
   $sm_service = $title,
   $ha_primary_override = undef,
@@ -36,6 +38,7 @@ define platform::drbd::filesystem (
   $manage_override = undef,
   $ip2_override = undef,
 ) {
+  $lv_device = "/dev/${vg_name}/${lv_name}"
 
   if $manage_override == undef {
     $drbd_manage = $::platform::drbd::params::manage
@@ -63,43 +66,81 @@ define platform::drbd::filesystem (
     $ip2 = $ip2_override
   }
 
-
-  logical_volume { $lv_name:
-    ensure          => present,
-    volume_group    => $vg_name,
-    size            => "${lv_size}G",
-    size_is_minsize => true,
+  if ($ensure == 'absent') {
+    exec { "umount drbd device ${device}":
+      command => "umount ${device}",
+      onlyif  => "test -e /etc/drbd.d/${resource_name}.res && mount | grep -q ${device}",
+    }
+    -> exec { "drbdadm disconnect ${resource_name}":
+      command => "drbdadm disconnect ${resource_name}",
+      onlyif  => "drbdadm status ${resource_name}",
+      returns => [0, 10],
+    }
+    -> exec { "drbdadm down ${resource_name}":
+      command => "drbdadm down ${resource_name}",
+      onlyif  => "drbdadm status ${resource_name}",
+    }
+    -> exec { "drbdadm wipe-md ${resource_name}":
+      command => "echo 'yes' | drbdadm wipe-md ${resource_name}",
+      onlyif  => "test -e /etc/drbd.d/${resource_name}.res",
+    }
+    -> file { "/etc/drbd.d/${resource_name}.res":
+      ensure  => 'absent',
+    }
+    -> exec { "removing: wipe start of device ${lv_device}":
+      command => "dd if=/dev/zero of=${lv_device} bs=512 count=34",
+      onlyif  => "blkid ${lv_device}",
+    }
+    -> exec { "removing: wipe end of device ${lv_device}":
+      command => "dd if=/dev/zero of=${lv_device} bs=512 seek=$(($(blockdev --getsz ${lv_device}) - 34)) count=34",
+      onlyif  => "blkid ${lv_device}",
+    }
+    -> exec { "lvremove lv ${lv_name}":
+      command => "lvremove -f ${lv_device}; true",
+      onlyif  => "test -e ${lv_device}",
+    }
   }
 
+  if ($ensure == 'present') {
 
-  -> drbd::resource { $title:
-    disk          => "/dev/${vg_name}/${lv_name}",
-    port          => $port,
-    device        => $device,
-    mountpoint    => $mountpoint,
-    handlers      => {
-      before-resync-target =>
-        "/usr/local/sbin/sm-notify -s ${sm_service} -e sync-start",
-      after-resync-target  =>
-        "/usr/local/sbin/sm-notify -s ${sm_service} -e sync-end",
-    },
-    host1         => $::platform::drbd::params::host1,
-    host2         => $::platform::drbd::params::host2,
-    ip1           => $::platform::drbd::params::ip1,
-    ip2           => $ip2,
-    manage        => $drbd_manage,
-    ha_primary    => $drbd_primary,
-    initial_setup => $drbd_initial,
-    automount     => $drbd_automount,
-    fs_type       => $::platform::drbd::params::fs_type,
-    link_util     => $::platform::drbd::params::link_util,
-    link_speed    => $::platform::drbd::params::link_speed,
-    num_parallel  => $::platform::drbd::params::num_parallel,
-    rtt_ms        => $::platform::drbd::params::rtt_ms,
-    cpumask       => $::platform::drbd::params::cpumask,
-    resync_after  => $resync_after,
+    logical_volume { $lv_name:
+      ensure          => present,
+      volume_group    => $vg_name,
+      size            => "${lv_size}G",
+      size_is_minsize => true,
+    }
+
+
+    -> drbd::resource { $title:
+      disk          => $lv_device,
+      port          => $port,
+      device        => $device,
+      mountpoint    => $mountpoint,
+      handlers      => {
+        before-resync-target =>
+          "/usr/local/sbin/sm-notify -s ${sm_service} -e sync-start",
+        after-resync-target  =>
+          "/usr/local/sbin/sm-notify -s ${sm_service} -e sync-end",
+      },
+      host1         => $::platform::drbd::params::host1,
+      host2         => $::platform::drbd::params::host2,
+      ip1           => $::platform::drbd::params::ip1,
+      ip2           => $ip2,
+      manage        => $drbd_manage,
+      ha_primary    => $drbd_primary,
+      initial_setup => $drbd_initial,
+      automount     => $drbd_automount,
+      fs_type       => $::platform::drbd::params::fs_type,
+      link_util     => $::platform::drbd::params::link_util,
+      link_speed    => $::platform::drbd::params::link_speed,
+      num_parallel  => $::platform::drbd::params::num_parallel,
+      rtt_ms        => $::platform::drbd::params::rtt_ms,
+      cpumask       => $::platform::drbd::params::cpumask,
+      resync_after  => $resync_after,
+    }
   }
 }
+
 
 # The device names (/dev/drbdX) for all drbd devices added in this manifest
 # should be kept in sync with the ones present in the restore ansible playbook
@@ -440,25 +481,26 @@ class platform::drbd::cephmon ()
   }
 }
 
-class platform::drbd::rookmon::params (
+class platform::drbd::rook::params (
+  $ensure = absent,
   $device = '/dev/drbd9',
-  $lv_name = 'ceph-mon-lv',
+  $lv_name = 'ceph-float-lv',
+  $lv_size = '20',
   $mountpoint = '/var/lib/ceph/mon-a',
   $port = '7788',
-  $resource_name = 'drbd-cephmon',
+  $resource_name = 'drbd-ceph',
   $vg_name = 'cgts-vg',
+  $node_drbd_rook_configured = '/etc/platform/.node_drbd_rook_configured',
 ) {}
 
-class platform::drbd::rookmon ()
-  inherits ::platform::drbd::rookmon::params {
-
-  include ::platform::rook::params
+class platform::drbd::rook ()
+  inherits ::platform::drbd::rook::params {
 
   $system_mode = $::platform::params::system_mode
   $system_type = $::platform::params::system_type
 
   if ((str2bool($::is_controller_active) or str2bool($::is_standalone_controller))
-    and ! str2bool($::is_node_rook_ceph_configured)) {
+    and ! str2bool($::is_node_drbd_rook_configured)) {
     # Active controller, first time configuration.
     $drbd_primary = true
     $drbd_initial = true
@@ -471,18 +513,19 @@ class platform::drbd::rookmon ()
     $drbd_automount = true
   } else {
     # Node unlock, reboot or standby configuration
-    # Do not mount ceph
+    # Do not mount SM will handle it
     $drbd_primary = undef
     $drbd_initial = undef
     $drbd_automount = undef
   }
 
-  if ($platform::rook::params::service_enabled and
-    $system_type == 'All-in-one' and 'duplex' in $system_mode) {
+  if ($system_type == 'All-in-one' and 'duplex' in $system_mode) {
     platform::drbd::filesystem { $resource_name:
+      ensure                 => $ensure,
       vg_name                => $vg_name,
       lv_name                => $lv_name,
-      lv_size                => $platform::rook::params::mon_lv_size,
+      lv_size                => $lv_size,
+      resource_name          => $resource_name,
       port                   => $port,
       device                 => $device,
       mountpoint             => $mountpoint,
@@ -492,6 +535,20 @@ class platform::drbd::rookmon ()
       initial_setup_override => $drbd_initial,
       automount_override     => $drbd_automount,
     }
+  }
+
+  # Cleanup any node specific tracking elements
+  class { '::platform::drbd::rook::post':
+    stage => post
+  }
+}
+
+class platform::drbd::rook::post
+  inherits ::platform::drbd::rook::params {
+
+  # Provide a file indicating if the DRBD device is present or not
+  file { $node_drbd_rook_configured:
+    ensure => $ensure
   }
 }
 
@@ -523,7 +580,7 @@ class platform::drbd(
   include ::platform::drbd::etcd
   include ::platform::drbd::dockerdistribution
   include ::platform::drbd::cephmon
-  include ::platform::drbd::rookmon
+  include ::platform::drbd::rook
   include ::platform::drbd::trigger_resize_check
 
   # network changes need to be applied prior to DRBD resources
@@ -531,7 +588,6 @@ class platform::drbd(
   -> Drbd::Resource <| |>
   -> Anchor['platform::services']
 }
-
 
 class platform::drbd::bootstrap {
 
@@ -587,7 +643,6 @@ class platform::drbd::pgsql::runtime {
   include ::platform::drbd::trigger_resize_check
 }
 
-
 class platform::drbd::platform::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
@@ -595,14 +650,12 @@ class platform::drbd::platform::runtime {
   include ::platform::drbd::trigger_resize_check
 }
 
-
 class platform::drbd::extension::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
   include ::platform::drbd::extension
   include ::platform::drbd::trigger_resize_check
 }
-
 
 class platform::drbd::dc_vault::runtime {
   include ::platform::drbd::params
@@ -631,8 +684,9 @@ class platform::drbd::cephmon::runtime {
   include ::platform::drbd::cephmon
 }
 
-class platform::drbd::rookmon::runtime {
+class platform::drbd::rook::runtime {
   include ::platform::drbd::params
   include ::platform::drbd::runtime_service_enable
-  include ::platform::drbd::rookmon
+  include ::platform::drbd::rook
+  include ::platform::drbd::trigger_resize_check
 }
