@@ -86,8 +86,10 @@ function parse_interface_stanzas {
     local last_generated=''
     local puppet_data
 
-    do_rm ${PUPPET_DIR}/auto
-    do_rm ${PUPPET_DIR}/ifcfg-\*
+    log_it info "remove ${PUPPET_DIR}/auto"
+    rm -f ${PUPPET_DIR}/auto
+    log_it info "remove ${PUPPET_DIR}/ifcfg-*"
+    rm -f ${PUPPET_DIR}/ifcfg-*
 
     is_iface=$(false)
     is_auto=$(false)

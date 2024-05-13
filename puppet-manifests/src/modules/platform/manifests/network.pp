@@ -654,7 +654,8 @@ class platform::network::apply {
   include ::platform::network::addresses
   include ::platform::network::routes
 
-  Network_config <| |>
+  Exec['cleanup-interfaces-file']
+  -> Network_config <| |>
   -> Exec['apply-network-config']
   -> Platform::Network::Network_address <| |>
   -> Exec['wait-for-tentative']
@@ -684,6 +685,12 @@ class platform::network::apply {
     tries     => 10,
     try_sleep => 1,
     onlyif    => 'test ! -f /var/run/.network_upgrade_bootstrap',
+  }
+
+  exec { 'cleanup-interfaces-file':
+    command   => 'rm -f /var/run/network-scripts.puppet/interfaces && touch /var/run/network-scripts.puppet/interfaces',
+    logoutput => true,
+    onlyif    => 'test -f /var/run/network-scripts.puppet/interfaces',
   }
 }
 
