@@ -1321,6 +1321,12 @@ class platform::sm
     -> exec { 'Provision DCOrch-Engine in SM (service dcorch-engine)':
       command => 'sm-provision service dcorch-engine',
     }
+    -> exec { 'Provision DCOrch-Engine-Worker (service-group-member dcorch-engine-worker)':
+      command => 'sm-provision service-group-member distributed-cloud-services dcorch-engine-worker',
+    }
+    -> exec { 'Provision DCOrch-Engine-Worker in SM (service dcorch-engine-worker)':
+      command => 'sm-provision service dcorch-engine-worker',
+    }
     -> exec { 'Provision DCOrch-Identity-Api-Proxy (service-group-member dcorch-identity-api-proxy)':
       command => 'sm-provision service-group-member distributed-cloud-services dcorch-identity-api-proxy',
     }
@@ -1377,6 +1383,9 @@ class platform::sm
     }
     -> exec { 'Configure OpenStack - DCOrch-Engine':
       command => "sm-configure service_instance dcorch-engine dcorch-engine \"\"",
+    }
+    -> exec { 'Configure OpenStack - DCOrch-Engine-Worker':
+      command => "sm-configure service_instance dcorch-engine-worker dcorch-engine-worker \"\"",
     }
     -> exec { 'Configure OpenStack - DCOrch-identity-api-proxy':
       command => "sm-configure service_instance dcorch-identity-api-proxy dcorch-identity-api-proxy \"\"",
