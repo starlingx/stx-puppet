@@ -15,7 +15,6 @@ include ::platform::drbd::bootstrap
 include ::platform::postgresql::bootstrap
 include ::platform::amqp::bootstrap
 
-include ::openstack::keystone::bootstrap
 include ::platform::client::bootstrap
 
 # Puppet classes to enable the bring up of kubernetes master
