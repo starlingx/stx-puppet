@@ -1510,6 +1510,8 @@ class platform::sm::update_oam_config::runtime {
 
 class platform::sm::enable_admin_config::runtime {
   include ::platform::network::admin::params
+  include ::platform::network::admin::ipv4::params
+  include ::platform::network::admin::ipv6::params
   $admin_ip_interface  = $::platform::network::admin::params::interface_name
   if $::platform::network::admin::ipv4::params::subnet_version == $::platform::params::ipv4 {
     exec { 'Manage admin-ipv4 service':
@@ -1534,6 +1536,8 @@ class platform::sm::enable_admin_config::runtime {
 
 class platform::sm::disable_admin_config::runtime {
   include ::platform::network::admin::params
+  include ::platform::network::admin::ipv4::params
+  include ::platform::network::admin::ipv6::params
   $admin_ip_interface  = $::platform::network::admin::params::interface_name
   if $::platform::network::admin::ipv4::params::subnet_version == $::platform::params::ipv4 {
     exec { 'Unmanage admin-ipv4 service':
@@ -1559,6 +1563,8 @@ class platform::sm::disable_admin_config::runtime {
 class platform::sm::update_admin_config::runtime {
   # lint:ignore:140chars
   include ::platform::network::admin::params
+  include ::platform::network::admin::ipv4::params
+  include ::platform::network::admin::ipv6::params
   $admin_ip_interface  = $::platform::network::admin::params::interface_name
   $admin_ip_param_ip   = $::platform::network::admin::params::controller_address
   $admin_ip_param_mask = $::platform::network::admin::params::subnet_prefixlen
