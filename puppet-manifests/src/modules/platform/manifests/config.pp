@@ -364,6 +364,11 @@ class platform::config::mgmt_network_reconfig_update_runtime {
     match              => '^rpc_zeromq_bind_ip=',
     append_on_no_match => false,
   }
+
+  # Force a restart of memcached to pick up the new MGMT IP
+  exec { 'systemctl enable memcached.service':
+    command => '/usr/bin/systemctl restart memcached.service',
+  }
 }
 
 

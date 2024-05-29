@@ -10,12 +10,10 @@ class platform::memcached::params(
   $service_restart = true,
 ) {
   include ::platform::params
-  $controller_0_hostname     = $::platform::params::controller_0_hostname
-  $controller_1_hostname     = $::platform::params::controller_1_hostname
-  $controller_0_fqdn         = $::platform::params::controller_0_fqdn
-  $controller_1_fqdn         = $::platform::params::controller_1_fqdn
-  $system_mode               = $::platform::params::system_mode
-  $system_type               = $::platform::params::system_type
+  $controller_0_hostname = $::platform::params::controller_0_hostname
+  $controller_1_hostname = $::platform::params::controller_1_hostname
+  $system_mode           = $::platform::params::system_mode
+  $system_type           = $::platform::params::system_type
 
   if $system_type == 'All-in-one' and
     $::platform::params::distributed_cloud_role != 'systemcontroller' {
@@ -25,14 +23,14 @@ class platform::memcached::params(
   }
 
   if $system_mode == 'simplex' {
-    $listen = $controller_0_fqdn
+    $listen = $controller_0_hostname
   } else {
     case $::hostname {
       $controller_0_hostname: {
-        $listen = $controller_0_fqdn
+        $listen = $controller_0_hostname
       }
       $controller_1_hostname: {
-        $listen = $controller_1_fqdn
+        $listen = $controller_1_hostname
       }
       default: {
         fail("Hostname must be either ${controller_0_hostname} or ${controller_1_hostname}")
