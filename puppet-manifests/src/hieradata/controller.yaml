@@ -185,9 +185,10 @@ keystone::endpoint::admin_url: 'http://127.0.0.1:5000'
 keystone::ldap::identity_driver: 'sql'
 keystone::ldap::assignment_driver: 'sql'
 
-keystone::security_compliance::unique_last_password_count: 2
-keystone::security_compliance::password_regex: '^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*()<>{}+=_\\\[\]\-?|~`,.;:]).{7,}$'
-keystone::security_compliance::password_regex_description: 'Password must have a minimum length of 7 characters, and must contain at least 1 upper case, 1 lower case, 1 digit, and 1 special character'
+keystone::security_compliance::unique_last_password_count: 5
+keystone::security_compliance::password_regex: '^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*()<>{}+=_\\\[\]\-?|~`,.;:]).{12,}$'
+keystone::security_compliance::password_regex_description: 'Password must have a minimum length of 12 characters, and must contain at least 1 upper case, 1 lower case, 1 digit, and 1 special character'
+keystone::security_compliance::password_expires_days: 90
 
 keystone::roles::admin::email: 'admin@localhost'
 keystone::roles::admin::admin_tenant: 'admin'
