@@ -1526,6 +1526,7 @@ class platform::sm::enable_admin_config::runtime {
   include ::platform::network::admin::params
   include ::platform::network::admin::ipv4::params
   include ::platform::network::admin::ipv6::params
+
   $admin_ip_interface  = $::platform::network::admin::params::interface_name
   if $::platform::network::admin::ipv4::params::subnet_version == $::platform::params::ipv4 {
     exec { 'Manage admin-ipv4 service':
@@ -1579,6 +1580,7 @@ class platform::sm::update_admin_config::runtime {
   include ::platform::network::admin::params
   include ::platform::network::admin::ipv4::params
   include ::platform::network::admin::ipv6::params
+
   $admin_ip_interface  = $::platform::network::admin::params::interface_name
   $admin_ip_param_ip   = $::platform::network::admin::params::controller_address
   $admin_ip_param_mask = $::platform::network::admin::params::subnet_prefixlen
@@ -1624,6 +1626,85 @@ class platform::sm::update_admin_config::runtime {
   }
   exec { 'Configure Admin Interface':
     command => $sm_cmd,
+  }
+  # lint:endignore:140chars
+}
+
+class platform::sm::cluster_host::add_ip_config::ipv4::runtime {
+  # lint:ignore:140chars
+  include ::platform::network::cluster_host::ipv4::params
+
+  if $::personality == 'controller' {
+    if $::platform::network::cluster_host::ipv4::params::subnet_version == $::platform::params::ipv4 {
+      $interface = $::platform::network::cluster_host::params::interface_name
+      $ip        = $::platform::network::cluster_host::ipv4::params::controller_address
+      $mask      = $::platform::network::cluster_host::ipv4::params::subnet_prefixlen
+      exec { 'Reconfigure Cluster-Host IPv4 service_instance':
+        command => "sm-configure service_instance cluster-host-ipv4 cluster_host-ipv4 \"ip=${ip},cidr_netmask=${mask},nic=${interface},arp_count=7\" --apply",
+      }
+      -> exec { 'Manage cluster_host-ipv4 service':
+          command => 'sm-manage service cluster-host-ipv4'
+      }
+      -> exec { 'Provision cluster-host-ipv4 service':
+        command => 'sm-provision service-group-member controller-services cluster-host-ipv4 --apply'
+      }
+    }
+  }
+  # lint:endignore:140chars
+}
+
+class platform::sm::cluster_host::remove_ip_config::ipv4::runtime {
+  # lint:ignore:140chars
+  if $::personality == 'controller' {
+    exec { 'Unmanage cluster-host-ipv4 service':
+      command => 'sm-unmanage service cluster-host-ipv4',
+      onlyif  => 'sm-dump | grep cluster-host-ipv4',
+    }
+    -> exec { 'Deprovision cluster-host-ipv4 service':
+      command => 'sm-deprovision service-group-member controller-services cluster-host-ipv4 --apply',
+      onlyif  => 'sm-dump | grep cluster-host-ipv4',
+    }
+  }
+  # lint:endignore:140chars
+}
+
+class platform::sm::cluster_host::add_ip_config::ipv6::runtime {
+  # lint:ignore:140chars
+  include ::platform::network::cluster_host::ipv6::params
+
+  if $::personality == 'controller' {
+    if $::platform::network::cluster_host::ipv6::params::subnet_version == $::platform::params::ipv6 {
+      $interface = $::platform::network::cluster_host::params::interface_name
+      $ip        = $::platform::network::cluster_host::ipv6::params::controller_address
+      $mask      = $::platform::network::cluster_host::ipv6::params::subnet_prefixlen
+      exec { 'Reconfigure Cluster-Host IPv6 service_instance':
+        command => "sm-configure service_instance cluster-host-ipv6 cluster_host-ipv6 \"ip=${ip},cidr_netmask=${mask},nic=${interface},arp_count=7\" --apply",
+      }
+      -> exec { 'Manage cluster_host-ipv6 service':
+          command => 'sm-manage service cluster-host-ipv6'
+      }
+      -> exec { 'Provision cluster-host-ipv6 service':
+        command => 'sm-provision service-group-member controller-services cluster-host-ipv6 --apply'
+      }
+    }
+  }
+  # lint:endignore:140chars
+}
+
+class platform::sm::cluster_host::remove_ip_config::ipv6::runtime {
+  # lint:ignore:140chars
+  include ::platform::network::cluster_host::params
+  include ::platform::network::cluster_host::ipv6::params
+
+  if $::personality == 'controller' {
+    exec { 'Unmanage cluster-host-ipv6 service':
+      command => 'sm-unmanage service cluster-host-ipv6',
+      onlyif  => 'sm-dump | grep cluster-host-ipv6',
+    }
+    -> exec { 'Deprovision cluster-host-ipv6 service':
+      command => 'sm-deprovision service-group-member controller-services cluster-host-ipv6 --apply',
+      onlyif  => 'sm-dump | grep cluster-host-ipv6',
+    }
   }
   # lint:endignore:140chars
 }

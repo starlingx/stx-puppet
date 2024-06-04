@@ -1,0 +1,11 @@
+# Calico default ip pool
+
+apiVersion: crd.projectcalico.org/v1
+kind: IPPool
+metadata:
+  name: default-<%= @protocol %>-ippool
+spec:
+  cidr: <%= @pod_sec_subnet %>
+  ipipMode: <%= @ipip_mode %>
+  natOutgoing: true
+  vxlanMode: Never

@@ -7,6 +7,7 @@ class platform::kubernetes::params (
   $kubeadm_version = undef,
   $kubelet_version = undef,
   $node_ip = undef,
+  $node_ip_secondary = undef,
   $service_domain = undef,
   $apiserver_cluster_ip = undef,
   $dns_service_ip = undef,
@@ -266,6 +267,7 @@ class platform::kubernetes::kubeadm {
   require platform::kubernetes::symlinks
 
   $node_ip = $::platform::kubernetes::params::node_ip
+  $node_ip_secondary = $::platform::kubernetes::params::node_ip_secondary
   $host_labels = $::platform::kubernetes::params::host_labels
   $k8s_platform_cpuset = $::platform::kubernetes::params::k8s_platform_cpuset
   $k8s_reserved_mem = $::platform::kubernetes::params::k8s_reserved_mem
@@ -1105,29 +1107,133 @@ class platform::kubernetes::certsans::runtime
   inherits ::platform::kubernetes::params {
   include ::platform::params
   include ::platform::network::mgmt::params
+  include ::platform::network::mgmt::ipv4::params
+  include ::platform::network::mgmt::ipv6::params
   include ::platform::network::oam::params
+  include ::platform::network::oam::ipv4::params
+  include ::platform::network::oam::ipv6::params
   include ::platform::network::cluster_host::params
+  include ::platform::network::cluster_host::ipv4::params
+  include ::platform::network::cluster_host::ipv6::params
 
-  if $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
+  $ipv4_val = $::platform::params::ipv4
+  $ipv6_val = $::platform::params::ipv6
+
+  $prim_mgmt_subnet_ver = $::platform::network::mgmt::params::subnet_version
+  $ipv4_mgmt_subnet_ver = $::platform::network::mgmt::ipv4::params::subnet_version
+  $ipv6_mgmt_subnet_ver = $::platform::network::mgmt::ipv6::params::subnet_version
+  if $prim_mgmt_subnet_ver == $ipv6_val and $ipv4_mgmt_subnet_ver != undef {
+    $sec_mgmt_subnet_ver = $ipv4_mgmt_subnet_ver
+  } elsif $prim_mgmt_subnet_ver == $ipv4_val and $ipv6_mgmt_subnet_ver != undef {
+    $sec_mgmt_subnet_ver = $ipv6_mgmt_subnet_ver
+  } else {
+    $sec_mgmt_subnet_ver = undef
+  }
+
+  $prim_cluster_host_subnet_ver = $::platform::network::cluster_host::params::subnet_version
+  $ipv4_cluster_host_subnet_ver = $::platform::network::cluster_host::ipv4::params::subnet_version
+  $ipv6_cluster_host_subnet_ver = $::platform::network::cluster_host::ipv6::params::subnet_version
+  if $prim_cluster_host_subnet_ver == $ipv6_val and $ipv4_cluster_host_subnet_ver != undef {
+    $sec_cluster_host_subnet_ver = $ipv4_cluster_host_subnet_ver
+  } elsif $prim_cluster_host_subnet_ver == $ipv4_val and $ipv6_cluster_host_subnet_ver != undef {
+    $sec_cluster_host_subnet_ver = $ipv6_cluster_host_subnet_ver
+  } else {
+    $sec_cluster_host_subnet_ver = undef
+  }
+
+  $prim_oam_subnet_ver = $::platform::network::oam::params::subnet_version
+  $ipv4_oam_subnet_ver = $::platform::network::oam::ipv4::params::subnet_version
+  $ipv6_oam_subnet_ver = $::platform::network::oam::ipv6::params::subnet_version
+  if $prim_oam_subnet_ver == $ipv6_val and $ipv4_oam_subnet_ver != undef {
+    $sec_oam_subnet_ver = $ipv4_oam_subnet_ver
+  } elsif $prim_oam_subnet_ver == $ipv4_val and $ipv6_oam_subnet_ver != undef {
+    $sec_oam_subnet_ver = $ipv6_oam_subnet_ver
+  } else {
+    $sec_oam_subnet_ver = undef
+  }
+
+  if $::platform::network::mgmt::params::subnet_version == $ipv6_val {
     $localhost_address = '::1'
   } else {
     $localhost_address = '127.0.0.1'
   }
+  if $sec_mgmt_subnet_ver != undef {
+    if $sec_mgmt_subnet_ver == $ipv4_val {
+      $certsans_sec_localhost = ',127.0.0.1'
+    } elsif $sec_mgmt_subnet_ver == $ipv6_val {
+      $certsans_sec_localhost = ',::1'
+    }
+  } else {
+    $certsans_sec_localhost = ''
+  }
 
   if $::platform::params::system_mode == 'simplex' {
-    $certsans = "\"${platform::network::cluster_host::params::controller_address}, \
-                   ${platform::network::cluster_host::params::controller0_address}, \
-                   ${localhost_address}, \
-                   ${platform::network::oam::params::controller_address}\""
+    $certsans_prim = "${platform::network::cluster_host::params::controller_address}, \
+                  ${platform::network::cluster_host::params::controller0_address}, \
+                  ${localhost_address}, \
+                  ${platform::network::oam::params::controller_address}"
+
+    if $sec_oam_subnet_ver == $ipv4_val {
+      $certsans_oam_sec = ",${platform::network::oam::ipv4::params::controller_address}"
+    } elsif $sec_oam_subnet_ver == $ipv6_val {
+      $certsans_oam_sec = ",${platform::network::oam::ipv6::params::controller_address}"
+    } else {
+      $certsans_oam_sec = ''
+    }
+
+    if $sec_cluster_host_subnet_ver == $ipv4_val {
+      $certsans_cluster_host_sec = ",${platform::network::cluster_host::ipv4::params::controller_address}, \
+                                     ${platform::network::cluster_host::ipv4::params::controller0_address}"
+    } elsif $sec_cluster_host_subnet_ver == $ipv6_val {
+      $certsans_cluster_host_sec = ",${platform::network::cluster_host::ipv6::params::controller_address}, \
+                                     ${platform::network::cluster_host::ipv6::params::controller0_address}"
+    } else {
+      $certsans_cluster_host_sec = ''
+    }
+
+    $certsans_sec_hosts = "${certsans_oam_sec}${certsans_cluster_host_sec}"
+
+    $certsans_sec = "${certsans_sec_hosts}${certsans_sec_localhost}"
+
   } else {
-    $certsans = "\"${platform::network::cluster_host::params::controller_address}, \
-                   ${platform::network::cluster_host::params::controller0_address}, \
-                   ${platform::network::cluster_host::params::controller1_address}, \
-                   ${localhost_address}, \
-                   ${platform::network::oam::params::controller_address}, \
-                   ${platform::network::oam::params::controller0_address}, \
-                   ${platform::network::oam::params::controller1_address}\""
+    $certsans_prim = "${platform::network::cluster_host::params::controller_address}, \
+                  ${platform::network::cluster_host::params::controller0_address}, \
+                  ${platform::network::cluster_host::params::controller1_address}, \
+                  ${localhost_address}, \
+                  ${platform::network::oam::params::controller_address}, \
+                  ${platform::network::oam::params::controller0_address}, \
+                  ${platform::network::oam::params::controller1_address}"
+
+    if $sec_oam_subnet_ver == $ipv4_val {
+      $certsans_oam_sec = ",${platform::network::oam::ipv4::params::controller_address}, \
+                            ${platform::network::oam::ipv4::params::controller0_address}, \
+                            ${platform::network::oam::ipv4::params::controller1_address}"
+    } elsif $sec_oam_subnet_ver == $ipv6_val {
+      $certsans_oam_sec = ",${platform::network::oam::ipv6::params::controller_address}, \
+                            ${platform::network::oam::ipv6::params::controller0_address}, \
+                            ${platform::network::oam::ipv6::params::controller1_address}"
+    } else {
+      $certsans_oam_sec = ''
+    }
+
+    if $sec_cluster_host_subnet_ver == $ipv4_val {
+      $certsans_cluster_host_sec = ",${platform::network::cluster_host::ipv4::params::controller_address}, \
+                                     ${platform::network::cluster_host::ipv4::params::controller0_address}, \
+                                     ${platform::network::cluster_host::ipv4::params::controller1_address}"
+    } elsif $sec_cluster_host_subnet_ver == $ipv6_val {
+      $certsans_cluster_host_sec = ",${platform::network::cluster_host::ipv6::params::controller_address}, \
+                                     ${platform::network::cluster_host::ipv6::params::controller0_address}, \
+                                     ${platform::network::cluster_host::ipv6::params::controller1_address}"
+    } else {
+      $certsans_cluster_host_sec = ''
+    }
+
+    $certsans_sec_hosts = "${certsans_oam_sec}${certsans_cluster_host_sec}"
+
+    $certsans_sec = "${certsans_sec_hosts}${certsans_sec_localhost}"
   }
+
+  $certsans = "\"${certsans_prim}${certsans_sec}\""
 
   exec { 'update kube-apiserver certSANs':
     provider => shell,
@@ -1855,4 +1961,294 @@ class platform::kubernetes::upgrade_abort_recovery
   -> exec { 'uncordon the node':
       command   => "kubectl --kubeconfig=/etc/kubernetes/admin.conf uncordon ${::platform::params::hostname}",
   }
+}
+
+class platform::kubernetes::kubelet::update_node_ip::runtime
+  inherits ::platform::kubernetes::params {
+  # lint:ignore:140chars
+  if $::personality == 'worker' or $::personality == 'controller' {
+
+    $node_ip = $::platform::kubernetes::params::node_ip
+    if $::platform::kubernetes::params::node_ip_secondary {
+      $node_ip_secondary = $::platform::kubernetes::params::node_ip_secondary
+    } else {
+      $node_ip_secondary = 'undef'
+    }
+    $restart_wait = '5'
+
+    if $::personality == 'worker' {
+      $cfgf = '/etc/kubernetes/kubelet.conf'
+    } elsif $::personality == 'controller' {
+      $cfgf = '/etc/kubernetes/admin.conf'
+    }
+
+    exec { 'kubelet-update-node-ip':
+      path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+      command   => "dual-stack-kubelet.py ${node_ip} ${node_ip_secondary} ${restart_wait} ${cfgf}",
+      logoutput => true,
+    }
+  }
+  # lint:endignore:140chars
+}
+
+class platform::kubernetes::kubeadm::dual_stack::ipv4::runtime {
+  # lint:ignore:140chars
+  include ::platform::network::cluster_pod::params
+  include ::platform::network::cluster_pod::ipv4::params
+  include ::platform::network::cluster_service::params
+  include ::platform::network::cluster_service::ipv4::params
+  include ::platform::network::cluster_host::ipv4::params
+  if $::personality == 'controller' {
+    $restart_wait = '5'
+
+    $pod_prim_network = $::platform::network::cluster_pod::params::subnet_network
+    $pod_prim_prefixlen = $::platform::network::cluster_pod::params::subnet_prefixlen
+    $pod_prim_subnet = "${pod_prim_network}/${pod_prim_prefixlen}"
+
+    if $platform::network::cluster_pod::ipv4::params::subnet_version == $::platform::params::ipv4  {
+      $pod_sec_network = $::platform::network::cluster_pod::ipv4::params::subnet_network
+      $pod_sec_prefixlen = $::platform::network::cluster_pod::ipv4::params::subnet_prefixlen
+      $pod_sec_subnet = "${pod_sec_network}/${pod_sec_prefixlen}"
+    } else {
+      $pod_sec_subnet = 'undef'
+    }
+
+    $svc_prim_network = $::platform::network::cluster_service::params::subnet_network
+    $svc_prim_prefixlen = $::platform::network::cluster_service::params::subnet_prefixlen
+    $svc_prim_subnet = "${svc_prim_network}/${svc_prim_prefixlen}"
+
+    if $platform::network::cluster_service::ipv4::params::subnet_version == $::platform::params::ipv4 {
+      $svc_sec_network = $::platform::network::cluster_service::ipv4::params::subnet_network
+      $svc_sec_prefixlen = $::platform::network::cluster_service::ipv4::params::subnet_prefixlen
+      $svc_sec_subnet = "${svc_sec_network}/${svc_sec_prefixlen}"
+    } else {
+      $svc_sec_subnet = 'undef'
+    }
+
+    if $::platform::params::hostname == 'controller-0' {
+      $cluster_host_addr = $::platform::network::cluster_host::params::controller0_address
+    } else {
+      $cluster_host_addr = $::platform::network::cluster_host::params::controller1_address
+    }
+
+    exec { 'update kubeadm pod and service secondary IPv6 subnets':
+      path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+      command   => "dual-stack-kubeadm.py ${pod_prim_subnet} ${svc_prim_subnet} ${pod_sec_subnet} ${svc_sec_subnet} ${restart_wait} ${cluster_host_addr}",
+      logoutput => true,
+    }
+  }
+  # lint:endignore:140chars
+}
+
+class platform::kubernetes::kubeadm::dual_stack::ipv6::runtime {
+  # lint:ignore:140chars
+  include ::platform::network::cluster_pod::params
+  include ::platform::network::cluster_pod::ipv6::params
+  include ::platform::network::cluster_service::params
+  include ::platform::network::cluster_service::ipv6::params
+  include ::platform::network::cluster_host::ipv6::params
+  if $::personality == 'controller' {
+    $restart_wait = '5'
+
+    $pod_prim_network = $::platform::network::cluster_pod::params::subnet_network
+    $pod_prim_prefixlen = $::platform::network::cluster_pod::params::subnet_prefixlen
+    $pod_prim_subnet = "${pod_prim_network}/${pod_prim_prefixlen}"
+
+    if $platform::network::cluster_pod::ipv6::params::subnet_version == $::platform::params::ipv6  {
+      $pod_sec_network = $::platform::network::cluster_pod::ipv6::params::subnet_network
+      $pod_sec_prefixlen = $::platform::network::cluster_pod::ipv6::params::subnet_prefixlen
+      $pod_sec_subnet = "${pod_sec_network}/${pod_sec_prefixlen}"
+    } else {
+      $pod_sec_subnet = 'undef'
+    }
+
+    $svc_prim_network = $::platform::network::cluster_service::params::subnet_network
+    $svc_prim_prefixlen = $::platform::network::cluster_service::params::subnet_prefixlen
+    $svc_prim_subnet = "${svc_prim_network}/${svc_prim_prefixlen}"
+
+    if $platform::network::cluster_service::ipv6::params::subnet_version == $::platform::params::ipv6 {
+      $svc_sec_network = $::platform::network::cluster_service::ipv6::params::subnet_network
+      $svc_sec_prefixlen = $::platform::network::cluster_service::ipv6::params::subnet_prefixlen
+      $svc_sec_subnet = "${svc_sec_network}/${svc_sec_prefixlen}"
+    } else {
+      $svc_sec_subnet = 'undef'
+    }
+
+    if $::platform::params::hostname == 'controller-0' {
+      $cluster_host_addr = $::platform::network::cluster_host::params::controller0_address
+    } else {
+      $cluster_host_addr = $::platform::network::cluster_host::params::controller1_address
+    }
+
+    exec { 'update kubeadm pod and service secondary IPv6 subnets':
+      path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+      command   => "dual-stack-kubeadm.py ${pod_prim_subnet} ${svc_prim_subnet} ${pod_sec_subnet} ${svc_sec_subnet} ${restart_wait} ${cluster_host_addr}",
+      logoutput => true,
+    }
+  }
+  # lint:endignore:140chars
+}
+
+class platform::kubernetes::dual_stack::ipv4::runtime {
+  # lint:ignore:140chars
+  # adds/removes secondary IPv4 subnets to pod and service
+  include ::platform::network::cluster_pod::params
+  include ::platform::network::cluster_pod::ipv4::params
+  include ::platform::network::cluster_service::params
+  include ::platform::network::cluster_service::ipv4::params
+  include ::platform::network::cluster_host::ipv4::params
+
+  $protocol = 'ipv4'
+  $def_pool_filename = "/tmp/def_pool_${protocol}.yaml"
+  $kubeconfig = '--kubeconfig=/etc/kubernetes/admin.conf'
+  $restart_wait = '5'
+
+  $pod_prim_network = $::platform::network::cluster_pod::params::subnet_network
+  $pod_prim_prefixlen = $::platform::network::cluster_pod::params::subnet_prefixlen
+  $pod_prim_subnet = "${pod_prim_network}/${pod_prim_prefixlen}"
+
+  if $platform::network::cluster_pod::ipv4::params::subnet_version == $::platform::params::ipv4  {
+    $pod_sec_network = $::platform::network::cluster_pod::ipv4::params::subnet_network
+    $pod_sec_prefixlen = $::platform::network::cluster_pod::ipv4::params::subnet_prefixlen
+    $pod_sec_subnet = "${pod_sec_network}/${pod_sec_prefixlen}"
+    $c0_addr = $::platform::network::cluster_host::ipv4::params::controller0_address
+    $state = true
+  } else {
+    $pod_sec_subnet = 'undef'
+    $state = false
+    $c0_addr = '::'
+  }
+
+  $svc_prim_network = $::platform::network::cluster_service::params::subnet_network
+  $svc_prim_prefixlen = $::platform::network::cluster_service::params::subnet_prefixlen
+  $svc_prim_subnet = "${svc_prim_network}/${svc_prim_prefixlen}"
+
+  if $platform::network::cluster_service::ipv4::params::subnet_version == $::platform::params::ipv4 {
+    $svc_sec_network = $::platform::network::cluster_service::ipv4::params::subnet_network
+    $svc_sec_prefixlen = $::platform::network::cluster_service::ipv4::params::subnet_prefixlen
+    $svc_sec_subnet = "${svc_sec_network}/${svc_sec_prefixlen}"
+  } else {
+    $svc_sec_subnet = 'undef'
+  }
+
+  exec { 'update kube-proxy pod secondary IPv6 subnet':
+    path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+    command   => "dual-stack-kubeproxy.py ${pod_prim_subnet} ${pod_sec_subnet} ${restart_wait}",
+    logoutput => true,
+  }
+  -> exec { 'update calico node pod secondary IPv6 subnet':
+    path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+    command   => "dual-stack-calico.py ${protocol} ${state} ${c0_addr} ${restart_wait}",
+    logoutput => true,
+  }
+  if $state == true {
+    $ipip_mode = 'Always'
+    file { $def_pool_filename:
+      ensure  => file,
+      content => template('platform/callico_ippool.yaml.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0640',
+    }
+    -> exec { "create default-${protocol}-ippool":
+      path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+      command   => "kubectl ${kubeconfig} apply -f ${def_pool_filename}",
+      logoutput => true
+    }
+  } else {
+    exec { "delete default-${protocol}-ippool":
+      path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+      command   => "kubectl ${kubeconfig} delete ippools.crd.projectcalico.org default-${protocol}-ippool",
+      logoutput => true,
+      onlyif    => "kubectl ${kubeconfig} get ippools.crd.projectcalico.org default-${protocol}-ippool ",
+    }
+  }
+  exec { 'update multus to support IPv4':
+    path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+    command   => "dual-stack-multus.py ${protocol} ${state} ${restart_wait}",
+    logoutput => true,
+  }
+  # lint:endignore:140chars
+}
+
+class platform::kubernetes::dual_stack::ipv6::runtime {
+  # lint:ignore:140chars
+  # adds/removes secondary IPv6 subnets to pod and service
+  include ::platform::network::cluster_pod::params
+  include ::platform::network::cluster_pod::ipv6::params
+  include ::platform::network::cluster_service::params
+  include ::platform::network::cluster_service::ipv6::params
+  include ::platform::network::cluster_host::ipv6::params
+
+  $protocol = 'ipv6'
+  $def_pool_filename = "/tmp/def_pool_${protocol}.yaml"
+  $kubeconfig = '--kubeconfig=/etc/kubernetes/admin.conf'
+  $restart_wait = '10'
+
+  $pod_prim_network = $::platform::network::cluster_pod::params::subnet_network
+  $pod_prim_prefixlen = $::platform::network::cluster_pod::params::subnet_prefixlen
+  $pod_prim_subnet = "${pod_prim_network}/${pod_prim_prefixlen}"
+
+  if $platform::network::cluster_pod::ipv6::params::subnet_version == $::platform::params::ipv6  {
+    $pod_sec_network = $::platform::network::cluster_pod::ipv6::params::subnet_network
+    $pod_sec_prefixlen = $::platform::network::cluster_pod::ipv6::params::subnet_prefixlen
+    $pod_sec_subnet = "${pod_sec_network}/${pod_sec_prefixlen}"
+    $c0_addr = $::platform::network::cluster_host::ipv6::params::controller0_address
+    $state = true
+  } else {
+    $pod_sec_subnet = 'undef'
+    $state = false
+    $c0_addr = '::'
+  }
+
+  $svc_prim_network = $::platform::network::cluster_service::params::subnet_network
+  $svc_prim_prefixlen = $::platform::network::cluster_service::params::subnet_prefixlen
+  $svc_prim_subnet = "${svc_prim_network}/${svc_prim_prefixlen}"
+
+  if $platform::network::cluster_service::ipv6::params::subnet_version == $::platform::params::ipv6 {
+    $svc_sec_network = $::platform::network::cluster_service::ipv6::params::subnet_network
+    $svc_sec_prefixlen = $::platform::network::cluster_service::ipv6::params::subnet_prefixlen
+    $svc_sec_subnet = "${svc_sec_network}/${svc_sec_prefixlen}"
+  } else {
+    $svc_sec_subnet = 'undef'
+  }
+
+  exec { 'update kube-proxy pod secondary IPv6 subnet':
+    path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+    command   => "dual-stack-kubeproxy.py ${pod_prim_subnet} ${pod_sec_subnet} ${restart_wait}",
+    logoutput => true,
+  }
+  -> exec { 'update calico node pod secondary IPv6 subnet':
+    path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+    command   => "dual-stack-calico.py ${protocol} ${state} ${c0_addr} ${restart_wait}",
+    logoutput => true,
+  }
+  if $state == true {
+    $ipip_mode = 'Never'
+    file { $def_pool_filename:
+      ensure  => file,
+      content => template('platform/callico_ippool.yaml.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0640',
+    }
+    -> exec { "create default-${protocol}-ippool":
+      path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+      command   => "kubectl ${kubeconfig} apply -f ${def_pool_filename}",
+      logoutput => true,
+    }
+  } else {
+    exec { "delete default-${protocol}-ippool":
+      path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+      command   => "kubectl ${kubeconfig} delete ippools.crd.projectcalico.org default-${protocol}-ippool",
+      logoutput => true,
+      onlyif    => "kubectl ${kubeconfig} get ippools.crd.projectcalico.org default-${protocol}-ippool "
+    }
+  }
+  exec { 'update multus to support IPv6':
+    path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+    command   => "dual-stack-multus.py ${protocol} ${state} ${restart_wait}",
+    logoutput => true,
+  }
+  # lint:endignore:140chars
 }
