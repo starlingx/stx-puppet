@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ################################################################################
-# Copyright (c) 2023 Wind River Systems, Inc.
+# Copyright (c) 2023-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -35,17 +35,23 @@ if [[ ${resource_exist} == "${resource_name}" ]]; then
             log_it "Failed to remove last-applied-configuration annotation from ${gnp_name}"
             exit 1
         fi
-    fi
-    kubectl --kubeconfig=${kubeconfig} apply -f ${file_name_gnp};
-    if [ "$?" -ne 0 ]; then
-        log_it "Failed to apply ${gnp_name} with ${file_name_gnp}"
-        exit 1
-    else
-        log_it "Successfully applied ${gnp_name} with ${file_name_gnp}"
-        if [ -f /etc/platform/.platform_firewall_config_required ]; then
-            log_it "remove flag platform_firewall_config_required"
-            rm -fv /etc/platform/.platform_firewall_config_required
+        kubectl --kubeconfig=${kubeconfig} replace -f ${file_name_gnp};
+        if [ "$?" -ne 0 ]; then
+            log_it "Failed to replace ${gnp_name} with ${file_name_gnp}"
+            exit 1
         fi
+    else
+        kubectl --kubeconfig=${kubeconfig} create -f ${file_name_gnp};
+        if [ "$?" -ne 0 ]; then
+            log_it "Failed to create ${gnp_name} with ${file_name_gnp}"
+            exit 1
+        fi
+    fi
+
+    log_it "Successfully applied ${gnp_name} with ${file_name_gnp}"
+    if [ -f /etc/platform/.platform_firewall_config_required ]; then
+        log_it "remove flag platform_firewall_config_required"
+        rm -fv /etc/platform/.platform_firewall_config_required
     fi
 else
     log_it "Failed to check ${resource_name} exists, mark for sysinv to reapply"
