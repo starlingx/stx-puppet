@@ -1,13 +1,13 @@
 class platform::client::params (
   $admin_username,
   $identity_auth_url,
-  $identity_region = 'RegionOne',
+  $identity_region = lookup('platform::client::params::identity_region', {default_value => 'RegionOne'}),
   $identity_api_version = 3,
   $admin_user_domain = 'Default',
   $admin_project_domain = 'Default',
   $admin_project_name = 'admin',
   $admin_password = undef,
-  $keystone_identity_region = 'RegionOne',
+  $keystone_identity_region = lookup('platform::client::params::keystone_identity_region', {default_value => 'RegionOne'}),
 ) { }
 
 class platform::client
