@@ -35,6 +35,7 @@ PUPPET_MODULES_PATH=/usr/share/puppet/modules:/usr/share/openstack-puppet/module
 PUPPET_MANIFEST=/etc/puppet/manifests/${MANIFEST}.pp
 PUPPET_TMP=/tmp/puppet
 FILEBUCKET_PATH=/var/cache/puppet/clientbucket
+REPORTS_PATH=/var/cache/puppet/reports
 
 # Setup log directory and file
 DATETIME=$(date -u +"%Y-%m-%d-%H-%M-%S")
@@ -152,6 +153,10 @@ function finish {
     # issues, clean up its contents after every apply.
     if [ -d ${FILEBUCKET_PATH} ]; then
         rm -fr ${FILEBUCKET_PATH}/*
+    fi
+
+    if [ -d ${REPORTS_PATH} ]; then
+        rm -fr ${REPORTS_PATH}/*
     fi
 }
 trap finish EXIT
