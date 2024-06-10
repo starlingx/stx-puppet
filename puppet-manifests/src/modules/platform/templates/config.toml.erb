@@ -1,3 +1,6 @@
+# explicitly use v2 config format for identification
+version = 2
+
 root = "/var/lib/docker"
 state = "/var/run/containerd"
 oom_score = 0
@@ -23,9 +26,9 @@ oom_score = 0
   path = ""
 
 [plugins]
-  [plugins.cgroups]
+  [plugins."io.containerd.monitor.v1.cgroups"]
     no_prometheus = false
-  [plugins.cri]
+  [plugins."io.containerd.grpc.v1.cri"]
     stream_server_address = "<%= @stream_server_address %>"
     stream_server_port = "0"
     enable_selinux = false
@@ -34,14 +37,14 @@ oom_score = 0
     systemd_cgroup = false
     enable_tls_streaming = false
     max_container_log_line_size = 16384
-    [plugins.cri.containerd]
+    [plugins."io.containerd.grpc.v1.cri".containerd]
       snapshotter = "overlayfs"
       no_pivot = false
       default_runtime_name = "runc"
-      [plugins.cri.containerd.runtimes]
-        [plugins.cri.containerd.runtimes.runc]
-          runtime_type = "io.containerd.runc.v1"
-          [plugins.cri.containerd.runtimes.runc.options]
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+          runtime_type = "io.containerd.runc.v2"
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
             NoPivotRoot = false
             NoNewKeyring = false
             ShimCgroup = ""
@@ -51,11 +54,11 @@ oom_score = 0
             Root = ""
             CriuPath = ""
             SystemdCgroup = false
-        [plugins.cri.containerd.runtimes.kata]
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
           runtime_type = "io.containerd.kata.v2"
-        [plugins.cri.containerd.runtimes.katacli]
-          runtime_type = "io.containerd.runc.v1"
-          [plugins.cri.containerd.runtimes.katacli.options]
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.katacli]
+          runtime_type = "io.containerd.runc.v2"
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.katacli.options]
             NoPivotRoot = false
             NoNewKeyring = false
             ShimCgroup = ""
@@ -65,61 +68,51 @@ oom_score = 0
             Root = ""
             CriuPath = ""
             SystemdCgroup = false
-        [plugins.cri.containerd.runtimes.untrusted]
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.untrusted]
           runtime_type = "io.containerd.kata.v2"
           runtime_engine = ""
           runtime_root = ""
 <%- if @custom_container_runtime -%>
 <%- @custom_container_runtime.each do |cri| -%>
-        [plugins.cri.containerd.runtimes.<%= cri[0] %>]
-          runtime_type = "io.containerd.runc.v1"
-          [plugins.cri.containerd.runtimes.<%= cri[0] %>.options]
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.<%= cri[0] %>]
+          runtime_type = "io.containerd.runc.v2"
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.<%= cri[0] %>.options]
             BinaryName = "<%= cri[1] %>"
 <%- end -%>
 <%- end -%>
-
-    [plugins.cri.cni]
+    [plugins."io.containerd.grpc.v1.cri".cni]
       # conf_dir is the directory in which the admin places a CNI conf.
       conf_dir = "/etc/cni/net.d"
       bin_dir = "<%= @k8s_cni_bin_dir %>"
       max_conf_num = 1
       conf_template = ""
-    [plugins.cri.registry]
-      [plugins.cri.registry.mirrors]
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/etc/containerd/certs.d"
+      [plugins."io.containerd.grpc.v1.cri".registry.mirrors]
         # Begin of insecure registries
 <%- @insecure_registries.each do |insecure_registry| -%>
-        [plugins.cri.registry.mirrors."<%= insecure_registry %>"]
+        [plugins."io.containerd.grpc.v1.cri".registry.mirrors."<%= insecure_registry %>"]
           endpoint = ["http://<%= insecure_registry %>"]
 <%- end -%>
         # End of insecure registries
-    [plugins.cri.registry.configs."registry.local:9001".tls]
-      ca_file = "/etc/docker/certs.d/registry.local:9001/registry-cert.crt"
-    [plugins.cri.registry.configs."registry.local:9001".auth]
-      auth = "<%= @registry_auth %>"
-# Central cloud registry config for distributed cloud subclouds
-<%- if @distributed_cloud_role == 'subcloud' -%>
-    [plugins.cri.registry.configs."registry.central:9001".tls]
-      ca_file = "/etc/docker/certs.d/registry.central:9001/registry-cert.crt"
-<%- end -%>
-# End central cloud registry config for distributed cloud subclouds
-    [plugins.cri.x509_key_pair_streaming]
+    [plugins."io.containerd.grpc.v1.cri".x509_key_pair_streaming]
       tls_cert_file = ""
       tls_key_file = ""
-  [plugins.diff-service]
-    default = ["walking"]
-  [plugins.linux]
-    shim = "containerd-shim"
-    runtime = "runc"
-    runtime_root = ""
-    no_shim = false
-    shim_debug = false
-  [plugins.opt]
-    path = "/opt/containerd"
-  [plugins.restart]
-    interval = "10s"
-  [plugins.scheduler]
-    pause_threshold = 0.02
-    deletion_threshold = 0
-    mutation_threshold = 100
-    schedule_delay = "0s"
-    startup_delay = "100ms"
+    [plugins."io.containerd.service.v1.diff-service"]
+      default = ["walking"]
+    [plugins."io.containerd.runtime.v1.linux"]
+      shim = "containerd-shim"
+      runtime = "runc"
+      runtime_root = ""
+      no_shim = false
+      shim_debug = false
+    [plugins."io.containerd.internal.v1.opt"]
+      path = "/opt/containerd"
+    [plugins."io.containerd.internal.v1.restart"]
+      interval = "10s"
+    [plugins."io.containerd.gc.v1.scheduler"]
+      pause_threshold = 0.02
+      deletion_threshold = 0
+      mutation_threshold = 100
+      schedule_delay = "0s"
+      startup_delay = "100ms"
