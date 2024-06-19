@@ -77,7 +77,7 @@ function do_if_down {
 
 #
 # Parse /var/run/network-scripts.puppet/interfaces
-# into /var/run/network-scripts.puppet/ifcfg-[interface mane] files
+# into /var/run/network-scripts.puppet/ifcfg-[interface name] files
 #
 function parse_interface_stanzas {
     local is_iface
@@ -191,6 +191,13 @@ function is_vlan_device_present_on_kernel {
 }
 
 #
+# returns $(true) if interface device is configured in the kernel
+#
+function is_interface_present_on_kernel {
+    /usr/sbin/ip link show dev ${1} > /dev/null 2>&1
+}
+
+#
 # Compare files in ETC_DIR to check if all VLANs are created on the kernel
 # only search over platform interfaces, from the ${ETC_DIR}/auto file
 #
@@ -237,7 +244,7 @@ function is_vlan {
     if [ -f ${cfg} ]; then
         iface=$( grep iface ${cfg} )
         if_name=$( echo "${iface}" | awk '{print $2}' )
-        regex="(vlan.*)|(.*\..*)"
+        regex="(vlan[0-9]+)|(.*\..*)"
         regex2="pre-up .*ip link add link.*type vlan"
         if [[ ${if_name} =~ ${regex} ]]; then
             return $(true)
@@ -323,8 +330,14 @@ function get_slaves {
 }
 
 #
-# returns $(true) if ifcfg files have the same number of VFs
+# returns $(true) if interface is a bonding
 #
+function is_bonding {
+    get_slaves $1 >/dev/null 2>&1
+}
+
+#
+# returns $(true) if ifcfg files have the same number of VFs
 #
 function is_eq_sriov_numvfs {
     local cfg_1=$1
@@ -419,11 +432,10 @@ function is_eq_ifcfg {
 }
 
 #
-# returns $(true) if cfg file has the given interface_name as a PHYSDEV
+# gets physical device for a vlan
 #
-function has_physdev {
+function get_physdev {
     local vlan=$1
-    local device=$2
     local phydev=''
     local iface
     local if_name
@@ -433,22 +445,25 @@ function has_physdev {
     iface=$( grep iface ${vlan} )
     if_name=$( echo "${iface}" | awk '{print $2}' )
     regex_dot_vlan=".*\..*"
-    regex_vlan="vlan.*"
+    regex_vlan="vlan[0-9]+"
+    regex_preup="pre-up .*ip link add link.*type vlan"
 
     if [[ ${if_name} =~ ${regex_dot_vlan} ]]; then
-        phydev=$( echo "${if_name}" | awk --field-separator=. '{print $1}' )
+        echo "${if_name}" | awk --field-separator=. '{print $1}'
+        return $(true)
     elif [[ ${if_name} =~ ${regex_vlan} ]]; then
         vlan_raw_device=$(grep vlan-raw-device ${vlan})
-        phydev=$( echo "${vlan_raw_device}" | awk '{print $2}' )
-    fi
-
-    if [[ ${device} == "${phydev}" ]]; then
-        if [[ -f ${PUPPET_DIR}/ifcfg-${device} ]]; then
+        echo "${vlan_raw_device}" | awk '{print $2}'
+        return $(true)
+    else
+        preup=$( grep -E "${regex_preup}" ${vlan} )
+        if [ $? -eq 0 ] ; then
+            echo "${preup}" | sed -En 's/.*ip link add link (.+) name.*/\1/p'
             return $(true)
+        else
+            return $(false)
         fi
     fi
-
-    return $(false)
 }
 
 #
