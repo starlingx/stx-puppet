@@ -10,8 +10,8 @@ class platform::exports {
   }
   -> file_line { '/etc/exports /etc/platform':
     path  => '/etc/exports',
-    line  => (str2bool($::is_bootstrap_completed)) ? {
-                true    => "/etc/platform\t\t (no_root_squash,no_subtree_check,rw)",
+    line  => ($::platform::params::system_mode == 'simplex') ? {
+                true    => '',
                 default => "/etc/platform\t\t ${::platform::params::mate_hostname}(no_root_squash,no_subtree_check,rw)",
               },
     match => '^/etc/platform\s',
