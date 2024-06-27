@@ -119,7 +119,7 @@ class platform::containerd::config
 
   $kubeadm_version = $::platform::kubernetes::params::kubeadm_version
 
-  $registry = 'registry.local:9001'
+  $registry_local = 'registry.local:9001'
 
   file { '/etc/containerd':
     ensure => 'directory',
@@ -140,34 +140,34 @@ class platform::containerd::config
     group  => 'root',
     mode   => '0700',
   }
-  -> file { "/etc/containerd/certs.d/${registry}":
+  -> file { "/etc/containerd/certs.d/${registry_local}":
     ensure => 'directory',
     owner  => 'root',
     group  => 'root',
     mode   => '0700',
   }
-  -> file { "/etc/containerd/certs.d/${registry}/hosts.toml":
+  -> file { "/etc/containerd/certs.d/${registry_local}/hosts.toml":
     ensure  => present,
     owner   => 'root',
     group   => 'root',
     mode    => '0600',
-    content => template('platform/hosts.toml.erb'),
+    content => template('platform/local-hosts.toml.erb'),
   }
   if $::platform::params::distributed_cloud_role == 'subcloud' {
-    $registry = 'registry.central:9001'
+    $registry_central = 'registry.central:9001'
 
-    file { "/etc/containerd/certs.d/${registry}":
+    file { "/etc/containerd/certs.d/${registry_central}":
       ensure => 'directory',
       owner  => 'root',
       group  => 'root',
       mode   => '0700',
     }
-    -> file { "/etc/containerd/certs.d/${registry}/hosts.toml":
+    -> file { "/etc/containerd/certs.d/${registry_central}/hosts.toml":
       ensure  => present,
       owner   => 'root',
       group   => 'root',
       mode    => '0600',
-      content => template('platform/hosts.toml.erb'),
+      content => template('platform/central-hosts.toml.erb'),
     }
   }
   exec { 'set containerd sandbox pause image':
