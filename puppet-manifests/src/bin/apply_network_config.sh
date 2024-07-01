@@ -358,17 +358,26 @@ else
             exit 1
         fi
 
+        log_network_info
+
+        parse_interface_stanzas
+
+        auto_intf=$(grep -v HEADER ${PUPPET_DIR}/auto)
+        log_it info "auto interfaces='${auto_intf}'"
+        if [ "${auto_intf}" == "auto lo" ]; then
+            # if an empty configuration is provided by puppet we should ignore it, otherwise
+            # it will remove the present network configuration and put nothing back in its place
+            log_it info "generated ${PUPPET_FILE} with empty configuration:'${auto_intf}', exiting"
+            exit 0
+        fi
+
         if [ -f /etc/network/interfaces.d/ifcfg-pxeboot ]; then
             iface_name=$( cat /etc/network/interfaces.d/ifcfg-pxeboot | grep iface | awk '{print $2}' )
-            log_it "turn off pxeboot install config, will be turned on later"
+            log_it "turn off pxeboot install config for ${iface_name}, will be turned on later"
             do_if_down ${iface_name}
             log_it "remove ifcfg-pxeboot, left from pxeboot install phase"
             rm /etc/network/interfaces.d/ifcfg-pxeboot
         fi
-
-        log_network_info
-
-        parse_interface_stanzas
 
         upgr_bootstrap=1
 
