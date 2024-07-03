@@ -71,6 +71,9 @@ define platform::drbd::filesystem (
   if $::platform::drbd::params::secure == true {
     $drbd_hmac = $::platform::drbd::params::hmac
     $drbd_secret = $::platform::drbd::params::secret
+  } else {
+    $drbd_hmac = undef
+    $drbd_secret = undef
   }
   if ($ensure == 'absent') {
     exec { "umount drbd device ${device}":
