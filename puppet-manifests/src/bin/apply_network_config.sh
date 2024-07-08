@@ -130,25 +130,76 @@ function sysinv_agent_lock {
     esac
 }
 
+# Returns $(true) if interface is base, $(false) if label
+function is_base_iface {
+    if [[ "$1" =~ ":" ]]; then
+        return $(false)
+    fi
+    return $(true)
+}
+
+# Gets base interface name for a label
+function get_base_iface {
+    base_cfg=${1/:*/}
+    echo ${base_cfg}
+}
+
+# Gets interface type
+function get_type {
+    if ! is_base_iface $1; then
+        echo label
+    elif is_vlan $1; then
+        echo vlan
+    elif is_slave $1; then
+        echo slave
+    elif is_bonding $1; then
+        echo bonding
+    else
+        echo eth
+    fi
+}
+
+# Updates interfaces according to puppet generated files
 function update_interfaces {
     is_upgrade=$(($1))
-    upDown=()
     changed=()
+    removed=()
     vlans=()
+    labels=()
 
-    # in DOR scenarios systemd might timeout to configure some interfaces since DHCP server
-    # might not be ready yet on the controller. If this happens the next interfaces in
-    # ${ETC_DIR}/ will not be configured, as the timeout will interrupt
-    # the network service.
-    verify_all_vlans_created
+    down_label=()
+    down_vlan=()
+    down_slave=()
+    down_bonding=()
+    down_eth=()
 
-    # the auto file contains the correct ordered execution list
+    up_label=()
+    up_vlan=()
+    up_slave=()
+    up_bonding=()
+    up_eth=()
+
+    auto_etc=( $(grep -v HEADER ${ETC_DIR}/auto) )
     auto_puppet=( $(grep -v HEADER ${PUPPET_DIR}/auto) )
+
+    # build a list of interfaces that were removed and also add them to the down list
+    for auto_if in ${auto_etc[@]:1}; do
+        if [[ ! " ${auto_puppet[@]:1} " =~ " ${auto_if} " ]]; then
+            iftype=$( get_type ${ETC_DIR}/${CFG_PREFIX}${auto_if} )
+            eval down_${iftype}+=\(\$auto_if\)
+            removed+=($auto_if)
+        fi
+    done
+
     for auto_if in ${auto_puppet[@]:1}; do
         cfg="${CFG_PREFIX}${auto_if}"
+        iftype=$( get_type ${PUPPET_DIR}/${cfg} )
+        include=1
 
-        if is_vlan ${ETC_DIR}/${cfg}; then
-            vlans+=(${auto_if})
+        if [ "${iftype}" == "label" ]; then
+            labels+=("${auto_if}")
+        elif [ "${iftype}" == "vlan" ]; then
+            vlans+=("${auto_if}")
         fi
 
         diff -I ".*Last generated.*" -q ${PUPPET_DIR}/${cfg} ${ETC_DIR}/${cfg} >/dev/null 2>&1
@@ -157,118 +208,115 @@ function update_interfaces {
             # puppet file needs to be copied to network dir because diff detected
             changed+=(${cfg})
 
-            to_add=""
-            if is_dhcp ${PUPPET_DIR}/${cfg} || is_dhcp ${ETC_DIR}/${cfg}  ; then
+            if is_dhcp ${PUPPET_DIR}/${cfg} || is_dhcp ${ETC_DIR}/${cfg}; then
                 # if dhcp type iface, then too many possible attr's to compare against, so just add
-                # the interface to the upDown list because we know (from above) cfg file is changed
-                log_it notice "DHCP detected for ${auto_if}, adding to upDown list"
-                to_add=${auto_if}
+                # the interface to the up/down list because we know (from above) cfg file is changed
+                log_it notice "DHCP detected for ${auto_if}, adding to up/down list"
+                include=0
             else
                 # not in dhcp situation so check if any significant
                 # cfg attributes have changed to warrant an iface restart
                 is_eq_ifcfg ${PUPPET_DIR}/${cfg} ${ETC_DIR}/${cfg}
                 if [ $? -ne 0 ] ; then
                     log_it notice "${cfg} changed"
-                    # Check if the base interface is already on the list for
-                    # restart. If not, add it to the list.
-                    # If in CentOS, remove alias portion in the interface name if any.
-                    #               The alias interface does not need to be restarted.
-                    # If in Debian, use the interface name, with or without label
-                    base_cfg=$(get_search_ifname ${auto_if})
-                    found=0
-                    for chk in ${upDown[@]}; do
-                        if [ "${base_cfg}" = "${chk}" ]; then
-                            found=1
-                            break
-                        fi
-                    done
-
-                    if [ ${found} -eq 0 ]; then
-                        to_add=${base_cfg}
-                    fi
+                    include=0
                 fi
             fi
+        fi
 
-            # skip if already in list
-            if [ -n "${to_add}" ] && [[ " ${upDown[@]} " =~ " ${to_add} " ]]; then
-                to_add=""
+        # if is vlan or bonding and is not present in the kernel, add to list
+        if [ ${include} -ne 0 ] && [[ " vlan bonding " =~ " ${iftype} " ]]; then
+            if ! is_interface_present_on_kernel ${auto_if}; then
+                log_it notice "Interface ${auto_if} of type ${iftype} is not present in the" \
+                    "kernel, adding to up/down list"
+                include=0
             fi
+        fi
 
-            if [ -n "${to_add}" ]; then
-                # check if is part of a bonding
-                if_list=($( get_bonding_compound ${to_add} ))
-                if [ $? -ne 0 ]; then
-                    if_list=(${to_add})
-                else
-                    log_it info "Bonding compound detected: '${if_list[*]}'"
-                fi
+        if [ ${include} -eq 0 ]; then
+            # add interface to up and down lists
+            eval up_${iftype}+=\(\$auto_if\)
+            eval down_${iftype}+=\(\$auto_if\)
+        fi
+    done
 
-                for iface in ${if_list[@]}; do
-                    if [[ ! " ${upDown[@]} " =~ " ${iface} " ]]; then
-                        log_it notice "Adding ${iface} to upDown list"
-                        upDown+=("${iface}")
-                    fi
-                done
+    log_it info "Labels: ${labels[*]}"
+    log_it info "VLANs: ${vlans[*]}"
+
+    # include master interfaces for all slaves that are being modified
+    for iface in ${up_slave[@]}; do
+        master=$( get_master ${PUPPET_DIR}/${CFG_PREFIX}${iface} )
+        if [[ ! " ${up_bonding[@]} " =~ " ${master} " ]]; then
+            log_it notice "Adding bonding interface ${master} to up/down list since" \
+                "slave ${iface} is changing"
+            up_bonding+=($master)
+            down_bonding+=($master)
+        fi
+    done
+
+    # include slave interfaces for all bondings that are being modified
+    for iface in ${up_bonding[@]}; do
+        slaves=($( get_slaves ${PUPPET_DIR}/${CFG_PREFIX}${iface} ))
+        for slave in ${slaves[@]}; do
+            if [[ ! " ${up_slave[@]} " =~ " ${slave} " ]]; then
+                log_it notice "Adding slave interface ${slave} to up/down list since" \
+                    "bonding ${iface} is changing"
+                up_slave+=($slave)
+                down_slave+=($slave)
+            fi
+        done
+    done
+
+    # include vlan interfaces for all eth and bondings that are being modified
+    for iface in ${vlans[@]}; do
+        physdev=$( get_physdev ${PUPPET_DIR}/${CFG_PREFIX}${iface} )
+        if [[ " ${up_eth[@]} ${up_bonding[@]} " =~ " ${physdev} " ]]; then
+            if [[ ! " ${up_vlan[@]} " =~ " ${iface} " ]]; then
+                log_it notice "Adding ${iface} to up/down list since physdev ${physdev} is changing"
+                up_vlan+=($iface)
+                down_vlan+=($iface)
             fi
         fi
     done
 
-    current=()
-    if [ -f ${ETC_DIR}/auto ]; then
-        auto_etc=( $(grep -v HEADER ${ETC_DIR}/auto) )
-        current=( ${auto_etc[@]:1} )
-    fi
-
-    active=( ${auto_puppet[@]} )
+    # include labels for all interfaces that are being modified
+    for iface in ${labels[@]}; do
+        base_iface=$( get_base_iface $iface )
+        if [[ " ${up_eth[@]} ${up_bonding[@]} ${up_vlan[@]} " =~ " ${base_iface} " ]]; then
+            if [[ ! " ${up_label[@]} " =~ " ${iface} " ]]; then
+                log_it notice "Adding ${iface} to up/down list since base ${base_iface} is changing"
+                up_label+=($iface)
+                down_label+=($iface)
+            fi
+        fi
+    done
 
     if [ ${is_upgrade} -ne 0 ]; then
         # synchronize with sysinv-agent audit
         sysinv_agent_lock ${ACQUIRE_LOCK}
     fi
 
-    remove=$(array_diff current[@] active[@])
-    for iface in ${remove[@]}; do
-        if [ ${is_upgrade} -ne 0 ]; then
-            # Bring down interface before we execute network restart, interfaces
-            # that do not have an ifcfg are not managed by init script
-            do_if_down ${iface}
-        fi
-        do_rm ${ETC_DIR}/${CFG_PREFIX}${iface}
-    done
-
-    # If a lower ethernet interface is being changed, the upper vlan interface(s) will lose
-    # configuration such as (IPv6) addresses and (IPv4, IPv6) default routes.  If the vlan
-    # interface is not already in the up/down list, then explicitly add it.
-    for iface in ${upDown[@]}; do
-        for vlan in ${vlans[@]}; do
-            if has_physdev ${PUPPET_DIR}/${CFG_PREFIX}${vlan} ${iface}; then
-                if [[ ! " ${upDown[@]} " =~ " ${vlan} " ]]; then
-                    log_it notice "Adding ${vlan} to up/down list since physdev ${iface} is changing"
-                    upDown+=($vlan)
-                fi
-            fi
-        done
-    done
-
+    # set interfaces down
     if [ ${is_upgrade} -ne 0 ]; then
-        # now down the changed ifaces by dealing with vlan interfaces first so that
-        # they are brought down gracefully (i.e., without taking their dependencies
-        # away unexpectedly).
-        for iftype in vlan ethernet slave; do
-            for iface in ${upDown[@]}; do
-                ifcfg=${PUPPET_DIR}/${CFG_PREFIX}${iface}
-                if iftype_filter ${iftype} ${ifcfg}; then
-                    do_if_down ${iface}
-                fi
+        for iftype in label vlan bonding slave eth; do
+            eval list=\${down_${iftype}[@]}
+            for iface in ${list[@]}; do
+                do_if_down ${iface}
             done
         done
     fi
 
-    # now copy the puppet changed interfaces to ${ETC_DIR}
+    # remove configs that are in ${ETC_DIR} but not in ${PUPPET_DIR}
+    for iface in ${removed[@]}; do
+        do_rm ${ETC_DIR}/${CFG_PREFIX}${iface}
+    done
+
+    # copy the puppet changed interfaces to ${ETC_DIR}
     for cfg in ${changed[@]}; do
         do_cp ${PUPPET_DIR}/${cfg} ${ETC_DIR}/${cfg}
     done
-    # copy the start on boot interfaces (for Debian) to ETC_DIR
+
+    # copy the start on boot interfaces to ${ETC_DIR}
     if [ -f ${PUPPET_DIR}/auto ]; then
         diff -I ".*Last generated.*" -q ${PUPPET_DIR}/auto ${ETC_DIR}/auto >/dev/null 2>&1
         if [ $? -ne 0 ] ; then
@@ -276,25 +324,23 @@ function update_interfaces {
         fi
     fi
 
-    # now ifup changed ifaces by dealing with vlan interfaces last so that their
-    # dependencies are met before they are configured. Bonding slaves are not
-    # included because ifup deals with them automatically.
-    for iftype in ethernet vlan; do
-        for iface in ${upDown[@]}; do
-            ifcfg=${PUPPET_DIR}/${CFG_PREFIX}${iface}
-            if iftype_filter ${iftype} ${ifcfg}; then
-                if [ ${is_upgrade} -eq 0 ]; then
-                    if is_loopback ${iface}; then
-                        log_it info "Interface '${iface}' is loopback, skipping"
-                    elif is_interface_missing_or_down ${iface}; then
-                        reset_ips ${iface}
-                        do_if_up ${iface}
-                    else
-                        ensure_iface_configured ${iface}
-                    fi
-                else
+    # now ifup changed ifaces by dealing with labels and vlan interfaces last so that their
+    # dependencies are met before they are configured. Bonding slaves are not included because ifup
+    # deals with them automatically.
+    for iftype in eth bonding vlan label; do
+        eval list=\${up_${iftype}[@]}
+        for iface in ${list[@]}; do
+            if [ ${is_upgrade} -eq 0 ]; then
+                if is_loopback ${iface}; then
+                    log_it info "Interface '${iface}' is loopback, skipping"
+                elif is_interface_missing_or_down ${iface}; then
+                    reset_ips ${iface}
                     do_if_up ${iface}
+                else
+                    ensure_iface_configured ${iface}
                 fi
+            else
+                do_if_up ${iface}
             fi
         done
     done
@@ -304,7 +350,16 @@ function update_interfaces {
         sysinv_agent_lock ${RELEASE_LOCK}
     fi
 
-    echo "${upDown[@]}"
+    # build a list of interfaces that were changed and need to have their routes recreated
+    changed_ifaces=("${up_eth[@]} ${up_bonding[@]} ${up_vlan[@]}")
+    for iface in ${up_label[@]}; do
+        base_iface=$( get_base_iface $iface )
+        if [[ ! " ${changed_ifaces[@]} " =~ " ${base_iface} " ]]; then
+            changed_ifaces+=("${base_iface}")
+        fi
+    done
+
+    echo "${changed_ifaces[@]}"
 }
 
 if [ ${ROUTES_ONLY} = "yes" ]; then
