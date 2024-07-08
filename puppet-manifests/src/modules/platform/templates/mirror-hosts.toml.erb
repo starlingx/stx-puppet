@@ -1,0 +1,11 @@
+# explicitly use v2 config format for identification
+version = 2
+
+# Begin of insecure registries
+<%- @insecure_registries.each do |insecure_registry| -%>
+  server = "<%= insecure_registry %>"
+
+  [host."<%= insecure_registry %>"]
+    capabilities = ["pull", "resolve", "push"]
+<%- end -%>
+# End of insecure registries

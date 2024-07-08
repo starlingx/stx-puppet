@@ -153,6 +153,22 @@ class platform::containerd::config
     mode    => '0600',
     content => template('platform/local-hosts.toml.erb'),
   }
+  if $insecure_registries {
+
+    file { '/etc/containerd/certs.d/default':
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => '0700',
+    }
+    -> file { '/etc/containerd/certs.d/default/hosts.toml':
+      ensure  => present,
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0600',
+      content => template('platform/mirror-hosts.toml.erb'),
+    }
+  }
   if $::platform::params::distributed_cloud_role == 'subcloud' {
     $registry_central = 'registry.central:9001'
 

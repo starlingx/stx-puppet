@@ -88,13 +88,6 @@ oom_score = 0
       conf_template = ""
     [plugins."io.containerd.grpc.v1.cri".registry]
       config_path = "/etc/containerd/certs.d"
-      [plugins."io.containerd.grpc.v1.cri".registry.mirrors]
-        # Begin of insecure registries
-<%- @insecure_registries.each do |insecure_registry| -%>
-        [plugins."io.containerd.grpc.v1.cri".registry.mirrors."<%= insecure_registry %>"]
-          endpoint = ["http://<%= insecure_registry %>"]
-<%- end -%>
-        # End of insecure registries
     [plugins."io.containerd.grpc.v1.cri".x509_key_pair_streaming]
       tls_cert_file = ""
       tls_key_file = ""
