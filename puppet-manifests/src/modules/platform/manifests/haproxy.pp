@@ -228,6 +228,9 @@ class platform::haproxy::runtime {
   include ::platform::nfv::haproxy
   include ::platform::ceph::haproxy
   include ::platform::fm::haproxy
+  if ($::platform::params::distributed_cloud_role == 'subcloud') {
+    include ::platform::dcagent::haproxy
+  }
   if ($::platform::params::distributed_cloud_role == 'systemcontroller' or
       $::platform::params::distributed_cloud_role == 'subcloud') {
     include ::platform::dcdbsync::haproxy

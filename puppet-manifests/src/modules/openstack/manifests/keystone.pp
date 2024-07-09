@@ -315,10 +315,12 @@ class openstack::keystone::endpoint::runtime {
       include ::dcorch::keystone::auth
       include ::dcmanager::keystone::auth
       include ::dcdbsync::keystone::auth
+      include ::dcagent::keystone::auth
     }
 
     if $::platform::params::distributed_cloud_role == 'subcloud' {
       include ::dcdbsync::keystone::auth
+      include ::dcagent::keystone::auth
     }
 
     include ::smapi::keystone::auth
@@ -401,14 +403,18 @@ class openstack::keystone::endpoint::reconfig
     if $::platform::params::distributed_cloud_role =='systemcontroller' {
       Keystone_endpoint["${region}/dcmanager::dcmanager"] -> Keystone_endpoint["${region}/sysinv::platform"]
       Keystone_endpoint["${region}/dcdbsync::dcorch-dbsync"] -> Keystone_endpoint["${region}/sysinv::platform"]
+      Keystone_endpoint["${region}/dcagent::dcagent"] -> Keystone_endpoint["${region}/sysinv::platform"]
       include ::dcorch::keystone::auth
       include ::dcmanager::keystone::auth
       include ::dcdbsync::keystone::auth
+      include ::dcagent::keystone::auth
     }
 
     if $::platform::params::distributed_cloud_role == 'subcloud' {
       Keystone_endpoint["${region}/dcdbsync::dcorch-dbsync"] -> Keystone_endpoint["${region}/sysinv::platform"]
+      Keystone_endpoint["${region}/dcagent"] -> Keystone_endpoint["${region}/sysinv::platform"]
       include ::dcdbsync::keystone::auth
+      include ::dcagent::keystone::auth
     }
     include ::smapi::keystone::auth
     include ::sysinv::keystone::auth

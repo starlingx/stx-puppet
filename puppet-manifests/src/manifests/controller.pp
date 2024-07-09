@@ -108,6 +108,9 @@ include ::platform::certalarm
 include ::platform::dcdbsync
 include ::platform::dcdbsync::api
 
+include ::platform::dcagent
+include ::platform::dcagent::api
+
 include ::platform::smapi
 
 include ::openstack::barbican
