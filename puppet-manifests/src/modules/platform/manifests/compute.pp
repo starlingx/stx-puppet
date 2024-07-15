@@ -462,6 +462,32 @@ class platform::compute::nvidia_vgpu_drivers(
   }
 }
 
+class platform::compute::iscsi_setup
+  inherits ::platform::compute::params {
+
+  if $platform_cpu_list != '' {
+    exec { 'Create config directory':
+      command => 'mkdir -p /sys/kernel/config',
+      unless  => 'test -d /sys/kernel/config',
+    }
+    -> exec { 'Mount configfs':
+      command => 'mount -t configfs none /sys/kernel/config',
+      unless  => 'mount | grep /sys/kernel/config',
+    }
+    -> exec { 'Load iscsi_target_mod module':
+      command => 'modprobe iscsi_target_mod',
+      unless  => 'lsmod | grep iscsi_target_mod',
+    }
+    -> exec { 'Create iscsi directory':
+      command => 'mkdir /sys/kernel/config/target/iscsi',
+      unless  => 'test -d /sys/kernel/config/target/iscsi',
+    }
+    -> exec { 'Set CPUs allowed list':
+      command => "echo ${platform_cpu_list} > /sys/kernel/config/target/iscsi/cpus_allowed_list",
+    }
+  }
+}
+
 class platform::compute {
 
   Class[$name] -> Class['::platform::vswitch']
@@ -472,6 +498,7 @@ class platform::compute {
   require ::platform::compute::machine
   require ::platform::compute::config
   require ::platform::compute::nvidia_vgpu_drivers
+  require ::platform::compute::iscsi_setup
 
   # Not included in Debian until libvirt gets included
   if $::osfamily == 'RedHat' {
