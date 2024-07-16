@@ -52,6 +52,7 @@ class platform::compute::grub::params (
   $g_audit_backlog_limit = 'audit_backlog_limit=8192',
   $g_intel_nic_driver_version = '',
   $g_intel_pstate = '',
+  $g_out_of_tree_drivers = '',
   $bios_cstate = false,
   $ignore_recovery = false,
   $keys = [
@@ -68,6 +69,7 @@ class platform::compute::grub::params (
     'audit_backlog_limit',
     'multi-drivers-switch',
     'intel_pstate',
+    'out-of-tree-drivers',
     'intel_idle.max_cstate',
   ],
 ) {
@@ -105,6 +107,12 @@ class platform::compute::grub::params (
     $multi_drivers_switch = ''
   }
 
+  if ! empty($g_out_of_tree_drivers) {
+    $oot_drivers_switch = "out-of-tree-drivers=${g_out_of_tree_drivers}"
+  } else {
+    $oot_drivers_switch = ''
+  }
+
   if ! empty($g_intel_pstate) {
     $intel_pstate = "intel_pstate=${g_intel_pstate}"
   } else {
@@ -113,7 +121,7 @@ class platform::compute::grub::params (
 
   $grub_updates = strip(
     # lint:ignore:140chars
-    "${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit} ${intel_idle_cstate} ${multi_drivers_switch} ${intel_pstate} ${nmi_watchdog} ${skew_tick}"
+    "${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit} ${intel_idle_cstate} ${multi_drivers_switch} ${intel_pstate} ${nmi_watchdog} ${skew_tick} ${oot_drivers_switch}"
     # lint:endignore:140chars
     )
 }
