@@ -2142,7 +2142,6 @@ class platform::kubernetes::dual_stack::ipv4::runtime {
     logoutput => true,
   }
   if $state == true {
-    $ipip_mode = 'Always'
     file { $def_pool_filename:
       ensure  => file,
       content => template('platform/callico_ippool.yaml.erb'),
@@ -2224,7 +2223,6 @@ class platform::kubernetes::dual_stack::ipv6::runtime {
     logoutput => true,
   }
   if $state == true {
-    $ipip_mode = 'Never'
     file { $def_pool_filename:
       ensure  => file,
       content => template('platform/callico_ippool.yaml.erb'),
