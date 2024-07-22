@@ -17,7 +17,7 @@ class platform::kubernetes::params (
   $k8s_platform_cpuset = undef,
   $k8s_reserved_mem = undef,
   $k8s_all_reserved_cpuset = undef,
-  $k8s_cpu_mgr_policy = 'none',
+  $k8s_cpu_mgr_policy = 'static',
   $k8s_topology_mgr_policy = 'best-effort',
   $k8s_cni_bin_dir = '/var/opt/cni/bin',
   $k8s_vol_plugin_dir = '/var/opt/libexec/kubernetes/kubelet-plugins/volume/exec/',
