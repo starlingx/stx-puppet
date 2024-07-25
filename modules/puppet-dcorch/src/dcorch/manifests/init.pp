@@ -157,7 +157,7 @@ class dcorch (
 
     'usm/bind_host' : value => $proxy_bind_host;
     'usm/bind_port' : value => $usm_bind_port;
-    'usm/remote_host' : value => '0.0.0.0';
+    'usm/remote_host' : value => $proxy_remote_host;
     'usm/remote_port' : value => $usm_remote_port;
 
     'identity/bind_host' : value => $proxy_bind_host;
