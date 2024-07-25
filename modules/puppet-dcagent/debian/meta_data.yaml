@@ -1,0 +1,9 @@
+---
+debname: puppet-dcagent
+debver: 1.0.0-1
+src_path: src
+revision:
+    dist: $STX_DIST
+    PKG_GITREVCOUNT: true
+    SRC_GITREVCOUNT:
+        SRC_BASE_SRCREV: 727ad5d6d22a63924d97391697ef337a8ca3f2b2

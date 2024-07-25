@@ -207,6 +207,11 @@ dcmanager::use_syslog: true
 dcmanager::log_facility: 'local4'
 dcmanager::debug: false
 
+# Dcagent
+dcagent::use_syslog: true
+dcagent::log_facility: 'local4'
+dcagent::debug: false
+
 # Dcdbsync instance for platform services
 dcdbsync::use_syslog: true
 dcdbsync::log_facility: 'local4'

@@ -1,0 +1,12 @@
+#!/bin/sh
+
+set -e
+
+if [ "${1}" = "remove" ] || [ "${1}" = "upgrade" ] || [ "${1}" = "deconfigure" ] ; then
+    update-alternatives --remove puppet-module-starlingx-dcagent \
+        /usr/share/puppet/modules.available/dcagent
+fi
+
+#DEBHELPER#
+
+exit 0

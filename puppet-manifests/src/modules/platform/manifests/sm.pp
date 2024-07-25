@@ -731,6 +731,12 @@ class platform::sm
       -> exec { 'Configure OpenStack - DCDBsync-openstack-API':
         command => "sm-configure service_instance dcdbsync-openstack-api dcdbsync-openstack-api \"config=/etc/dcdbsync/dcdbsync_openstack.conf\"",
       }
+      -> exec { 'Configure OpenStack - DCAgent-API':
+        command => "sm-configure service_instance dcagent-api dcagent-api \"\"",
+      }
+      -> exec { 'Provision DCAgent-API (service-group-member dcagent-api)':
+        command => 'sm-provision service-group-member distributed-cloud-services dcagent-api',
+      }
       # Deprovision Horizon when running as a subcloud
       exec { 'Deprovision OpenStack - Horizon (service-group-member)':
         command => 'sm-deprovision service-group-member web-services horizon',

@@ -51,7 +51,7 @@ class dcdbsync::keystone::auth (
 
   # dcdbsync is a private service only used by dcorch,
   # its API is not exposed for public access.
-  -> exec { 'Delete public endpoint':
+  -> exec { 'Delete dcdbsync public endpoint':
     path      => '/usr/bin',
     command   => @("CMD"/L),
       /bin/sh -c 'source /etc/platform/openrc && \

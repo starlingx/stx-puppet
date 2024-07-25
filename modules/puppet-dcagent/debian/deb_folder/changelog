@@ -1,0 +1,5 @@
+puppet-dcagent (1.0.0-1) unstable; urgency=medium
+
+  * Initial release.
+
+ -- Victor Romano <victor.gluzromano@windriver.com>  Mon, 08 Jul 2024 14:40:03 -0300
