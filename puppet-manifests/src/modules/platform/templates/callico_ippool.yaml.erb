@@ -6,6 +6,6 @@ metadata:
   name: default-<%= @protocol %>-ippool
 spec:
   cidr: <%= @pod_sec_subnet %>
-  ipipMode: <%= @ipip_mode %>
+  ipipMode: Never
   natOutgoing: true
   vxlanMode: Never
