@@ -1,4 +1,5 @@
 puppet-manifests
+modules/puppet-dcagent
 modules/puppet-dcdbsync
 modules/puppet-dcmanager
 modules/puppet-dcorch

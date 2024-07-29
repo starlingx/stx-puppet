@@ -1,4 +1,4 @@
-Source: puppet-dcagemt
+Source: puppet-dcagent
 Section: admin
 Priority: optional
 Maintainer: StarlingX Developers <starlingx-discuss@lists.starlingx.io>

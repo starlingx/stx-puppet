@@ -1,4 +1,7 @@
 
+#puppet-dcagent
+puppet-dcagent
+
 #puppet-dcdbsync
 puppet-dcdbsync
 
