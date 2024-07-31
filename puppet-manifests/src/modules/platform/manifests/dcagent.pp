@@ -10,8 +10,7 @@ class platform::dcagent::params (
 
 class platform::dcagent
   inherits ::platform::dcagent::params {
-  if ($::platform::params::distributed_cloud_role == 'subcloud' or
-      $::platform::params::distributed_cloud_role == 'systemcontroller') {
+  if ($::platform::params::distributed_cloud_role == 'subcloud') {
     if $service_create {
       if $::platform::params::init_keystone {
         include ::dcagent::keystone::auth

@@ -22,7 +22,7 @@ class dcagent::keystone::auth (
   $service_description    = 'DCAgent service',
   $service_name           = 'dcagent',
   $service_type           = 'dcagent',
-  $configure_endpoint     = false,
+  $configure_endpoint     = true,
   $configure_user         = true,
   $configure_user_role    = true,
   $public_url             = 'http://127.0.0.1:8325/v1',
@@ -33,37 +33,34 @@ class dcagent::keystone::auth (
 
   $real_service_name = pick($service_name, $auth_name)
 
-  $should_configure_endpoint = $distributed_cloud_role ? {
-    'subcloud' => true,
-    default    => $configure_endpoint,
-  }
+  if $distributed_cloud_role == 'subcloud' {
+    keystone::resource::service_identity { 'dcagent':
+      configure_user      => $configure_user,
+      configure_user_role => $configure_user_role,
+      configure_endpoint  => $configure_endpoint,
+      service_type        => $service_type,
+      service_description => $service_description,
+      service_name        => $real_service_name,
+      region              => $region,
+      auth_name           => $auth_name,
+      password            => $password,
+      email               => $email,
+      tenant              => $tenant,
+      public_url          => $public_url,
+      admin_url           => $admin_url,
+      internal_url        => $internal_url,
+    }
 
-  keystone::resource::service_identity { 'dcagent':
-    configure_user      => $configure_user,
-    configure_user_role => $configure_user_role,
-    configure_endpoint  => $should_configure_endpoint,
-    service_type        => $service_type,
-    service_description => $service_description,
-    service_name        => $real_service_name,
-    region              => $region,
-    auth_name           => $auth_name,
-    password            => $password,
-    email               => $email,
-    tenant              => $tenant,
-    public_url          => $public_url,
-    admin_url           => $admin_url,
-    internal_url        => $internal_url,
-  }
-
-  # dcagent is a private service only used by dcmanager-audit and dcorch,
-  # its API is not exposed for public access.
-  -> exec { 'Delete dcagent public endpoint':
-    path      => '/usr/bin',
-    command   => @("CMD"/L),
-      /bin/sh -c 'source /etc/platform/openrc && \
-      openstack endpoint list --service dcagent --interface public --format value -c ID | \
-      xargs --no-run-if-empty openstack endpoint delete'
-      | CMD
-    logoutput => true,
+    # dcagent is a private service only used by dcmanager-audit and dcorch,
+    # its API is not exposed for public access.
+    -> exec { 'Delete dcagent public endpoint':
+      path      => '/usr/bin',
+      command   => @("CMD"/L),
+        /bin/sh -c 'source /etc/platform/openrc && \
+        openstack endpoint list --service dcagent --interface public --format value -c ID | \
+        xargs --no-run-if-empty openstack endpoint delete'
+        | CMD
+      logoutput => true,
+    }
   }
 }
