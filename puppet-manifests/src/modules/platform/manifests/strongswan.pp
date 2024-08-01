@@ -86,13 +86,13 @@ class platform::strongswan::config
   inherits ::platform::strongswan::params {
 
   $strongswan_override_dir = '/etc/systemd/system/strongswan-starter.service.d'
-  $initial_config_file = find_file('/etc/platform/.initial_config_complete')
+  $pmon_config_file = '/etc/pmon.d/strongswan-starter.conf'
 
   # Restart charon
-  if $initial_config_file {
+  if (find_file($pmon_config_file)) {
     $ipsec_restart_cmd = '/usr/local/sbin/pmon-restart charon'
   } else {
-    $ipsec_restart_cmd =  '/usr/bin/systemctl restart ipsec'
+    $ipsec_restart_cmd = '/usr/bin/systemctl restart ipsec'
   }
 
   # Create systemd override directory
@@ -115,15 +115,6 @@ class platform::strongswan::config
   -> exec { 'perform systemctl daemon reload for strongswan-starter override':
     command   => '/usr/bin/systemctl daemon-reload',
     logoutput => true,
-  }
-
-  # set strongswan-starter monitored by pmond
-  -> file { '/etc/pmon.d/strongswan-starter.conf':
-    ensure  => file,
-    content => template('platform/strongswan-starter-pmond-conf.erb'),
-    owner   => 'root',
-    group   => 'root',
-    mode    => '0644',
   }
 
   # Add charon log rotate configuration
@@ -161,6 +152,23 @@ class platform::strongswan::config
   # Restart charon
   -> exec { 'Restart charon to take updated configs':
     command => $ipsec_restart_cmd,
+  }
+
+  # Generate pmon configuration file in /tmp directory.
+  # The pmon config file is generated first in /tmp directory, then
+  # moved to /etc/pmon.d. This is to avoid the issue where the puppet
+  # generated file some times doesn't trigger an inode notification on
+  # time for pmon to detect and register charon process for monitoring.
+  -> file { '/tmp/strongswan-starter.conf':
+    ensure  => file,
+    content => template('platform/strongswan-starter-pmond-conf.erb'),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+  }
+  # Move the pmon config file to /etc/pmon.d
+  -> exec { 'Move pmon config file to its location':
+    command => "/usr/bin/mv /tmp/strongswan-starter.conf ${pmon_config_file}",
   }
 
   # Run ipsec-cert-renew.sh daily
