@@ -1165,6 +1165,9 @@ class platform::sm
     -> exec { 'Configure ceph-osd':
       command => "sm-configure service_instance ceph-osd ceph-osd \"\"",
     }
+    -> exec { 'Configure storage-networking':
+      command => "sm-configure service_instance storage-networking storage-networking \"\"",
+    }
   }
 
   # On an AIO-DX systems, rook DRBD must always be configured, even
@@ -1209,7 +1212,7 @@ class platform::sm
       -> exec { 'Provision Cephmon FS in SM (service-group-member cephmon-fs)':
         command => 'sm-provision service-group-member controller-services cephmon-fs',
       }
-      -> exec { 'Provision Cephmon DRBD in SM (service-group-member drbd-cephmon':
+      -> exec { 'Provision Cephmon DRBD in SM (service-group-member drbd-cephmon)':
         command => 'sm-provision service-group-member controller-services drbd-cephmon',
       }
       -> exec { 'Provision cephmon (service-group-member)':
@@ -1217,6 +1220,9 @@ class platform::sm
       }
       -> exec { 'Provision ceph-osd (service-group-member)':
         command => 'sm-provision service-group-member storage-services ceph-osd',
+      }
+      -> exec { 'Provision storage-networking (service-group-member)':
+        command => 'sm-provision service-group-member storage-services storage-networking',
       }
     }
 
@@ -1831,7 +1837,10 @@ class platform::sm::ceph::runtime {
       exec { 'Provision Cephmon FS in SM --apply (service-group-member cephmon-fs)':
         command => 'sm-provision service-group-member controller-services cephmon-fs --apply',
       }
-      -> exec { 'Provision Cephmon DRBD in SM --apply (service-group-member drbd-cephmon':
+      -> exec { 'Provision storage-networking --apply (service-group-member)':
+        command => 'sm-provision service-group-member storage-services storage-networking --apply',
+      }
+      -> exec { 'Provision Cephmon DRBD in SM --apply (service-group-member drbd-cephmon)':
         command => 'sm-provision service-group-member controller-services drbd-cephmon --apply',
       }
       -> exec { 'Provision cephmon --apply (service-group-member)':

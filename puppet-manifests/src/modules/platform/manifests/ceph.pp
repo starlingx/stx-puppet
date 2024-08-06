@@ -13,6 +13,7 @@ class platform::ceph::params(
   $floating_mon_host = undef,
   $floating_mon_ip = undef,
   $floating_mon_addr = undef,
+  $ceph_network='management',
   $mon_0_host = undef,
   $mon_0_ip = undef,
   $mon_0_addr = undef,
@@ -65,7 +66,7 @@ class platform::ceph
         # 2 node configuration, we have a floating monitor
         $mon_initial_members = $floating_mon_host
         $osd_pool_default_size = 2
-        $mon_host = $floating_mon_addr
+        $mon_host = "${floating_mon_addr},${mon_0_addr},${mon_1_addr}"
       }
     } else {
       # Multinode & standard, any 2 monitors form a cluster
@@ -104,6 +105,8 @@ class platform::ceph
         Class['::ceph']
         -> ceph_config {
           "mon.${floating_mon_host}/host":          value => $floating_mon_host;
+          "mon.${mon_0_host}/host":          value => $mon_0_host;
+          "mon.${mon_1_host}/host":          value => $mon_1_host;
         }
       } else {
         # Simplex case, a single monitor binded to the controller.
@@ -133,7 +136,7 @@ class platform::ceph
       if $system_mode == 'simplex' {
         $valid_monitors = [ $mon_0_host ]
       } else {
-        $valid_monitors = [ $floating_mon_host ]
+        $valid_monitors = [ $floating_mon_host, $mon_0_host, $mon_1_host ]
       }
     } else {
       $valid_monitors = [ $mon_0_host, $mon_1_host, $mon_2_host ]
@@ -203,6 +206,17 @@ class platform::ceph::pmond_config {
 }
 
 
+class platform::ceph::fixed_mon_pmond_config {
+  file { '/etc/pmon.d/ceph-fixed-mon.conf':
+    ensure => link,
+    target => '/etc/ceph/ceph-fixed-mon.conf.pmon',
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0640',
+  }
+}
+
+
 class platform::ceph::mds_pmond_config {
   file { '/etc/pmon.d/ceph-mds.conf':
     ensure => link,
@@ -225,25 +239,23 @@ class platform::ceph::monitor
     $ceph_mon_ip_reconfig = find_file($ceph_mon_reconfig_flag)
 
     if $ceph_mon_ip_reconfig {
-      if $system_type == 'All-in-one' and 'simplex' in $system_mode {
-        include ::platform::network::mgmt::params
-
-        $controller0_mgmt_adress = $::platform::network::mgmt::params::controller0_address
-
-        exec { 'Stop ceph-mon':
-          command => '/etc/init.d/ceph-init-wrapper stop mon',
-        }
-        -> exec { 'Extract controller-0 monmap':
-          command => 'ceph-mon -i controller-0 --extract-monmap ./monmap.bin',
-        }
-        -> exec { 'Remove controller-0 monmap':
-          command => 'monmaptool --rm controller-0 ./monmap.bin',
-        }
-        -> exec { 'Add new controller-0 ip on monmap':
-          command => "monmaptool --add controller-0 ${controller0_mgmt_adress} ./monmap.bin",
-        }
-        -> exec { 'Inject controller-0 monmap':
-          command => 'ceph-mon --name mon.controller-0 --inject-monmap ./monmap.bin',
+      if $ceph_network == 'management' {
+        if $system_type == 'All-in-one' and 'simplex' in $system_mode {
+          exec { 'Stop ceph-mon':
+            command => '/etc/init.d/ceph-init-wrapper stop mon',
+          }
+          -> exec { 'Extract controller-0 monmap':
+            command => 'ceph-mon -i controller-0 --extract-monmap ./monmap.bin',
+          }
+          -> exec { 'Remove controller-0 monmap':
+            command => 'monmaptool --rm controller-0 ./monmap.bin',
+          }
+          -> exec { 'Add new controller-0 ip on monmap':
+            command => "monmaptool --add controller-0 ${mon_0_ip} ./monmap.bin",
+          }
+          -> exec { 'Inject controller-0 monmap':
+            command => 'ceph-mon --name mon.controller-0 --inject-monmap ./monmap.bin',
+          }
         }
       }
       exec { "Remove ${ceph_mon_reconfig_flag}" :
@@ -254,9 +266,8 @@ class platform::ceph::monitor
     if $system_type == 'All-in-one' and 'duplex' in $system_mode {
 
       if $::personality == 'controller' {
-        # In AIO-DX, only controllers have the ceph-mds service. This is managed by pmon.
-        # All other ceph services are managed by SM.
-        include ::platform::ceph::mds_pmond_config
+        # In AIO-DX, the controllers have a fixed Ceph monitor managed by pmon.
+        include ::platform::ceph::fixed_mon_pmond_config
       }
 
       if str2bool($::is_controller_active) or str2bool($::is_standalone_controller) {
@@ -264,18 +275,35 @@ class platform::ceph::monitor
         # when 'ceph' storage backend is added in sysinv.
         # Then SM takes care of starting ceph after manifests are applied.
         $configure_ceph_mon = true
+        $configure_ceph_mon_floating = true
       } else {
-        $configure_ceph_mon = false
+        $configure_ceph_mon = true
+        $configure_ceph_mon_floating = false
         # Ensures public_addr on controllers when mon configuration is not required.
         Class['::ceph']
         -> ceph_config {
           "mon.${floating_mon_host}/public_addr":   value => $floating_mon_ip;
         }
+
+        if $::hostname == $mon_0_host {
+          Class['::ceph']
+          -> ceph_config {
+            "mon.${mon_1_host}/public_addr":   value => $mon_1_ip;
+          }
+        }
+        if $::hostname == $mon_1_host {
+          Class['::ceph']
+          -> ceph_config {
+            "mon.${mon_0_host}/public_addr":   value => $mon_0_ip;
+          }
+        }
       }
     } else {
       if $::hostname == $mon_0_host or $::hostname == $mon_1_host or $::hostname == $mon_2_host {
+        # This host has a Ceph mon
         $configure_ceph_mon = true
       } else {
+        # This host does not have a Ceph mon
         $configure_ceph_mon = false
       }
     }
@@ -283,20 +311,15 @@ class platform::ceph::monitor
     $configure_ceph_mon = false
   }
 
-  if $::personality == 'worker' and ! $configure_ceph_mon {
-    # Reserve space for ceph-mon on all worker nodes.
-    include ::platform::filesystem::params
-    logical_volume { $mon_lv_name:
-      ensure       => present,
-      volume_group => $::platform::filesystem::params::vg_name,
-      size         => "${mon_lv_size_reserved}G",
-    }
-  }
-
   if $configure_ceph_mon {
     include ::platform::filesystem::ceph::mountpoint
 
     if $system_type == 'All-in-one' and 'duplex' in $system_mode {
+
+      # Hiera data will be set to enable this optional host filesystem
+      # on controllers when bare-metal ceph is enabled.
+      include ::platform::filesystem::ceph::runtime
+
       # if transition from AIO-SX to AIO-DX has started, we need to
       # wipe the logical volume before mounting DRBD
       # and remove the pmon.d managed ceph daemons
@@ -306,6 +329,7 @@ class platform::ceph::monitor
 
         Class['::platform::ceph::migration::sx_to_dx::remove_mon']
         -> Class['::ceph']
+
       } else {
         # ensure DRBD config is complete before enabling the ceph monitor
         Drbd::Resource <| |> -> Class['::ceph']
@@ -366,14 +390,29 @@ class platform::ceph::monitor
     }
 
     if $system_type == 'All-in-one' and 'duplex' in $system_mode {
-      ceph::mon { $floating_mon_host:
-        public_addr => $floating_mon_ip,
+      if $configure_ceph_mon_floating {
+        ceph::mon { $floating_mon_host:
+          public_addr => $floating_mon_ip,
+        }
+        # On AIO-DX there is also a floating Ceph monitor backed by DRBD.
+        # Therefore DRBD must be up before Ceph monitor is configured
+        Drbd::Resource <| |> -> Ceph::Mon <| |>
       }
 
-      # On AIO-DX there is a single, floating, Ceph monitor backed by DRBD.
-      # Therefore DRBD must be up before Ceph monitor is configured
-      Drbd::Resource <| |> -> Ceph::Mon <| |>
-
+      if $::hostname == $mon_0_host {
+        ceph::mon { $mon_0_host:
+          public_addr    => $mon_0_ip,
+          mon_data       => '/var/lib/ceph/data/ceph-controller-0',
+          service_ensure => 'stopped',
+        }
+      }
+      elsif $::hostname == $mon_1_host {
+        ceph::mon { $mon_1_host:
+          public_addr    => $mon_1_ip,
+          mon_data       => '/var/lib/ceph/data/ceph-controller-1',
+          service_ensure => 'stopped',
+        }
+      }
     } else {
       if $::hostname == $mon_0_host {
         ceph::mon { $mon_0_host:
@@ -391,6 +430,10 @@ class platform::ceph::monitor
         }
       }
     }
+
+    # Include Pmon configuration for Ceph MDS on every host that
+    # has Ceph monitor configured
+    include ::platform::ceph::mds_pmond_config
   }
 
   # explicitly bind ceph-mgr to host-specific address
@@ -435,11 +478,19 @@ class platform::ceph::migration::sx_to_dx::remove_mon
     onlyif  => "test -f ${pmond_ceph_file}",
   }
   -> Drbd::Resource['drbd-cephmon']
-  -> exec { 'Adding auto mount for drbd-cephmon to fstab' :
-    command => "echo \"${drbd_device} ${mon_mountpoint} auto defaults,noauto 0 0\" | tee -a /etc/fstab",
+  -> file_line { 'Removing old auto mount for cephmon from fstab' :
+    ensure            => absent,
+    path              => '/etc/fstab',
+    match             => '/var/lib/ceph/mon[[:space:]]',
+    match_for_absence => true,
+  }
+  -> file_line { 'Adding auto mount for drbd-cephmon to fstab' :
+    path => '/etc/fstab',
+    line => "${drbd_device}\t${mon_mountpoint}\text4\tdefaults,noauto\t0\t0",
   }
   -> exec { 'Mount drbd-cephmon DRBD device' :
     command => "/usr/bin/mount ${mon_mountpoint}",
+    unless  => "mountpoint -q ${mon_mountpoint}",
   }
 }
 
@@ -458,8 +509,11 @@ class platform::ceph::migration::sx_to_dx::rebuild_mon
     command => 'sm-unmanage service ceph-mon',
     onlyif  => 'test -f /var/run/goenabled',
   }
-  -> exec { 'stop Ceph OSDs and Monitor' :
-    command => '/etc/init.d/ceph-init-wrapper stop'
+  -> exec { 'stop Ceph OSDs' :
+    command => '/etc/init.d/ceph-init-wrapper stop osd'
+  }
+  -> exec { 'stop Ceph Monitor' :
+    command => '/etc/init.d/ceph-init-wrapper stop mon.controller'
   }
   -> exec { 'Remove current ceph-controller store.db' :
     command => "rm -rf ${mon_db_path}/store.db",
@@ -476,13 +530,13 @@ class platform::ceph::migration::sx_to_dx::rebuild_mon
   }
 
   exec { 'Add monitor information to store.db' :
-    command => "ceph-monstore-tool ${mon_db_path} rebuild --mon-ids ${floating_mon_host}",
+    command => "ceph-monstore-tool ${mon_db_path} rebuild --mon-ids ${floating_mon_host} ${mon_0_host} ${mon_1_host}",
   }
   -> exec { 'start Ceph Monitor after rebuilding monitor store' :
-    command => '/etc/init.d/ceph-init-wrapper start mon',
+    command => '/etc/init.d/ceph-init-wrapper start mon.controller',
   }
   -> exec { 'start other Ceph components after rebuilding monitor store' :
-    command => '/etc/init.d/ceph-init-wrapper start',
+    command => '/etc/init.d/ceph-init-wrapper start osd',
   }
   -> exec { 'sm-manage service ceph-osd after rebuilding monitor store' :
     command => 'sm-manage service ceph-osd',
@@ -501,8 +555,11 @@ class platform::ceph::migration::sx_to_dx::rebuild_mon
 class platform::ceph::migration::sx_to_dx::active_cluster_updates
   inherits platform::ceph::params {
 
-  exec { 'Ensure Ceph Monitor is running' :
-    command => '/etc/init.d/ceph-init-wrapper start mon',
+  exec { 'Ensure Fixed Ceph Monitor is running' :
+    command => "/etc/init.d/ceph-init-wrapper start mon.${$::hostname}",
+  }
+  -> exec { 'Ensure Floating Ceph Monitor is running' :
+    command => '/etc/init.d/ceph-init-wrapper start mon.controller',
   }
   -> exec { 'Ensure Ceph OSDs are running' :
     command => '/etc/init.d/ceph-init-wrapper start osd',
@@ -540,18 +597,21 @@ class platform::ceph::metadataserver::config
         Class['::ceph']
           -> ceph_config {
             "mds.${$::hostname}/host": value => $mon_0_host;
+            "mds.${$::hostname}/public_addr": value => $mon_0_ip;
           }
     }
   if $::hostname == $mon_1_host {
         Class['::ceph']
           -> ceph_config {
             "mds.${$::hostname}/host": value => $mon_1_host;
+            "mds.${$::hostname}/public_addr": value => $mon_1_ip;
           }
     }
   if $::hostname == $mon_2_host {
         Class['::ceph']
           -> ceph_config {
             "mds.${$::hostname}/host": value => $mon_2_host;
+            "mds.${$::hostname}/public_addr": value => $mon_2_ip;
           }
     }
   }
@@ -569,42 +629,6 @@ class platform::ceph::metadataserver::controller::runtime
 
     # Make sure the ceph SM services are provisioned
     Class['::platform::sm::ceph::runtime'] -> Class[$name]
-
-    $system_mode = $::platform::params::system_mode
-    $system_type = $::platform::params::system_type
-
-    if $system_type == 'All-in-one' {
-      if 'duplex' in $system_mode {
-        if str2bool($::is_controller_active) {
-          # Active Duplex Controller
-          exec { 'sm-unmanage service ceph-mon':
-            command => 'sm-unmanage service ceph-mon'
-          }
-          -> exec { 'Ensure Ceph monitor is started':
-            command => '/etc/init.d/ceph-init-wrapper start mon'
-          }
-          -> exec { 'Ensure Ceph metadata server is started':
-            command => '/etc/init.d/ceph-init-wrapper start mds'
-          }
-          -> exec { 'sm-manage service ceph-mon':
-            command => 'sm-manage service ceph-mon'
-          }
-        } else {
-          # Standby Duplex Controller
-          exec { 'Ensure Ceph metadata server is started':
-            command => '/etc/init.d/ceph-init-wrapper start mds'
-          }
-        }
-      }
-    } else {
-      # Simplex/Std Controller
-      exec { 'Ensure Ceph monitor is started':
-        command => '/usr/local/sbin/pmon-restart ceph'
-      }
-      -> exec { 'Ensure Ceph metadata server is started':
-        command => '/etc/init.d/ceph-init-wrapper start mds'
-      }
-    }
   }
 }
 
@@ -619,13 +643,6 @@ class platform::ceph::metadataserver::worker::runtime
       # Make sure the metadata config and monitor is added before starting services
       Class['::platform::ceph::monitor'] -> Class[$name]
       Class['::platform::ceph::metadataserver::config'] -> Class[$name]
-
-      exec {'Ensure Ceph monitor is started':
-        command => '/usr/local/sbin/pmon-restart ceph'
-      }
-      -> exec { 'Ensure Ceph metadata server is started':
-        command => '/etc/init.d/ceph-init-wrapper start mds'
-      }
     }
   }
 }
@@ -913,7 +930,6 @@ class platform::ceph::runtime_osds {
   include ::ceph::params
   include ::platform::ceph
   include ::platform::ceph::osds
-  include ::platform::ceph::pmond_config
 
   # Since this is runtime we have to avoid checking status of Ceph while we
   # configure it. On AIO-DX ceph-osd processes are monitored by SM & on other
@@ -933,6 +949,8 @@ class platform::ceph::runtime_osds {
       command => 'sm-manage service ceph-osd'
     }
   } else {
+    include ::platform::ceph::pmond_config
+
     exec { 'remove /etc/pmon.d/ceph.conf':
       command => 'rm -f /etc/pmon.d/ceph.conf'
     }
@@ -991,3 +1009,4 @@ class platform::ceph::mon::runtime
     }
   }
 }
+
