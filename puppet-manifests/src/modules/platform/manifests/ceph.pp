@@ -268,17 +268,20 @@ class platform::ceph::monitor
       if $::personality == 'controller' {
         # In AIO-DX, the controllers have a fixed Ceph monitor managed by pmon.
         include ::platform::ceph::fixed_mon_pmond_config
+        $configure_ceph_mon = true
+      } else {
+        # If this is a worker node on a AIO-DX, do not configure ceph monitor
+        $configure_ceph_mon = false
       }
 
       if str2bool($::is_controller_active) or str2bool($::is_standalone_controller) {
         # Ceph mon is configured on a DRBD partition,
         # when 'ceph' storage backend is added in sysinv.
         # Then SM takes care of starting ceph after manifests are applied.
-        $configure_ceph_mon = true
         $configure_ceph_mon_floating = true
       } else {
-        $configure_ceph_mon = true
         $configure_ceph_mon_floating = false
+
         # Ensures public_addr on controllers when mon configuration is not required.
         Class['::ceph']
         -> ceph_config {
