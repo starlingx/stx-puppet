@@ -497,7 +497,7 @@ class platform::drbd::rook::params (
   $device = '/dev/drbd9',
   $lv_name = 'ceph-float-lv',
   $lv_size = '20',
-  $mountpoint = '/var/lib/ceph/mon-a',
+  $mountpoint = '/var/lib/ceph/mon-float',
   $port = '7788',
   $resource_name = 'drbd-ceph',
   $vg_name = 'cgts-vg',
