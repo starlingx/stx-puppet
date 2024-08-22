@@ -29,6 +29,7 @@ define platform::haproxy::proxy (
   $mode_option = undef,
   $acl_option = {},
   $public_secondary_ip_address = undef,
+  $internal_frontend = false,
 ) {
   include ::platform::haproxy::params
 
@@ -134,20 +135,40 @@ define platform::haproxy::proxy (
     }
   }
 
-  if $server_timeout {
-    $timeout_option = "server ${server_timeout}"
-  } else {
-    $timeout_option = undef
-  }
+  if $private_ip != undef {
+    if $internal_frontend {
+      # If internal frontend is true, an extra frontend will be created for
+      # the internal endpoint and binded to the private port.
+      haproxy::frontend { "${name}-internal":
+        collect_exported => false,
+        name             => "${name}-internal",
+        bind             => {
+          "${private_ip}:${private_port}" => ' ',
+        },
+        options          => $all_options
+      }
+      # Backend port is private port plus 2 as to not collide w/ admin
+      # convention (private + 1)
+      $backend_port = $private_port + 2
+    } else {
+      $backend_port = $private_port
+    }
 
-  haproxy::backend { $name:
-    collect_exported => false,
-    name             => "${name}-internal",
-    options          => {
-      'server'   => "${server_name} ${private_ip}:${private_port}",
-      'timeout'  => $timeout_option,
-      'mode'     => $mode_option,
-      'retry-on' => $retry_on
+    if $server_timeout {
+      $timeout_option = "server ${server_timeout}"
+    } else {
+      $timeout_option = undef
+    }
+
+    haproxy::backend { $name:
+      collect_exported => false,
+      name             => "${name}-internal",
+      options          => {
+        'server'   => "${server_name} ${private_ip}:${backend_port}",
+        'timeout'  => $timeout_option,
+        'mode'     => $mode_option,
+        'retry-on' => $retry_on
+      }
     }
   }
 }
@@ -185,6 +206,7 @@ define platform::haproxy::alt_backend (
     }
   }
 }
+
 
 class platform::haproxy::server {
 
