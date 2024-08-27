@@ -252,7 +252,19 @@ class platform::devices::qat::qat_4xxx {
     notice('QAT device found.')
 
     $vf_driver = 'vfio-pci'
-    kmod::load { $vf_driver: }
+
+    exec { 'Load vfio-pci driver with sriov enabled for QAT device':
+      command   => 'modprobe vfio-pci enable_sriov=1 disable_idle_d3=1',
+      logoutput => true,
+    }
+    -> exec { 'Ensure enable_sriov is set for QAT device':
+      command   => 'echo 1 > /sys/module/vfio_pci/parameters/enable_sriov',
+      logoutput => true,
+    }
+    -> exec { 'Ensure disable_idle_d3 is set for QAT device':
+      command   => 'echo 1 > /sys/module/vfio_pci/parameters/disable_idle_d3',
+      logoutput => true,
+    }
 
     exec { 'config_qat':
       command   => 'bash /usr/share/puppet/modules/platform/files/config_qat.sh',
@@ -266,7 +278,7 @@ class platform::devices::qat::qat_4xxx {
       enable     => true,
       hasrestart => true,
       notify     => Service['sysinv-agent'],
-      require    => Kmod::Load[$vf_driver],
+      require    => Exec['Load vfio-pci driver with sriov enabled for QAT device'],
     }
 
     exec { 'qat_systemctl_enable':
