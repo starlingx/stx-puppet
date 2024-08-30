@@ -91,25 +91,33 @@ define platform::ptpinstance::nic_clock_handler (
   $ptp_conf_dir,
   $wpc_commands = {
     'sma1' => {
-        'input' => "1 1 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1",
-        'output' => "2 1 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1"
+        'input' => "1 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1",
+        'output' => "2 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1"
     },
     'sma2' => {
-        'input' => "1 2 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2",
-        'output' => "2 2 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2"
+        'input' => "1 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2",
+        'output' => "2 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2"
     },
     'u.fl1' => {
-        'output' => "2 1 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL1"
+        'output' => "2 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL1"
     },
     'u.fl2' => {
-        'input' => "1 2 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2"
+        'input' => "1 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2"
     },
     'synce_rclka' => {
-        'enabled' => "1 0 > /sys/class/net/${name}/device/phy/synce"
+        'enabled' => "1 \$channel > /sys/class/net/${name}/device/phy/synce"
     },
     'synce_rclkb' => {
-        'enabled' => "1 1 > /sys/class/net/${name}/device/phy/synce"
+        'enabled' => "1 \$channel > /sys/class/net/${name}/device/phy/synce"
     }
+  },
+  $wpc_channels = {
+    'sma1' => "cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1 | awk '{print \$2}'",
+    'sma2' => "cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2 | awk '{print \$2}'",
+    'u.fl1' => "cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL1 | awk '{print \$2}'",
+    'u.fl2' => "cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2 | awk '{print \$2}'",
+    'synce_rclka' => 'echo 0',
+    'synce_rclkb' => 'echo 1'
   }
 ) {
   exec { "${ifname}_heading":
@@ -123,6 +131,7 @@ define platform::ptpinstance::nic_clock_handler (
     if $wpc_commands[$parm] {
       exec { "${ifname}_${parm}":
         command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
+          channel=$(${wpc_channels[$parm]});\
           echo ${wpc_commands[$parm][$value]}",
         provider => shell,
         require  => [ Exec["${ifname}_heading"], Exec["${ifname}_${base_port}_heading"] ]
@@ -145,22 +154,26 @@ define platform::ptpinstance::nic_clock_reset (
 ) {
   exec { "${ifname}_clear_UFL1":
     command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
-      echo 0 1 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL1",
+      channel=$(cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL1 | awk '{print \$2}');\
+      echo 0 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL1",
     provider => shell,
   }
   exec { "${ifname}_clear_UFL2":
     command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
-      echo 0 2 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2",
+      channel=$(cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2 | awk '{print \$2}');\
+      echo 0 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2",
     provider => shell,
   }
   exec { "${ifname}_clear_SMA1":
     command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
-      echo 0 1 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1",
+      channel=$(cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1 | awk '{print \$2}');\
+      echo 0 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1",
     provider => shell,
   }
   exec { "${ifname}_clear_SMA2":
     command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
-      echo 0 2 > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2",
+      channel=$(cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2 | awk '{print \$2}');\
+      echo 0 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2",
     provider => shell,
   }
   exec { "${ifname}_clear_rclka":
