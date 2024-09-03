@@ -1567,21 +1567,21 @@ class platform::sm::disable_admin_config::runtime {
   include ::platform::network::admin::ipv4::params
   include ::platform::network::admin::ipv6::params
   $admin_ip_interface  = $::platform::network::admin::params::interface_name
-  if $::platform::network::admin::ipv4::params::subnet_version == $::platform::params::ipv4 {
-    exec { 'Unmanage admin-ipv4 service':
-      command => 'sm-unmanage service admin-ipv4'
-    }
-    -> exec { 'Deprovision admin-ipv4 service':
-      command => 'sm-deprovision service-group-member controller-services admin-ipv4 --apply'
-    }
+  exec { 'Unmanage admin-ipv4 service':
+    command => 'sm-unmanage service admin-ipv4',
+    onlyif  => 'sm-dump | grep admin-ipv4',
   }
-  if $::platform::network::admin::ipv6::params::subnet_version == $::platform::params::ipv6 {
-    exec { 'Unmanage admin-ipv6 service':
-      command => 'sm-unmanage service admin-ipv6'
-    }
-    -> exec { 'Deprovision admin-ipv6 service':
-      command => 'sm-deprovision service-group-member controller-services admin-ipv6 --apply'
-    }
+  -> exec { 'Deprovision admin-ipv4 service':
+    command => 'sm-deprovision service-group-member controller-services admin-ipv4 --apply',
+    onlyif  => 'sm-dump | grep admin-ipv4',
+  }
+  exec { 'Unmanage admin-ipv6 service':
+    command => 'sm-unmanage service admin-ipv6',
+    onlyif  => 'sm-dump | grep admin-ipv6',
+  }
+  -> exec { 'Deprovision admin-ipv6 service':
+    command => 'sm-deprovision service-group-member controller-services admin-ipv6 --apply',
+    onlyif  => 'sm-dump | grep admin-ipv6',
   }
   exec { 'Deprovision service domain admin-interface':
     command => 'sm-deprovision service-domain-interface controller admin-interface --apply'
