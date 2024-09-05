@@ -1,6 +1,6 @@
 class platform::usm::params (
   $private_port = 5497,
-  $private_slow_port = 5499,
+  $private_slow_port = 5500,
   $public_port = undef,
   $server_timeout = '600s',
   $region_name = undef,
@@ -61,12 +61,13 @@ class platform::usm::haproxy
   }
 
   platform::haproxy::proxy { 'usm-restapi':
-    server_name    => 's-usm',
-    public_port    => $public_port,
-    private_port   => $private_port,
-    server_timeout => $server_timeout,
-    mode_option    => 'http',
-    acl_option     => $acl_option,
+    server_name       => 's-usm',
+    public_port       => $public_port,
+    private_port      => $private_port,
+    server_timeout    => $server_timeout,
+    mode_option       => 'http',
+    acl_option        => $acl_option,
+    internal_frontend => true,
   }
 
   # Configure rules for DC https enabled admin endpoint.
@@ -92,7 +93,7 @@ class platform::usm::haproxy
       server_name       => 's-usm',
       public_ip_address => $::platform::haproxy::params::private_dc_ip_address,
       public_port       => $private_port + 1,
-      private_port      => $private_port,
+      private_port      => $private_port + 2,
       server_timeout    => $server_timeout,
       mode_option       => 'http',
       acl_option        => $acl_option_admin,
