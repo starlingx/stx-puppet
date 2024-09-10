@@ -1,7 +1,7 @@
 #
 # Files in this package are licensed under Apache; see LICENSE file.
 #
-# Copyright (c) 2013-2023 Wind River Systems, Inc.
+# Copyright (c) 2013-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -59,6 +59,7 @@ class dcorch (
   $usm_remote_port             = 5497,
   $identity_bind_port          = 25000,
   $identity_remote_port        = 5000,
+  $engine_workers              = 6,
 ) {
 
   include dcorch::params
@@ -123,6 +124,10 @@ class dcorch (
       'DEFAULT/log_file'  :           value => $log_file;
       'DEFAULT/log_dir'   :           value => $log_dir;
     }
+  }
+
+  dcorch_config {
+    'DEFAULT/workers':           value => $engine_workers;
   }
 
   dcorch_config {

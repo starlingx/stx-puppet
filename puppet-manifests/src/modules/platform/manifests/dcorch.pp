@@ -17,6 +17,7 @@ class platform::dcorch::params (
   $identity_api_proxy_port = undef,
   $sysinv_api_proxy_client_timeout = '600s',
   $sysinv_api_proxy_server_timeout = '600s',
+  $engine_workers = undef,
 ) {
   include ::platform::params
 
@@ -91,6 +92,14 @@ class platform::dcorch
       $fqdn_ready = false
     }
 
+    # If not defined, worker values can vary from 4 to 6 depending
+    # on the number of physical cores and memory available
+    if $::platform::dcorch::params::engine_workers == undef {
+      $engine_workers_value = min($::platform::params::eng_workers_by_2, 6)
+    } else {
+      $engine_workers_value = $::platform::dcorch::params::engine_workers
+    }
+
     class { '::dcorch':
       rabbit_host       => (str2bool($fqdn_ready)) ? {
                               true    => $::platform::amqp::params::host,
@@ -101,6 +110,7 @@ class platform::dcorch
       rabbit_password   => $::platform::amqp::params::auth_password,
       proxy_bind_host   => $api_host,
       proxy_remote_host => $api_host,
+      engine_workers    => $engine_workers_value,
     }
 
     # Purge dcorch database 20 minutes in the first hour daily

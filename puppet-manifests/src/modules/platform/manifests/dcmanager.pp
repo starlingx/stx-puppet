@@ -10,6 +10,8 @@ class platform::dcmanager::params (
   $deploy_base_dir = '/opt/platform/deploy',
   $iso_base_dir_source = '/opt/platform/iso',
   $iso_base_dir_target = '/var/www/pages/iso',
+  $state_workers = undef,
+  $audit_worker_workers = undef,
 ) {
   include ::platform::params
 
@@ -84,14 +86,30 @@ class platform::dcmanager
       $fqdn_ready = false
     }
 
+    # If not defined, worker values can vary from 4 to 8 depending
+    # on the number of physical cores and memory available
+    if $::platform::dcmanager::params::state_workers == undef {
+      $state_workers_value = min($::platform::params::eng_workers_by_2, 8)
+    } else {
+      $state_workers_value = $::platform::dcmanager::params::state_workers
+    }
+
+    if $::platform::dcmanager::params::audit_worker_workers == undef {
+      $audit_worker_workers_value = min($::platform::params::eng_workers_by_2, 8)
+    } else {
+      $audit_worker_workers_value = $::platform::dcmanager::params::audit_worker_workers
+    }
+
     class { '::dcmanager':
-      rabbit_host     => (str2bool($fqdn_ready)) ? {
-                            true    => $::platform::amqp::params::host,
-                            default => $::platform::amqp::params::host_url,
-                          },
-      rabbit_port     => $::platform::amqp::params::port,
-      rabbit_userid   => $::platform::amqp::params::auth_user,
-      rabbit_password => $::platform::amqp::params::auth_password,
+      rabbit_host          => (str2bool($fqdn_ready)) ? {
+                                true    => $::platform::amqp::params::host,
+                                default => $::platform::amqp::params::host_url,
+                              },
+      rabbit_port          => $::platform::amqp::params::port,
+      rabbit_userid        => $::platform::amqp::params::auth_user,
+      rabbit_password      => $::platform::amqp::params::auth_password,
+      state_workers        => $state_workers_value,
+      audit_worker_workers => $audit_worker_workers_value,
     }
     file {$iso_base_dir_source:
       ensure => directory,

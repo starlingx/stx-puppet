@@ -197,7 +197,7 @@ class platform::postgresql::server
     #   - re-assess shared_buffers setting for the system controller in a large
     #     distributed cloud.
     postgresql::server::config_entry { 'max_connections':
-      value => '1500',
+      value => '10000',
     }
     postgresql::server::config_entry { 'shared_buffers':
       value => '80MB',
