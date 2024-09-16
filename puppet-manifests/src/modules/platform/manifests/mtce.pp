@@ -60,13 +60,16 @@ class platform::mtce::agent
   }
 }
 
-
 class platform::mtce::reload {
   exec {'signal-mtc-agent':
     command => 'pkill -HUP mtcAgent',
+    onlyif  => '/bin/pgrep mtcAgent',
+    path    => ['/bin', '/usr/bin'],
   }
   exec {'signal-hbs-agent':
     command => 'pkill -HUP hbsAgent',
+    onlyif  => '/bin/pgrep hbsAgent',
+    path    => ['/bin', '/usr/bin'],
   }
 
   # mtcClient and hbsClient don't currently reload all configuration,
