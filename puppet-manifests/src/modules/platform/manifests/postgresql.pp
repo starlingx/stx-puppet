@@ -335,7 +335,6 @@ class platform::postgresql::bootstrap
   postgresql::server::role {'admin':
     password_hash => 'admin',
     superuser     => true,
-    hash          => $::postgresql::server::password_encryption,
   }
 }
 
