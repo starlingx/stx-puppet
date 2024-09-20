@@ -13,10 +13,11 @@
 
 CONFIG_DIRECTORY="/etc"
 CONFIG_FILE_PREFIX="4xxx*"
-TEMP_LOCATION="/tmp"
+TEMP_LOCATION="/tmp/qat_config_files"
 CONFIG_SCRIPT_DIR="/etc/qat/script_files"
 CONFIG_PF_SCRIPT="generate_conf_files.sh"
 CONFIG_TEMPLATE_DIR="/etc/qat/conf_files"
+CONFIG_TEMPLATE_TEMP_DIRECTORY="/tmp/qat_template_files"
 CONFIG_PF_TEMPLATE="4xxx_template.conf"
 CONFIG_VF_TEMPLATE="4xxxvf_dev0.conf.vm"
 INTEL_VENDORID="8086"
@@ -64,7 +65,7 @@ create_pf_config() {
 
     if [[ ${SYS_4XXX_PF_DEV} -gt 0 ]]; then
         ${CONFIG_SCRIPT_DIR}/${CONFIG_PF_SCRIPT} -n "${SYS_4XXX_PF_DEV}" \
-            -f ${CONFIG_TEMPLATE_DIR}/${CONFIG_PF_TEMPLATE} -o ${TEMP_LOCATION}
+            -f ${CONFIG_TEMPLATE_TEMP_DIRECTORY}/${CONFIG_PF_TEMPLATE} -o ${TEMP_LOCATION}
     fi
     ${INSTALL} -D -m 640 ${TEMP_LOCATION}/4xxx_dev${pf_seq}.conf \
         "${pf_config_file}"
@@ -86,10 +87,35 @@ create_vf_config() {
             continue
         fi
 
-        ${INSTALL} -D -m 640 ${CONFIG_TEMPLATE_DIR}/${CONFIG_VF_TEMPLATE} \
+        ${INSTALL} -D -m 640 ${CONFIG_TEMPLATE_TEMP_DIRECTORY}/${CONFIG_VF_TEMPLATE} \
             "${vf_config_file}"
         log_message "QAT VF config file ${vf_config_file} created \
         successfully."
+    done
+}
+
+# Function to modify pf vf config template files
+modify_pf_vf_config_template_files() {
+    FILES=("${CONFIG_TEMPLATE_TEMP_DIRECTORY}/${CONFIG_PF_TEMPLATE}" \
+            "${CONFIG_TEMPLATE_TEMP_DIRECTORY}/${CONFIG_VF_TEMPLATE}")
+
+    # Modify pf and vf template files
+    for FILE in "${FILES[@]}"; do
+        # Check if the file exists
+
+        if [ ! -f "${FILE}" ]; then
+            log_message "File does not exist: ${FILE}"
+            exit 1
+        fi
+        # Replace asym;dc with sym;dc using sed
+        sed -i 's/ServicesEnabled = asym;dc/ServicesEnabled = sym;dc/g' "${FILE}"
+        # Check if the sed command was successful
+        if [ $? -eq 0 ]; then
+            log_message "File modified successfully: ${FILE}"
+        else
+            log_message "Failed to modify file: ${FILE}"
+            exit 1
+        fi
     done
 }
 
@@ -107,6 +133,24 @@ if [[ ${EUID} -ne 0 ]]; then
     exit 1
 fi
 
+if [ -d "${TEMP_LOCATION}" ]; then
+    rm -rf ${TEMP_LOCATION}
+fi
+
+if [ -d "${CONFIG_TEMPLATE_TEMP_DIRECTORY}" ]; then
+    rm -rf ${CONFIG_TEMPLATE_TEMP_DIRECTORY}
+fi
+
+mkdir -p ${TEMP_LOCATION}
+mkdir -p ${CONFIG_TEMPLATE_TEMP_DIRECTORY}
+
+# Copy pf and vf config template files to temp location
+cp ${CONFIG_TEMPLATE_DIR}/${CONFIG_PF_TEMPLATE} ${CONFIG_TEMPLATE_TEMP_DIRECTORY}
+cp ${CONFIG_TEMPLATE_DIR}/${CONFIG_VF_TEMPLATE} ${CONFIG_TEMPLATE_TEMP_DIRECTORY}
+
+# Modify pf vf config template files
+modify_pf_vf_config_template_files
+
 if [[ "$#" -eq 0 ]]; then
     if [ "${SYS_4XXX_PF_DEV}" -gt 0 ]; then
         for ((i = 0; i < ${SYS_4XXX_PF_DEV}; i++)); do
@@ -120,6 +164,8 @@ fi
 if [[ "$#" -gt "${SYS_4XXX_PF_DEV}" ]]; then
     log_message "Usage: $0 <Max ${SYS_4XXX_PF_DEV} \
         vf_count argument are supported> ..."
+    rm -rf ${TEMP_LOCATION}
+    rm -rf ${CONFIG_TEMPLATE_TEMP_DIRECTORY}
     exit 1
 fi
 
@@ -134,3 +180,7 @@ for vf in "$@"; do
     create_config_files ${pf_seq} ${vf_cnt}
     pf_seq=${pf_seq}+1
 done
+
+# Delete temp folders
+rm -rf ${TEMP_LOCATION}
+rm -rf ${CONFIG_TEMPLATE_TEMP_DIRECTORY}
