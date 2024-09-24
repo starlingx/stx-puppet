@@ -400,20 +400,30 @@ class platform::ceph::monitor
         # On AIO-DX there is also a floating Ceph monitor backed by DRBD.
         # Therefore DRBD must be up before Ceph monitor is configured
         Drbd::Resource <| |> -> Ceph::Mon <| |>
+
+        # If the floating monitor is being configured in the host, then
+        # the fixed monitor must be started too to prevent Ceph to get unresponsive
+        # when there is a reboot and there is not a three monitor quorum defined
+        $fixed_mon_service_state = 'running'
+      }
+      else {
+        # If this is the standby controller, defer the start of the fixed monitor.
+        # Pmon will start it later.
+        $fixed_mon_service_state = 'stopped'
       }
 
       if $::hostname == $mon_0_host {
         ceph::mon { $mon_0_host:
           public_addr    => $mon_0_ip,
           mon_data       => '/var/lib/ceph/data/ceph-controller-0',
-          service_ensure => 'stopped',
+          service_ensure => $fixed_mon_service_state,
         }
       }
       elsif $::hostname == $mon_1_host {
         ceph::mon { $mon_1_host:
           public_addr    => $mon_1_ip,
           mon_data       => '/var/lib/ceph/data/ceph-controller-1',
-          service_ensure => 'stopped',
+          service_ensure => $fixed_mon_service_state,
         }
       }
     } else {
