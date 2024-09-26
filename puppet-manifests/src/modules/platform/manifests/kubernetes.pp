@@ -433,6 +433,12 @@ class platform::kubernetes::master::init
     $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
     $creds_command = '$(cat /tmp/puppet/registry_credentials)'
 
+    if versioncmp(regsubst($version, '^v', ''), '1.29.0') >= 0 {
+      $generate_super_conf = true
+    } else {
+      $generate_super_conf = false
+    }
+
     $resource_title = 'pre pull k8s images'
     $command = "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${version} | xargs -i crictl pull --creds ${creds_command} registry.local:9001/{}" # lint:ignore:140chars
 
@@ -455,6 +461,14 @@ class platform::kubernetes::master::init
       owner  => 'root',
       group  => $::platform::params::protected_group_name,
       mode   => '0640',
+    }
+    # Fresh installation with Kubernetes 1.29 generates the super-admin.conf
+    # only in controller-0 and not in controller-1. The following command
+    # generates the super-admin.conf in controller-1.
+    -> exec { 'generate the /etc/kubernetes/super-admin.conf':
+      command   => 'kubeadm init phase kubeconfig super-admin',
+      onlyif    => "test ${generate_super_conf} = true",
+      logoutput => true,
     }
 
     # Add a bash profile script to set a k8s env variable
@@ -933,6 +947,12 @@ class platform::kubernetes::upgrade_control_plane
   # assure here that the images are downloaded.
   require platform::kubernetes::pre_pull_control_plane_images
 
+  if versioncmp(regsubst($version, '^v', ''), '1.29.0') >= 0 {
+    $generate_conf = true
+  } else {
+    $generate_conf = false
+  }
+
   # control plane is only upgraded on a controller
   # The -v6 gives verbose debug output includes health, GET response, delay.
   platform::kubernetes::kube_command { 'upgrade_control_plane':
@@ -941,6 +961,16 @@ class platform::kubernetes::upgrade_control_plane
     environment => 'KUBECONFIG=/etc/kubernetes/admin.conf:/etc/kubernetes/kubelet.conf',
     timeout     => 210,
   }
+
+  # K8s control plane upgrade from 1.28 to 1.29 generates the super-admin.conf
+  # only on the active controller, not on the standby controller. The following
+  # command creates the super-admin.conf on the standby controller.
+  -> exec { 'generate super-admin.conf during kubernetes upgrade':
+    command   => 'kubeadm init phase kubeconfig super-admin',
+    onlyif    => "test ${generate_conf} = true && test ! -f /etc/kubernetes/super-admin.conf",
+    logoutput => true,
+  }
+
 }
 
 # Define for unmasking and starting a service
