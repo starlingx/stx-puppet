@@ -331,11 +331,6 @@ class platform::postgresql::bootstrap
     database    => 'all',
     order       => '000',
   }
-
-  postgresql::server::role {'admin':
-    password_hash => 'admin',
-    superuser     => true,
-  }
 }
 
 class platform::postgresql::upgrade
