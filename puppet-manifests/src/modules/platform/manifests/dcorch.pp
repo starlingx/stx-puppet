@@ -18,6 +18,7 @@ class platform::dcorch::params (
   $sysinv_api_proxy_client_timeout = '600s',
   $sysinv_api_proxy_server_timeout = '600s',
   $engine_workers = undef,
+  $rabbit_host = 'localhost',
 ) {
   include ::platform::params
 
@@ -69,29 +70,6 @@ class platform::dcorch
 
     $system_mode = $::platform::params::system_mode
 
-    # FQDN can be used after:
-    # - after the bootstrap for any installation
-    # - mate controller uses FQDN if mgmt::params::fqdn_ready is present
-    #     mate controller can use FQDN before the bootstrap flag
-    # - just AIO-SX can use FQDN during the an upgrade. For other installs
-    #     the active controller in older release can resolve the .internal FQDN
-    #     when the mate controller is updated to N+1 version
-    if (!str2bool($::is_upgrade_do_not_use_fqdn) or $system_mode == 'simplex') {
-      if (str2bool($::is_bootstrap_completed)) {
-        $fqdn_ready = true
-      } else {
-        if ($::platform::network::mgmt::params::fqdn_ready != undef) {
-          $fqdn_ready = $::platform::network::mgmt::params::fqdn_ready
-        }
-        else {
-          $fqdn_ready = false
-        }
-      }
-    }
-    else {
-      $fqdn_ready = false
-    }
-
     # If not defined, worker values can vary from 4 to 6 depending
     # on the number of physical cores and memory available
     if $::platform::dcorch::params::engine_workers == undef {
@@ -101,10 +79,7 @@ class platform::dcorch
     }
 
     class { '::dcorch':
-      rabbit_host       => (str2bool($fqdn_ready)) ? {
-                              true    => $::platform::amqp::params::host,
-                              default => $::platform::amqp::params::host_url,
-                            },
+      rabbit_host       => $::platform::dcorch::params::rabbit_host,
       rabbit_port       => $::platform::amqp::params::port,
       rabbit_userid     => $::platform::amqp::params::auth_user,
       rabbit_password   => $::platform::amqp::params::auth_password,

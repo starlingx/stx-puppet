@@ -12,6 +12,7 @@ class platform::dcmanager::params (
   $iso_base_dir_target = '/var/www/pages/iso',
   $state_workers = undef,
   $audit_worker_workers = undef,
+  $rabbit_host = 'localhost',
 ) {
   include ::platform::params
 
@@ -63,29 +64,6 @@ class platform::dcmanager
 
     $system_mode = $::platform::params::system_mode
 
-    # FQDN can be used after:
-    # - after the bootstrap for any installation
-    # - mate controller uses FQDN if mgmt::params::fqdn_ready is present
-    #     mate controller can use FQDN before the bootstrap flag
-    # - just AIO-SX can use FQDN during the an upgrade. For other installs
-    #     the active controller in older release can resolve the .internal FQDN
-    #     when the mate controller is updated to N+1 version
-    if (!str2bool($::is_upgrade_do_not_use_fqdn) or $system_mode == 'simplex') {
-      if (str2bool($::is_bootstrap_completed)) {
-        $fqdn_ready = true
-      } else {
-        if ($::platform::network::mgmt::params::fqdn_ready != undef) {
-          $fqdn_ready = $::platform::network::mgmt::params::fqdn_ready
-        }
-        else {
-          $fqdn_ready = false
-        }
-      }
-    }
-    else {
-      $fqdn_ready = false
-    }
-
     # If not defined, worker values can vary from 4 to 8 depending
     # on the number of physical cores and memory available
     if $::platform::dcmanager::params::state_workers == undef {
@@ -101,10 +79,7 @@ class platform::dcmanager
     }
 
     class { '::dcmanager':
-      rabbit_host          => (str2bool($fqdn_ready)) ? {
-                                true    => $::platform::amqp::params::host,
-                                default => $::platform::amqp::params::host_url,
-                              },
+      rabbit_host          => $::platform::dcmanager::params::rabbit_host,
       rabbit_port          => $::platform::amqp::params::port,
       rabbit_userid        => $::platform::amqp::params::auth_user,
       rabbit_password      => $::platform::amqp::params::auth_password,

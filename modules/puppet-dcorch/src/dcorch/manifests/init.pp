@@ -93,7 +93,7 @@ class dcorch (
   }
 
   dcorch_config {
-      'DEFAULT/transport_url':    value => $::platform::amqp::params::transport_url;
+      'DEFAULT/transport_url':    value=> "rabbit://${rabbit_userid}:${rabbit_password}@${rabbit_host}:${rabbit_port}"
   }
 
   dcorch_config {
