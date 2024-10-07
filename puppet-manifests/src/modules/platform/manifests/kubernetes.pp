@@ -985,6 +985,12 @@ define platform::kubernetes::unmask_start_service($service_name, $onlyif = undef
     command => "/usr/local/sbin/pmon-start ${service_name}",
     onlyif  => $onlyif,
   }
+  # Start the service if not running
+  -> exec { "start ${service_name} if not running":
+    command => "/usr/bin/systemctl start ${service_name}",
+    unless  => "systemctl is-active ${service_name} | grep -wq active",
+    onlyif  => "systemctl is-enabled ${service_name} | grep -wq enabled",
+  }
 }
 
 # Define for masking and stopping a service
@@ -1885,7 +1891,7 @@ class platform::kubernetes::unmask_start_services
   }
   -> Class['platform::kubernetes::unmask_start_kubelet']
   -> exec { 'wait for kubernetes endpoints health check':
-      command => '/usr/local/bin/k8s_wait_for_endpoints_health.py',
+      command => '/usr/bin/sysinv-k8s-health check',
   }
 }
 
