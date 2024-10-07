@@ -656,6 +656,7 @@ class platform::config::pre {
   }
   include ::platform::coredump::k8s_token_handler::config
   include ::platform::coredump::runtime
+  include ::platform::crontab
 }
 
 
