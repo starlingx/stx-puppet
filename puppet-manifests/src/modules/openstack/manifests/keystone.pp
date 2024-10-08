@@ -102,7 +102,15 @@ class openstack::keystone (
       section => 'DEFAULT',
       setting => 'admin_token',
     }
-
+    # This is applied to c0 via the bootstrap playbook
+    # For c1, puppet is needed to apply during unlock
+    ini_setting { 'Set keystone default log level to INFO':
+      ensure  => present,
+      path    => '/etc/keystone/logging.conf',
+      section => 'logger_root',
+      setting => 'level',
+      value   => 'INFO',
+    }
     # create keystone policy configuration
     file { '/etc/keystone/policy.json':
       ensure  => present,
