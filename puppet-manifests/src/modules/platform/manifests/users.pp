@@ -31,6 +31,44 @@ class platform::users
     ensure => 'present',
     gid    => $::platform::params::deny_ssh_group_id,
   }
+
+  # Create the 'sys_admin' group. This group grants full administrative
+  # privileges needed to manage the StarlingX system. Members of this
+  # group can perform all tasks, with the exception of those restricted
+  # for security reasons.
+  -> group { $::platform::params::sys_admin_group_name:
+    ensure => 'present',
+    gid    => $::platform::params::sys_admin_group_id,
+    system => true,
+  }
+
+  # Create the 'sys_configurator' group. This group allows its members to
+  # perform configuration changes on the StarlingX system. However,
+  # security-related tasks (e.g., adding or deleting users) are restricted
+  # to the 'sys_admin' group and cannot be performed by members of this group.
+  -> group { $::platform::params::sys_configurator_group_name:
+    ensure => 'present',
+    gid    => $::platform::params::sys_configurator_group_id,
+    system => true,
+  }
+
+  # Create the 'sys_operator' group. This group allows its members to manage
+  # the operational state of the StarlingX system, such as starting and
+  # stopping services, but without permission to modify system configurations.
+  -> group { $::platform::params::sys_operator_group_name:
+    ensure => 'present',
+    gid    => $::platform::params::sys_operator_group_id,
+    system => true,
+  }
+
+  # Create the 'sys_reader' group. This group provides read-only access,
+  # allowing its members to view and list system information without the
+  # ability to make any modifications.
+  -> group { $::platform::params::sys_reader_group_name:
+    ensure => 'present',
+    gid    => $::platform::params::sys_reader_group_id,
+    system => true,
+  }
 }
 
 
@@ -57,6 +95,34 @@ class platform::users::bootstrap
   -> group { $::platform::params::deny_ssh_group_name:
     ensure => 'present',
     gid    => $::platform::params::deny_ssh_group_id,
+  }
+
+  # Create the 'sys_admin' group
+  -> group { $::platform::params::sys_admin_group_name:
+    ensure => 'present',
+    gid    => $::platform::params::sys_admin_group_id,
+    system => true,
+  }
+
+  # Create the 'sys_configurator' group
+  -> group { $::platform::params::sys_configurator_group_name:
+    ensure => 'present',
+    gid    => $::platform::params::sys_configurator_group_id,
+    system => true,
+  }
+
+  # Create the 'sys_operator' group
+  -> group { $::platform::params::sys_operator_group_name:
+    ensure => 'present',
+    gid    => $::platform::params::sys_operator_group_id,
+    system => true,
+  }
+
+  # Create the 'sys_reader' group
+  -> group { $::platform::params::sys_reader_group_name:
+    ensure => 'present',
+    gid    => $::platform::params::sys_reader_group_id,
+    system => true,
   }
 }
 
