@@ -20,6 +20,7 @@ include ::platform::drbd::etcd::bootstrap
 include ::platform::drbd::dockerdistribution::bootstrap
 
 # Puppet classes to enable the bring up of kubernetes master
+include ::platform::k8splatform::bootstrap
 include ::platform::docker::bootstrap
 include ::platform::etcd::bootstrap
 

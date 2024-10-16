@@ -94,6 +94,12 @@ class platform::helm
     include ::platform::helm::repositories
 
     Class['::platform::kubernetes::gate']
+    # Mitigate systemd hung behaviour for concurrent operations
+    # TODO(jgauld): Remove workaround after base OS issue resolved
+    -> exec { 'verify-systemd-running - helm':
+      command   => '/usr/local/bin/verify-systemd-running.sh',
+      logoutput => true,
+    }
     -> exec { 'restart lighttpd for helm':
       require   => [File['/etc/lighttpd/lighttpd.conf', $target_helm_repos_base_dir, $source_helm_repos_base_dir]],
       command   => 'systemctl restart lighttpd.service',

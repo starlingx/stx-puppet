@@ -241,7 +241,6 @@ class platform::sm
     }
   }
 
-
   # Add a shell for the postgres. By default WRL sets the shell to /bin/false.
   user { 'postgres':
     shell => '/bin/sh'

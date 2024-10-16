@@ -43,6 +43,7 @@ include ::platform::network::interfaces::fpga::config
 include ::platform::grub
 include ::platform::collectd
 include ::platform::filesystem::compute
+include ::platform::k8splatform
 include ::platform::docker::worker
 include ::platform::containerd::worker
 include ::platform::dockerdistribution::compute

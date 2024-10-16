@@ -1,0 +1,5 @@
+[Service]
+Slice=<%= scope['platform::k8splatform::params::slice'] %>
+CPUShares=<%= scope['platform::k8splatform::params::containerd_shares'] %>
+CPUQuota=<%= Integer(scope['platform::k8splatform::params::containerd_quota_scale']) * Integer(scope['platform::params::platform_cpu_count']) %>%
+CPUQuotaPeriodSec=10ms
