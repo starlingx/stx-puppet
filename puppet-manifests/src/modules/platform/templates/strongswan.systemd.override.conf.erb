@@ -1,3 +1,6 @@
+[Unit]
+Before=sm.service
+
 [Service]
 After=network-online.target luks-fs-mgr.service
 ExecStartPre=/usr/bin/check-ipsec-luks-dir.sh
