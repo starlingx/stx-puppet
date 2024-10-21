@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2016-2023 Wind River Systems, Inc.
+# Copyright (c) 2016-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -31,8 +31,8 @@ class nfv::nfvi (
   $ceilometer_service_type       = 'metering',
   $ceilometer_endpoint_type      = 'admin',
   $cinder_region_name            = 'RegionOne',
-  $cinder_service_name           = 'cinderv2',
-  $cinder_service_type           = 'volumev2',
+  $cinder_service_name           = 'cinderv3',
+  $cinder_service_type           = 'volumev3',
   $cinder_endpoint_type          = 'admin',
   $cinder_endpoint_disabled      = false,
   $glance_region_name            = 'RegionOne',
