@@ -67,6 +67,7 @@ class platform::sysinv
   sysinv_config {
     'app_framework/fluxcd_hr_reconcile_check_delay': value => 60;
     'app_framework/missing_auto_update': value => true;
+    'app_framework/skip_k8s_application_audit': value => false;
   }
 }
 
