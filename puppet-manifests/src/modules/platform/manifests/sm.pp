@@ -486,16 +486,12 @@ class platform::sm
 
   ############################
   # PXEBOOT
-  # Create the PXEBoot IP service if it is configured
   # PXEBoot only supports IPv4 config
-  # TODO(heitormatsui) review if we can change this 'if' or move elsewhere like the other ipvX services
-  if str2bool($::is_initial_config) or str2bool($::usm_upgrade_in_progress) {
-    exec { 'Configure PXEBoot IPv4 service in SM (service-group-member pxeboot-ipv4)':
-        command => 'sm-provision service-group-member controller-services pxeboot-ipv4',
-    }
-    -> exec { 'Configure PXEBoot IPv4 service in SM (service pxeboot-ipv4)':
-        command => 'sm-provision service pxeboot-ipv4',
-    }
+  exec { 'Configure PXEBoot IPv4 service in SM (service-group-member pxeboot-ipv4)':
+      command => 'sm-provision service-group-member controller-services pxeboot-ipv4',
+  }
+  -> exec { 'Configure PXEBoot IPv4 service in SM (service pxeboot-ipv4)':
+      command => 'sm-provision service pxeboot-ipv4',
   }
 
   if $system_mode == 'duplex-direct' or $system_mode == 'simplex' {
