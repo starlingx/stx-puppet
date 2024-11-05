@@ -1,5 +1,6 @@
 class platform::sysctl::params (
   $low_latency = false,
+  $tuned_devices  = ''
 ) inherits ::platform::params {}
 
 class platform::sysctl::vm_min_free_kbytes (
@@ -19,6 +20,7 @@ class platform::sysctl::vm_min_free_kbytes (
 class platform::sysctl
   inherits ::platform::sysctl::params {
 
+  include ::platform::sysctl::tuned
   include ::platform::network::mgmt::params
 
   $ip_version = $::platform::network::mgmt::params::subnet_version
@@ -104,6 +106,21 @@ class platform::sysctl
     exec { 'Clear rp_filter for existing interfaces':
       command => "bash -c 'for f in /proc/sys/net/ipv4/conf/*/rp_filter; do echo 0 > \$f; done'",
     }
+  }
+}
+
+class platform::sysctl::tuned
+  inherits ::platform::sysctl::params {
+
+  # Populate devices to disable APM using device_path
+  # Eg.: devices_udev_regex=(ID_PATH=pci-0000:00:17.0-ata-1.0)|(ID_PATH=pci-0000:00:17.0-ata-2.0)
+  file_line { 'tuned_populate_devices':
+    path  => '/etc/tuned/starlingx/tuned.conf',
+    line  => "devices_udev_regex=${tuned_devices}",
+    match => '^[\s]*#?devices_udev_regex=',
+  }
+  -> exec { 'systemctl-restart-tuned':
+    command => '/usr/bin/systemctl restart tuned.service',
   }
 }
 
@@ -214,5 +231,6 @@ class platform::sysctl::controller::runtime {
 
 
 class platform::sysctl::bootstrap {
+  include ::platform::sysctl::tuned
   include ::platform::sysctl::controller::reserve_ports
 }
