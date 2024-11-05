@@ -3,6 +3,7 @@ class platform::usm::params (
   $private_slow_port = 5500,
   $public_port = undef,
   $server_timeout = '600s',
+  $server_timeout_slow = '1800s',
   $region_name = undef,
   $service_create = false,
 ) { }
@@ -46,12 +47,13 @@ class platform::usm::haproxy
   # which are anticipated to take multiple seconds to process.
   # USM API handles the slow requests in a separated thread, so that
   # typical queries are not blocked.
+  # The server_timeout_slow value is identical to UPLOAD_REQUEST_TIMEOUT
   $alt_backend_name = 'alt-usm-restapi-internal'
   platform::haproxy::alt_backend { 'usm-restapi':
     backend_name     => $alt_backend_name,
     server_name      => 's-usm',
     alt_private_port => $private_slow_port,
-    server_timeout   => $server_timeout,
+    server_timeout   => $server_timeout_slow,
     mode_option      => 'http',
   }
 
@@ -79,7 +81,7 @@ class platform::usm::haproxy
       backend_name     => $alt_admin_backend_name,
       server_name      => 's-usm',
       alt_private_port => $private_slow_port,
-      server_timeout   => $server_timeout,
+      server_timeout   => $server_timeout_slow,
       mode_option      => 'http',
     }
 
