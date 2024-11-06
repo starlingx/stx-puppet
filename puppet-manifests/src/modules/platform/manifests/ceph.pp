@@ -41,7 +41,6 @@ class platform::ceph::params(
   $simplex_to_duplex_migration = false,
   $cephfs_filesystems = {},
   $ceph_config_file = '/etc/ceph/ceph.conf',
-  $ceph_config_ready_path = '/var/run/.ceph_started',
   $node_ceph_configured_flag = '/etc/platform/.node_ceph_configured',
   $ceph_mon_reconfig_flag = '/etc/platform/.ceph_mon_reconfig_required',
   $pmond_ceph_file = '/etc/pmon.d/ceph.conf',
@@ -177,19 +176,15 @@ class platform::ceph
 
 class platform::ceph::post
   inherits ::platform::ceph::params {
-  # Enable ceph process recovery after all configuration is done
-  file { $ceph_config_ready_path:
-    ensure  => present,
-    content => '',
-    owner   => 'root',
-    group   => 'root',
-    mode    => '0644',
-  }
 
   if $service_enabled {
     # Ceph configuration on this node is done
     file { $node_ceph_configured_flag:
-      ensure => present
+      ensure  => present,
+      content => '',
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0640',
     }
   }
 }
@@ -408,7 +403,6 @@ class platform::ceph::monitor
       }
       else {
         # If this is the standby controller, defer the start of the fixed monitor.
-        # Pmon will start it later.
         $fixed_mon_service_state = 'stopped'
       }
 
@@ -936,6 +930,22 @@ class platform::ceph::runtime_base {
       Drbd::Resource <| |> -> Class[$name]
     }
     Class[$name] -> Class['::platform::sm::ceph::runtime']
+  }
+
+  # Start Ceph processes when the ceph storage backend is configured
+  # at runtime. This is needed because mtcClient will not call the
+  # ceph.sh script.
+  class { '::platform::ceph::start_ceph':
+    stage => post,
+  }
+}
+
+class platform::ceph::start_ceph {
+  include ::platform::ceph::post
+
+  Class['::platform::ceph::post']
+  -> exec { 'Start ceph processes':
+    command => "/etc/services.d/${::personality}/ceph.sh start",
   }
 }
 
