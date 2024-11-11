@@ -152,35 +152,47 @@ define platform::ptpinstance::nic_clock_reset (
   $uuid,
   $base_port,
 ) {
-  exec { "${ifname}_clear_UFL1":
-    command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
-      channel=$(cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL1 | awk '{print \$2}');\
-      echo 0 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL1",
-    provider => shell,
+  if $parameters['u.fl1'] {
+    exec { "${ifname}_clear_UFL1":
+      command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
+        channel=$(cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL1 | awk '{print \$2}');\
+        echo 0 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL1",
+      provider => shell,
+    }
   }
-  exec { "${ifname}_clear_UFL2":
-    command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
-      channel=$(cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2 | awk '{print \$2}');\
-      echo 0 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2",
-    provider => shell,
+  if $parameters['u.fl2'] {
+    exec { "${ifname}_clear_UFL2":
+      command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
+        channel=$(cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2 | awk '{print \$2}');\
+        echo 0 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2",
+      provider => shell,
+    }
   }
-  exec { "${ifname}_clear_SMA1":
-    command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
-      channel=$(cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1 | awk '{print \$2}');\
-      echo 0 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1",
-    provider => shell,
+  if $parameters['sma1'] {
+    exec { "${ifname}_clear_SMA1":
+      command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
+        channel=$(cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1 | awk '{print \$2}');\
+        echo 0 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1",
+      provider => shell,
+    }
   }
-  exec { "${ifname}_clear_SMA2":
-    command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
-      channel=$(cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2 | awk '{print \$2}');\
-      echo 0 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2",
-    provider => shell,
+  if $parameters['sma2'] {
+    exec { "${ifname}_clear_SMA2":
+      command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
+        channel=$(cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2 | awk '{print \$2}');\
+        echo 0 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2",
+      provider => shell,
+    }
   }
-  exec { "${ifname}_clear_rclka":
-    command => "echo 0 0 > /sys/class/net/${name}/device/phy/synce",
+  if $parameters['synce_rclka'] {
+    exec { "${ifname}_clear_rclka":
+      command => "echo 0 0 > /sys/class/net/${name}/device/phy/synce",
+    }
   }
-  exec { "${ifname}_clear_rclkb":
-    command => "echo 0 1 > /sys/class/net/${name}/device/phy/synce",
+  if $parameters['synce_rclkb'] {
+    exec { "${ifname}_clear_rclkb":
+      command => "echo 0 1 > /sys/class/net/${name}/device/phy/synce",
+    }
   }
 }
 
