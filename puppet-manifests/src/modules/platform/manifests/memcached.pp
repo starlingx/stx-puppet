@@ -2,7 +2,8 @@ class platform::memcached::params(
   $package_ensure = 'present',
   $logfile = '/var/log/memcached.log',
   # set CACHESIZE in /etc/sysconfig/memcached
-  $max_memory = false,
+  $max_memory_large = undef,
+  $max_memory_small = undef,
   $tcp_port = 11211,
   $udp_port = 11211,
   # set MAXCONN in /etc/sysconfig/memcached
@@ -43,6 +44,12 @@ class platform::memcached::params(
 class platform::memcached
   inherits ::platform::memcached::params {
 
+  if $::platform::params::distributed_cloud_role !='systemcontroller' {
+    $local_max_memory = $max_memory_small
+  } else {
+    $local_max_memory = $max_memory_large
+  }
+
   Anchor['platform::networking']
 
   -> class { '::memcached':
@@ -52,12 +59,18 @@ class platform::memcached
     tcp_port        => $tcp_port,
     udp_port        => $udp_port,
     max_connections => $max_connections,
-    max_memory      => $max_memory,
+    max_memory      => $local_max_memory,
     service_restart => $service_restart,
     processorcount  => $processorcount
   }
 
   -> exec { 'systemctl enable memcached.service':
     command => '/usr/bin/systemctl enable memcached.service',
+  }
+}
+
+class platform::memcached::runtime {
+  exec { 'systemctl restart memcached.service':
+    command => '/usr/bin/systemctl restart memcached.service',
   }
 }

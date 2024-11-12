@@ -132,7 +132,10 @@ haproxy::defaults_options:
 # disable UDP listener to prevent DOS attack
 platform::memcached::params::udp_port: 0
 platform::memcached::params::max_connections: 8192
-platform::memcached::params::max_memory: 782
+# system controller
+platform::memcached::params::max_memory_large: 782
+# standalone systems or subcloud
+platform::memcached::params::max_memory_small: 32
 
 # sysinv
 sysinv::journal_max_size: 51200
