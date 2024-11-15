@@ -84,16 +84,55 @@ class platform::collectd
     mode   => '0600',
   }
 
-  # Crontab entry for rss daily Memory log.
+  # Crontab entry for monitoring rss daily Memory log.
   cron { 'memory-logs':
-  ensure      => 'present',
-  command     => '/usr/bin/date >> /var/log/rss-memory.log; /usr/bin/ps -e -o ppid,pid,nlwp,rss:10,vsz:10,comm,cmd --sort=-rss >> /var/log/rss-memory.log', # lint:ignore:140chars
-  environment => 'PATH=/bin:/usr/bin:/usr/sbin',
-  minute      => '00',
-  hour        => '1',
-  user        => 'root',
+    ensure      => 'present',
+    environment => 'PATH=/bin:/usr/bin:/usr/sbin',
+    minute      => '00',
+    hour        => '1',
+    user        => 'root',
+    command     => @(EOL/L),
+        date --rfc-3339=s >> /var/log/rss-memory.log; \
+        ps -e -o ppid,pid,nlwp,rss:10,vsz:10,comm,cmd --sort=-rss \
+        >> /var/log/rss-memory.log
+        |- EOL
+  }
+
+  # Install custom toprc for root user;
+  # gives fields: P, NU, CGNAME, and command args
+  file { [ '/root/.config', '/root/.config/procps' ]:
+    ensure => 'directory',
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0700',
+  }
+  -> file { '/root/.config/procps/toprc':
+    ensure  => 'present',
+    replace => true,
+    content => template('platform/toprc.erb'),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+  }
+
+  # Install custom toprc for sysadmin user
+  # gives fields: P, NU, CGNAME, and command args
+  file { [ '/home/sysadmin/.config', '/home/sysadmin/.config/procps' ]:
+    ensure => 'directory',
+    owner  => 'sysadmin',
+    group  => 'sys_protected',
+    mode   => '0700',
+  }
+  -> file { '/home/sysadmin/.config/procps/toprc':
+    ensure  => 'present',
+    replace => true,
+    content => template('platform/toprc.erb'),
+    owner   => 'sysadmin',
+    group   => 'sys_protected',
+    mode    => '0644',
   }
 }
+
 class platform::collectd::runtime {
   include ::platform::collectd
 }
