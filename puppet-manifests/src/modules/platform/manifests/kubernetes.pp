@@ -236,9 +236,10 @@ class platform::kubernetes::cgroup
 define platform::kubernetes::kube_command (
   $command,
   $logname,
-  $environment = undef,
+  $environment = [],
   $timeout = undef,
-  $onlyif = undef
+  $onlyif = undef,
+  $unless = undef
 ) {
   # Execute kubernetes command with instrumentation.
   # Note that puppet captures no command output on timeout.
@@ -250,11 +251,12 @@ define platform::kubernetes::kube_command (
   # by puppet-manifest-apply.sh command.
 
   exec { "${title}": # lint:ignore:only_variable_string
-    environment => [ $environment ],
+    environment => $environment,
     provider    => shell,
     command     => "stdbuf -oL -eL ${command} |& tee /var/log/puppet/latest/${logname}",
     timeout     => $timeout,
     onlyif      => $onlyif,
+    unless      => $unless,
     logoutput   => true,
   }
 }
@@ -449,9 +451,10 @@ class platform::kubernetes::master::init
       local_registry_auth => $local_registry_auth,
     }
 
-    -> exec { 'configure master node':
-      command   => $join_cmd,
-      logoutput => true,
+    -> platform::kubernetes::kube_command { 'configure master node':
+      command => $join_cmd,
+      logname => 'kubeadm-join-command.log',
+      timeout => 300,
     }
 
     # Update ownership/permissions for file created by "kubeadm init".
@@ -609,10 +612,11 @@ class platform::kubernetes::worker::init
 
   # Configure the worker node. Only do this once, so check whether the
   # kubelet.conf file has already been created (by the join).
-  exec { 'configure worker node':
-    command   => $join_cmd,
-    logoutput => true,
-    unless    => 'test -f /etc/kubernetes/kubelet.conf',
+  -> platform::kubernetes::kube_command { 'configure worker node':
+    command => $join_cmd,
+    logname => 'kubeadm-join-command.log',
+    unless  => 'test -f /etc/kubernetes/kubelet.conf',
+    timeout => 300,
   }
 
   # Add kubelet service override
@@ -898,7 +902,7 @@ class platform::kubernetes::upgrade_first_control_plane
     command     => "kubeadm -v6 upgrade apply ${version} \
                     --allow-experimental-upgrades --allow-release-candidate-upgrades -y",
     logname     => 'kubeadm-upgrade-apply.log',
-    environment => 'KUBECONFIG=/etc/kubernetes/admin.conf',
+    environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
     timeout     => 210,
   }
   -> exec { 'purge all kubelet-config except most recent':
@@ -958,7 +962,7 @@ class platform::kubernetes::upgrade_control_plane
   platform::kubernetes::kube_command { 'upgrade_control_plane':
     command     => 'kubeadm -v6 upgrade node',
     logname     => 'kubeadm-upgrade-node.log',
-    environment => 'KUBECONFIG=/etc/kubernetes/admin.conf:/etc/kubernetes/kubelet.conf',
+    environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf:/etc/kubernetes/kubelet.conf' ],
     timeout     => 210,
   }
 
@@ -1095,7 +1099,7 @@ class platform::kubernetes::worker::upgrade_kubelet
     # The -v6 gives verbose debug output includes health, GET response, delay.
     command     => "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm -v6 upgrade node",
     logname     => 'kubeadm-upgrade-node.log',
-    environment => 'KUBECONFIG=/etc/kubernetes/kubelet.conf',
+    environment => [ 'KUBECONFIG=/etc/kubernetes/kubelet.conf' ],
     timeout     => 300,
   }
   -> Class['platform::kubernetes::mask_stop_kubelet']
@@ -1844,7 +1848,7 @@ class platform::kubernetes::update_kubelet_config::runtime
   platform::kubernetes::kube_command { 'update kubelet config':
     command     => 'kubeadm upgrade node phase kubelet-config',
     logname     => 'kubeadm-upgrade-node-phase-kubelet-config.log',
-    environment => 'KUBECONFIG=/etc/kubernetes/admin.conf:/etc/kubernetes/kubelet.conf',
+    environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf:/etc/kubernetes/kubelet.conf' ],
     timeout     => 60,
   }
 
@@ -1877,7 +1881,7 @@ class platform::kubernetes::cordon_node {
                     --skip-wait-for-delete-timeout=10 \
                     --force --timeout=150s",
     logname     => 'cordon.log',
-    environment => 'KUBECONFIG=/etc/kubernetes/admin.conf:/etc/kubernetes/kubelet.conf',
+    environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf:/etc/kubernetes/kubelet.conf' ],
     onlyif      => "kubectl get node ${::platform::params::hostname}",
   }
 }
