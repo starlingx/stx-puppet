@@ -128,6 +128,11 @@ class { '::platform::config::controller::post':
   stage => post,
 }
 
+class { '::platform::logpermission':
+  stage   => post,
+  require => Class['::platform::config::controller::post'],
+}
+
 if $::osfamily == 'Debian' {
   lookup('classes', {merge => unique}).include
 } else {
