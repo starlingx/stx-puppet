@@ -28,11 +28,6 @@ class patching (
     'runtime/agent_port':            value => $agent_port;
   }
 
-  Patching_config<||> ~> service { 'sw-patch-agent.service':
-    ensure => 'running',
-    enable => true,
-  }
-
   if $::personality == 'controller' {
     Patching_config<||> ~> service { 'sw-patch-controller-daemon.service':
       ensure => 'running',
