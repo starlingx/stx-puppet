@@ -143,6 +143,8 @@ class platform::compute::grub::update
       logoutput => true,
     }
   } elsif($::osfamily == 'Debian') {
+    notice("Removing kernel args: ${to_be_removed}")
+    notice("Adding kernel args: ${truncated_grub_updates}")
     exec { 'Remove the cpu arguments from /boot/efi/EFI/BOOT/boot.env':
       command   => "/usr/local/bin/puppet-update-grub-env.py --remove-kernelparams '${to_be_removed}'",
     }

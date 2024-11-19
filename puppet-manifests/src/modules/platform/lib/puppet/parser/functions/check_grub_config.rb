@@ -25,7 +25,7 @@ module Puppet::Parser::Functions
     expected.split().each do |element|
       value = cmd_array.include?(element)
       if value == false
-        Puppet.debug("#{element} is not presented in #{cmd}")
+        Puppet.info("#{element} is not presented in #{cmd}")
         return value
       end
     end
