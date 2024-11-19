@@ -189,22 +189,29 @@ class platform::postgresql::server
     }
   } else {
     # System controller or standard controller
-    # 1500 connections, 80MB shared_buffers, increase work_mem and
+    # 10000 connections, 256MB shared_buffers, increase work_mem and
     # checkpoint_segments
-    # TODO:
-    #   - re-assess work_mem setting considering the complexity of the current
-    #     queries.
-    #   - re-assess shared_buffers setting for the system controller in a large
-    #     distributed cloud.
     postgresql::server::config_entry { 'max_connections':
       value => '10000',
     }
     postgresql::server::config_entry { 'shared_buffers':
-      value => '80MB',
+      value => '256MB',
     }
     postgresql::server::config_entry { 'work_mem':
-      value => '512MB',
+      value => '32MB',
     }
+
+    # Optimized I/O settings for SSD on system controller:
+    # Lower random read costs (4 to 1.1) and increase parallel I/O operations (1 to 200)
+    if $::platform::params::distributed_cloud_role == 'systemcontroller' {
+      postgresql::server::config_entry { 'random_page_cost':
+        value => '1.1',
+      }
+      postgresql::server::config_entry { 'effective_io_concurrency':
+        value => '200',
+      }
+    }
+
     if $::osfamily == 'Debian' {
       postgresql::server::config_entry { 'max_wal_size':
         # checkpoint_segments was replaced by min_wal_size and max_wal_size
