@@ -1,0 +1,8 @@
+[Unit]
+Description=Kubernetes Platform slice
+Before=slices.target
+
+[Slice]
+MemoryAccounting=true
+CPUAccounting=true
+CPUShares=<%= @k8splatform_shares %>

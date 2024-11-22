@@ -18,6 +18,7 @@ include ::platform::amqp::bootstrap
 include ::platform::client::bootstrap
 
 # Puppet classes to enable the bring up of kubernetes master
+include ::platform::k8splatform::bootstrap
 include ::platform::docker::bootstrap
 include ::platform::etcd::bootstrap
 

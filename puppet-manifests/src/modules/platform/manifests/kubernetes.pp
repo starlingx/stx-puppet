@@ -400,6 +400,7 @@ class platform::kubernetes::kubeadm {
                 /etc/kubernetes/manifests/kube-controller-manager.yaml",
     onlyif  => 'test -f /etc/kubernetes/manifests/kube-controller-manager.yaml'
   }
+
   # A seperate enable is required since we have modified the service resource
   # to never enable services.
   -> exec { 'enable-kubelet':
@@ -420,6 +421,7 @@ class platform::kubernetes::master::init
   include ::platform::params
   include ::platform::docker::params
   include ::platform::dockerdistribution::params
+  include ::platform::k8splatform::params
 
   if str2bool($::is_initial_k8s_config) {
     # This allows subsequent node installs
@@ -505,6 +507,14 @@ class platform::kubernetes::master::init
       mode    => '0644',
     }
 
+    -> file { '/etc/systemd/system/kubelet.service.d/kubelet-cpu-shares.conf':
+      ensure  => file,
+      content => template('platform/kubelet-cpu-shares.conf.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0644',
+    }
+
     # set kubelet monitored by pmond
     -> file { '/etc/pmon.d/kubelet.conf':
       ensure  => file,
@@ -517,6 +527,17 @@ class platform::kubernetes::master::init
     # Reload systemd
     -> exec { 'perform systemctl daemon reload for kubelet override':
       command   => 'systemctl daemon-reload',
+      logoutput => true,
+    }
+    # Mitigate systemd hung behaviour after daemon-reload
+    # TODO(jgauld): Remove workaround after base OS issue resolved
+    -> exec { 'verify-systemd-running - kubernetes master init':
+      command   => '/usr/local/bin/verify-systemd-running.sh',
+      logoutput => true,
+    }
+    # NOTE: --no-block is used to mitigate systemd hung behaviour
+    -> exec { 'restart kubelet with overrides - kubernetes master init':
+      command   => 'systemctl --no-block try-restart kubelet.service',
       logoutput => true,
     }
 
@@ -543,6 +564,31 @@ class platform::kubernetes::master::init
       group => 'sys_protected',
       mode  => '0640',
     }
+
+    # Regenerate CPUShares since we may reconfigure number of platform cpus
+    file { '/etc/systemd/system/kubelet.service.d/kubelet-cpu-shares.conf':
+      ensure  => file,
+      content => template('platform/kubelet-cpu-shares.conf.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0644',
+    }
+    # Reload systemd to pick up overrides
+    -> exec { 'perform systemctl daemon reload for kubelet override':
+      command   => 'systemctl daemon-reload',
+      logoutput => true,
+    }
+    # Mitigate systemd hung behaviour after daemon-reload
+    # TODO(jgauld): Remove workaround after base OS issue resolved
+    -> exec { 'verify-systemd-running - kubernetes master init':
+      command   => '/usr/local/bin/verify-systemd-running.sh',
+      logoutput => true,
+    }
+    # NOTE: --no-block is used to mitigate systemd hung behaviour
+    -> exec { 'restart kubelet with overrides - kubernetes master init':
+      command   => 'systemctl --no-block try-restart kubelet.service',
+      logoutput => true,
+    }
   }
 
   # Run kube-cert-rotation daily
@@ -559,6 +605,8 @@ class platform::kubernetes::master::init
 class platform::kubernetes::master
   inherits ::platform::kubernetes::params {
 
+  include ::platform::k8splatform
+
   contain ::platform::kubernetes::kubeadm
   contain ::platform::kubernetes::cgroup
   contain ::platform::kubernetes::master::init
@@ -567,6 +615,7 @@ class platform::kubernetes::master
   contain ::platform::kubernetes::configuration
 
   Class['::platform::sysctl::controller::reserve_ports'] -> Class[$name]
+  Class['::platform::k8splatform'] -> Class[$name]
   Class['::platform::etcd'] -> Class[$name]
   Class['::platform::docker::config'] -> Class[$name]
   Class['::platform::containerd::config'] -> Class[$name]
@@ -584,7 +633,9 @@ class platform::kubernetes::master
 class platform::kubernetes::worker::init
   inherits ::platform::kubernetes::params {
   include ::platform::dockerdistribution::params
+  include ::platform::k8splatform::params
 
+  Class['::platform::k8splatform'] -> Class[$name]
   Class['::platform::docker::config'] -> Class[$name]
   Class['::platform::containerd::config'] -> Class[$name]
   Class['::platform::filesystem::kubelet'] -> Class[$name]
@@ -628,6 +679,15 @@ class platform::kubernetes::worker::init
     mode    => '0644',
   }
 
+  # Regenerate CPUShares since we may reconfigure number of platform cpus
+  -> file { '/etc/systemd/system/kubelet.service.d/kubelet-cpu-shares.conf':
+    ensure  => file,
+    content => template('platform/kubelet-cpu-shares.conf.erb'),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+  }
+
   # set kubelet monitored by pmond
   -> file { '/etc/pmon.d/kubelet.conf':
     ensure  => file,
@@ -637,9 +697,20 @@ class platform::kubernetes::worker::init
     mode    => '0644',
   }
 
-  # Reload systemd
+  # Reload systemd to pick up overrides
   -> exec { 'perform systemctl daemon reload for kubelet override':
     command   => 'systemctl daemon-reload',
+    logoutput => true,
+  }
+  # Mitigate systemd hung behaviour after daemon-reload
+  # TODO(jgauld): Remove workaround after base OS issue resolved
+  -> exec { 'verify-systemd-running - kubernetes worker init':
+    command   => '/usr/local/bin/verify-systemd-running.sh',
+    logoutput => true,
+  }
+  # NOTE: --no-block is used to mitigate systemd hung behaviour
+  -> exec { 'restart kubelet with overrides - kubernetes worker init':
+    command   => 'systemctl --no-block try-restart kubelet.service',
     logoutput => true,
   }
 }
@@ -1040,6 +1111,13 @@ class platform::kubernetes::unmask_start_kubelet
     command => '/usr/bin/systemctl daemon-reload',
     require => File['/var/lib/kubernetes/stage2'],
   }
+  # Mitigate systemd hung behaviour after daemon-reload
+  # TODO(jgauld): Remove workaround after base OS issue resolved
+  -> exec { 'verify-systemd-running - unmask start kubelet':
+    command   => '/usr/local/bin/verify-systemd-running.sh',
+    logoutput => true,
+  }
+
 
   # In case we're upgrading K8s, remove any image GC override and revert to defaults.
   # We only want to do this here for duplex systems, for simplex we'll do it at the uncordon.

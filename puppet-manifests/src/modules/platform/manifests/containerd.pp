@@ -24,20 +24,22 @@ class platform::containerd::proxyconfig{
   # remove the square brackets
   $no_proxy = regsubst($::platform::docker::params::no_proxy_complete_list, '\\[|\\]', '', 'G')
 
+  file { '/etc/systemd/system/containerd.service.d':
+    ensure => 'directory',
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0755',
+  }
+
   if $http_proxy or $https_proxy {
-    file { '/etc/systemd/system/containerd.service.d':
-      ensure => 'directory',
-      owner  => 'root',
-      group  => 'root',
-      mode   => '0755',
-    }
-    -> file { '/etc/systemd/system/containerd.service.d/http-proxy.conf':
+    file { '/etc/systemd/system/containerd.service.d/http-proxy.conf':
       ensure  => present,
       owner   => 'root',
       group   => 'root',
       mode    => '0644',
       # share the same template as docker, since the conf file is the same
       content => template('platform/dockerproxy.conf.erb'),
+      require => File['/etc/systemd/system/containerd.service.d'],
     }
     ~> exec { 'perform systemctl daemon reload for containerd proxy':
       command     => 'systemctl daemon-reload',
@@ -47,6 +49,7 @@ class platform::containerd::proxyconfig{
   } else {
     file { '/etc/systemd/system/containerd.service.d/http-proxy.conf':
       ensure  => absent,
+      require => File['/etc/systemd/system/containerd.service.d'],
     }
     ~> exec { 'perform systemctl daemon reload for containerd proxy':
       command     => 'systemctl daemon-reload',
@@ -74,6 +77,16 @@ class platform::containerd::config
   include ::platform::dockerdistribution::registries
   include ::platform::params
   include ::platform::mtce::params
+  include ::platform::k8splatform::params
+
+  file { '/etc/systemd/system/containerd.service.d/containerd-cpu-shares.conf':
+    ensure  => file,
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+    content => template('platform/containerd-cpu-shares.conf.erb'),
+    require => File['/etc/systemd/system/containerd.service.d'],
+  }
 
   if $::platform::params::system_type == 'All-in-one' and
       $::platform::params::distributed_cloud_role != 'systemcontroller' {
@@ -85,6 +98,7 @@ class platform::containerd::config
       group   => 'root',
       mode    => '0600',
       content => template('platform/containerd-max-proc.conf.erb'),
+      require => File['/etc/systemd/system/containerd.service.d'],
     }
   }
 

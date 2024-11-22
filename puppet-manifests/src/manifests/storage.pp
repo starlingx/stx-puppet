@@ -34,6 +34,7 @@ include ::platform::sysinv
 include ::platform::grub
 include ::platform::collectd
 include ::platform::filesystem::storage
+include ::platform::k8splatform
 include ::platform::docker::storage
 include ::platform::containerd::storage
 include ::platform::ceph::storage

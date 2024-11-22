@@ -38,6 +38,7 @@ include ::platform::amqp::rabbitmq
 include ::platform::postgresql::server
 include ::platform::haproxy::server
 include ::platform::grub
+include ::platform::k8splatform
 include ::platform::etcd
 include ::platform::docker::controller
 include ::platform::dockerdistribution

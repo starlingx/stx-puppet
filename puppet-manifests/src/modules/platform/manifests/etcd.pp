@@ -24,6 +24,7 @@ class platform::etcd::params (
 class platform::etcd::setup {
 
   include ::platform::params
+  include ::platform::k8splatform::params
 
   if $::platform::params::system_type == 'All-in-one' and
     $::platform::params::distributed_cloud_role != 'systemcontroller' {
@@ -52,6 +53,11 @@ class platform::etcd::setup {
   }
   -> exec { 'systemd-reload-daemon':
     command     => '/usr/bin/systemctl daemon-reload',
+  }
+  # Mitigate systemd hung behaviour after daemon-reload
+  -> exec { 'verify-systemd-running - etcd setup':
+    command   => '/usr/local/bin/verify-systemd-running.sh',
+    logoutput => true,
   }
   -> Service['etcd']
 }
