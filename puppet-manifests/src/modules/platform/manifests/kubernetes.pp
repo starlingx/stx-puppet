@@ -663,7 +663,7 @@ class platform::kubernetes::worker::init
 
   # Configure the worker node. Only do this once, so check whether the
   # kubelet.conf file has already been created (by the join).
-  -> platform::kubernetes::kube_command { 'configure worker node':
+  platform::kubernetes::kube_command { 'configure worker node':
     command => $join_cmd,
     logname => 'kubeadm-join-command.log',
     unless  => 'test -f /etc/kubernetes/kubelet.conf',
