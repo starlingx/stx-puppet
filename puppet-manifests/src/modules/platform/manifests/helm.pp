@@ -8,6 +8,7 @@ define platform::helm::repository (
   $repo_base = undef,
   $repo_port = undef,
   $create = false,
+  $sw_version = undef,
 ) {
 
   $repo_path = "${repo_base}/${name}"
@@ -35,10 +36,20 @@ define platform::helm::repository (
     $require_relationship =  User['sysadmin']
   }
 
+  # Helm versions above 3.3.1 have a breaking change, where 'helm repo add' now returns an
+  # error if the repo already exists (reference: https://github.com/helm/helm/issues/8771).
+  # The 'force-update' flag is enough to overcome this, but it isn't backward compatible.
+  # TODO(mdecastr): Cleanup once upgrade from 22.12 isn't possible (keep 'force-update')
+  if $sw_version == '22.12'{
+    $base_cmd = 'helm repo add'
+  } else {
+    $base_cmd = 'helm repo add --force-update'
+  }
+
   exec { "Adding StarlingX helm repo: ${name}":
     before      => $before_relationship,
     environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' , 'HOME=/home/sysadmin'],
-    command     => "helm repo add ${name} http://127.0.0.1:${repo_port}/helm_charts/${name}",
+    command     => "${base_cmd} ${name} http://127.0.0.1:${repo_port}/helm_charts/${name}",
     logoutput   => true,
     user        => 'sysadmin',
     group       => 'sys_protected',
@@ -49,14 +60,16 @@ define platform::helm::repository (
 class platform::helm::repositories
   inherits ::platform::helm::repositories::params {
   include ::openstack::horizon::params
+  include ::platform::params
   include ::platform::users
 
   Anchor['platform::services']
 
   -> platform::helm::repository { $helm_repositories:
-    repo_base => $target_helm_repos_base_dir,
-    repo_port => $::openstack::horizon::params::http_port,
-    create    => $::is_initial_config,
+    repo_base  => $target_helm_repos_base_dir,
+    repo_port  => $::openstack::horizon::params::http_port,
+    create     => $::is_initial_config,
+    sw_version => $::platform::params::software_version,
   }
 
   -> exec { 'Updating info of available charts locally from chart repo':
