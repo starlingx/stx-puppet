@@ -91,18 +91,3 @@ class platform::patching::api (
 
   include ::platform::patching::haproxy
 }
-
-class platform::patching::agent::reload {
-
-  exec { 'restart sw-patch-agent':
-    command   => '/usr/sbin/sw-patch-agent-restart',
-    logoutput => true,
-  }
-}
-
-class platform::patching::runtime {
-
-  class {'::platform::patching::agent::reload':
-    stage => post
-  }
-}

@@ -564,11 +564,6 @@ class openstack::keystone::barbican::password::runtime {
 class openstack::keystone::patching::password::runtime {
   include ::patching::api
 
-  Patching_config<||> ~> service { 'sw-patch-agent.service':
-    ensure => 'running',
-    enable => true,
-  }
-
   if $::personality == 'controller' {
     Patching_config<||> ~> service { 'sw-patch-controller-daemon.service':
       ensure => 'running',
