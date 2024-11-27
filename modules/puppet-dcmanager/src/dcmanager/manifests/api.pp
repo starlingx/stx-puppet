@@ -160,7 +160,7 @@ class dcmanager::api (
     dcmanager_config {
       'cache/admin_tenant':       value => $keystone_admin_tenant;
       'cache/admin_username':     value => $keystone_admin_user;
-      'cache/admin_password':     value => $keystone_admin_password, secret=> true;
+      'cache/admin_password':     value => regsubst($keystone_admin_password, '\\$', '$$'), secret=> true;
     }
     dcmanager_config {
       'endpoint_cache/auth_plugin':    value => $auth_type;
