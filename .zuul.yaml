@@ -5,13 +5,13 @@
     check:
       jobs:
         - stx-puppet-linters
-        - openstack-tox-pep8
-        - openstack-tox-pylint
+        - stx-puppet-tox-pep8
+        - stx-puppet-tox-pylint
     gate:
       jobs:
         - stx-puppet-linters
-        - openstack-tox-pep8
-        - openstack-tox-pylint
+        - stx-puppet-tox-pep8
+        - stx-puppet-tox-pylint
     post:
       jobs:
         - stx-stx-puppet-upload-git-mirror
@@ -22,6 +22,24 @@
     description: |
       Run linters for stx-puppet
     pre-run: playbooks/tox-puppet-lint/pre.yaml
+
+- job:
+    name: stx-puppet-tox-pep8
+    parent: openstack-tox-pep8
+    nodeset: debian-bullseye
+    description: |
+      Run pep8 checks for stx-puppet
+    vars:
+      python_version: 3.9
+
+- job:
+    name: stx-puppet-tox-pylint
+    parent: openstack-tox-pylint
+    nodeset: debian-bullseye
+    description: |
+      Run pylint checks for stx-puppet
+    vars:
+      python_version: 3.9
 
 - job:
     name: stx-stx-puppet-upload-git-mirror
