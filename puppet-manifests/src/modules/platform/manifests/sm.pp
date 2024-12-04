@@ -1430,6 +1430,37 @@ class platform::sm
     -> exec { 'Configure ISO image FileSystem':
       command => "sm-configure service_instance dc-iso-fs dc-iso-fs \"device=${iso_fs_source_dir},directory=${iso_fs_target_dir},options=bind,noatime,nodiratime,fstype=ext4,check_level=20\"",
     }
+
+    # Remove CPU cgroup engineering on systemcontroller/controller due
+    # to extremely parallel and cpu intensive usage of ssh/sm.
+    # This creates systemd DropIn to override the default
+    # cgroup engineering generally applied to all nodes.
+    $disable_cpu = @("DISABLECPU"/L)
+      [Service]
+      CPUShares=1024
+      CPUQuota=
+      CPUQuotaPeriodSec=
+      | DISABLECPU
+
+    file { '/etc/systemd/system/sm.service.d':
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => '0755',
+    }
+    -> file { '/etc/systemd/system/sm.service.d/sm-cpu-shares.conf':
+      ensure  => file,
+      content => inline_template($disable_cpu),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0644',
+    }
+
+    # Reload systemd to pick up DropIns
+    -> exec { 'systemctl daemon reload - sm override':
+      command   => 'systemctl daemon-reload',
+      logoutput => true,
+    }
   }
 
   # lint:endignore:140chars
