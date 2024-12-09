@@ -25,7 +25,7 @@ resource_name='globalnetworkpolicies.crd.projectcalico.org';
 
 resource_exist=$(kubectl --kubeconfig=${kubeconfig} get --no-headers customresourcedefinitions.apiextensions.k8s.io ${resource_name} | awk '{print $1}');
 if [[ ${resource_exist} == "${resource_name}" ]]; then
-    gnp_exist=$(kubectl --kubeconfig=${kubeconfig} get --no-headers ${resource_name} ${gnp_name} | awk '{print $1}');
+    gnp_exist=$(kubectl --kubeconfig=${kubeconfig} get --no-headers ${resource_name} ${gnp_name} 2> /dev/null | awk '{print $1}');
     if [[ ${gnp_exist} == "${gnp_name}" ]]; then
         # Remove annotation as it contains last-applied-configuration with
         # resourceVersion in it, which will require the gnp re-apply to
