@@ -75,6 +75,7 @@ class platform::ldap::server::local
   }
 
   exec { 'configure-ldaps':
+    timeout => 90,
     command => "ldapmodify -D cn=config -w \"${admin_pw}\" -xH ldap:/// -f ${slapd_etc_path}/certs.ldif",
     onlyif  => ["test -e ${slapd_etc_path}/certs/openldap-cert.crt", "test -e ${slapd_etc_path}/certs/openldap-cert.key"]
   }
