@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ################################################################################
-# Copyright (c) 2016-2022 Wind River Systems, Inc.
+# Copyright (c) 2016-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -136,6 +136,17 @@ function is_base_iface {
         return $(false)
     fi
     return $(true)
+}
+
+# Returns 0 if address is IPv6, 1 otherwise
+function is_ipv6 {
+    local addr=$1
+    # simple check for ':'
+    if [ "${addr/:/}" != "${addr}" ]; then
+        # addr is ipv6
+        return 0
+    fi
+    return 1
 }
 
 # Gets base interface name for a label
@@ -443,6 +454,36 @@ else
 
         ifaces=$(update_interfaces ${upgr_bootstrap})
         update_routes "${ifaces}"
+
+        # In case of subcloud enrollment
+        if [ -f /var/run/.enroll-init-reconfigure ]; then
+            # OAM reconfiguration should not overwrite cloud-init's intended default route.
+            # Enrollment depends on cloud-init configured IP/route on interface/vlan, which
+            # could be different than OAM interface/vlan. We don't want oam-modify to set
+            # the default route via original OAM interface/vlan.
+            # Force back default route via new interface/vlan given by cloud-init.
+            cfg=/etc/network/interfaces.d/50-cloud-init
+            if [ -f ${cfg} ]; then
+                log_it info "Enrollment: Updating default OAM route"
+                iface_line=$( cat ${cfg} |grep ^iface | grep -v 'iface lo' )
+                if_name=$( echo "${iface_line}" | awk '{print $2}' )
+                gateway_line=$( cat ${cfg} |grep gateway)
+                oam_gateway_ip=$( echo "${gateway_line}" | awk '{print $2}' )
+
+                log_it info "OAM gateway IP:${oam_gateway_ip}, Cloud-init if-name:${if_name}"
+                ip_command='ip'
+                if is_ipv6 "${oam_gateway_ip}"; then
+                    ip_command='ip -6'
+                fi
+
+                default_ip_route_before=$(${ip_command} route |grep default)
+                log_it info "default route before modification: ${default_ip_route_before}"
+                ip_route_results=$(${ip_command} route replace default via ${oam_gateway_ip} dev ${if_name} 2>&1)
+                log_it info "ip route add/replace errors: ${ip_route_results}"
+                default_ip_route_after=$(${ip_command} route |grep default)
+                log_it info "default route after modification: ${default_ip_route_after}"
+            fi
+        fi
 
         log_network_info
 
