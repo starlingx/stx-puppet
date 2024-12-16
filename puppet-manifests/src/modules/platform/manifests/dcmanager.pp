@@ -121,8 +121,8 @@ class platform::dcmanager
     $service_names = [ 'pmon', 'ssh', 'sysinv-agent', 'collectd', 'fm-api', 'sm-api' ]
     $services = $service_names.map |$var| { "${var}.service" }
     $services_string = join($services, ' ')
-    $dirs = $services.map |$var| { "/etc/systemd/system/${var}.service.d" }
-    $files = $services.map |$var| { "/etc/systemd/system/${var}.service.d/${var}-cpu-shares.conf" }
+    $dirs = $service_names.map |$var| { "/etc/systemd/system/${var}.service.d" }
+    $files = $service_names.map |$var| { "/etc/systemd/system/${var}.service.d/${var}-cpu-shares.conf" }
 
     file { $dirs:
       ensure => 'directory',
