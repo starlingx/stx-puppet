@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2016 Wind River Systems, Inc.
+# Copyright (c) 2016-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -35,7 +35,7 @@ class nfv::vim (
   $vim_api_rpc_port         = 0,
   $vim_webserver_ip         = '0.0.0.0',
   $vim_webserver_port       = 32323,
-  $vim_webserver_source_dir = '/usr/lib64/python2.7/site-packages/nfv_vim/webserver',
+  $vim_webserver_source_dir = '/usr/lib/python3/dist-packages/nfv_vim/webserver',
   $instance_max_live_migrate_wait_in_secs = 180,
   $instance_single_hypervisor = false,
   $sw_mgmt_single_controller = false,
