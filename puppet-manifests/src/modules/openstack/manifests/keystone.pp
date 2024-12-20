@@ -299,7 +299,7 @@ class openstack::keystone::server::runtime {
 
 class openstack::keystone::endpoint::runtime {
 
-  if str2bool($::is_controller_active) {
+  if str2bool($::is_controller_active) and !find_file('/var/run/.enrollment_in_progress') {
     case $::osfamily {
         'RedHat': {
             include ::keystone::endpoint
