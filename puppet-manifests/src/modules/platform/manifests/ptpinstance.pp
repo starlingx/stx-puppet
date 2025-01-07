@@ -12,6 +12,7 @@ define platform::ptpinstance::ptp_config_files(
   $pmc_gm_settings = '',
   $device_parameters = '',
   $gnss_uart_disable = '',
+  $external_source = '',
 ) {
   file { $_name:
     ensure  => file,
@@ -58,6 +59,7 @@ define platform::ptpinstance::set_ptp4l_pmc_parameters(
   $pmc_gm_settings = '',
   $device_parameters = '',
   $gnss_uart_disable = '',
+  $external_source = '',
 ) {
   if ($service == 'ptp4l') and ($pmc_gm_settings != '') {
     exec { "${_name}_set_initial_pmc_paramters":
@@ -264,6 +266,7 @@ define platform::ptpinstance::disable_e810_gnss_uart_interfaces (
   $id = '',
   $interfaces = '',
   $pmc_gm_settings = '',
+  $external_source = '',
 ) {
 
   $gnss_device = $global_parameters['ts2phc.nmea_serialport']
