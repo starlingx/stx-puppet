@@ -7,6 +7,8 @@
 #
 ################################################################################
 
+# WARNING: This file is OBSOLETE, use apply_network_config.py instead
+
 #
 #  Purpose of this script is to copy the puppet-built ifcfg-* network config
 #  files from the PUPPET_DIR to the ETC_DIR. Only files that are detected as

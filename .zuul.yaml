@@ -7,11 +7,13 @@
         - stx-puppet-linters
         - stx-puppet-tox-pep8
         - stx-puppet-tox-pylint
+        - puppet-manifests-tox-py39
     gate:
       jobs:
         - stx-puppet-linters
         - stx-puppet-tox-pep8
         - stx-puppet-tox-pylint
+        - puppet-manifests-tox-py39
     post:
       jobs:
         - stx-stx-puppet-upload-git-mirror
@@ -40,6 +42,19 @@
       Run pylint checks for stx-puppet
     vars:
       python_version: 3.9
+
+- job:
+    name: puppet-manifests-tox-py39
+    parent: openstack-tox-py39
+    description: |
+      Run py39 test for puppet-manifests
+    nodeset: debian-bullseye
+    files:
+      - puppet-manifests/*
+    vars:
+      tox_envlist: py39
+      python_version: 3.9
+      tox_extra_args: -c puppet-manifests/tox.ini
 
 - job:
     name: stx-stx-puppet-upload-git-mirror
