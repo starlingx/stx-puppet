@@ -86,6 +86,17 @@ class nfv::nfvi (
   $host_listener_host            = '127.0.0.1',
   $host_listener_port            = 30004,
   $identity_uri                  = undef,
+  # TIMEOUTS
+  $openstack_get_token_timeout              = 10,
+  $neutron_disable_host_servicese_timeout   = 40,
+  $neutron_delete_host_services_timeout     = 40,
+  $glance_upload_image_data_by_file_timeout = 180,
+  $glance_upload_image_data_by_url_timeout  = 180,
+  $sysinv_timeout                           = 60,
+  $patching_apply_patch_timeout             = 180,
+  $usm_timeout                              = 60,
+  $usm_sw_deploy_execute_timeout            = 3600,
+  $usm_sw_deploy_rollback_timeout           = 3600,
 ) {
 
   include nfv::params
@@ -197,6 +208,18 @@ class nfv::nfvi (
     # Host Listener
     'host-listener/host': value => $host_listener_host;
     'host-listener/port': value => $host_listener_port;
+
+    # NFVI-TIMEOUTS
+    'nfvi-timeouts/openstack.get_token': value => $openstack_get_token_timeout;
+    'nfvi-timeouts/neutron.disable_host_services': value => $neutron_disable_host_servicese_timeout;
+    'nfvi-timeouts/neutron.delete_host_services': value => $neutron_delete_host_services_timeout;
+    'nfvi-timeouts/glance.upload_image_data_by_file': value => $glance_upload_image_data_by_file_timeout;
+    'nfvi-timeouts/glance.upload_image_data_by_url': value => $glance_upload_image_data_by_url_timeout;
+    'nfvi-timeouts/sysinv': value => $sysinv_timeout;
+    'nfvi-timeouts/patching.apply_patch': value => $patching_apply_patch_timeout;
+    'nfvi-timeouts/usm': value => $usm_timeout;
+    'nfvi-timeouts/usm.sw_deploy_execute': value => $usm_sw_deploy_execute_timeout;
+    'nfvi-timeouts/usm.sw_deploy_rollback': value => $usm_sw_deploy_rollback_timeout;
   }
 
   if $identity_uri {

@@ -39,6 +39,13 @@ class nfv::vim (
   $instance_max_live_migrate_wait_in_secs = 180,
   $instance_single_hypervisor = false,
   $sw_mgmt_single_controller = false,
+  # TIMEOUTS
+  $deploy_start_timeout        = 3600,
+  # sw_deploy_rollback uses timeout from sw_deploy_execute
+  $deploy_host_execute_timeout = 3600,
+  $deploy_activate_timeout     = 3600,
+  $deploy_activate_retries     = 2,
+  $deploy_activate_retry_delay = 120,
 ) {
 
   include nfv::params
@@ -98,6 +105,13 @@ class nfv::vim (
 
     # SW-MGMT CONFIGURATION
     'sw-mgmt-configuration/single_controller': value => $sw_mgmt_single_controller;
+
+    # SOFTWARE-DEPLOYMENT TIMEOUTS
+    'software-deploy/deploy_start_timeout': value => $deploy_start_timeout;
+    'software-deploy/deploy_host_execute_timeout': value => $deploy_host_execute_timeout;
+    'software-deploy/deploy_activate_timeout': value => $deploy_activate_timeout;
+    'software-deploy/deploy_activate_retries': value => $deploy_activate_retries;
+    'software-deploy/deploy_activate_retry_delay': value => $deploy_activate_retry_delay;
   }
 
   if $enabled {
