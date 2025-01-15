@@ -31,6 +31,7 @@ class platform::params (
   $system_controller_mgmt_addr = undef,
   $virtual_system = false,
   $apparmor = 'disabled',
+  $sctp_autoload = 'enabled',
 ) {
   $ipv4 = 4
   $ipv6 = 6
