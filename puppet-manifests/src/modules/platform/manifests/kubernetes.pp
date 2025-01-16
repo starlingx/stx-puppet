@@ -1092,6 +1092,16 @@ class platform::kubernetes::mask_stop_kubelet {
   }
 }
 
+class platform::kubernetes::containerd_pause_image (
+  String $kubeadm_version = $::platform::kubernetes::params::kubeadm_version
+) {
+
+  exec { 'set containerd sandbox pause image':
+    command   => "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm config images list --kubernetes-version ${kubeadm_version} 2>/dev/null | grep pause: | xargs -I '{}' sed -i -e '/sandbox_image =/ s|= .*|= \"registry.local:9001/{}\"|' /etc/containerd/config.toml", # lint:ignore:140chars
+    logoutput => true
+  }
+}
+
 class platform::kubernetes::unmask_start_kubelet
   inherits ::platform::kubernetes::params {
 
@@ -1138,15 +1148,21 @@ class platform::kubernetes::unmask_start_kubelet
 
 class platform::kubernetes::master::upgrade_kubelet
   inherits ::platform::kubernetes::params {
+    include platform::kubernetes::containerd_pause_image
     include platform::kubernetes::mask_stop_kubelet
     include platform::kubernetes::unmask_start_kubelet
 
-    Class['platform::kubernetes::mask_stop_kubelet'] -> Class['platform::kubernetes::unmask_start_kubelet']
+
+
+    Class['platform::kubernetes::mask_stop_kubelet']
+    -> Class['platform::kubernetes::containerd_pause_image']
+    -> Class['platform::kubernetes::unmask_start_kubelet']
 }
 
 class platform::kubernetes::worker::upgrade_kubelet
   inherits ::platform::kubernetes::params {
   include ::platform::dockerdistribution::params
+  include platform::kubernetes::containerd_pause_image
   include platform::kubernetes::mask_stop_kubelet
   include platform::kubernetes::unmask_start_kubelet
 
@@ -1177,6 +1193,7 @@ class platform::kubernetes::worker::upgrade_kubelet
     timeout     => 300,
   }
   -> Class['platform::kubernetes::mask_stop_kubelet']
+  -> Class['platform::kubernetes::containerd_pause_image']
   -> Class['platform::kubernetes::unmask_start_kubelet']
 
 }
