@@ -30,4 +30,7 @@
     "identity:change_password": "rule:admin_or_owner and not rule:protected_services",
 
     "identity:delete_role": "rule:admin_required and not rule:protected_roles",
+
+    "identity:list_services": "rule:admin_required or role:reader",
+    "identity:list_endpoints": "rule:admin_required or role:reader",
 }
