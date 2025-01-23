@@ -461,8 +461,12 @@ class platform::kubernetes::master::init
     -> file { '/etc/kubernetes/admin.conf':
       ensure => file,
       owner  => 'root',
-      group  => $::platform::params::protected_group_name,
+      group  => 'root',
       mode   => '0640',
+    }
+    -> exec { 'set_acl_on_admin_conf':
+      command   => 'setfacl -m g:sys_protected:r /etc/kubernetes/admin.conf',
+      logoutput => true,
     }
     # Fresh installation with Kubernetes 1.29 generates the super-admin.conf
     # only in controller-0 and not in controller-1. The following command
@@ -558,8 +562,12 @@ class platform::kubernetes::master::init
     # to kube config during the host reboots after the initial install.
     file { '/etc/kubernetes/admin.conf':
       owner => 'root',
-      group => 'sys_protected',
+      group => 'root',
       mode  => '0640',
+    }
+    -> exec { 'set_acl_on_admin_conf':
+      command   => 'setfacl -m g:sys_protected:r /etc/kubernetes/admin.conf',
+      logoutput => true,
     }
 
     # Regenerate CPUShares since we may reconfigure number of platform cpus
