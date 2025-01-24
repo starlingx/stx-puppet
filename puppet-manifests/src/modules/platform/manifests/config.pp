@@ -558,7 +558,7 @@ class platform::config::certs::ssl_ca
   -> exec { 'restart dockerd':
     command     => $dockerd_restart_cmd,
     subscribe   => File[$ssl_ca_file],
-    onlyif      => 'systemctl is-enabled dockerd.service | grep -wq enabled',
+    onlyif      => 'systemctl is-enabled docker.service | grep -wq enabled',
     refreshonly => true
   }
   -> exec { 'restart sssd service on cert install/uninstall':
