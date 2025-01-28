@@ -40,6 +40,8 @@ class platform::kubernetes::params (
   $rootca_key = undef,
   $admin_cert = undef,
   $admin_key = undef,
+  $super_admin_cert = undef,
+  $super_admin_key = undef,
   $apiserver_cert = undef,
   $apiserver_key = undef,
   $apiserver_kubelet_cert = undef,
@@ -1437,6 +1439,11 @@ class platform::kubernetes::master::rootca::trustbothcas::runtime
     environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
     command     => 'kubectl config set-cluster kubernetes --certificate-authority /etc/kubernetes/pki/ca.crt --embed-certs',
   }
+  # update super-admin.conf with both old and new certs
+  -> exec { 'update_super_admin_conf':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/super-admin.conf' ],
+    command     => 'kubectl config set-cluster kubernetes --certificate-authority /etc/kubernetes/pki/ca.crt --embed-certs',
+  }
   # Restart apiserver to trust both old and new certs
   -> exec { 'restart_apiserver':
     command => "/usr/bin/kill -s SIGHUP $(pidof kube-apiserver)",
@@ -1529,6 +1536,11 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
   # Update admin.conf to remove the old CA cert
   -> exec { 'update_admin_conf':
     environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
+    command     => "kubectl config set-cluster kubernetes --certificate-authority ${rootca_certfile} --embed-certs",
+  }
+  # Update super-admin.conf to remove the old CA cert
+  -> exec { 'update_super_admin_conf':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/super-admin.conf' ],
     command     => "kubectl config set-cluster kubernetes --certificate-authority ${rootca_certfile} --embed-certs",
   }
   # Restart sysinv-conductor and sysinv-inv since they cache clients with
@@ -1675,11 +1687,36 @@ class platform::kubernetes::master::rootca::updatecerts::runtime
     mode    => '0640',
   }
 
+  # Create the new k8s super admin cert file
+  -> file { '/tmp/kube_rootca_update/kubernetes-super-admin.crt':
+    ensure  => file,
+    content => base64('decode', $super_admin_cert),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0640',
+  }
+
+  # Create the new k8s super admin key file
+  -> file { '/tmp/kube_rootca_update/kubernetes-super-admin.key':
+    ensure  => file,
+    content => base64('decode', $super_admin_key),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0640',
+  }
+
   # Update admin.conf with new cert/key
   -> exec { 'update_admin_conf_credentials':
     environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
     command     => "kubectl config set-credentials kubernetes-admin --client-key /tmp/kube_rootca_update/kubernetes-admin.key \
                     --client-certificate /tmp/kube_rootca_update/kubernetes-admin.crt --embed-certs",
+  }
+
+  # Update super-admin.conf with new cert/key
+  -> exec { 'update_super_admin_conf_credentials':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/super-admin.conf' ],
+    command     => "kubectl config set-credentials kubernetes-super-admin --client-key /tmp/kube_rootca_update/kubernetes-super-admin.key \
+                    --client-certificate /tmp/kube_rootca_update/kubernetes-super-admin.crt --embed-certs",
   }
 
   # Copy the new apiserver.crt, apiserver.key to replace the ones in /etc/kubernetes/pki/ directory
