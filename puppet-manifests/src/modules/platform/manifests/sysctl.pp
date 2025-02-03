@@ -42,6 +42,16 @@ class platform::sysctl
     value => '1',
   }
 
+  # Ensure address space layout randomization is enabled
+  -> sysctl::value { 'kernel.randomize_va_space':
+    value => '2',
+  }
+
+  # Ensure ptrace_scope is restricted
+  -> sysctl::value { 'kernel.yama.ptrace_scope':
+    value => '1',
+  }
+
   # Tuning options for low latency compute
   if $low_latency {
     # Increase VM stat interval
@@ -87,24 +97,6 @@ class platform::sysctl
   } else {
     sysctl::value { 'net.ipv4.ip_forward':
       value => '1'
-    }
-
-    sysctl::value { 'net.ipv4.conf.default.rp_filter':
-      value => '0'
-    }
-
-    sysctl::value { 'net.ipv4.conf.all.rp_filter':
-      value => '0'
-    }
-
-    # If this manifest is applied without rebooting the controller, as is done
-    # when config_controller is run, any existing interfaces will not have
-    # their rp_filter setting changed. This is because the kernel uses a MAX
-    # of the 'all' setting (which is now 0) and the current setting for the
-    # interface (which will be 1). When a blade is rebooted, the interfaces
-    # come up with the new 'default' setting so all is well.
-    exec { 'Clear rp_filter for existing interfaces':
-      command => "bash -c 'for f in /proc/sys/net/ipv4/conf/*/rp_filter; do echo 0 > \$f; done'",
     }
   }
 }
