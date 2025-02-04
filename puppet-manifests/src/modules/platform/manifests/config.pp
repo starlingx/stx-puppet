@@ -641,6 +641,7 @@ class platform::config::pre {
   }
 
   include ::platform::config::apparmor
+  include ::platform::config::sctp
   include ::platform::config::timezone
   include ::platform::config::hostname
   include ::platform::config::hosts
@@ -807,5 +808,37 @@ class platform::config::pam_systemd {
     path              => '/etc/pam.d/common-session',
     match             => 'pam_systemd.so$',
     match_for_absence => true,
+  }
+}
+
+class platform::config::sctp::runtime {
+  include ::platform::config::sctp
+}
+
+class platform::config::sctp {
+  include ::platform::params
+  $exec_path = ['/sbin', '/usr/sbin', '/bin', '/usr/bin']
+
+  $sctp_autoload = $::platform::params::sctp_autoload
+
+  if $sctp_autoload == 'enabled' {
+    file { '/etc/modules-load.d/sctp.conf':
+      ensure  => present,
+      content => "sctp\n",
+      mode    => '0644',
+      owner   => 'root',
+      group   => 'root',
+    }
+  } else {
+    file { '/etc/modules-load.d/sctp.conf':
+      ensure => absent,
+    }
+
+    exec { 'update-initramfs':
+      command     => '/usr/sbin/update-initramfs -u',
+      refreshonly => true,
+      subscribe   => File['/etc/modules-load.d/sctp.conf'],
+      path        => $exec_path,
+    }
   }
 }
