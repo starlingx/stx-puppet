@@ -465,14 +465,30 @@ define platform::network::network_address (
       $options = ''
     }
 
+    # Remove the subnet prefix if present ( e.g: 1.1.1.1/24 fd001::1/64)
+    $ip_address = $address ? {
+      /.+\// => $address.split('/')[0], # If there's a '/', take the part before it
+      default => $address,              # Otherwise, keep it as is
+    }
+
     # addresses should only be configured if running in simplex, otherwise SM
     # will configure them on the active controller.
+    # Force a gratuitous ARP for IPv4 floating IPs, for fresh installs the
+    # controller-0 works like simplex even for aio-dx/standard modes.
     exec { "Configuring ${name} IP address to ${address}":
       command   => "ip addr replace ${address} dev ${ifname} ${options}",
       logoutput => true,
-      onlyif    => ['test -f /etc/platform/simplex', 'test ! -f /var/run/.network_upgrade_bootstrap'],
+      onlyif    => ['test -f /etc/platform/simplex',
+                    'test ! -f /var/run/.network_upgrade_bootstrap'],
     }
-
+    -> exec { "Send Gratuitous ARP for IP: ${ip_address} on interface: ${name}":
+      command   => "arping -c 3 -U -I ${ifname} ${ip_address}",
+      logoutput => true,
+      onlyif    => ["test ${ifname} != 'lo'",
+                    "echo ${ip_address} | grep -qE '^([0-9]{1,3}\\.){3}[0-9]{1,3}$'",
+                    'test -f /etc/platform/simplex',
+                    'test ! -f /var/run/.network_upgrade_bootstrap'],
+    }
   }
 }
 
