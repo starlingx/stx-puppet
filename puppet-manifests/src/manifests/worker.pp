@@ -58,13 +58,9 @@ include ::platform::rook
 include ::platform::tty
 include ::platform::crashdump
 
+
 class { '::platform::config::worker::post':
   stage => post,
-}
-
-class { '::platform::logpermission':
-  stage   => post,
-  require => Class['::platform::config::worker::post'],
 }
 
 if $::osfamily == 'Debian' {

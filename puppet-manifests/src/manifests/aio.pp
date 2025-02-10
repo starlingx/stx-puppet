@@ -120,13 +120,9 @@ include ::platform::network::interfaces::fpga::config
 include ::platform::worker::storage
 include ::platform::kubernetes::aio
 
+
 class { '::platform::config::aio::post':
   stage => post,
-}
-
-class { '::platform::logpermission':
-  stage   => post,
-  require => Class['::platform::config::aio::post'],
 }
 
 if $::osfamily == 'Debian' {
