@@ -94,7 +94,8 @@ class platform::collectd
     command     => @(EOL/L),
         date --rfc-3339=s >> /var/log/rss-memory.log; \
         ps -e -o ppid,pid,nlwp,rss:10,vsz:10,comm,cmd --sort=-rss \
-        >> /var/log/rss-memory.log
+        >> /var/log/rss-memory.log; \
+        /bin/chmod 0640 /var/log/rss-memory.log
         |- EOL
   }
 
