@@ -44,8 +44,8 @@ class nfv::vim (
   # sw_deploy_rollback uses timeout from sw_deploy_execute
   $deploy_host_execute_timeout = 3600,
   $deploy_activate_timeout     = 3600,
-  $deploy_activate_retries     = 2,
-  $deploy_activate_retry_delay = 120,
+  $deploy_activate_retries     = 3,
+  $deploy_activate_retry_delay = 30,
 ) {
 
   include nfv::params
