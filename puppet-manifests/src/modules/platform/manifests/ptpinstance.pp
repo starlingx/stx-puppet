@@ -20,7 +20,7 @@ define platform::ptpinstance::ptp_config_files(
     path    => "${ptp_conf_dir}/ptpinstance/${service}-${_name}.conf",
     mode    => '0644',
     content => template('platform/ptpinstance.conf.erb'),
-    require => File["${ptp_conf_dir}/ptpinstance"]
+    require => File["${ptp_conf_dir}/ptpinstance"],
   }
   -> file { "${_name}-sysconfig":
     ensure  => file,
@@ -28,7 +28,7 @@ define platform::ptpinstance::ptp_config_files(
     path    => "${ptp_options_dir}/ptpinstance/${service}-instance-${_name}",
     mode    => '0644',
     content => template("platform/${service}-instance.erb"),
-    require => File["${ptp_options_dir}/ptpinstance"]
+    require => File["${ptp_options_dir}/ptpinstance"],
   }
   -> service { "instance-${_name}":
     ensure     => $ensure,
@@ -91,58 +91,26 @@ define platform::ptpinstance::nic_clock_handler (
   $uuid,
   $base_port,
   $ptp_conf_dir,
-  $wpc_commands = {
-    'sma1' => {
-        'input' => "1 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1",
-        'output' => "2 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1"
-    },
-    'sma2' => {
-        'input' => "1 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2",
-        'output' => "2 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2"
-    },
-    'u.fl1' => {
-        'output' => "2 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL1"
-    },
-    'u.fl2' => {
-        'input' => "1 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2"
-    },
-    'synce_rclka' => {
-        'enabled' => "1 \$channel > /sys/class/net/${name}/device/phy/synce"
-    },
-    'synce_rclkb' => {
-        'enabled' => "1 \$channel > /sys/class/net/${name}/device/phy/synce"
-    }
-  },
-  $wpc_channels = {
-    'sma1' => "cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1 | awk '{print \$2}'",
-    'sma2' => "cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2 | awk '{print \$2}'",
-    'u.fl1' => "cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL1 | awk '{print \$2}'",
-    'u.fl2' => "cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2 | awk '{print \$2}'",
-    'synce_rclka' => 'echo 0',
-    'synce_rclkb' => 'echo 1'
-  }
 ) {
   exec { "${ifname}_heading":
-    command => "echo ifname [${name}] >> ${ptp_conf_dir}/ptpinstance/clock-conf.conf",
-    require => File['ensure_clock_conf_present']
+    command  => "echo ifname [${name}] >> ${ptp_conf_dir}/ptpinstance/clock-conf.conf",
+    require  => File['ensure_clock_conf_present'],
+    provider => shell,
   }
   -> exec { "${ifname}_${base_port}_heading":
     command  => "echo base_port [${base_port}] >> ${ptp_conf_dir}/ptpinstance/clock-conf.conf",
+    provider => shell,
   }
   $parameters.each |String $parm, String $value| {
-    if $wpc_commands[$parm] {
-      exec { "${ifname}_${parm}":
-        command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
-          channel=$(${wpc_channels[$parm]});\
-          echo ${wpc_commands[$parm][$value]}",
-        provider => shell,
-        require  => [ Exec["${ifname}_heading"], Exec["${ifname}_${base_port}_heading"] ]
-      }
-      -> exec { "${ifname}_${parm}_to_file":
-        command  => "echo ${parm} ${value} >> ${ptp_conf_dir}/ptpinstance/clock-conf.conf"
-      }
-    } else {
-      notice("Skipped invalid clock parameter ${parm}.")
+    platform::ptpinstance::config_param { "${name}_${parm}_${value}":
+      iface   => $name,
+      param   => $parm,
+      value   => $value,
+      require => [Exec["${ifname}_heading"], Exec["${ifname}_${base_port}_heading"]],
+    }
+    -> exec { "${ifname}_${parm}_to_file":
+      command  => "echo ${parm} ${value} >> ${ptp_conf_dir}/ptpinstance/clock-conf.conf",
+      provider => shell,
     }
   }
 }
@@ -154,46 +122,11 @@ define platform::ptpinstance::nic_clock_reset (
   $uuid,
   $base_port,
 ) {
-  if $parameters['u.fl1'] {
-    exec { "${ifname}_clear_UFL1":
-      command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
-        channel=$(cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL1 | awk '{print \$2}');\
-        echo 0 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL1",
-      provider => shell,
-    }
-  }
-  if $parameters['u.fl2'] {
-    exec { "${ifname}_clear_UFL2":
-      command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
-        channel=$(cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2 | awk '{print \$2}');\
-        echo 0 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/U.FL2",
-      provider => shell,
-    }
-  }
-  if $parameters['sma1'] {
-    exec { "${ifname}_clear_SMA1":
-      command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
-        channel=$(cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1 | awk '{print \$2}');\
-        echo 0 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA1",
-      provider => shell,
-    }
-  }
-  if $parameters['sma2'] {
-    exec { "${ifname}_clear_SMA2":
-      command  => "PTP=$(basename /sys/class/net/${base_port}/device/ptp/ptp*);\
-        channel=$(cat /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2 | awk '{print \$2}');\
-        echo 0 \$channel > /sys/class/net/${base_port}/device/ptp/\$PTP/pins/SMA2",
-      provider => shell,
-    }
-  }
-  if $parameters['synce_rclka'] {
-    exec { "${ifname}_clear_rclka":
-      command => "echo 0 0 > /sys/class/net/${name}/device/phy/synce",
-    }
-  }
-  if $parameters['synce_rclkb'] {
-    exec { "${ifname}_clear_rclkb":
-      command => "echo 0 1 > /sys/class/net/${name}/device/phy/synce",
+  $parameters.each |String $parm, String $value| {
+    platform::ptpinstance::config_param { "${name}_${parm}_default":
+      iface => $name,
+      param => $parm,
+      value => 'default',
     }
   }
 }
@@ -219,24 +152,31 @@ class platform::ptpinstance::nic_clock (
 
   require ::platform::ptpinstance::nic_clock::nic_reset
 
-  file {"${ptp_conf_dir}/ptpinstance":
-    ensure =>  directory,
-    mode   =>  '0755',
+  file { "${ptp_conf_dir}/ptpinstance":
+    ensure => directory,
+    mode   => '0755',
   }
   -> tidy { 'purge_conf':
     path    => "${ptp_conf_dir}/ptpinstance",
-    matches => [ '[^clock]*.conf' ],
+    matches => ['[^clock]*.conf'],
     recurse => true,
-    rmdirs  => false
+    rmdirs  => false,
   }
   -> file { 'ensure_clock_conf_present':
     ensure  => present,
     path    => "${ptp_conf_dir}/ptpinstance/clock-conf.conf",
     mode    => '0644',
-    require => File["${ptp_conf_dir}/ptpinstance"]
+    require => File["${ptp_conf_dir}/ptpinstance"],
   }
   if $nic_clock_enabled {
-    create_resources('platform::ptpinstance::nic_clock_handler', $nic_clock_config, {'ptp_conf_dir' => $ptp_conf_dir})
+    create_resources('platform::ptpinstance::nic_clock_handler', $nic_clock_config, { 'ptp_conf_dir' => $ptp_conf_dir })
+    $iface_keys = keys($nic_clock_config)
+    $iface_keys.each|Integer $index, String $iface_cfg| {
+      if $index > 0 {
+        # Defining an order for the instances that will be created with create_resources
+        Platform::Ptpinstance::Nic_clock_handler[$iface_keys[$index - 1]] -> Platform::Ptpinstance::Nic_clock_handler[$iface_cfg]
+      }
+    }
   }
 }
 
@@ -244,15 +184,22 @@ class platform::ptpinstance::nic_clock::nic_reset (
   $nic_clock_config = $platform::ptpinstance::nic_clock::nic_clock_config,
   $nic_clock_enabled = $platform::ptpinstance::nic_clock::nic_clock_enabled
 ) {
-  include ::platform::ptpinstance::params
   $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
 
-  if $nic_clock_enabled {
-    create_resources('platform::ptpinstance::nic_clock_reset', $nic_clock_config)
+  if $nic_clock_enabled and find_file("${ptp_conf_dir}/ptpinstance/clock-conf.conf") {
+    $clock_conf_values = read_clock_conf("${ptp_conf_dir}/ptpinstance/clock-conf.conf")
+    create_resources('platform::ptpinstance::nic_clock_reset', $clock_conf_values)
+    $iface_keys = keys($clock_conf_values)
+    $iface_keys.each|Integer $index, String $iface_cfg| {
+      if $index > 0 {
+        # Defining an order for the instances that will be created with create_resources
+        Platform::Ptpinstance::Nic_clock_reset[$iface_keys[$index - 1]] -> Platform::Ptpinstance::Nic_clock_reset[$iface_cfg]
+      }
+    }
   }
   exec { 'clear_clock_conf_file':
     command => "echo \"\" > ${ptp_conf_dir}/ptpinstance/clock-conf.conf",
-    onlyif  => "stat ${ptp_conf_dir}/ptpinstance/clock-conf.conf"
+    onlyif  => "stat ${ptp_conf_dir}/ptpinstance/clock-conf.conf",
   }
 }
 
@@ -268,7 +215,6 @@ define platform::ptpinstance::disable_e810_gnss_uart_interfaces (
   $pmc_gm_settings = '',
   $external_source = '',
 ) {
-
   $gnss_device = $global_parameters['ts2phc.nmea_serialport']
 
   if empty($gnss_device) {
@@ -281,12 +227,12 @@ define platform::ptpinstance::disable_e810_gnss_uart_interfaces (
 
     notice("Trying to disable UART devices for serial port ${gnss_device}")
 
-    exec {"${_name}_disable_gnss_uart1":
+    exec { "${_name}_disable_gnss_uart1":
       command => "echo -ne \"${uart1_cmd}\" > ${gnss_device}",
       timeout => 3,
       onlyif  => "/usr/bin/test -c ${gnss_device}",
     }
-    exec {"${_name}_disable_gnss_uart2":
+    exec { "${_name}_disable_gnss_uart2":
       command => "echo -ne \"${uart2_cmd}\" > ${gnss_device}",
       timeout => 3,
       onlyif  => "/usr/bin/test -c ${gnss_device}",
@@ -326,13 +272,13 @@ class platform::ptpinstance (
     }
   }
 
-  file{"${ptp_options_dir}/ptpinstance":
-    ensure =>  directory,
-    mode   =>  '0755',
+  file { "${ptp_options_dir}/ptpinstance":
+    ensure => directory,
+    mode   => '0755',
   }
   -> tidy { 'purge_sysconf':
     path    => "${ptp_options_dir}/ptpinstance/",
-    matches => [ '*-instance-*' ],
+    matches => ['*-instance-*'],
     recurse => true,
     rmdirs  => false
   }
@@ -428,7 +374,277 @@ class platform::ptpinstance (
 class platform::ptpinstance::runtime {
   class { 'platform::ptpinstance::nic_clock': }
   -> class { 'platform::ptpinstance': runtime => true }
-  -> exec {'Ensure collectd is restarted':
+  -> exec { 'Ensure collectd is restarted':
     command => '/usr/local/sbin/pmon-restart collectd'
+  }
+}
+
+define platform::ptpinstance::net_tspll_cfg (
+  $iface,
+  $tspll_freq,
+  $clk_src,
+) {
+  unless defined(Exec["${iface}_tspll_cfg_${tspll_freq}_${clk_src}"]) {
+    exec { "${iface}_tspll_cfg_${tspll_freq}_${clk_src}":
+      command  => "echo ${tspll_freq} ${clk_src} > /sys/class/net/${iface}/device/tspll_cfg",
+      provider => shell,
+    }
+  }
+}
+
+define platform::ptpinstance::phy_synce (
+  $iface,
+  $enable,
+  $pin,
+) {
+  exec { "${iface}_synce_${enable}_${pin}":
+    command  => "echo ${enable} ${pin} > /sys/class/net/${iface}/device/phy/synce",
+    provider => shell,
+  }
+}
+
+define platform::ptpinstance::phy_tx_clk (
+  $iface,
+  $ref_clk,
+) {
+  unless defined(Exec["${iface}_tx_clk_${ref_clk}"]) {
+    exec { "${iface}_tx_clk_${ref_clk}":
+      command  => "echo ${ref_clk} > /sys/class/net/${iface}/device/phy/tx_clk",
+      provider => shell,
+    }
+  }
+}
+
+define platform::ptpinstance::ptp_extts_enable (
+  $iface,
+  $enable,
+  $channel,
+) {
+  exec { "${iface}_${channel}_extts_enable_${enable}":
+    command  => "PTP=\$(basename /sys/class/net/${iface}/device/ptp/ptp*);\
+      echo ${channel} ${enable} > /sys/class/net/${iface}/device/ptp/\$PTP/extts_enable",
+    provider => shell,
+  }
+
+  # This logic determines which pin is related to this extts configuration.
+  $pin = $channel ? {
+    1 => 'SDP1',
+    2 => 'SDP3',
+  }
+
+  # Function 1 is input and function 0 is default, we need to know this to
+  # identify if this is the default operation or if we are applying a new value.
+  $function = $enable ? {
+    1 => 1,
+    0 => 0,
+  }
+
+  if $function != 0 {
+    # When we are setting a new value to the extts config, the pin
+    # input function needs to be set first, this dependecy ensures that.
+    Exec["${iface}_${pin}_${function}"] -> Exec["${iface}_${channel}_extts_enable_${enable}"]
+  } else {
+    # When we are setting the default value to the extts config, the pin
+    # input function needs to be set after that, this dependecy ensures that.
+    Exec["${iface}_${channel}_extts_enable_${enable}"] -> Exec["${iface}_${pin}_${function}"]
+  }
+}
+
+define platform::ptpinstance::ptp_period (
+  $iface,
+  $start_time_s,
+  $start_time_ns,
+  $period_s,
+  $period_ns,
+  $channel,
+) {
+  exec { "${iface}_period_${channel}_${start_time_s}_${start_time_ns}_${period_s}_${period_ns}":
+    command  => "PTP=\$(basename /sys/class/net/${iface}/device/ptp/ptp*);\
+      echo ${channel} ${start_time_s} ${start_time_ns} ${period_s} ${period_ns} > /sys/class/net/${iface}/device/ptp/\$PTP/period",
+    provider => shell,
+  }
+
+  # This logic determines which pin is related to this period configuration.
+  $pin = $channel ? {
+    1 => 'SDP0',
+    2 => 'SDP2',
+  }
+  # Function 2 is output and function 0 is default, we need to know this to
+  # identify if this is the default operation or if we are applying a new value.
+  $function = ($period_s != 0 or $period_ns != 0) ? {
+    true  => 2,
+    false => 0,
+  }
+
+  if $function != 0 {
+    # When we are setting a new value to the period config, the pin
+    # output function needs to be set first, this dependecy ensures that.
+    Exec["${iface}_${pin}_${function}"] -> Exec["${iface}_period_${channel}_${start_time_s}_${start_time_ns}_${period_s}_${period_ns}"]
+  } else {
+    # When we are setting the default value to the period config, the pin
+    # output function needs to be set after that, this dependecy ensures that.
+    Exec["${iface}_period_${channel}_${start_time_s}_${start_time_ns}_${period_s}_${period_ns}"] -> Exec["${iface}_${pin}_${function}"]
+  }
+}
+
+define platform::ptpinstance::ptp_pin (
+  $iface,
+  $pin,
+  $function,
+  $channel = undef,
+) {
+  if $channel == undef {
+    exec { "${iface}_${pin}_${function}":
+      command  => "PTP=$(basename /sys/class/net/${iface}/device/ptp/ptp*);\
+        CHANNEL=$(cat /sys/class/net/${iface}/device/ptp/\$PTP/pins/${pin} | awk '{print \$2}');\
+        echo ${function} \$CHANNEL > /sys/class/net/${iface}/device/ptp/\$PTP/pins/${pin}",
+      provider => shell,
+    }
+  } else {
+  exec { "${iface}_${pin}_${function}":
+    command  => "PTP=$(basename /sys/class/net/${iface}/device/ptp/ptp*);\
+      echo ${function} ${channel} > /sys/class/net/${iface}/device/ptp/\$PTP/pins/${pin}",
+    provider => shell,
+    }
+  }
+}
+
+define platform::ptpinstance::config_param (
+  $iface,
+  $param,
+  $value,
+) {
+  $cmds = {
+    'tspll_cfg' => {
+      'resource'       => 'platform::ptpinstance::net_tspll_cfg',
+      'default'        => { 'iface' => $iface, 'tspll_freq' => 4, 'clk_src' => 0 },
+      'osc_25'         => { 'iface' => $iface, 'tspll_freq' => 0, 'clk_src' => 0 },
+      'osc_122.88'     => { 'iface' => $iface, 'tspll_freq' => 1, 'clk_src' => 0 },
+      'osc_125'        => { 'iface' => $iface, 'tspll_freq' => 2, 'clk_src' => 0 },
+      'osc_153.6'      => { 'iface' => $iface, 'tspll_freq' => 3, 'clk_src' => 0 },
+      'osc_156.25'     => { 'iface' => $iface, 'tspll_freq' => 4, 'clk_src' => 0 },
+      'osc_245.76'     => { 'iface' => $iface, 'tspll_freq' => 5, 'clk_src' => 0 },
+      'timeref_25'     => { 'iface' => $iface, 'tspll_freq' => 0, 'clk_src' => 1 },
+      'timeref_122.88' => { 'iface' => $iface, 'tspll_freq' => 1, 'clk_src' => 1 },
+      'timeref_125'    => { 'iface' => $iface, 'tspll_freq' => 2, 'clk_src' => 1 },
+      'timeref_153.6'  => { 'iface' => $iface, 'tspll_freq' => 3, 'clk_src' => 1 },
+      'timeref_156.25' => { 'iface' => $iface, 'tspll_freq' => 4, 'clk_src' => 1 },
+      'timeref_245.76' => { 'iface' => $iface, 'tspll_freq' => 5, 'clk_src' => 1 },
+    },
+    'synce_rclka' => {
+      'resource' => 'platform::ptpinstance::phy_synce',
+      'default'  => { 'iface' => $iface, 'enable' => 0, 'pin' => 0 },
+      'enabled'  => { 'iface' => $iface, 'enable' => 1, 'pin' => 0 },
+    },
+    'synce_rclkb' => {
+      'resource' => 'platform::ptpinstance::phy_synce',
+      'default'  => { 'iface' => $iface, 'enable' => 0, 'pin' => 1 },
+      'enabled'  => { 'iface' => $iface, 'enable' => 1, 'pin' => 1 },
+    },
+    'tx_clk' => {
+      'resource' => 'platform::ptpinstance::phy_tx_clk',
+      'default' => { 'iface' => $iface, 'ref_clk' => 0 },
+      'enet'    => { 'iface' => $iface, 'ref_clk' => 0 },
+      'synce'   => { 'iface' => $iface, 'ref_clk' => 1 },
+      'eref0'   => { 'iface' => $iface, 'ref_clk' => 2 },
+    },
+    'extts_sdp1' => {
+      'resource' => 'platform::ptpinstance::ptp_extts_enable',
+      'default'  => { 'iface' => $iface, 'channel' => 1, 'enable' => 0},
+      'enabled'  => { 'iface' => $iface, 'channel' => 1, 'enable' => 1},
+    },
+    'extts_sdp3' => {
+      'resource' => 'platform::ptpinstance::ptp_extts_enable',
+      'default'  => { 'iface' => $iface, 'channel' => 2, 'enable' => 0},
+      'enabled'  => { 'iface' => $iface, 'channel' => 2, 'enable' => 1},
+    },
+    'period_sdp0' => {
+      'resource' => 'platform::ptpinstance::ptp_period',
+      'default' => { 'iface' => $iface, 'channel' => 1, 'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 0 },
+      '1pps'  => { 'iface' => $iface, 'channel' => 1, 'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 1, 'period_ns' => 0 },
+      '10mhz' => { 'iface' => $iface, 'channel' => 1, 'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 100 },
+      '1khz'  => { 'iface' => $iface, 'channel' => 1, 'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 1000000 },
+    },
+    'period_sdp2' => {
+      'resource' => 'platform::ptpinstance::ptp_period',
+      'default' => { 'iface' => $iface, 'channel' => 2, 'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 0 },
+      '1pps'  => { 'iface' => $iface, 'channel' => 2, 'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 1, 'period_ns' => 0 },
+      '10mhz' => { 'iface' => $iface, 'channel' => 2, 'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 100 },
+      '1khz'  => { 'iface' => $iface, 'channel' => 2, 'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 1000000 },
+    },
+    'sdp0' => {
+      'resource' => 'platform::ptpinstance::ptp_pin',
+      'default'  => { 'iface' => $iface, 'pin' => 'SDP0', 'function' => 0, 'channel' => 1 },
+      'output'   => { 'iface' => $iface, 'pin' => 'SDP0', 'function' => 2, 'channel' => 1 },
+    },
+    'sdp1' => {
+      'resource' => 'platform::ptpinstance::ptp_pin',
+      'default'  => { 'iface' => $iface, 'pin' => 'SDP1', 'function' => 0, 'channel' => 1 },
+      'input'    => { 'iface' => $iface, 'pin' => 'SDP1', 'function' => 1, 'channel' => 1 },
+    },
+    'sdp2' => {
+      'resource' => 'platform::ptpinstance::ptp_pin',
+      'default'  => { 'iface' => $iface, 'pin' => 'SDP2', 'function' => 0, 'channel' => 2 },
+      'output'   => { 'iface' => $iface, 'pin' => 'SDP2', 'function' => 2, 'channel' => 2 },
+    },
+    'sdp3' => {
+      'resource' => 'platform::ptpinstance::ptp_pin',
+      'default' => { 'iface' => $iface, 'pin' => 'SDP3', 'function' => 0, 'channel' => 2 },
+      'input'   => { 'iface' => $iface, 'pin' => 'SDP3', 'function' => 1, 'channel' => 2 },
+    },
+    'sma1' => {
+      'resource' => 'platform::ptpinstance::ptp_pin',
+      'default' => { 'iface' => $iface, 'pin' => 'SMA1', 'function' => 0 },
+      'input'   => { 'iface' => $iface, 'pin' => 'SMA1', 'function' => 1 },
+      'output'  => { 'iface' => $iface, 'pin' => 'SMA1', 'function' => 2 },
+    },
+    'sma2' => {
+      'resource' => 'platform::ptpinstance::ptp_pin',
+      'default' => { 'iface' => $iface, 'pin' => 'SMA2', 'function' => 0 },
+      'input'   => { 'iface' => $iface, 'pin' => 'SMA2', 'function' => 1 },
+      'output'  => { 'iface' => $iface, 'pin' => 'SMA2', 'function' => 2 },
+    },
+    'u.fl1' => {
+      'resource' => 'platform::ptpinstance::ptp_pin',
+      'default' => { 'iface' => $iface, 'pin' => 'U.FL1', 'function' => 0 },
+      'output'  => { 'iface' => $iface, 'pin' => 'U.FL1', 'function' => 2 },
+    },
+    'u.fl2' => {
+      'resource' => 'platform::ptpinstance::ptp_pin',
+      'default' => { 'iface' => $iface, 'pin' => 'U.FL2', 'function' => 0 },
+      'input'   => { 'iface' => $iface, 'pin' => 'U.FL2', 'function' => 1 },
+    },
+  }
+
+  if $cmds[$param][$value] {
+    $final_value = $cmds[$param][$value]
+  } elsif ($param == 'period_sdp0' or $param == 'period_sdp2') and !$cmds[$param][$value] {
+    # This logic deals with periods set in nanoseconds, we don't have a fixed argument to
+    # those so this logic makes sure that the value is converted to seconds if needed.
+    # The minimum value is 100ns, and the maximum is 4s.
+    $period_s  = Integer($value) / 1000000000
+    $period_ns = Integer($value) % 1000000000
+    $channel = $param ? {
+      'period_sdp0' => 1,
+      'period_sdp2' => 2,
+    }
+    $final_value = {
+      'iface'         => $iface,
+      'channel'       => $channel,
+      'start_time_s'  => 0,
+      'start_time_ns' => 0,
+      'period_s'      => $period_s,
+      'period_ns'     => $period_ns,
+    }
+  } elsif !$cmds[$param][$value] {
+    $final_value = undef
+  }
+
+  if !$cmds[$param] {
+    notice("Skipped invalid clock parameter: ${param}.")
+  } elsif $final_value == undef {
+    notice("Skipped invalid clock parameter value: ${param}: ${value}.")
+  } else {
+    create_resources($cmds[$param]['resource'], { "${iface}_${param}_${value}" => $final_value })
   }
 }
