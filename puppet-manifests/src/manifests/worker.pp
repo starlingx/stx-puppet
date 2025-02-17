@@ -63,11 +63,6 @@ class { '::platform::config::worker::post':
   stage => post,
 }
 
-class { '::platform::logpermission':
-  stage   => post,
-  require => Class['::platform::config::worker::post'],
-}
-
 if $::osfamily == 'Debian' {
   lookup('classes', {merge => unique}).include
 } else {

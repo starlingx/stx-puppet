@@ -125,11 +125,6 @@ class { '::platform::config::aio::post':
   stage => post,
 }
 
-class { '::platform::logpermission':
-  stage   => post,
-  require => Class['::platform::config::aio::post'],
-}
-
 if $::osfamily == 'Debian' {
   lookup('classes', {merge => unique}).include
 } else {
