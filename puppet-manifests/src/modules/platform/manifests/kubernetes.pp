@@ -413,6 +413,14 @@ class platform::kubernetes::kubeadm {
   }
 }
 
+class platform::kubernetes::set_crt_permissions {
+  exec { 'set_permissions_on_crt_files':
+    command => 'find /etc/kubernetes/pki -type f -name "*.crt" -exec chmod 600 {} +',
+    onlyif  => 'find /etc/kubernetes/pki -type f -name "*.crt" ! -perm 600 | grep .',
+    path    => ['/bin', '/usr/bin'],
+  }
+}
+
 class platform::kubernetes::master::init
   inherits ::platform::kubernetes::params {
 
@@ -605,6 +613,8 @@ class platform::kubernetes::master::init
     hour        => '*/24',
     user        => 'root',
   }
+
+  -> class { 'platform::kubernetes::set_crt_permissions': }
 }
 
 class platform::kubernetes::master
