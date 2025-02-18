@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2016-2024 Wind River Systems, Inc.
+# Copyright (c) 2016-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -93,6 +93,7 @@ class nfv::nfvi (
   $glance_upload_image_data_by_file_timeout = 180,
   $glance_upload_image_data_by_url_timeout  = 180,
   $sysinv_timeout                           = 60,
+  $sysinv_unlock_host_timeout               = 120,
   $patching_apply_patch_timeout             = 180,
   $usm_timeout                              = 60,
   $usm_sw_deploy_execute_timeout            = 3600,
@@ -216,6 +217,7 @@ class nfv::nfvi (
     'nfvi-timeouts/glance.upload_image_data_by_file': value => $glance_upload_image_data_by_file_timeout;
     'nfvi-timeouts/glance.upload_image_data_by_url': value => $glance_upload_image_data_by_url_timeout;
     'nfvi-timeouts/sysinv': value => $sysinv_timeout;
+    'nfvi-timeouts/sysinv.unlock_host': value => $sysinv_unlock_host_timeout;
     'nfvi-timeouts/patching.apply_patch': value => $patching_apply_patch_timeout;
     'nfvi-timeouts/usm': value => $usm_timeout;
     'nfvi-timeouts/usm.sw_deploy_execute': value => $usm_sw_deploy_execute_timeout;
