@@ -41,6 +41,7 @@ include ::platform::ceph::storage
 include ::platform::rook
 include ::platform::tty
 include ::platform::crashdump
+include ::platform::logpermission
 
 class { '::platform::config::storage::post':
   stage => post,

@@ -119,7 +119,7 @@ include ::platform::network::interfaces::sriov::config
 include ::platform::network::interfaces::fpga::config
 include ::platform::worker::storage
 include ::platform::kubernetes::aio
-
+include ::platform::logpermission
 
 class { '::platform::config::aio::post':
   stage => post,

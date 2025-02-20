@@ -57,7 +57,7 @@ include ::platform::lmon
 include ::platform::rook
 include ::platform::tty
 include ::platform::crashdump
-
+include ::platform::logpermission
 
 class { '::platform::config::worker::post':
   stage => post,
