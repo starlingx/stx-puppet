@@ -124,6 +124,8 @@ include ::platform::rook
 
 include ::platform::deviceimage
 
+include ::platform::logpermission
+
 class { '::platform::config::controller::post':
   stage => post,
 }

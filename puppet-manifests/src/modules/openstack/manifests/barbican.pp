@@ -150,7 +150,7 @@ class openstack::barbican::service (
 
   cron { 'barbican-cleaner':
     ensure      => 'present',
-    command     => '/usr/bin/barbican-manage db clean -p -e -L /var/log/barbican/barbican-clean.log',
+    command     => '/usr/bin/barbican-manage db clean -p -e -L /var/log/barbican/barbican-clean.log; chmod 640 /var/log/barbican/barbican-clean.log', # lint:ignore:140chars
     environment => 'PATH=/bin:/usr/bin:/usr/sbin',
     minute      => '50',
     hour        => '*/24',
