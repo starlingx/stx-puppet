@@ -123,10 +123,8 @@ enable=E1603,E1609,E1610,E1602,E1606,E1608,E1607,E1605,E1604,E1601,E1611,W1652,
 # See "Messages Control" section of
 # https://pylint.readthedocs.io/en/latest/user_guide
 # We are disabling (C)onvention
-#  W0201: attribute-defined-outside-init
-#  W1202: logging-format-interpolation
 #  W1618: no-absolute-import
-disable=C, W0201,W1202,W1618
+disable=C, W1618
 
 [REPORTS]
 # Set the output format. Available formats are text, parseable, colorized, msvs

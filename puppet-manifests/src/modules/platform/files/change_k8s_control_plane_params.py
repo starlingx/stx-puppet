@@ -729,15 +729,14 @@ def get_kubelet_cfg_from_service_parameters(service_params):
         # map[string]string & []string
         if value.startswith(('[', '{')) and value.endswith((']', '}')):
             try:
-                value = json.loads(
-                    value.replace('True', 'true').replace('False', 'false').replace("'", '"'))
+                value = json.loads(value.replace('True', 'true').replace('False', 'false').replace("'", '"'))
             except Exception as e:
                 msg = 'Parsing param: %s / value: %s. [Error: %s]' % (param, value, e)
                 LOG.error(msg)
                 return 3
         # bool
         elif value in ['False', 'false'] or value in ['True', 'true']:
-            value = True if value in ['True', 'true'] else False  # pylint: disable-msg=simplifiable-if-expression # noqa: E501
+            value = True if value in ['True', 'true'] else False  # pylint: disable-msg=simplifiable-if-expression
         # float
         elif '.' in value:
             try:
@@ -1158,8 +1157,7 @@ def main():
     parser.add_argument("--kubelet_latest_config_file", default="/var/lib/kubelet/config.yaml")
     parser.add_argument("--kubelet_bak_config_file", default="/var/lib/kubelet/config.yaml.bak")
     parser.add_argument("--kubelet_error_log", default="/tmp/kubelet_errors.log")
-    parser.add_argument("--k8s_configmaps_init_flag",
-                        default="/tmp/.sysinv_k8s_configmaps_initialized")
+    parser.add_argument("--k8s_configmaps_init_flag", default="/tmp/.sysinv_k8s_configmaps_initialized")
 
     parser.add_argument("--automatic_recovery", default=True)
     parser.add_argument("--timeout", default=RECOVERY_TIMEOUT)

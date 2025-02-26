@@ -800,7 +800,7 @@ class platform::network::apply {
   -> Exec['apply-network-config']
 
   exec {'apply-network-config':
-    command => 'apply_network_config.py',
+    command => 'apply_network_config.sh',
   }
 
   # Wait for network interface to leave tentative state during ipv6 DAD, if interface is UP
@@ -890,7 +890,7 @@ class platform::network::routes::runtime {
   }
 
   exec {'apply-network-config route setup':
-    command => 'apply_network_config.py --routes',
+    command => 'apply_network_config.sh --routes',
   }
 }
 

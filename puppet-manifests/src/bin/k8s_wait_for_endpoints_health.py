@@ -62,10 +62,10 @@ def k8s_wait_for_endpoints_health(tries=TRIES, try_sleep=TRY_SLEEP, timeout=TIME
     healthz_endpoints = [APISERVER_READYZ_ENDPOINT, CONTROLLER_MANAGER_HEALTHZ_ENDPOINT,
                          SCHEDULER_HEALTHZ_ENDPOINT, KUBELET_HEALTHZ_ENDPOINT]
     for endpoint in healthz_endpoints:
-        is_k8s_endpoint_healthy = kubernetes.k8s_health_check(tries=tries,
-                                                              try_sleep=try_sleep,
-                                                              timeout=timeout,
-                                                              healthz_endpoint=endpoint)
+        is_k8s_endpoint_healthy = kubernetes.k8s_health_check(tries = tries,
+                                                              try_sleep = try_sleep,
+                                                              timeout = timeout,
+                                                              healthz_endpoint = endpoint)
         if not is_k8s_endpoint_healthy:
             LOG.error("Timeout: Kubernetes control-plane endpoints not healthy")
             return 1
@@ -93,3 +93,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
