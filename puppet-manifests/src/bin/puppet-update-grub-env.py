@@ -28,7 +28,6 @@ import sys
 BOOT_ENV = "/boot/efi/EFI/BOOT/boot.env"
 KERNEL_PARAMS_STRING = "kernel_params"
 
-
 # Get value of kernel_params from conf
 def read_kernel_params(conf):
     """Get value of kernel_params from conf"""
@@ -47,7 +46,6 @@ def read_kernel_params(conf):
 
     return res
 
-
 # Write key=value string to conf
 def write_conf(conf, string):
     """Write key=value string to conf"""
@@ -60,7 +58,6 @@ def write_conf(conf, string):
     except Exception as err:
         print(err)
         raise
-
 
 def set_parser():
     """Set command parser"""
@@ -113,7 +110,6 @@ def set_parser():
 
     return parser
 
-
 def convert_dict_to_value(kernel_params_dict):
     """Dictionary to value"""
 
@@ -131,7 +127,6 @@ def convert_dict_to_value(kernel_params_dict):
         kernel_params += f" {kernel_params_dict['hugepage']}"
 
     return f"kernel_params={kernel_params}"
-
 
 def convert_value_to_dict(value):
     """Value to dictionary"""
@@ -161,6 +156,7 @@ def convert_value_to_dict(value):
         else:
             key, val = param, ''
 
+
         kernel_params_dict[key] = val
 
     if hugepage_cache:
@@ -180,7 +176,6 @@ def convert_value_to_dict(value):
         kernel_params_dict['hugepage'] = hugepage_cache
 
     return kernel_params_dict
-
 
 def edit_boot_env(args):
     """Edit boot environment"""
@@ -217,7 +212,6 @@ def edit_boot_env(args):
     kernel_params = convert_dict_to_value(kernel_params_dict)
     write_conf(BOOT_ENV, kernel_params)
 
-
 def get_kernel_dir():
     """Get kernel directory"""
 
@@ -229,12 +223,11 @@ def get_kernel_dir():
 
     return "/boot/1"
 
-
 def edit_kernel_env(args):
     """Edit kernel environment"""
 
     kernel_dir = get_kernel_dir()
-    path_all = os.path.join(kernel_dir, "vmlinuz*-amd64")
+    path_all = os.path.join(kernel_dir,"vmlinuz*-amd64")
     path_rt = os.path.join(kernel_dir, "vmlinuz*rt*-amd64")
 
     glob_all_kernels = [os.path.basename(f) for f in glob.glob(path_all)]
@@ -261,7 +254,6 @@ def edit_kernel_env(args):
     kernel_rollback_env = f"kernel_rollback={kernel}"
     write_conf(kernel_env, kernel_rollback_env)
 
-
 def list_kernels():
     """List kernels"""
 
@@ -280,7 +272,6 @@ def list_kernels():
 
     print(output)
 
-
 def list_kernel_params():
     """List kernel params"""
 
@@ -296,7 +287,6 @@ def list_kernel_params():
         if line.startswith('kernel_params='):
             print(line)
             break
-
 
 def main():
     """Main"""
@@ -314,7 +304,6 @@ def main():
 
     if args.list_kernel_params:
         list_kernel_params()
-
 
 if __name__ == "__main__":
     main()
