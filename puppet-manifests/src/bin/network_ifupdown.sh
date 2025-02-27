@@ -5,6 +5,8 @@
 #
 ################################################################################
 
+# WARNING: This file is OBSOLETE
+
 #
 # This file purpose is to provide helper functions if the system is Debian based
 # for the apply_network_config.sh script
