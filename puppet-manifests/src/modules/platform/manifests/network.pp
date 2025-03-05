@@ -617,6 +617,317 @@ class platform::network::routes (
   }
 }
 
+define platform::network::interfaces::rate_limit::tx_rate (
+  Integer $max_tx_rate,
+  String $address_pool,
+  String $interface_name,
+  Optional[Array[String]] $accept_subnet = undef,
+  Enum['present', 'absent'] $ensure_rule = 'present',
+) {
+
+  $hashlimit_name = "${interface_name}-limit"
+
+  # Convert max_tx_rate to Kilobytes/second
+  # 1 Megabit (Mb) = 125 Kilobytes (KB)
+  $max_tx_rate_kbps = $max_tx_rate * 125
+
+  notify { "Configuring tx rate limit for ${interface_name}":
+    message  => "Applying tx rate limit settings on ${interface_name}",
+    loglevel => 'debug',
+  }
+
+  # Add IPv4 rules if needed
+  if $address_pool == 'ipv4' or $address_pool == 'dual' {
+
+    if $accept_subnet and !empty($accept_subnet) {
+      platform::network::interfaces::accept::subnet { "${interface_name}-ipv4-egress":
+        interface_name => $interface_name,
+        address_pool   => 'ipv4',
+        accept_subnet  => $accept_subnet,
+        ensure_rule    => $ensure_rule,
+        provider       => 'iptables',
+        direction      => 'egress',
+      }
+    }
+
+    firewall { "301 rate-limit egress IPv4 ${interface_name}":
+      ensure          => $ensure_rule,
+      chain           => 'OUTPUT',
+      proto           => 'all',
+      outiface        => $interface_name,
+      action          => 'drop',
+      hashlimit_name  => "${hashlimit_name}-egress",
+      hashlimit_above => "${max_tx_rate_kbps}kb/s",
+      hashlimit_mode  => 'srcip',
+      provider        => 'iptables',
+    }
+  }
+
+  # Add IPv6 rules if needed
+  if $address_pool == 'ipv6' or $address_pool == 'dual' {
+
+    if $accept_subnet and !empty($accept_subnet) {
+      platform::network::interfaces::accept::subnet { "${interface_name}-ipv6-egress":
+        interface_name => $interface_name,
+        address_pool   => 'ipv6',
+        accept_subnet  => $accept_subnet,
+        ensure_rule    => $ensure_rule,
+        provider       => 'ip6tables',
+        direction      => 'egress',
+      }
+    }
+
+    firewall { "303 rate-limit egress IPv6 ${interface_name}":
+      ensure          => $ensure_rule,
+      chain           => 'OUTPUT',
+      proto           => 'all',
+      outiface        => $interface_name,
+      action          => 'drop',
+      hashlimit_name  => "${hashlimit_name}-egress",
+      hashlimit_above => "${max_tx_rate_kbps}kb/s",
+      hashlimit_mode  => 'srcip',
+      provider        => 'ip6tables',
+    }
+  }
+}
+
+define platform::network::interfaces::rate_limit::rx_rate (
+  Integer $max_rx_rate,
+  String $address_pool,
+  String $interface_name,
+  Optional[Array[String]] $accept_subnet = undef,
+  Enum['present', 'absent'] $ensure_rule = 'present',
+) {
+  $hashlimit_name = "${interface_name}-limit"
+
+  # Convert max_rx_rate to Kilobytes/second
+  # 1 Megabit (Mb) = 125 Kilobytes (KB)
+  $max_rx_rate_kbps = $max_rx_rate * 125
+
+  notify { "Configuring rx rate limit for ${interface_name}":
+    message  => "Applying rx rate limit settings on ${interface_name}",
+    loglevel => 'debug',
+  }
+
+  # Add IPv4 rules if needed
+  if $address_pool == 'ipv4' or $address_pool == 'dual' {
+
+    if $accept_subnet and !empty($accept_subnet) {
+      platform::network::interfaces::accept::subnet { "${interface_name}-ipv4-ingress":
+        interface_name => $interface_name,
+        address_pool   => 'ipv4',
+        accept_subnet  => $accept_subnet,
+        ensure_rule    => $ensure_rule,
+        provider       => 'iptables',
+        direction      => 'ingress',
+      }
+    }
+
+    firewall { "300 rate-limit ingress IPv4 ${interface_name}":
+      ensure          => $ensure_rule,
+      chain           => 'INPUT',
+      proto           => 'all',
+      iniface         => $interface_name,
+      action          => 'drop',
+      hashlimit_name  => "${hashlimit_name}-ingress",
+      hashlimit_above => "${max_rx_rate_kbps}kb/s",
+      hashlimit_mode  => 'dstip',
+      provider        => 'iptables',
+    }
+  }
+
+  # Add IPv6 rules if needed
+  if $address_pool == 'ipv6' or $address_pool == 'dual' {
+
+    if $accept_subnet and !empty($accept_subnet) {
+      platform::network::interfaces::accept::subnet { "${interface_name}-ipv6-ingress":
+        interface_name => $interface_name,
+        address_pool   => 'ipv6',
+        accept_subnet  => $accept_subnet,
+        ensure_rule    => $ensure_rule,
+        provider       => 'ip6tables',
+        direction      => 'ingress',
+      }
+    }
+
+    firewall { "302 rate-limit ingress IPv6 ${interface_name}":
+      ensure          => $ensure_rule,
+      chain           => 'INPUT',
+      proto           => 'all',
+      iniface         => $interface_name,
+      action          => 'drop',
+      hashlimit_name  => "${hashlimit_name}-ingress",
+      hashlimit_above => "${max_rx_rate_kbps}kb/s",
+      hashlimit_mode  => 'dstip',
+      provider        => 'ip6tables',
+    }
+  }
+}
+
+define platform::network::interfaces::rate_limit::interface (
+  Optional[Integer] $max_tx_rate = undef,
+  Optional[Integer] $max_rx_rate = undef,
+  Optional[Enum['ipv4', 'ipv6', 'dual']] $address_pool = undef,
+  Optional[Array[String]] $accept_subnet = undef,
+) {
+
+  $interface_name = $title
+
+  if ($max_rx_rate != undef or $max_tx_rate != undef) {
+    include platform::network::interfaces::rate_limit::load_driver
+    if $::personality == 'controller' {
+        include platform::network::interfaces::rate_limit::bypass
+    }
+  } else {
+    notice("No rate limiting configured for interface ${interface_name}")
+  }
+
+  if $max_tx_rate != undef and $max_tx_rate > 0 and $address_pool != undef {
+    platform::network::interfaces::rate_limit::tx_rate { $interface_name:
+      max_tx_rate    => $max_tx_rate,
+      address_pool   => $address_pool,
+      interface_name => $interface_name,
+      accept_subnet  => $accept_subnet,
+      ensure_rule    => 'present',
+    }
+  }
+  elsif $max_tx_rate == 0 and $address_pool != undef {
+    platform::network::interfaces::rate_limit::tx_rate { $interface_name:
+      max_tx_rate    => 0,
+      address_pool   => $address_pool,
+      interface_name => $interface_name,
+      accept_subnet  => $accept_subnet,
+      ensure_rule    => 'absent',
+    }
+  }
+
+  if $max_rx_rate != undef and $max_rx_rate > 0 and $address_pool != undef {
+    platform::network::interfaces::rate_limit::rx_rate { $interface_name:
+      max_rx_rate    => $max_rx_rate,
+      address_pool   => $address_pool,
+      interface_name => $interface_name,
+      accept_subnet  => $accept_subnet,
+      ensure_rule    => 'present',
+    }
+  }
+  elsif $max_rx_rate == 0 and $address_pool != undef {
+    platform::network::interfaces::rate_limit::rx_rate { $interface_name:
+      max_rx_rate    => 0,
+      address_pool   => $address_pool,
+      interface_name => $interface_name,
+      accept_subnet  => $accept_subnet,
+      ensure_rule    => 'absent',
+    }
+  }
+}
+
+define platform::network::interfaces::accept::subnet (
+  String $interface_name,
+  String $address_pool,
+  Enum['ingress', 'egress'] $direction,
+  Enum['present', 'absent'] $ensure_rule = 'present',
+  Enum['iptables', 'ip6tables'] $provider = undef,
+  Optional[Array[String]] $accept_subnet = undef,
+) {
+  if $accept_subnet and !empty($accept_subnet) {
+    $accept_subnet.each |String $network_type| {
+
+      $subnet = lookup(
+        "platform::network::${network_type}::${address_pool}::params::subnet_network",
+        { 'default_value' => undef }
+      )
+      $prefix = lookup(
+        "platform::network::${network_type}::${address_pool}::params::subnet_prefixlen",
+        { 'default_value' => undef }
+      )
+
+      if $subnet and $prefix {
+        $cidr = "${subnet}/${prefix}"
+
+        if $direction == 'ingress' {
+          firewall { "100 accept ${network_type} ${direction} ${address_pool} ${interface_name}":
+            ensure   => $ensure_rule,
+            chain    => 'INPUT',
+            proto    => 'all',
+            source   => $cidr,
+            iniface  => $interface_name,
+            action   => 'accept',
+            provider => $provider,
+          }
+        } else {
+          firewall { "101 accept ${network_type} ${direction} ${address_pool} ${interface_name}":
+            ensure      => $ensure_rule,
+            proto       => 'all',
+            chain       => 'OUTPUT',
+            destination => $cidr,
+            outiface    => $interface_name,
+            action      => 'accept',
+            provider    => $provider,
+          }
+        }
+      } else {
+        notice("Subnet or prefix not found for ${network_type} ${address_pool} ${interface_name}")
+      }
+    }
+  }
+}
+
+class platform::network::interfaces::rate_limit::load_driver {
+  # Load xt_hashlimit driver
+  kmod::load { 'xt_hashlimit':
+    ensure => 'present',
+  }
+}
+
+
+class platform::network::interfaces::rate_limit::bypass {
+  firewall { '200 accept ingress State Synchronization and heartbeat traffic (IPv4)':
+    chain    => 'INPUT',
+    proto    => 'udp',
+    dport    => ['2222', '2223'],
+    action   => 'accept',
+    provider => 'iptables',
+  }
+
+  firewall { '201 accept egress State Synchronization and heartbeat traffic (IPv4)':
+    chain    => 'OUTPUT',
+    proto    => 'udp',
+    sport    => ['2222', '2223'],
+    action   => 'accept',
+    provider => 'iptables',
+  }
+
+  # IPv6 Rules (ip6tables)
+  firewall { '202 accept ingress State Synchronization and heartbeat traffic (IPv6)':
+    chain    => 'INPUT',
+    proto    => 'udp',
+    dport    => ['2222', '2223'],
+    action   => 'accept',
+    provider => 'ip6tables',
+  }
+
+  firewall { '203 accept egress State Synchronization and heartbeat traffic (IPv6)':
+    chain    => 'OUTPUT',
+    proto    => 'udp',
+    sport    => ['2222', '2223'],
+    action   => 'accept',
+    provider => 'ip6tables',
+  }
+}
+
+
+class platform::network::interfaces::rate_limit (
+  $rate_limit_config = {}
+) {
+  Anchor['platform::networking'] -> Class[$name]
+  create_resources('platform::network::interfaces::rate_limit::interface', $rate_limit_config, {})
+}
+
+
+class platform::network::interfaces::rate_limit::runtime {
+  include platform::network::interfaces::rate_limit
+}
+
 
 define platform::network::interfaces::sriov_enable (
   $addr,
@@ -779,6 +1090,7 @@ class platform::network::apply {
   include ::platform::network::interfaces
   include ::platform::network::addresses
   include ::platform::network::routes
+  include ::platform::network::interfaces::rate_limit
 
   Exec['cleanup-interfaces-file']
   -> Network_config <| |>
