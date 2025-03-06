@@ -459,16 +459,25 @@ define platform::network::network_address (
     # floating ips so that they are not used
     if $ifname == 'lo' {
       $options = 'scope host'
+      $protocol = ''
     } elsif $address =~ Stdlib::IP::Address::V6 {
       $options = 'preferred_lft 0'
+      $protocol = 'ipv6'
     } else {
       $options = ''
+      $protocol = 'ipv4'
     }
 
     # Remove the subnet prefix if present ( e.g: 1.1.1.1/24 fd001::1/64)
     $ip_address = $address ? {
       /.+\// => $address.split('/')[0], # If there's a '/', take the part before it
       default => $address,              # Otherwise, keep it as is
+    }
+
+    # save subnet prefix if present ( e.g: 1.1.1.1/24 fd001::1/64)
+    $ip_prefix = $address ? {
+      /.+\// => $address.split('/')[1], # If there's a '/', take the part after it
+      default => '',
     }
 
     # addresses should only be configured if running in simplex, otherwise SM
@@ -481,11 +490,21 @@ define platform::network::network_address (
       onlyif    => ['test -f /etc/platform/simplex',
                     'test ! -f /var/run/.network_upgrade_bootstrap'],
     }
-    -> exec { "Send Gratuitous ARP for IP: ${ip_address} on interface: ${name}":
+    -> exec { "Send Gratuitous ARP for IPv4: ${ip_address}/${ip_prefix} on interface: ${name},${ifname}":
       command   => "arping -c 3 -U -I ${ifname} ${ip_address}",
-      logoutput => true,
+      logoutput => 'on_failure',
       onlyif    => ["test ${ifname} != 'lo'",
                     "echo ${ip_address} | grep -qE '^([0-9]{1,3}\\.){3}[0-9]{1,3}$'",
+                    'test -f /etc/platform/simplex',
+                    'test ! -f /var/run/.network_upgrade_bootstrap'],
+    }
+    -> exec { "Send Unsolicited Advertisement for IPv6: ${ip_address}/${ip_prefix} on interface: ${name},${ifname}":
+      command   => "/usr/lib/heartbeat/send_ua ${ip_address} ${ip_prefix} ${ifname}",
+      logoutput => 'on_failure',
+      onlyif    => ["test ${ifname} != 'lo'",
+                    "test ${ip_prefix} != ''",
+                    "test ${protocol} == 'ipv6'",
+                    'test -x /usr/lib/heartbeat/send_ua',
                     'test -f /etc/platform/simplex',
                     'test ! -f /var/run/.network_upgrade_bootstrap'],
     }
