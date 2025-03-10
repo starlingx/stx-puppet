@@ -68,7 +68,7 @@ class platform::dockerdistribution::config
   include ::platform::network::mgmt::params
   include ::platform::docker::params
   include ::platform::haproxy::params
-  include ::platform::dockerdistribution::registries
+  include ::platform::docker::daemonconfig
 
   $system_mode = $::platform::params::system_mode
   # FQDN can be used after:
@@ -100,8 +100,6 @@ class platform::dockerdistribution::config
     $docker_registry_host = $::platform::network::mgmt::params::controller_address_url
   }
 
-  $insecure_registries = $::platform::dockerdistribution::registries::insecure_registries
-
   if $::platform::params::distributed_cloud_role == 'subcloud' {
     $docker_realm_host = 'registry.local'
   } else {
@@ -115,21 +113,6 @@ class platform::dockerdistribution::config
     $service_name = 'docker-registry.service'
   } else {
     $service_name = 'docker-distribution.service'
-  }
-
-  # for external docker registry running insecure mode
-  file { '/etc/docker':
-    ensure => 'directory',
-    owner  => 'root',
-    group  => 'root',
-    mode   => '0700',
-  }
-  -> file { '/etc/docker/daemon.json':
-    ensure  => present,
-    owner   => 'root',
-    group   => 'root',
-    mode    => '0644',
-    content => template('platform/insecuredockerregistry.conf.erb'),
   }
 
   platform::dockerdistribution::write_config { 'runtime_config':
@@ -225,23 +208,7 @@ class platform::dockerdistribution::compute
   inherits ::platform::dockerdistribution::params {
   include ::platform::kubernetes::params
 
-  include ::platform::dockerdistribution::registries
-  $insecure_registries = $::platform::dockerdistribution::registries::insecure_registries
-
-  # for external docker registry running insecure mode
-  file { '/etc/docker':
-    ensure => 'directory',
-    owner  => 'root',
-    group  => 'root',
-    mode   => '0700',
-  }
-  -> file { '/etc/docker/daemon.json':
-    ensure  => present,
-    owner   => 'root',
-    group   => 'root',
-    mode    => '0644',
-    content => template('platform/insecuredockerregistry.conf.erb'),
-  }
+  include ::platform::docker::daemonconfig
 
   if $::personality != 'controller' {
     # it is for worker node only, since controller node already has ca cert in ssl folder.
