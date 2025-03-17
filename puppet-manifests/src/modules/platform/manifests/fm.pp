@@ -8,18 +8,58 @@ class platform::fm::params (
   $sysinv_catalog_info = 'platform:sysinv:internalURL',
   $snmp_enabled = 0,
   $snmp_trap_server_port = 162,
-) { }
+) {
+  # Set default values for database connection for AIO systems (except for
+  # systemcontroller on DC)
+  if ($::platform::params::system_type == 'All-in-one' and
+      $::platform::params::distributed_cloud_role != 'systemcontroller') {
+    $db_idle_timeout = 60
+    $db_pool_size = 1
+    $db_over_size = 5
+  } else {
+    $db_idle_timeout = undef
+    $db_pool_size = undef
+    $db_over_size = undef
+  }
+}
 
+class platform::fm::custom::params (
+  $db_idle_timeout = undef,
+  $db_pool_size    = undef,
+  $db_over_size    = undef,
+) {}
 
 class platform::fm::config
   inherits ::platform::fm::params {
 
+  include ::platform::fm::custom::params
+
   class { '::fm':
-    region_name           => $region_name,
-    system_name           => $system_name,
-    sysinv_catalog_info   => $sysinv_catalog_info,
-    snmp_enabled          => $snmp_enabled,
-    snmp_trap_server_port => $snmp_trap_server_port,
+    region_name            => $region_name,
+    system_name            => $system_name,
+    sysinv_catalog_info    => $sysinv_catalog_info,
+    snmp_enabled           => $snmp_enabled,
+    snmp_trap_server_port  => $snmp_trap_server_port,
+
+    # Decides between -in order- (1) custom: defined by system parameters,
+    # (2) AIO values defined on params class, or (3) the default values defined
+    # on personality yaml
+    database_idle_timeout  => pick_default(
+      $::platform::fm::custom::params::db_idle_timeout,
+      $db_idle_timeout,
+      undef),
+    database_max_pool_size => pick_default(
+      $::platform::fm::custom::params::db_pool_size,
+      $db_pool_size,
+      undef),
+    database_min_pool_size => pick_default(
+      $::platform::fm::custom::params::db_pool_size,
+      $db_pool_size,
+      undef),
+    database_max_overflow  => pick_default(
+      $::platform::fm::custom::params::db_over_size,
+      $db_over_size,
+      undef),
   }
 }
 
