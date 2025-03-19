@@ -814,6 +814,10 @@ def disable_pxeboot_interface():
     for iface in ifaces.keys():
         LOG.info(f"Turn off pxeboot install config for {iface}, will be turned on later")
         set_iface_down(iface)
+        if is_label(iface):
+            base_iface = get_base_iface(iface)
+            LOG.info(f"Turn off pxeboot for base interface {base_iface}")
+            set_iface_down(base_iface)
 
     LOG.info("Remove ifcfg-pxeboot, left from kickstart install phase")
     remove_iface_config_file("pxeboot")

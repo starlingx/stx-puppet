@@ -2191,9 +2191,11 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
         self.assertEqual([
             ('info', 'Turn off pxeboot install config for enp0s8:2, will be turned on later'),
             ('info', 'Bringing enp0s8:2 down'),
+            ('info', 'Turn off pxeboot for base interface enp0s8'),
+            ('info', 'Bringing enp0s8 down'),
             ('info', 'Remove ifcfg-pxeboot, left from kickstart install phase'),
             ('info', 'Removing /etc/network/interfaces.d/ifcfg-pxeboot')],
-            self._log.get_history()[:4])
+            self._log.get_history()[:6])
 
     def test_execute_system_cmd(self):
         retcode, stdout = anc.execute_system_cmd('echo "test_execute_system_cmd"')
