@@ -270,8 +270,11 @@ def parse_interface_stanzas():
 
 def get_current_config():
     '''Gets current network config in etc directory'''
+    LOG.info(f"Parsing contents of the {ETC_DIR} directory to gather current network configuration")
     auto = parse_auto_file()
-    ifaces = parse_ifcfg_files(auto)
+    ifaces = parse_etc_dir()
+    if len(ifaces) == 0:
+        LOG.warning(f"No interface config found in {ETC_DIR}")
     return build_config(auto, ifaces, is_from_puppet=False)
 
 
@@ -317,31 +320,16 @@ def get_ifcfg_path(iface):
     return os.path.join(ETC_DIR, CFG_PREFIX + iface)
 
 
-def parse_ifcfg_files(ifaces):
-    iface_configs = dict()
-    for iface in ifaces:
-        iface_configs[iface] = parse_ifcfg_file(iface)
-    return iface_configs
-
-
-def parse_ifcfg_file(iface):
-    path = get_ifcfg_path(iface)
-    if not os.path.isfile(path):
-        LOG.warning(f"Interface config file not found: '{path}'")
-        return dict()
-    lines = read_file_lines(path)
-    _, ifaces = StanzaParser.ParseLines(lines)
-    if len(ifaces) == 0:
-        LOG.warning(f"No interface config found in '{path}'")
-        return dict()
-    if (ifconfig := ifaces.get(iface, None)) is None:
-        LOG.warning(f"Config for interface '{iface}' not found in '{path}'. Instead, file has "
-                    f"config(s) for the following interface(s): {' '.join(sorted(ifaces.keys()))}")
-        return dict()
-    if len(ifaces) > 1:
-        LOG.warning(f"Multiple interface configs found in '{path}': "
-                    f"{' '.join(sorted(ifaces.keys()))}")
-    return ifconfig
+def parse_etc_dir():
+    parser = StanzaParser()
+    files = os.listdir(ETC_DIR)
+    for file in files:
+        file_path = ETC_DIR + "/" + file
+        if os.path.isfile(file_path):
+            LOG.info(f"Parsing file {file_path}")
+            lines = read_file_lines(file_path)
+            parser.parse_lines(lines)
+    return parser.get_auto_and_ifaces()[1]
 
 
 def get_types_and_dependencies(iface_configs):
@@ -412,7 +400,10 @@ def get_modified_ifaces(new_config, current_config):
     modified = set()
     new_ifaces = new_config["ifaces"]
     current_ifaces = current_config["ifaces"]
-    for iface, new_if_config in new_ifaces.items():
+    for iface in new_config["auto"]:
+        if iface not in current_config["auto"]:
+            continue
+        new_if_config = new_ifaces[iface]
         current_if_config = current_ifaces.get(iface, None)
         if not current_if_config:
             continue
@@ -468,10 +459,18 @@ def get_dependent_list(config, ifaces):
     return covered
 
 
-def get_down_list(current_config, comparison):
+def get_down_list(current_config, new_config, comparison):
     base_set = comparison["modified"].union(comparison["removed"])
+    for iface in sorted(comparison["added"]):
+        if iface not in base_set and is_iface_up(iface):
+            LOG.info(f"Interface {iface} not in {ETC_DIR}/auto but currently up, "
+                     "adding to DOWN list")
+            base_set.add(iface)
+            if iface not in current_config["ifaces_types"]:
+                current_config["ifaces_types"][iface] = new_config["ifaces_types"][iface]
     dependents = get_dependent_list(current_config, base_set)
-    return base_set.union(dependents)
+    down_list = base_set.union(dependents)
+    return down_list
 
 
 def get_up_list(new_config, comparison):
@@ -814,10 +813,6 @@ def disable_pxeboot_interface():
     for iface in ifaces.keys():
         LOG.info(f"Turn off pxeboot install config for {iface}, will be turned on later")
         set_iface_down(iface)
-        if is_label(iface):
-            base_iface = get_base_iface(iface)
-            LOG.info(f"Turn off pxeboot for base interface {base_iface}")
-            set_iface_down(base_iface)
 
     LOG.info("Remove ifcfg-pxeboot, left from kickstart install phase")
     remove_iface_config_file("pxeboot")
@@ -826,8 +821,8 @@ def disable_pxeboot_interface():
 def update_ifaces_ifupdown(new_config):
     current_config = get_current_config()
     comparison = compare_configs(new_config, current_config)
-    down_list = get_down_list(current_config, comparison)
     up_list = get_up_list(new_config, comparison)
+    down_list = get_down_list(current_config, new_config, comparison)
 
     lock = acquire_sysinv_agent_lock() if down_list or up_list else None
     try:
@@ -852,11 +847,25 @@ def update_ifaces_online(config):
     return get_updated_ifaces(config, sorted_ifaces)
 
 
+def is_iface_up(iface):
+    ifstate_path = IFSTATE_BASE_PATH + iface
+    if os.path.isfile(ifstate_path) and read_file_text(ifstate_path).strip() == iface:
+        return True
+    if is_label(iface):
+        return False
+    operstate_path = f"{DEVLINK_BASE_PATH}{iface}/operstate"
+    if os.path.isfile(operstate_path):
+        state = read_file_text(operstate_path)
+        if state.strip() == "up":
+            return True
+    return False
+
+
 def is_iface_missing_or_down(iface):
     path = f"{DEVLINK_BASE_PATH}{iface}/operstate"
     if os.path.isfile(path):
         state = read_file_text(path)
-        if state != "down":
+        if state.strip() != "down":
             return False
     return True
 

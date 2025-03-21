@@ -283,7 +283,7 @@ class FilesystemMock():
         entry[TARGET] = target_path
         self._call_listeners(entry)
 
-    def get_file_list(self, path):
+    def listdir(self, path):
         entry = self._get_entry(path, translate_link=True)
         if entry is None:
             raise FilesystemMockError("Path does not exist")
