@@ -106,6 +106,21 @@ define platform::kubernetes::pull_images_from_registry (
   }
 }
 
+# Define for kubelet to be monitored by pmond
+define platform::kubernetes::pmond_kubelet_file(
+  $custom_title = 'default',  # Default title
+) {
+  # Create the file if not present
+  file { '/etc/pmon.d/kubelet.conf':
+    ensure  => file,
+    replace => 'no',
+    content => template('platform/kubelet-pmond-conf.erb'),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+  }
+}
+
 class platform::kubernetes::configuration {
 
   # Check to ensure that this code is not executed
@@ -524,15 +539,6 @@ class platform::kubernetes::master::init
       mode    => '0644',
     }
 
-    # set kubelet monitored by pmond
-    -> file { '/etc/pmon.d/kubelet.conf':
-      ensure  => file,
-      content => template('platform/kubelet-pmond-conf.erb'),
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0644',
-    }
-
     # Reload systemd
     -> exec { 'perform systemctl daemon reload for kubelet override':
       command   => 'systemctl daemon-reload',
@@ -602,7 +608,12 @@ class platform::kubernetes::master::init
       command   => 'systemctl --no-block try-restart kubelet.service',
       logoutput => true,
     }
+
   }
+
+  # TODO(sshathee) move this to if block for stx-10 to stx-11 upgrade
+  # set kubelet to be monitored by pmond
+  platform::kubernetes::pmond_kubelet_file { 'kubelet_monitoring': }
 
   # Run kube-cert-rotation daily
   cron { 'kube-cert-rotation':
@@ -702,14 +713,8 @@ class platform::kubernetes::worker::init
     mode    => '0644',
   }
 
-  # set kubelet monitored by pmond
-  -> file { '/etc/pmon.d/kubelet.conf':
-    ensure  => file,
-    content => template('platform/kubelet-pmond-conf.erb'),
-    owner   => 'root',
-    group   => 'root',
-    mode    => '0644',
-  }
+  # set kubelet to be monitored by pmond
+  platform::kubernetes::pmond_kubelet_file { 'kubelet_monitoring': }
 
   # Reload systemd to pick up overrides
   -> exec { 'perform systemctl daemon reload for kubelet override':
