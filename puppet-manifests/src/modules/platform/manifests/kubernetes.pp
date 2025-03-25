@@ -1332,83 +1332,190 @@ class platform::kubernetes::certsans::runtime
   } else {
     $localhost_address = '127.0.0.1'
   }
+
   if $sec_mgmt_subnet_ver != undef {
     if $sec_mgmt_subnet_ver == $ipv4_val {
-      $certsans_sec_localhost = ',127.0.0.1'
+      $certsans_sec_localhost_array = ['127.0.0.1']
     } elsif $sec_mgmt_subnet_ver == $ipv6_val {
-      $certsans_sec_localhost = ',::1'
+      $certsans_sec_localhost_array = ['::1']
     }
   } else {
-    $certsans_sec_localhost = ''
+    $certsans_sec_localhost_array = []
   }
 
   if $::platform::params::system_mode == 'simplex' {
-    $certsans_prim = "${platform::network::cluster_host::params::controller_address}, \
-                  ${platform::network::cluster_host::params::controller0_address}, \
-                  ${localhost_address}, \
-                  ${platform::network::oam::params::controller_address}"
 
-    if $sec_oam_subnet_ver == $ipv4_val {
-      $certsans_oam_sec = ",${platform::network::oam::ipv4::params::controller_address}"
-    } elsif $sec_oam_subnet_ver == $ipv6_val {
-      $certsans_oam_sec = ",${platform::network::oam::ipv6::params::controller_address}"
+    # primary addresses
+    $primary_floating_array = [$::platform::network::cluster_host::params::controller_address,
+                                $::platform::network::oam::params::controller_address,
+                                $localhost_address]
+    if ($::platform::network::cluster_host::params::controller0_address != undef) {
+      $primary_unit_cluster_array = [$::platform::network::cluster_host::params::controller0_address]
     } else {
-      $certsans_oam_sec = ''
+      $primary_unit_cluster_array = []
+    }
+    $certsans_prim_array = $primary_floating_array + $primary_unit_cluster_array
+
+    # secondary addresses: OAM
+    if $sec_oam_subnet_ver == $ipv4_val {
+      $certsans_oam_sec_array = [$::platform::network::oam::ipv4::params::controller_address]
+    } elsif $sec_oam_subnet_ver == $ipv6_val {
+      $certsans_oam_sec_array = [$::platform::network::oam::ipv6::params::controller_address]
+    } else {
+      $certsans_oam_sec_array = []
     }
 
     if $sec_cluster_host_subnet_ver == $ipv4_val {
-      $certsans_cluster_host_sec = ",${platform::network::cluster_host::ipv4::params::controller_address}, \
-                                     ${platform::network::cluster_host::ipv4::params::controller0_address}"
+
+      $sec_cluster_float_array = [$::platform::network::cluster_host::ipv4::params::controller_address]
+      if ($::platform::network::cluster_host::ipv4::params::controller0_address != undef) {
+        $sec_cluster_unit_array = [$::platform::network::cluster_host::ipv4::params::controller0_address]
+      } else {
+        $sec_cluster_unit_array = []
+      }
+      $certsans_cluster_sec_array = $sec_cluster_float_array + $sec_cluster_unit_array
+
     } elsif $sec_cluster_host_subnet_ver == $ipv6_val {
-      $certsans_cluster_host_sec = ",${platform::network::cluster_host::ipv6::params::controller_address}, \
-                                     ${platform::network::cluster_host::ipv6::params::controller0_address}"
+
+      $sec_cluster_float_array = [$::platform::network::cluster_host::ipv6::params::controller_address]
+      if ($::platform::network::cluster_host::ipv6::params::controller0_address != undef) {
+        $sec_cluster_unit_array = [$::platform::network::cluster_host::ipv6::params::controller0_address]
+      } else {
+        $sec_cluster_unit_array = []
+      }
+      $certsans_cluster_sec_array = $sec_cluster_float_array + $sec_cluster_unit_array
+
     } else {
-      $certsans_cluster_host_sec = ''
+      $certsans_cluster_sec_array = []
     }
-
-    $certsans_sec_hosts = "${certsans_oam_sec}${certsans_cluster_host_sec}"
-
-    $certsans_sec = "${certsans_sec_hosts}${certsans_sec_localhost}"
+    $certsans_sec_hosts_array = $certsans_oam_sec_array + $certsans_cluster_sec_array + $certsans_sec_localhost_array
 
   } else {
-    $certsans_prim = "${platform::network::cluster_host::params::controller_address}, \
-                  ${platform::network::cluster_host::params::controller0_address}, \
-                  ${platform::network::cluster_host::params::controller1_address}, \
-                  ${localhost_address}, \
-                  ${platform::network::oam::params::controller_address}, \
-                  ${platform::network::oam::params::controller0_address}, \
-                  ${platform::network::oam::params::controller1_address}"
+    $primary_floating_array = [$::platform::network::cluster_host::params::controller_address,
+                                $::platform::network::oam::params::controller_address,
+                                $localhost_address]
 
+    # primary OAM unit addresses
+    if ($::platform::network::oam::params::controller0_address != undef) and
+        ($::platform::network::oam::params::controller1_address != undef) {
+      $primary_unit_oam_array = [$::platform::network::oam::params::controller0_address,
+                                  $::platform::network::oam::params::controller1_address]
+    } elsif ($::platform::network::oam::params::controller0_address != undef) and
+            ($::platform::network::oam::params::controller1_address == undef) {
+      $primary_unit_oam_array = [$::platform::network::oam::params::controller0_address]
+    } elsif ($::platform::network::oam::params::controller0_address == undef) and
+            ($::platform::network::oam::params::controller1_address != undef) {
+      $primary_unit_oam_array = [$::platform::network::oam::params::controller1_address]
+    } else {
+      $primary_unit_oam_array = []
+    }
+
+    # primary Cluster-host unit addresses
+    if ($::platform::network::cluster_host::params::controller0_address != undef) and
+        ($::platform::network::cluster_host::params::controller0_address != undef) {
+      $primary_unit_cluster_array = [$::platform::network::cluster_host::params::controller0_address,
+                                      $::platform::network::cluster_host::params::controller1_address]
+    } elsif ($::platform::network::cluster_host::params::controller0_address != undef) and
+            ($::platform::network::cluster_host::params::controller1_address == undef) {
+      $primary_unit_cluster_array = [$::platform::network::cluster_host::params::controller0_address]
+    } elsif ($::platform::network::cluster_host::params::controller0_address == undef) and
+            ($::platform::network::cluster_host::params::controller1_address != undef) {
+      $primary_unit_cluster_array = [$::platform::network::cluster_host::params::controller1_address]
+    } else {
+      $primary_unit_cluster_array = []
+    }
+
+    $certsans_prim_array = $primary_floating_array + $primary_unit_oam_array + $primary_unit_cluster_array
+
+    # secondary OAM addresses
     if $sec_oam_subnet_ver == $ipv4_val {
-      $certsans_oam_sec = ",${platform::network::oam::ipv4::params::controller_address}, \
-                            ${platform::network::oam::ipv4::params::controller0_address}, \
-                            ${platform::network::oam::ipv4::params::controller1_address}"
+      $secondary_oam_floating_array = [$::platform::network::oam::ipv4::params::controller_address]
+
+      if ($::platform::network::oam::ipv4::params::controller0_address != undef) and
+          ($::platform::network::oam::ipv4::params::controller1_address != undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv4::params::controller0_address,
+                                      $::platform::network::oam::ipv4::params::controller1_address]
+      } elsif ($::platform::network::oam::ipv4::params::controller0_address != undef) and
+              ($::platform::network::oam::ipv4::params::controller1_address == undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv4::params::controller0_address]
+      } elsif ($::platform::network::oam::ipv4::params::controller0_address == undef) and
+              ($::platform::network::oam::ipv4::params::controller1_address != undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv4::params::controller1_address]
+      } else {
+        $secondary_unit_oam_array = []
+      }
+      $certsans_oam_sec_array = $secondary_oam_floating_array + $secondary_unit_oam_array
+
     } elsif $sec_oam_subnet_ver == $ipv6_val {
-      $certsans_oam_sec = ",${platform::network::oam::ipv6::params::controller_address}, \
-                            ${platform::network::oam::ipv6::params::controller0_address}, \
-                            ${platform::network::oam::ipv6::params::controller1_address}"
+      $secondary_oam_floating_array = [$::platform::network::oam::ipv6::params::controller_address]
+
+      if ($::platform::network::oam::ipv6::params::controller0_address != undef) and
+          ($::platform::network::oam::ipv6::params::controller1_address != undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv6::params::controller0_address,
+                                      $::platform::network::oam::ipv6::params::controller1_address]
+      } elsif ($::platform::network::oam::ipv6::params::controller0_address != undef) and
+              ($::platform::network::oam::ipv6::params::controller1_address == undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv6::params::controller0_address]
+      } elsif ($::platform::network::oam::ipv6::params::controller0_address == undef) and
+              ($::platform::network::oam::ipv6::params::controller1_address != undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv6::params::controller1_address]
+      } else {
+        $secondary_unit_oam_array = []
+      }
+      $certsans_oam_sec_array = $secondary_oam_floating_array + $secondary_unit_oam_array
+
     } else {
-      $certsans_oam_sec = ''
+      $certsans_oam_sec_array = []
     }
 
+    # secondary Cluster-host addresses
     if $sec_cluster_host_subnet_ver == $ipv4_val {
-      $certsans_cluster_host_sec = ",${platform::network::cluster_host::ipv4::params::controller_address}, \
-                                     ${platform::network::cluster_host::ipv4::params::controller0_address}, \
-                                     ${platform::network::cluster_host::ipv4::params::controller1_address}"
+
+      $sec_cluster_host_floating_array = [$::platform::network::cluster_host::ipv4::params::controller_address]
+
+      if ($::platform::network::cluster_host::ipv4::params::controller0_address != undef) and
+          ($::platform::network::cluster_host::ipv4::params::controller1_address != undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv4::params::controller0_address,
+                                        $::platform::network::cluster_host::ipv4::params::controller1_address]
+      } elsif ($::platform::network::cluster_host::ipv4::params::controller0_address != undef) and
+              ($::platform::network::cluster_host::ipv4::params::controller1_address == undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv4::params::controller0_address]
+      } elsif ($::platform::network::cluster_host::ipv4::params::controller0_address == undef) and
+              ($::platform::network::cluster_host::ipv4::params::controller1_address != undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv4::params::controller1_address]
+      } else {
+        $sec_unit_cluster_host_array = []
+      }
+      $certsans_cluster_host_sec_array = $sec_cluster_host_floating_array + $sec_unit_cluster_host_array
+
     } elsif $sec_cluster_host_subnet_ver == $ipv6_val {
-      $certsans_cluster_host_sec = ",${platform::network::cluster_host::ipv6::params::controller_address}, \
-                                     ${platform::network::cluster_host::ipv6::params::controller0_address}, \
-                                     ${platform::network::cluster_host::ipv6::params::controller1_address}"
+
+      $sec_cluster_host_floating_array = [$::platform::network::cluster_host::ipv6::params::controller_address]
+
+      if ($::platform::network::cluster_host::ipv6::params::controller0_address != undef) and
+          ($::platform::network::cluster_host::ipv6::params::controller1_address != undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv6::params::controller0_address,
+                                        $::platform::network::cluster_host::ipv6::params::controller1_address]
+      } elsif ($::platform::network::cluster_host::ipv6::params::controller0_address != undef) and
+              ($::platform::network::cluster_host::ipv6::params::controller1_address == undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv6::params::controller0_address]
+      } elsif ($::platform::network::cluster_host::ipv6::params::controller0_address == undef) and
+              ($::platform::network::cluster_host::ipv6::params::controller1_address != undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv6::params::controller1_address]
+      } else {
+        $sec_unit_cluster_host_array = []
+      }
+      $certsans_cluster_host_sec_array = $sec_cluster_host_floating_array + $sec_unit_cluster_host_array
+
     } else {
-      $certsans_cluster_host_sec = ''
+      $certsans_cluster_host_sec_array = []
     }
 
-    $certsans_sec_hosts = "${certsans_oam_sec}${certsans_cluster_host_sec}"
-
-    $certsans_sec = "${certsans_sec_hosts}${certsans_sec_localhost}"
+    $certsans_sec_hosts_array = $certsans_oam_sec_array + $certsans_cluster_host_sec_array + $certsans_sec_localhost_array
   }
+  $certsans_array = $certsans_prim_array + $certsans_sec_hosts_array
 
-  $certsans = "\"${certsans_prim}${certsans_sec}\""
+  $certsans = join($certsans_array,',')
 
   exec { 'update kube-apiserver certSANs':
     provider => shell,
