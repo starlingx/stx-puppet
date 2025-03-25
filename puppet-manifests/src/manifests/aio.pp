@@ -120,6 +120,7 @@ include ::platform::network::interfaces::fpga::config
 include ::platform::worker::storage
 include ::platform::kubernetes::aio
 include ::platform::logpermission
+include ::platform::stalld
 
 class { '::platform::config::aio::post':
   stage => post,
