@@ -1,2 +1,6 @@
 [Service]
 Environment="GOMAXPROCS=<%= @docker_registry_max_procs %>"
+
+# syscall filtering
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM

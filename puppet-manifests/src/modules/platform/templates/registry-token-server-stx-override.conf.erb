@@ -1,3 +1,7 @@
 [Service]
 Environment="GOMAXPROCS=<%= @registry_token_server_max_procs %>"
 
+# syscall filtering
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
