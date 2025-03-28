@@ -1616,7 +1616,7 @@ class platform::kubernetes::master::rootca::trustbothcas::runtime
   }
   # Restart kubelet to truct both certs
   -> exec { 'restart_kubelet':
-    command => '/usr/bin/systemctl restart kubelet',
+    command => '/usr/local/sbin/pmon-restart kubelet',
   }
 }
 
@@ -1647,7 +1647,7 @@ class platform::kubernetes::worker::rootca::trustbothcas::runtime
   }
   # Restart kubelet to trust both certs
   -> exec { 'restart_kubelet':
-    command => '/usr/bin/systemctl restart kubelet',
+    command => '/usr/local/sbin/pmon-restart kubelet',
   }
 }
 
@@ -1726,7 +1726,7 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
   }
   # Restart kubelet to trust only the new cert
   -> exec { 'restart_kubelet':
-    command => '/usr/bin/systemctl restart kubelet',
+    command => '/usr/local/sbin/pmon-restart kubelet',
   }
   # Remove the new cert file
   -> exec { 'remove_new_cert_file':
@@ -1760,7 +1760,7 @@ class platform::kubernetes::worker::rootca::trustnewca::runtime
   }
   # Restart kubelet to trust only the new cert
   -> exec { 'restart_kubelet':
-    command => '/usr/bin/systemctl restart kubelet',
+    command => '/usr/local/sbin/pmon-restart kubelet',
   }
 }
 
@@ -2108,21 +2108,8 @@ class platform::kubernetes::update_kubelet_config::runtime
     timeout     => 60,
   }
 
-  # Temporary workaround for pmon-restart failures
-  # TODO(kdhokte) Replace with pmon-restart once pmon issue is fixed
-  # Ensure that kubelet is only managed by systemd when it is restarted
-
-  -> exec { 'temporarily stop kubelet being monitored by pmon':
-      command => '/usr/local/sbin/pmon-stop kubelet',
-  }
-
   -> exec { 'restart kubelet':
-      command   => '/usr/bin/systemctl restart kubelet.service',
-      logoutput => true,
-  }
-
-  -> exec { 'start monitoring kubelet by pmon again':
-      command => '/usr/local/sbin/pmon-start kubelet',
+      command => '/usr/local/sbin/pmon-restart kubelet',
   }
 
 }
