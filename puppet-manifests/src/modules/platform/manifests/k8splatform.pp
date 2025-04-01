@@ -1,7 +1,6 @@
 class platform::k8splatform::params (
   $slice                  = 'k8splatform.slice',
-  $k8splatform_shares     = 10240,
-
+  $k8splatform_shares     = 1024,
   $etcd_shares            = 1024,
   $etcd_quota_scale       = '',
   $containerd_shares      = 1024,
