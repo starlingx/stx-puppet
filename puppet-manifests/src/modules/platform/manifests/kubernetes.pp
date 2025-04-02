@@ -971,6 +971,23 @@ class platform::kubernetes::pre_pull_control_plane_images
   }
 }
 
+define platform::kubernetes::patch_coredns_kubeproxy_serviceaccount($current_version) {
+  if versioncmp(regsubst($current_version, '^v', ''), '1.30.0') >= 0 {
+    exec { 'Patch pull secret into kube-proxy service account':
+      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch serviceaccount kube-proxy -p \'{"imagePullSecrets": [{"name": "registry-local-secret"}]}\'', # lint:ignore:140chars
+      logoutput => true,
+      }
+    -> exec { 'Patch pull secret into coredns service account':
+        command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch serviceaccount coredns -p \'{"metadata": {"labels": {"kubernetes.io/cluster-service": "true","addonmanager.kubernetes.io/mode": "Reconcile"}},"imagePullSecrets": [{"name": "default-registry-key"}]}\'', # lint:ignore:140chars
+        logoutput => true,
+      }
+    -> exec { 'Restart the coredns and kube-proxy pods':
+        command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf rollout restart deployment coredns -n kube-system && kubectl --kubeconfig=/etc/kubernetes/admin.conf rollout restart daemonset kube-proxy -n kube-system', # lint:ignore:140chars
+        logoutput => true,
+      }
+  }
+}
+
 class platform::kubernetes::upgrade_first_control_plane
   inherits ::platform::kubernetes::params {
 
@@ -1028,6 +1045,12 @@ class platform::kubernetes::upgrade_first_control_plane
       require   => Exec['upgrade first control plane']
     }
   }
+  # Upgrading the K8s control plane from version 1.29 to 1.30
+  # resets the configurations of the CoreDNS and kube-proxy service accounts.
+  # The following change will restore the configurations for these service accounts.
+  -> platform::kubernetes::patch_coredns_kubeproxy_serviceaccount { 'patch_serviceaccount':
+      current_version => $version
+  }
 }
 
 class platform::kubernetes::upgrade_control_plane
@@ -1065,6 +1088,12 @@ class platform::kubernetes::upgrade_control_plane
     logoutput => true,
   }
 
+  # Upgrading the K8s control plane from version 1.29 to 1.30
+  # resets the configurations of the CoreDNS and kube-proxy service accounts.
+  # The following change will restore the configurations for these service accounts.
+  -> platform::kubernetes::patch_coredns_kubeproxy_serviceaccount { 'patch_serviceaccount':
+      current_version => $version
+  }
 }
 
 # Define for unmasking and starting a service
