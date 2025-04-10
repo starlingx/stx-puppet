@@ -5,26 +5,7 @@ class platform::sysinv::params (
   $fm_catalog_info = 'faultmanagement:fm:internalURL',
   $server_timeout = '600s',
   $sysinv_api_workers = undef,
-) {
-  # Set default values for database connection for AIO systems (except for
-  # systemcontroller on DC)
-  if ($::platform::params::system_type == 'All-in-one' and
-      $::platform::params::distributed_cloud_role != 'systemcontroller') {
-    $db_idle_timeout = 60
-    $db_pool_size = 1
-    $db_over_size = 5
-  } else {
-    $db_idle_timeout = undef
-    $db_pool_size = undef
-    $db_over_size = undef
-  }
-}
-
-class platform::sysinv::custom::params (
-  $db_idle_timeout = undef,
-  $db_pool_size    = undef,
-  $db_over_size    = undef,
-) {}
+) { }
 
 class platform::sysinv
   inherits ::platform::sysinv::params {
@@ -33,7 +14,6 @@ class platform::sysinv
 
   include ::platform::params
   include ::platform::drbd::platform::params
-  include ::platform::sysinv::custom::params
 
   # sysinv-agent is started on all hosts
   include ::sysinv::agent
@@ -88,38 +68,8 @@ class platform::sysinv
     'app_framework/missing_auto_update': value => true;
     'app_framework/skip_k8s_application_audit': value => false;
   }
-
-  # On AIO systems, restrict the connection pool size
-  # If database information doesn't exist in yaml file, use default values
-  $sel_db_idle_timeout  = pick_default(
-    $::platform::sysinv::custom::params::db_idle_timeout,
-    $db_idle_timeout,
-    undef)
-  $sel_db_pool_size = pick_default(
-    $::platform::sysinv::custom::params::db_pool_size,
-    $db_pool_size,
-    undef)
-  $sel_db_over_size  = pick_default(
-    $::platform::sysinv::custom::params::db_over_size,
-    $db_over_size,
-    undef)
-
-  if $sel_db_pool_size != undef {
-    Sysinv_config <| title == 'database/max_pool_size' |> {
-      value => $sel_db_pool_size,
-    }
-  }
-  if $sel_db_over_size != undef {
-    Sysinv_config <| title == 'database/max_overflow' |> {
-      value => $sel_db_over_size,
-    }
-  }
-  if $sel_db_idle_timeout != undef {
-    Sysinv_config <| title == 'database/connection_recycle_time' |> {
-      value => $sel_db_idle_timeout,
-    }
-  }
 }
+
 
 class platform::sysinv::conductor {
 
