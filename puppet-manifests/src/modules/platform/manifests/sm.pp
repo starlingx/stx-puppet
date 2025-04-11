@@ -733,15 +733,6 @@ class platform::sm
       -> exec { 'Provision DCAgent-API (service-group-member dcagent-api)':
         command => 'sm-provision service-group-member distributed-cloud-services dcagent-api',
       }
-      -> exec { 'Provision DCCertmon (service-group-member dccertmon)':
-        command => 'sm-provision service-group-member distributed-cloud-services dccertmon',
-      }
-      -> exec { 'Provision DCCertmon in SM (service dccertmon)':
-        command => 'sm-provision service dccertmon',
-      }
-      -> exec { 'Configure OpenStack - DCCertmon':
-        command => "sm-configure service_instance dccertmon dccertmon \"\"",
-      }
       # Deprovision Horizon when running as a subcloud
       exec { 'Deprovision OpenStack - Horizon (service-group-member)':
         command => 'sm-deprovision service-group-member web-services horizon',

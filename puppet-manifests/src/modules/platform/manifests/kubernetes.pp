@@ -1655,11 +1655,6 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
   inherits ::platform::kubernetes::params {
   include ::platform::params
 
-  $cloud_role = (
-    $::platform::params::distributed_cloud_role == 'systemcontroller' or
-    $::platform::params::distributed_cloud_role == 'subcloud'
-  )
-
   # Copy the new root CA cert in place
   exec { 'put_new_ca_cert_in_place':
     command => "/bin/cp ${rootca_certfile_new} ${rootca_certfile}",
@@ -1687,10 +1682,10 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
   -> exec { 'restart_cert_mon':
     command => 'sm-restart-safe service cert-mon',
   }
-  # Restart dccert-mon since it uses admin.conf
-  -> exec { 'restart_dc_cert_mon':
+  # Restart dccertmon since it uses admin.conf
+  -> exec { 'restart_dccertmon':
     command => 'sm-restart-safe service dccertmon',
-    onlyif  => $cloud_role,
+    onlyif  => $::platform::params::distributed_cloud_role == 'systemcontroller',
   }
   # Restart kube-apiserver to pick up the new cert
   -> exec { 'restart_apiserver':
