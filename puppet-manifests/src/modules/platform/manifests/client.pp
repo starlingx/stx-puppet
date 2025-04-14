@@ -89,3 +89,17 @@ class platform::client::bootstrap {
 class platform::client::upgrade {
   include ::platform::client
 }
+
+class platform::client::cliconfirmations::runtime {
+  # Lookup the value from Hiera
+  $cli_confirmations = lookup(
+    'platform::params::cli_confirmations',
+    { default_value => 'disabled' }
+  )
+
+  file { '/etc/profile.d/cli_env.sh':
+    ensure  => present,
+    mode    => '0644',
+    content => "export CLI_CONFIRMATIONS=${cli_confirmations}\n",
+  }
+}
