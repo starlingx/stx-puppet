@@ -32,6 +32,7 @@ class platform::params (
   $virtual_system = false,
   $apparmor = 'disabled',
   $sctp_autoload = 'enabled',
+  $ksoftirqd_priority = undef,
 ) {
   $ipv4 = 4
   $ipv6 = 6

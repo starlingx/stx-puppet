@@ -209,6 +209,8 @@ class platform::config::file {
       match => '^ceph_network=',
     }
   }
+
+  include platform::config::file::irq
 }
 
 # update the subfunctions in /etc/platform/platform.conf
@@ -247,6 +249,36 @@ class platform::config::file::subfunctions::lowlatency {
 # in /etc/platform/platform.conf to match low latency config setting
 class platform::config::file::subfunctions::lowlatency::runtime {
   include platform::config::file::subfunctions::lowlatency
+}
+
+class platform::config::file::irq {
+  include platform::params
+  $platform_conf = '/etc/platform/platform.conf'
+
+  if $::platform::params::ksoftirqd_priority {
+    file_line { "${platform_conf} ksoftirqd_priority":
+      path  => $platform_conf,
+      line  => "ksoftirqd_priority=${::platform::params::ksoftirqd_priority}",
+      match => '^ksoftirqd_priority=',
+    }
+  } else {
+    file_line { "${platform_conf} ksoftirqd_priority":
+      ensure            => absent,
+      path              => $platform_conf,
+      match             => '^ksoftirqd_priority=',
+      match_for_absence => true,
+    }
+  }
+}
+
+# Runtime manifest updates /etc/platform/platform.conf to add or remove kernel
+# threads parameters
+class platform::config::file::irq::runtime {
+  include platform::config::file::irq
+
+  exec { 'systemctl restart affine-platform.service':
+    command => '/usr/bin/systemctl restart affine-platform.service',
+  }
 }
 
 class platform::config::hostname {
