@@ -114,6 +114,7 @@ class platform::dcmanager
       CPUShares=1024
       CPUQuota=
       CPUQuotaPeriodSec=
+      Slice=system.slice
       | DISABLECPU
 
     # Create systemd DropIn overrides files for systemcontroller role
@@ -129,14 +130,18 @@ class platform::dcmanager
     # software, sw-patch-controller-daemon.
     # There is no reason to limit their CPUShares on systemcontroller.
     $service_names = [
+      'cron',
+      'docker',
       'pmon',
       'ssh',
       'sysinv-agent',
       'collectd',
       'fm-api',
+      'rsync',
       'sm-api',
       'software-controller-daemon',
       'software',
+      'systemd-udevd',
       'sw-patch-controller-daemon'
     ]
     $services = $service_names.map |$var| { "${var}.service" }
@@ -158,6 +163,26 @@ class platform::dcmanager
       mode    => '0644',
     }
 
+    # Define systemd DropIn override to set default CPUShares for init.scope
+    $disable_scope_cpu = @("DISABLESCOPECPU"/L)
+      [Scope]
+      CPUShares=1024
+      | DISABLESCOPECPU
+
+    file { '/etc/systemd/system/init.scope.d/':
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => '0755',
+    }
+    -> file { '/etc/systemd/system/init.scope.d/init.scope-cpu-shares.conf':
+      ensure  => file,
+      content => inline_template($disable_scope_cpu),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0644',
+    }
+
     # Reload systemd to pick up DropIns
     -> exec { 'systemctl daemon reload - dcmanager overrides':
       command   => 'systemctl daemon-reload',
@@ -167,6 +192,12 @@ class platform::dcmanager
     # Restart services only if they already running
     -> exec { 'restart services - dcmanager overrides':
       command   => "systemctl try-restart ${services_string}",
+      logoutput => true,
+    }
+
+    # Restart init.scope
+    -> exec { 'restart init.scope - dcmanager overrides':
+      command   => 'init u',
       logoutput => true,
     }
   }
