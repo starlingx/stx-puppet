@@ -60,7 +60,7 @@ class platform::ceph
         # 1 node configuration, a single monitor is available
         $mon_initial_members = $mon_0_host
         $osd_pool_default_size = 1
-        $mon_host = $mon_0_addr
+        $mon_host = $floating_mon_addr
       } else {
         # 2 node configuration, we have a floating monitor
         $mon_initial_members = $floating_mon_host
@@ -506,7 +506,8 @@ class platform::ceph::migration::sx_to_dx::rebuild_mon
   # Make sure osds are provisioned
   Class['::platform::ceph::osds'] -> Class[$name]
 
-  $mon_db_path = "${$mon_mountpoint}/ceph-${floating_mon_host}"
+  $mon_db_path_old = "${$mon_mountpoint}/ceph-${mon_0_host}"
+  $mon_db_path_new = "${$mon_mountpoint}/ceph-${floating_mon_host}"
 
   exec { 'sm-unmanage service ceph-osd to rebuild store.db' :
     command => 'sm-unmanage service ceph-osd',
@@ -523,21 +524,21 @@ class platform::ceph::migration::sx_to_dx::rebuild_mon
     command => '/etc/init.d/ceph-init-wrapper stop mon.controller'
   }
   -> exec { 'Remove current ceph-controller store.db' :
-    command => "rm -rf ${mon_db_path}/store.db",
-    onlyif  => "test -d ${mon_db_path}/store.db"
+    command => "rm -rf ${mon_db_path_old}/store.db",
+    onlyif  => "test -d ${mon_db_path_old}/store.db"
   }
 
   $::configured_ceph_osds.each |Integer $index, String $osd| {
     exec { "Rebuilding monitor storage from OSD ${osd}" :
       command => "ceph-objectstore-tool --data-path /var/lib/ceph/osd/${osd} --no-mon-config\
-                  --op update-mon-db --mon-store-path ${mon_db_path}",
+                  --op update-mon-db --mon-store-path ${mon_db_path_new}",
       require => Exec['Remove current ceph-controller store.db'],
     }
     Exec["Rebuilding monitor storage from OSD ${osd}"] -> Exec['Add monitor information to store.db']
   }
 
   exec { 'Add monitor information to store.db' :
-    command => "ceph-monstore-tool ${mon_db_path} rebuild --mon-ids ${floating_mon_host} ${mon_0_host} ${mon_1_host}",
+    command => "ceph-monstore-tool ${mon_db_path_new} rebuild --mon-ids ${floating_mon_host} ${mon_0_host} ${mon_1_host}",
   }
   -> exec { 'start Ceph Monitor after rebuilding monitor store' :
     command => '/etc/init.d/ceph-init-wrapper start mon.controller',
