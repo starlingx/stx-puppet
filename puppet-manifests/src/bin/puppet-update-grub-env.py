@@ -242,11 +242,12 @@ def edit_kernel_env(args):
     glob_std_kernels = list(set(glob_all_kernels) - set(glob_rt_kernels))
 
     if args.set_kernel_lowlatency:
-        kernel = f"kernel={sorted(glob_rt_kernels, reverse=True).pop()}"
+        set_kernel = sorted(glob_rt_kernels, reverse=True).pop()
     elif args.set_kernel_standard:
-        kernel = f"kernel={sorted(glob_std_kernels, reverse=True).pop()}"
+        set_kernel = sorted(glob_std_kernels, reverse=True).pop()
     else:
-        kernel = f"kernel={args.set_kernel}"
+        set_kernel = args.set_kernel
+    kernel = f"kernel={set_kernel}"
 
     if not kernel:
         err = f"Kernel not found in ${kernel_dir}"
@@ -258,8 +259,8 @@ def edit_kernel_env(args):
     write_conf(kernel_env, kernel)
 
     # write key-value kernel_rollback=... to kernel.env file
-    kernel_rollback_env = f"kernel_rollback={kernel}"
-    write_conf(kernel_env, kernel_rollback_env)
+    kernel_rollback = f"kernel_rollback={set_kernel}"
+    write_conf(kernel_env, kernel_rollback)
 
 
 def list_kernels():
