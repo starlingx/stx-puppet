@@ -269,6 +269,21 @@ class platform::config::file::irq {
       match_for_absence => true,
     }
   }
+
+  if $::platform::params::irq_work_priority {
+    file_line { "${platform_conf} irq_work_priority":
+      path  => $platform_conf,
+      line  => "irq_work_priority=${::platform::params::irq_work_priority}",
+      match => '^irq_work_priority=',
+    }
+  } else {
+    file_line { "${platform_conf} irq_work_priority":
+      ensure            => absent,
+      path              => $platform_conf,
+      match             => '^irq_work_priority=',
+      match_for_absence => true,
+    }
+  }
 }
 
 # Runtime manifest updates /etc/platform/platform.conf to add or remove kernel
