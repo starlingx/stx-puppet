@@ -1022,8 +1022,12 @@ class platform::kubernetes::upgrade_first_control_plane
   # This issue not present in the fresh install with K8s 1.29.
   -> file { '/etc/kubernetes/admin.conf':
     owner => 'root',
-    group => 'sys_protected',
+    group => 'root',
     mode  => '0640',
+  }
+  -> exec { 'set_acl_on_admin_conf':
+    command   => 'setfacl -m g:sys_protected:r /etc/kubernetes/admin.conf',
+    logoutput => true,
   }
 
   if $::platform::params::system_mode != 'simplex' {
@@ -2210,8 +2214,12 @@ class platform::kubernetes::refresh_admin_config {
   }
   -> file { '/etc/kubernetes/admin.conf':
     owner => 'root',
-    group => 'sys_protected',
+    group => 'root',
     mode  => '0640',
+  }
+  -> exec { 'set_acl_on_admin_conf':
+    command   => 'setfacl -m g:sys_protected:r /etc/kubernetes/admin.conf',
+    logoutput => true,
   }
 }
 
