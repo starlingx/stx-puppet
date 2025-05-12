@@ -21,6 +21,7 @@ class platform::strongswan::params (
   $swanctl_active = {},
   $authorities = {},
   $connections = {},
+  $includes = 'include conf.d/*.conf',
   $secrets = {},
   $pools = {},
   $strongswan_include = 'strongswan.d/*.conf',
@@ -30,17 +31,38 @@ class platform::strongswan::params (
 ) {
 }
 
+define platform::strongswan::generate_swanctl_conf(
+  $includes = undef,
+  $connections = {},
+  $filepath = undef,
+) {
+  $_connections = strongswan::hash_to_strongswan_config({
+    connections => $connections,
+  })
+
+  $_swanctl_conf = @("EOT"/L)
+    ${_connections}
+
+    ${includes}
+    | EOT
+
+  file { $filepath:
+    owner   => 'root',
+    mode    => '0600',
+    content => $_swanctl_conf,
+  }
+}
+
 class platform::strongswan::swanctl_config (
+  $includes = undef,
   $connections = {},
   $connections_active = {},
   $is_active_controller = undef,
 ) {
-  file { '/etc/swanctl/swanctl.conf':
-    owner   => 'root',
-    mode    => '0600',
-    content => strongswan::hash_to_strongswan_config({
-        connections => $connections,
-    }),
+  platform::strongswan::generate_swanctl_conf { 'Generate swanctl.conf':
+    includes    => $includes,
+    connections => $connections,
+    filepath    => '/etc/swanctl/swanctl.conf',
   }
 
   # If connections_active is not empty, the node is a controller.
@@ -54,12 +76,10 @@ class platform::strongswan::swanctl_config (
     $swanctl_active_conf="${swanctl_dir}/swanctl_active.conf"
     $swanctl_standby_conf="${swanctl_dir}/swanctl_standby.conf"
 
-    file { $swanctl_active_conf:
-      owner   => 'root',
-      mode    => '0600',
-      content => strongswan::hash_to_strongswan_config({
-          connections => $connections_active,
-      }),
+    platform::strongswan::generate_swanctl_conf{ 'Generate swanctl_active.conf':
+      includes    => $includes,
+      connections => $connections_active,
+      filepath    => $swanctl_active_conf,
     }
 
     # Symlink swanctl.conf based on the role of the controller
@@ -144,6 +164,7 @@ class platform::strongswan::config
 
   # Update swanctl configuration
   -> class { '::platform::strongswan::swanctl_config':
+    includes             => $::platform::strongswan::params::includes,
     connections          => $::platform::strongswan::params::swanctl,
     connections_active   => $::platform::strongswan::params::swanctl_active,
     is_active_controller => $::platform::strongswan::params::is_active_controller,
