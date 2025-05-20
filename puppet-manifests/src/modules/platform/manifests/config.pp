@@ -433,7 +433,9 @@ class platform::config::hosts
 
   # The localhost should resolve to the IPv4 loopback address only, therefore
   # ensure the IPv6 address is removed from configured hosts
-  resources { 'host': purge => true }
+  if str2bool(inline_template("<%= File.exist?('/etc/platform/.unlock_ready') %>")) {
+    resources { 'host': purge => true }
+  }
 
   $localhost = {
     'localhost' => {
