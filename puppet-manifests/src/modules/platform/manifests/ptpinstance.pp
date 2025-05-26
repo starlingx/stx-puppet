@@ -103,10 +103,11 @@ define platform::ptpinstance::nic_clock_handler (
   }
   $parameters.each |String $parm, String $value| {
     platform::ptpinstance::config_param { "${name}_${parm}_${value}":
-      iface   => $name,
-      param   => $parm,
-      value   => $value,
-      require => [Exec["${ifname}_heading"], Exec["${ifname}_${base_port}_heading"]],
+      iface     => $name,
+      base_port => $base_port,
+      param     => $parm,
+      value     => $value,
+      require   => [Exec["${ifname}_heading"], Exec["${ifname}_${base_port}_heading"]],
     }
     -> exec { "${ifname}_${parm}_to_file":
       command  => "echo ${parm} ${value} >> ${ptp_conf_dir}/ptpinstance/clock-conf.conf",
@@ -124,9 +125,10 @@ define platform::ptpinstance::nic_clock_reset (
 ) {
   $parameters.each |String $parm, String $value| {
     platform::ptpinstance::config_param { "${name}_${parm}_default":
-      iface => $name,
-      param => $parm,
-      value => 'default',
+      iface     => $name,
+      base_port => $base_port,
+      param     => $parm,
+      value     => 'default',
     }
   }
 }
@@ -417,6 +419,7 @@ define platform::ptpinstance::phy_tx_clk (
 
 define platform::ptpinstance::ptp_extts_enable (
   $iface,
+  $pin,
   $enable,
   $channel,
 ) {
@@ -424,12 +427,6 @@ define platform::ptpinstance::ptp_extts_enable (
     command  => "PTP=\$(basename /sys/class/net/${iface}/device/ptp/ptp*);\
       echo ${channel} ${enable} > /sys/class/net/${iface}/device/ptp/\$PTP/extts_enable",
     provider => shell,
-  }
-
-  # This logic determines which pin is related to this extts configuration.
-  $pin = $channel ? {
-    1 => 'SDP1',
-    2 => 'SDP3',
   }
 
   # Function 1 is input and function 0 is default, we need to know this to
@@ -452,6 +449,7 @@ define platform::ptpinstance::ptp_extts_enable (
 
 define platform::ptpinstance::ptp_period (
   $iface,
+  $pin,
   $start_time_s,
   $start_time_ns,
   $period_s,
@@ -464,11 +462,6 @@ define platform::ptpinstance::ptp_period (
     provider => shell,
   }
 
-  # This logic determines which pin is related to this period configuration.
-  $pin = $channel ? {
-    1 => 'SDP0',
-    2 => 'SDP2',
-  }
   # Function 2 is output and function 0 is default, we need to know this to
   # identify if this is the default operation or if we are applying a new value.
   $function = ($period_s != 0 or $period_ns != 0) ? {
@@ -487,49 +480,52 @@ define platform::ptpinstance::ptp_period (
   }
 }
 
+define platform::ptpinstance::external_ptp_pin (
+  $iface,
+  $pin,
+  $function,
+) {
+  exec { "${iface}_${pin}_${function}":
+    command  => "echo ${function} > /sys/class/net/${iface}/device/${pin}",
+    provider => shell,
+  }
+}
+
 define platform::ptpinstance::ptp_pin (
   $iface,
   $pin,
   $function,
-  $channel = undef,
+  $channel,
 ) {
-  if $channel == undef {
-    exec { "${iface}_${pin}_${function}":
-      command  => "PTP=$(basename /sys/class/net/${iface}/device/ptp/ptp*);\
-        CHANNEL=$(cat /sys/class/net/${iface}/device/ptp/\$PTP/pins/${pin} | awk '{print \$2}');\
-        echo ${function} \$CHANNEL > /sys/class/net/${iface}/device/ptp/\$PTP/pins/${pin}",
-      provider => shell,
-    }
-  } else {
   exec { "${iface}_${pin}_${function}":
     command  => "PTP=$(basename /sys/class/net/${iface}/device/ptp/ptp*);\
       echo ${function} ${channel} > /sys/class/net/${iface}/device/ptp/\$PTP/pins/${pin}",
     provider => shell,
-    }
   }
 }
 
 define platform::ptpinstance::config_param (
   $iface,
+  $base_port,
   $param,
   $value,
 ) {
   $cmds = {
     'tspll_cfg' => {
       'resource'       => 'platform::ptpinstance::net_tspll_cfg',
-      'default'        => { 'iface' => $iface, 'tspll_freq' => 4, 'clk_src' => 0 },
-      'osc_25'         => { 'iface' => $iface, 'tspll_freq' => 0, 'clk_src' => 0 },
-      'osc_122.88'     => { 'iface' => $iface, 'tspll_freq' => 1, 'clk_src' => 0 },
-      'osc_125'        => { 'iface' => $iface, 'tspll_freq' => 2, 'clk_src' => 0 },
-      'osc_153.6'      => { 'iface' => $iface, 'tspll_freq' => 3, 'clk_src' => 0 },
-      'osc_156.25'     => { 'iface' => $iface, 'tspll_freq' => 4, 'clk_src' => 0 },
-      'osc_245.76'     => { 'iface' => $iface, 'tspll_freq' => 5, 'clk_src' => 0 },
-      'timeref_25'     => { 'iface' => $iface, 'tspll_freq' => 0, 'clk_src' => 1 },
-      'timeref_122.88' => { 'iface' => $iface, 'tspll_freq' => 1, 'clk_src' => 1 },
-      'timeref_125'    => { 'iface' => $iface, 'tspll_freq' => 2, 'clk_src' => 1 },
-      'timeref_153.6'  => { 'iface' => $iface, 'tspll_freq' => 3, 'clk_src' => 1 },
-      'timeref_156.25' => { 'iface' => $iface, 'tspll_freq' => 4, 'clk_src' => 1 },
-      'timeref_245.76' => { 'iface' => $iface, 'tspll_freq' => 5, 'clk_src' => 1 },
+      'default'        => { 'iface' => $base_port, 'tspll_freq' => 4, 'clk_src' => 0 },
+      'osc_25'         => { 'iface' => $base_port, 'tspll_freq' => 0, 'clk_src' => 0 },
+      'osc_122.88'     => { 'iface' => $base_port, 'tspll_freq' => 1, 'clk_src' => 0 },
+      'osc_125'        => { 'iface' => $base_port, 'tspll_freq' => 2, 'clk_src' => 0 },
+      'osc_153.6'      => { 'iface' => $base_port, 'tspll_freq' => 3, 'clk_src' => 0 },
+      'osc_156.25'     => { 'iface' => $base_port, 'tspll_freq' => 4, 'clk_src' => 0 },
+      'osc_245.76'     => { 'iface' => $base_port, 'tspll_freq' => 5, 'clk_src' => 0 },
+      'timeref_25'     => { 'iface' => $base_port, 'tspll_freq' => 0, 'clk_src' => 1 },
+      'timeref_122.88' => { 'iface' => $base_port, 'tspll_freq' => 1, 'clk_src' => 1 },
+      'timeref_125'    => { 'iface' => $base_port, 'tspll_freq' => 2, 'clk_src' => 1 },
+      'timeref_153.6'  => { 'iface' => $base_port, 'tspll_freq' => 3, 'clk_src' => 1 },
+      'timeref_156.25' => { 'iface' => $base_port, 'tspll_freq' => 4, 'clk_src' => 1 },
+      'timeref_245.76' => { 'iface' => $base_port, 'tspll_freq' => 5, 'clk_src' => 1 },
     },
     'synce_rclka' => {
       'resource' => 'platform::ptpinstance::phy_synce',
@@ -550,86 +546,149 @@ define platform::ptpinstance::config_param (
     },
     'extts_sdp1' => {
       'resource' => 'platform::ptpinstance::ptp_extts_enable',
-      'default'  => { 'iface' => $iface, 'channel' => 1, 'enable' => 0},
-      'enabled'  => { 'iface' => $iface, 'channel' => 1, 'enable' => 1},
+      'default'  => { 'iface' => $base_port, 'pin' => 'SDP1', 'channel' => 1, 'enable' => 0},
+      'enabled'  => { 'iface' => $base_port, 'pin' => 'SDP1', 'channel' => 1, 'enable' => 1},
     },
     'extts_sdp3' => {
       'resource' => 'platform::ptpinstance::ptp_extts_enable',
-      'default'  => { 'iface' => $iface, 'channel' => 2, 'enable' => 0},
-      'enabled'  => { 'iface' => $iface, 'channel' => 2, 'enable' => 1},
+      'default'  => { 'iface' => $base_port, 'pin' => 'SDP3', 'channel' => 2, 'enable' => 0},
+      'enabled'  => { 'iface' => $base_port, 'pin' => 'SDP3', 'channel' => 2, 'enable' => 1},
+    },
+    'extts_sdp21' => {
+      'resource' => 'platform::ptpinstance::ptp_extts_enable',
+      'default'  => { 'iface' => $base_port, 'pin' => 'SDP21', 'channel' => 1, 'enable' => 0},
+      'enabled'  => { 'iface' => $base_port, 'pin' => 'SDP21', 'channel' => 1, 'enable' => 1},
+    },
+    'extts_sdp23' => {
+      'resource' => 'platform::ptpinstance::ptp_extts_enable',
+      'default'  => { 'iface' => $base_port, 'pin' => 'SDP23', 'channel' => 2, 'enable' => 0},
+      'enabled'  => { 'iface' => $base_port, 'pin' => 'SDP23', 'channel' => 2, 'enable' => 1},
     },
     'period_sdp0' => {
       'resource' => 'platform::ptpinstance::ptp_period',
-      'default' => { 'iface' => $iface, 'channel' => 1, 'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 0 },
-      '1pps'  => { 'iface' => $iface, 'channel' => 1, 'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 1, 'period_ns' => 0 },
-      '10mhz' => { 'iface' => $iface, 'channel' => 1, 'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 100 },
-      '1khz'  => { 'iface' => $iface, 'channel' => 1, 'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 1000000 },
+      'default'  => { 'iface' => $base_port, 'pin' => 'SDP0', 'channel' => 1,
+                      'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 0 },
+      '1pps'     => { 'iface' => $base_port, 'pin' => 'SDP0', 'channel' => 1,
+                      'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 1, 'period_ns' => 0 },
+      '10mhz'    => { 'iface' => $base_port, 'pin' => 'SDP0', 'channel' => 1,
+                      'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 100 },
+      '1khz'     => { 'iface' => $base_port, 'pin' => 'SDP0', 'channel' => 1,
+                      'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 1000000 },
     },
     'period_sdp2' => {
       'resource' => 'platform::ptpinstance::ptp_period',
-      'default' => { 'iface' => $iface, 'channel' => 2, 'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 0 },
-      '1pps'  => { 'iface' => $iface, 'channel' => 2, 'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 1, 'period_ns' => 0 },
-      '10mhz' => { 'iface' => $iface, 'channel' => 2, 'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 100 },
-      '1khz'  => { 'iface' => $iface, 'channel' => 2, 'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 1000000 },
+      'default'  => { 'iface' => $base_port, 'pin' => 'SDP2', 'channel' => 2,
+                      'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 0 },
+      '1pps'     => { 'iface' => $base_port, 'pin' => 'SDP2', 'channel' => 2,
+                      'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 1, 'period_ns' => 0 },
+      '10mhz'    => { 'iface' => $base_port, 'pin' => 'SDP2', 'channel' => 2,
+                      'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 100 },
+      '1khz'     => { 'iface' => $base_port, 'pin' => 'SDP2', 'channel' => 2,
+                      'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns'=> 1000000 },
+    },
+    'period_sdp20' => {
+      'resource' => 'platform::ptpinstance::ptp_period',
+      'default'  => { 'iface' => $base_port, 'pin' => 'SDP20', 'channel' => 1,
+                      'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 0 },
+      '1pps'     => { 'iface' => $base_port, 'pin' => 'SDP20', 'channel' => 1,
+                      'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 1, 'period_ns' => 0 },
+      '10mhz'    => { 'iface' => $base_port, 'pin' => 'SDP20', 'channel' => 1,
+                      'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 100 },
+      '1khz'     => { 'iface' => $base_port, 'pin' => 'SDP20', 'channel' => 1,
+                      'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 1000000 },
+    },
+    'period_sdp22' => {
+      'resource' => 'platform::ptpinstance::ptp_period',
+      'default'  => { 'iface' => $base_port, 'pin' => 'SDP22', 'channel' => 2,
+                      'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 0 },
+      '1pps'     => { 'iface' => $base_port, 'pin' => 'SDP22', 'channel' => 2,
+                      'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 1, 'period_ns' => 0 },
+      '10mhz'    => { 'iface' => $base_port, 'pin' => 'SDP22', 'channel' => 2,
+                      'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 100 },
+      '1khz'     => { 'iface' => $base_port, 'pin' => 'SDP22', 'channel' => 2,
+                      'start_time_s' => 0, 'start_time_ns' => 0, 'period_s' => 0, 'period_ns' => 1000000 },
     },
     'sdp0' => {
       'resource' => 'platform::ptpinstance::ptp_pin',
-      'default'  => { 'iface' => $iface, 'pin' => 'SDP0', 'function' => 0, 'channel' => 1 },
-      'output'   => { 'iface' => $iface, 'pin' => 'SDP0', 'function' => 2, 'channel' => 1 },
+      'default'  => { 'iface' => $base_port, 'pin' => 'SDP0', 'function' => 0, 'channel' => 1 },
+      'output'   => { 'iface' => $base_port, 'pin' => 'SDP0', 'function' => 2, 'channel' => 1 },
     },
     'sdp1' => {
       'resource' => 'platform::ptpinstance::ptp_pin',
-      'default'  => { 'iface' => $iface, 'pin' => 'SDP1', 'function' => 0, 'channel' => 1 },
-      'input'    => { 'iface' => $iface, 'pin' => 'SDP1', 'function' => 1, 'channel' => 1 },
+      'default'  => { 'iface' => $base_port, 'pin' => 'SDP1', 'function' => 0, 'channel' => 1 },
+      'input'    => { 'iface' => $base_port, 'pin' => 'SDP1', 'function' => 1, 'channel' => 1 },
     },
     'sdp2' => {
       'resource' => 'platform::ptpinstance::ptp_pin',
-      'default'  => { 'iface' => $iface, 'pin' => 'SDP2', 'function' => 0, 'channel' => 2 },
-      'output'   => { 'iface' => $iface, 'pin' => 'SDP2', 'function' => 2, 'channel' => 2 },
+      'default'  => { 'iface' => $base_port, 'pin' => 'SDP2', 'function' => 0, 'channel' => 2 },
+      'output'   => { 'iface' => $base_port, 'pin' => 'SDP2', 'function' => 2, 'channel' => 2 },
     },
     'sdp3' => {
       'resource' => 'platform::ptpinstance::ptp_pin',
-      'default' => { 'iface' => $iface, 'pin' => 'SDP3', 'function' => 0, 'channel' => 2 },
-      'input'   => { 'iface' => $iface, 'pin' => 'SDP3', 'function' => 1, 'channel' => 2 },
+      'default' => { 'iface' => $base_port, 'pin' => 'SDP3', 'function' => 0, 'channel' => 2 },
+      'input'   => { 'iface' => $base_port, 'pin' => 'SDP3', 'function' => 1, 'channel' => 2 },
+    },
+    'sdp20' => {
+      'resource' => 'platform::ptpinstance::ptp_pin',
+      'default'  => { 'iface' => $base_port, 'pin' => 'SDP20', 'function' => 0, 'channel' => 1 },
+      'output'   => { 'iface' => $base_port, 'pin' => 'SDP20', 'function' => 2, 'channel' => 1 },
+    },
+    'sdp21' => {
+      'resource' => 'platform::ptpinstance::ptp_pin',
+      'default'  => { 'iface' => $base_port, 'pin' => 'SDP21', 'function' => 0, 'channel' => 1 },
+      'input'    => { 'iface' => $base_port, 'pin' => 'SDP21', 'function' => 1, 'channel' => 1 },
+    },
+    'sdp22' => {
+      'resource' => 'platform::ptpinstance::ptp_pin',
+      'default'  => { 'iface' => $base_port, 'pin' => 'SDP22', 'function' => 0, 'channel' => 2 },
+      'output'   => { 'iface' => $base_port, 'pin' => 'SDP22', 'function' => 2, 'channel' => 2 },
+    },
+    'sdp23' => {
+      'resource' => 'platform::ptpinstance::ptp_pin',
+      'default' => { 'iface' => $base_port, 'pin' => 'SDP23', 'function' => 0, 'channel' => 2 },
+      'input'   => { 'iface' => $base_port, 'pin' => 'SDP23', 'function' => 1, 'channel' => 2 },
     },
     'sma1' => {
-      'resource' => 'platform::ptpinstance::ptp_pin',
-      'default' => { 'iface' => $iface, 'pin' => 'SMA1', 'function' => 0 },
-      'input'   => { 'iface' => $iface, 'pin' => 'SMA1', 'function' => 1 },
-      'output'  => { 'iface' => $iface, 'pin' => 'SMA1', 'function' => 2 },
+      'resource' => 'platform::ptpinstance::external_ptp_pin',
+      'default' => { 'iface' => $base_port, 'pin' => 'SMA1', 'function' => 0 },
+      'input'   => { 'iface' => $base_port, 'pin' => 'SMA1', 'function' => 1 },
+      'output'  => { 'iface' => $base_port, 'pin' => 'SMA1', 'function' => 2 },
     },
     'sma2' => {
-      'resource' => 'platform::ptpinstance::ptp_pin',
-      'default' => { 'iface' => $iface, 'pin' => 'SMA2', 'function' => 0 },
-      'input'   => { 'iface' => $iface, 'pin' => 'SMA2', 'function' => 1 },
-      'output'  => { 'iface' => $iface, 'pin' => 'SMA2', 'function' => 2 },
+      'resource' => 'platform::ptpinstance::external_ptp_pin',
+      'default' => { 'iface' => $base_port, 'pin' => 'SMA2', 'function' => 0 },
+      'input'   => { 'iface' => $base_port, 'pin' => 'SMA2', 'function' => 1 },
+      'output'  => { 'iface' => $base_port, 'pin' => 'SMA2', 'function' => 2 },
     },
     'u.fl1' => {
-      'resource' => 'platform::ptpinstance::ptp_pin',
-      'default' => { 'iface' => $iface, 'pin' => 'U.FL1', 'function' => 0 },
-      'output'  => { 'iface' => $iface, 'pin' => 'U.FL1', 'function' => 2 },
+      'resource' => 'platform::ptpinstance::external_ptp_pin',
+      'default' => { 'iface' => $base_port, 'pin' => 'U.FL1', 'function' => 0 },
+      'output'  => { 'iface' => $base_port, 'pin' => 'U.FL1', 'function' => 2 },
     },
     'u.fl2' => {
-      'resource' => 'platform::ptpinstance::ptp_pin',
-      'default' => { 'iface' => $iface, 'pin' => 'U.FL2', 'function' => 0 },
-      'input'   => { 'iface' => $iface, 'pin' => 'U.FL2', 'function' => 1 },
+      'resource' => 'platform::ptpinstance::external_ptp_pin',
+      'default' => { 'iface' => $base_port, 'pin' => 'U.FL2', 'function' => 0 },
+      'input'   => { 'iface' => $base_port, 'pin' => 'U.FL2', 'function' => 1 },
     },
   }
 
   if $cmds[$param][$value] {
     $final_value = $cmds[$param][$value]
-  } elsif ($param == 'period_sdp0' or $param == 'period_sdp2') and !$cmds[$param][$value] {
+  } elsif ($param in ['period_sdp0', 'period_sdp2', 'period_sdp20', 'period_sdp22']) and !$cmds[$param][$value] {
     # This logic deals with periods set in nanoseconds, we don't have a fixed argument to
     # those so this logic makes sure that the value is converted to seconds if needed.
     # The minimum value is 100ns, and the maximum is 4s.
     $period_s  = Integer($value) / 1000000000
     $period_ns = Integer($value) % 1000000000
     $channel = $param ? {
-      'period_sdp0' => 1,
-      'period_sdp2' => 2,
+      'period_sdp0'  => 1,
+      'period_sdp2'  => 2,
+      'period_sdp20' => 1,
+      'period_sdp22' => 2,
     }
     $final_value = {
       'iface'         => $iface,
+      'pin'           => $pin,
       'channel'       => $channel,
       'start_time_s'  => 0,
       'start_time_ns' => 0,
