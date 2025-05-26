@@ -30,6 +30,11 @@ class platform::k8splatform
 class platform::k8splatform::config
   inherits ::platform::k8splatform::params {
 
+  $k8splatform_cpushares = $::platform::params::distributed_cloud_role ? {
+    'systemcontroller' => 10240,
+    default            => $platform::k8splatform::params::k8splatform_shares
+  }
+
   file { '/etc/systemd/system/k8splatform.slice':
     ensure  => file,
     owner   => 'root',

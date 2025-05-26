@@ -249,7 +249,7 @@ class platform::kubernetes::cgroup
         mode   => '0644',
       }
     }
-    if $controller == 'cpu' {
+    if $::platform::params::distributed_cloud_role != 'systemcontroller' and $controller == 'cpu' {
       $cgroup_cpushares = "${cgroup_dir}/cpu.shares"
       File[ $cgroup_dir ]
       -> exec { "Create ${cgroup_cpushares}" :
