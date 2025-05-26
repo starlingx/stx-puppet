@@ -1024,6 +1024,72 @@ def initialize_k8s_configmaps(
         raise
 
 
+def update_extra_args(config, name, value, list_of_dict=False):
+    """Update ConfigMap extraArgs data structure 'name' and 'value'
+     for a given key value pair. This takes into account different data
+     structure format of dictionary vs list of dictionary format.
+
+    The original dictionary format:
+    config['extraArgs] = {k: v foreach k, v}
+
+    The new list of dictionary format:
+    config['extraArgs] = [{'name': k, 'value': v} foreach k, v]
+
+    Args:
+        config: is a dictionary containing the configurations for either the
+        apiserver, or controller manager, or scheduler.
+        name: is a string used to identify an existing value to update, or
+        to append in case of a new value in 'extraArgs'
+        value: is a string that will be updated or appended in 'extraArgs'
+        list_of_dict: is a boolean indicating whether the data structure has
+        changed in version v1beta4
+    """
+    if list_of_dict:
+        for item in config['extraArgs']:
+            if item.get('name') == name:
+                item['value'] = value
+                break
+        else:
+            config['extraArgs'].append({'name': name, 'value': value})
+    else:
+        config['extraArgs'][name] = value
+
+
+def filter_extra_args(config, service_param, list_of_dict=False):
+    """This routine removes all parameters in 'extraArgs' not present in
+    service-parameter. This updates ConfigMap extraArgs data structure with
+    a filtered list of key-value pairs contained in service_parameter
+    dictionary. This takes into account different data structure format of
+    dictionary vs list of dictionary format.
+
+    The original dictionary format:
+    config['extraArgs] = {k: v foreach k, v}
+
+    The new list of dictionary format:
+    config['extraArgs] = [{'name': k, 'value': v}, foreach k, v]
+
+    Args:
+        config: is a dictionary containing the configurations for either the
+        apiserver, or controller manager, or scheduler.
+        service_param: is a dictionary contains the service-parameters of
+        either the apiserver, or controller manager, or scheduler.
+        list_of_dict: is a boolean indicating whether the data structure has
+        changed in version v1beta4
+    """
+    extra_args = config.get('extraArgs')
+    if not extra_args:
+        return
+    service_param_set = set(service_param)
+    if list_of_dict:
+        config['extraArgs'] = list(filter(
+            lambda item: item.get('name') in service_param_set, extra_args
+        ))
+    else:
+        config['extraArgs'] = {
+            k: v for k, v in extra_args.items() if k in service_param_set
+        }
+
+
 def main():
     """This script updates the k8s control-plane components configuration
     with the paramaters set by the user through sysinv service-parameters.
@@ -1300,6 +1366,19 @@ def main():
     if 'try_sleep' in service_params['config'].keys():
         try_sleep = int(service_params['config']['try_sleep'])
 
+    # In K8S 1.31, kubeadm introduces the new v1beta4 version of its configuration
+    # file format. As a result, the format of extraArgs changes from a dictionary to
+    # a list of dictionaries. We need to support both formats in the ConfigMap to
+    # ensure compatibility with K8S versions both below and above 1.31.
+    k8s_version = get_k8s_version()
+    if not k8s_version:
+        LOG.error('Error in getting K8S version.')
+        return 3
+    k8s_version = '.'.join(k8s_version.replace('v', '').split('.')[:2])
+    list_of_dict = False
+    if LooseVersion(k8s_version) >= LooseVersion("1.31"):
+        list_of_dict = True
+
     # kube-apiserver section ------------------------------------------------------
     for param, value in service_params['apiServer'].items():
         if param in apiserver_schema['root'].keys():
@@ -1308,18 +1387,13 @@ def main():
             # By default all not known params will be placed in
             # section 'extraArgs'
             if 'extraArgs' not in cluster_cfg['apiServer'].keys():
-                cluster_cfg['apiServer']['extraArgs'] = {}
+                cluster_cfg['apiServer']['extraArgs'] = [] if list_of_dict else {}
             if param == 'enable-admission-plugins':
                 value = _validate_admission_plugins(value)
-                cluster_cfg['apiServer']['extraArgs'][param] = value
-            else:
-                cluster_cfg['apiServer']['extraArgs'][param] = value
-
-    # remove all parameters in 'extraArgs' not present in service-parameter.
-    if 'extraArgs' in cluster_cfg['apiServer'].keys():
-        for param in list(cluster_cfg['apiServer']['extraArgs'].keys()):
-            if param not in service_params['apiServer']:
-                cluster_cfg['apiServer']['extraArgs'].pop(param)
+            update_extra_args(cluster_cfg['apiServer'], param, value, list_of_dict)
+    # Remove all parameters in 'extraArgs' not present in service-parameter, accounting
+    # for ConfigMap data structure change with v1beta4.
+    filter_extra_args(cluster_cfg['apiServer'], service_params['apiServer'], list_of_dict)
 
     # apiserver_volumes section
     if cluster_cfg['apiServer'] and 'extraVolumes' in cluster_cfg['apiServer']:
@@ -1341,14 +1415,15 @@ def main():
             # By default all not known params will be place in
             # section 'extraArgs'
             if 'extraArgs' not in cluster_cfg['controllerManager'].keys():
-                cluster_cfg['controllerManager']['extraArgs'] = {}
-            cluster_cfg['controllerManager']['extraArgs'][param] = value
-
-    # remove all parameters in 'extraArgs' not present in service-parameter.
-    if 'extraArgs' in cluster_cfg['controllerManager'].keys():
-        for param in list(cluster_cfg['controllerManager']['extraArgs'].keys()):
-            if param not in service_params['controllerManager']:
-                cluster_cfg['controllerManager']['extraArgs'].pop(param)
+                cluster_cfg['controllerManager']['extraArgs'] = [] if list_of_dict else {}
+            update_extra_args(cluster_cfg['controllerManager'], param, value, list_of_dict)
+    # Remove all parameters in 'extraArgs' not present in service-parameter, accounting
+    # for ConfigMap data structure change with v1beta4
+    filter_extra_args(
+        cluster_cfg['controllerManager'],
+        service_params['controllerManager'],
+        list_of_dict
+    )
 
     # controller_manager_volumes section
     if cluster_cfg['controllerManager'] and 'extraVolumes' in cluster_cfg['controllerManager']:
@@ -1370,14 +1445,11 @@ def main():
             # By default all not known params will be place in
             # section 'extraArgs'
             if 'extraArgs' not in cluster_cfg['scheduler'].keys():
-                cluster_cfg['scheduler']['extraArgs'] = {}
-            cluster_cfg['scheduler']['extraArgs'][param] = value
-
-    # remove all parameters not present in service-parameter.
-    if 'extraArgs' in cluster_cfg['scheduler'].keys():
-        for param in list(cluster_cfg['scheduler']['extraArgs'].keys()):
-            if param not in service_params['scheduler']:
-                cluster_cfg['scheduler']['extraArgs'].pop(param)
+                cluster_cfg['scheduler']['extraArgs'] = [] if list_of_dict else {}
+            update_extra_args(cluster_cfg['scheduler'], param, value, list_of_dict)
+    # Remove all parameters in 'extraArgs' not present in service-parameter, accounting
+    # for ConfigMap data structure change with v1beta4
+    filter_extra_args(cluster_cfg['scheduler'], service_params['scheduler'], list_of_dict)
 
     # scheduler_volumes section
     if cluster_cfg['scheduler'] and 'extraVolumes' in cluster_cfg['scheduler']:
