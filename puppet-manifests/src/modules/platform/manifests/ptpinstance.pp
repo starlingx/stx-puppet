@@ -16,26 +16,23 @@ define platform::ptpinstance::ptp_config_files(
 ) {
   file { $_name:
     ensure  => file,
-    notify  => Service["instance-${_name}"],
+    notify  => Exec["instance-${_name}"],
     path    => "${ptp_conf_dir}/ptpinstance/${service}-${_name}.conf",
     mode    => '0644',
     content => template('platform/ptpinstance.conf.erb'),
   }
   -> file { "${_name}-sysconfig":
     ensure  => file,
-    notify  => Service["instance-${_name}"],
+    notify  => Exec["instance-${_name}"],
     path    => "${ptp_options_dir}/ptpinstance/${service}-instance-${_name}",
     mode    => '0644',
     content => template("platform/${service}-instance.erb"),
   }
-  -> service { "instance-${_name}":
-    ensure     => $ensure,
-    enable     => $enable,
-    name       => "${service}@${_name}",
-    hasstatus  => true,
-    hasrestart => true,
-    require    => Exec['ptpinstance-systemctl-daemon-reload'],
-    before     => Exec['set-ice-gnss-thread-niceness']
+  -> exec { "instance-${_name}":
+    require  => Exec['ptpinstance-systemctl-daemon-reload'],
+    before   => Exec['set-ice-gnss-thread-niceness'],
+    command  => "/usr/bin/systemctl start ${service}@${_name} || true",
+    provider => shell,
   }
   -> exec { "enable-${_name}":
     command => "/usr/bin/systemctl enable \
@@ -111,7 +108,7 @@ define platform::ptpinstance::set_ptp4l_pmc_parameters(
                   timeTraceable ${pmc_gm_settings['timeTraceable']} \
                   frequencyTraceable ${pmc_gm_settings['frequencyTraceable']} \
                   timeSource ${pmc_gm_settings['timeSource']}'",
-      require => Service["instance-${_name}"]
+      require => Exec["instance-${_name}"]
     }
   }
 }
