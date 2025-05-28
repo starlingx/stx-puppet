@@ -54,6 +54,7 @@ class platform::compute::grub::params (
   $g_out_of_tree_drivers = '',
   $bios_cstate = false,
   $ignore_recovery = false,
+  $g_kthread_prio = '21',
   $keys = [
     'kvm-intel.eptad',
     'default_hugepagesz',
@@ -111,9 +112,15 @@ class platform::compute::grub::params (
     $intel_pstate = ''
   }
 
+  if str2bool($platform::sysctl::params::low_latency) {
+    $kthread_prio = "rcutree.kthread_prio=${g_kthread_prio}"
+  } else {
+    $kthread_prio = ''
+  }
+
   $grub_updates = strip(
     # lint:ignore:140chars
-    "${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit} ${intel_idle_cstate} ${intel_pstate} ${nmi_watchdog} ${skew_tick} ${oot_drivers_switch}"
+    "${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit} ${intel_idle_cstate} ${intel_pstate} ${nmi_watchdog} ${skew_tick} ${oot_drivers_switch} ${kthread_prio}"
     # lint:endignore:140chars
     )
 }
