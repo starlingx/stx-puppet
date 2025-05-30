@@ -3233,3 +3233,153 @@ class TestUpgrade(BaseTestCase):
             ('info', 'Configuring interface enp0s8:2-4'),
             ('info', 'Bringing enp0s8:2-4 up')],
             self._log.get_history())
+
+
+class AuditDhcpTests(BaseTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self._os_kill_call_count = 0
+
+    def os_kill_side_effect(self, _pid, _sig):
+        if self._os_kill_call_count == 0:
+            self._os_kill_call_count += 1
+            raise OSError("No such process")
+        self._os_kill_call_count += 1
+
+    def test_start_dhclient_for_bonding_interface(self):
+        bond_iface = {
+            "ifaces": {
+                "bond0": {
+                    "iface": "bond0 inet dhcp",
+                    "bond-slave": "enp0s8 enp0s9",
+                    "bond-mode": "active-backup",
+                    "bond-primary": "enp0s8",
+                    "bond-miimon": "100",
+                }
+            }
+        }
+
+        dhclient_started = {}
+
+        def mock_popen(cmd, **_kwargs):
+            if any("/sbin/ifup" in part for part in cmd):
+                dhclient_started["started"] = True
+
+            proc_mock = mock.Mock()
+            proc_mock.communicate.return_value = (b"", None)
+            proc_mock.returncode = 0
+            return proc_mock
+
+        with mock.patch("subprocess.Popen", side_effect=mock_popen), \
+            mock.patch("os.path.isfile", return_value=True), \
+            mock.patch("builtins.open", mock.mock_open(read_data="9999")), \
+            mock.patch("os.kill", side_effect=self.os_kill_side_effect):
+
+            anc.audit_dhcp_ifaces(bond_iface)
+
+        self.assertTrue(dhclient_started.get("started", False),
+                        "Expected dhclient to be started for interface bond0")
+
+    def test_dhclient_running_for_bonding_interface(self):
+        bond_iface = {
+            "ifaces": {
+                "bond0": {
+                    "iface": "bond0 inet dhcp",
+                    "bond-slave": "enp0s8 enp0s9",
+                    "bond-mode": "active-backup",
+                    "bond-primary": "enp0s8",
+                    "bond-miimon": "100",
+                }
+            }
+        }
+
+        dhclient_started = {}
+
+        self._os_kill_call_count = 1
+
+        with mock.patch("os.path.isfile", return_value=True), \
+            mock.patch("builtins.open", mock.mock_open(read_data="1234")), \
+            mock.patch("os.kill", side_effect=self.os_kill_side_effect):
+
+            anc.audit_dhcp_ifaces(bond_iface)
+
+        self.assertFalse(dhclient_started.get("started", False),
+                         "dhclient should not be restarted if already running")
+
+    def test_ethernet_iface_without_dhclient_pid_file(self):
+        contents = dict()
+        contents[anc.ETC_DIR + "/ifcfg-enp0s8"] = (
+            "iface enp0s8 inet dhcp\n"
+            "mtu 9216\n"
+            "post-up echo 0 > /proc/sys/net/ipv6/conf/enp0s8/autoconf; "
+            "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/accept_ra; "
+            "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/accept_redirects; "
+            "echo 1 > /proc/sys/net/ipv6/conf/bond0/keep_addr_on_down\n"
+            "stx-description ifname:pxeboot0,net:pxeboot")
+
+        self._add_fs_mock(contents)
+
+        eth_iface = "enp0s8"
+        ifstate_path = f"/run/network/ifstate.{eth_iface}"
+        self._fs.set_file_contents(ifstate_path, eth_iface)
+
+        dhclient_started = {}
+
+        def mock_popen(cmd, **_kwargs):
+            if any("/sbin/ifup" in part for part in cmd):
+                dhclient_started["started"] = True
+            proc_mock = mock.Mock()
+            proc_mock.communicate.return_value = (b"", None)
+            proc_mock.returncode = 0
+            return proc_mock
+
+        self._os_kill_call_count = 1
+
+        with mock.patch("subprocess.Popen", side_effect=mock_popen), \
+            mock.patch("os.path.isfile", side_effect=[False, True]), \
+            mock.patch("builtins.open", mock.mock_open(read_data="9999")), \
+            mock.patch("os.kill", side_effect=self.os_kill_side_effect):
+
+            self._mocked_call([self._mock_fs], anc.audit_config)
+
+        self.assertTrue(dhclient_started.get("started", False),
+                        "Expected dhclient to be started for interface enp0s8")
+
+    def test_start_dhclient_eth_iface_process_not_running(self):
+        contents = dict()
+        contents[anc.ETC_DIR + "/ifcfg-enp0s8"] = (
+            "iface enp0s8 inet dhcp\n"
+            "mtu 9216\n"
+            "post-up echo 0 > /proc/sys/net/ipv6/conf/enp0s8/autoconf; "
+            "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/accept_ra; "
+            "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/accept_redirects; "
+            "echo 1 > /proc/sys/net/ipv6/conf/bond0/keep_addr_on_down\n"
+            "stx-description ifname:pxeboot0,net:pxeboot")
+
+        self._add_fs_mock(contents)
+
+        eth_iface = "enp0s8"
+        ifstate_path = f"/run/network/ifstate.{eth_iface}"
+        self._fs.set_file_contents(ifstate_path, eth_iface)
+
+        dhclient_started = {}
+
+        def mock_popen(cmd, **_kwargs):
+            if any("/sbin/ifup" in part for part in cmd):
+                dhclient_started["started"] = True
+
+            proc_mock = mock.Mock()
+            proc_mock.communicate.return_value = (b"", None)
+            proc_mock.returncode = 0
+            return proc_mock
+
+        with mock.patch("subprocess.Popen", side_effect=mock_popen), \
+             mock.patch("os.path.isfile", return_value=True), \
+             mock.patch("builtins.open", mock.mock_open(read_data="9999")), \
+             mock.patch("os.kill", side_effect=self.os_kill_side_effect):
+
+            self._mocked_call([self._mock_fs], anc.audit_config)
+
+        self.assertTrue(dhclient_started.get("started", False),
+                        f"Expected dhclient to be started for interface {eth_iface}")

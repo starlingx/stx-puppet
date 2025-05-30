@@ -1042,6 +1042,61 @@ def check_enrollment_config():
             ensure_iface_configured(iface, cfg)
 
 
+def get_ifaces_with_dhcp(iface_configs):
+    dhcp_ifaces = []
+    ifaces_dict = iface_configs.get("ifaces", {})
+
+    for iface, config in ifaces_dict.items():
+        iface_str = config.get("iface", "").lower()
+        if "dhcp" in iface_str:
+            dhcp_ifaces.append(iface)
+
+    return dhcp_ifaces
+
+
+def start_dhcp_iface(iface):
+    ifstate_file = f"/run/network/ifstate.{iface}"
+    try:
+        if os.path.exists(ifstate_file):
+            os.remove(ifstate_file)
+    except (FileNotFoundError, PermissionError, OSError) as e:
+        LOG.error(f"Failed to remove ifstate file for {iface}: {e}")
+    try:
+        if set_iface_up(iface) == 0 and is_dhclient_running(iface):
+            LOG.info(f"Successfully ifup for interface {iface}")
+        else:
+            LOG.error(f"Failed DHCP for interface {iface}")
+    except subprocess.CalledProcessError as e:
+        LOG.error(f"Failed to bring up interface {iface} with ifup: {e}")
+
+
+def is_dhclient_running(iface):
+    pid_file = f"/run/dhclient.{iface}.pid"
+    if not os.path.isfile(pid_file):
+        return False
+    try:
+        with open(pid_file, 'r') as f:
+            pid = int(f.read().strip())
+        os.kill(pid, 0)
+        return True
+    except (OSError, ValueError):
+        LOG.info(f"dhclient is not running for interface {iface}")
+        return False
+
+
+def audit_dhcp_ifaces(iface_configs):
+    dhcp_ifaces = get_ifaces_with_dhcp(iface_configs)
+    for iface in dhcp_ifaces:
+        LOG.info(f"Running DHCP audit for {iface}")
+        if not is_dhclient_running(iface):
+            start_dhcp_iface(iface)
+
+
+def audit_config():
+    current_config = get_current_config()
+    audit_dhcp_ifaces(current_config)
+
+
 def main():
     log_format = ('%(asctime)s: [%(process)s]: %(filename)s(%(lineno)s): '
                   '%(levelname)s: %(message)s')
@@ -1055,6 +1110,7 @@ def main():
     args = parser.parse_args()
 
     apply_config(args.routes)
+    audit_config()
     return 0
 
 
