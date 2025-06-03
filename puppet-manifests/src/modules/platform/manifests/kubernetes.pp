@@ -1718,7 +1718,7 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
   # Restart dccertmon since it uses admin.conf
   -> exec { 'restart_dccertmon':
     command => 'sm-restart-safe service dccertmon',
-    onlyif  => $::platform::params::distributed_cloud_role == 'systemcontroller',
+    onlyif  => "test '${::platform::params::distributed_cloud_role }' == 'systemcontroller'",
   }
   # Restart kube-apiserver to pick up the new cert
   -> exec { 'restart_apiserver':
