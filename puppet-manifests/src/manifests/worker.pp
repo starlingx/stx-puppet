@@ -31,6 +31,7 @@ include ::platform::ntp::client
 include ::platform::strongswan::apparmor
 include ::platform::ptpinstance
 include ::platform::ptpinstance::nic_clock
+include ::platform::ptpinstance::monitoring
 include ::platform::lldp
 include ::platform::patching
 include ::platform::usm

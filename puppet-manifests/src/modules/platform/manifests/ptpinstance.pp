@@ -20,7 +20,6 @@ define platform::ptpinstance::ptp_config_files(
     path    => "${ptp_conf_dir}/ptpinstance/${service}-${_name}.conf",
     mode    => '0644',
     content => template('platform/ptpinstance.conf.erb'),
-    require => File["${ptp_conf_dir}/ptpinstance"],
   }
   -> file { "${_name}-sysconfig":
     ensure  => file,
@@ -28,7 +27,6 @@ define platform::ptpinstance::ptp_config_files(
     path    => "${ptp_options_dir}/ptpinstance/${service}-instance-${_name}",
     mode    => '0644',
     content => template("platform/${service}-instance.erb"),
-    require => File["${ptp_options_dir}/ptpinstance"],
   }
   -> service { "instance-${_name}":
     ensure     => $ensure,
@@ -42,6 +40,40 @@ define platform::ptpinstance::ptp_config_files(
   -> exec { "enable-${_name}":
     command => "/usr/bin/systemctl enable \
     ${service}@${_name}",
+  }
+}
+
+define platform::ptpinstance::monitoring_handler(
+  $global_parameters,
+  $cmdline_opts,
+  $ensure,
+  $enable,
+  $ptp_conf_dir,
+  $ptp_options_dir,
+) {
+  file {'monitoring-ptp.conf':
+    ensure  => file,
+    path    => "${ptp_conf_dir}/ptpinstance/monitoring-ptp.conf",
+    mode    => '0644',
+    content => template('platform/monitoring-ptp.conf.erb'),
+  }
+  -> file {'gpsd-sysconfig':
+    ensure  => file,
+    notify  => Service['gpsd_service'],
+    path    => "${ptp_options_dir}/ptpinstance/monitoring-ptp",
+    mode    => '0644',
+    content => template('platform/monitoring-ptp.erb'),
+  }
+  -> service { 'gpsd_service':
+    ensure     => $ensure,
+    enable     => $enable,
+    name       => 'gpsd.service',
+    hasstatus  => true,
+    hasrestart => true,
+    require    => Exec['ptpinstance-monitoring-systemctl-daemon-reload'],
+  }
+  -> exec { 'enable-gpsd-sevice':
+    command => '/usr/bin/systemctl enable gpsd.service',
   }
 }
 
@@ -144,6 +176,21 @@ class platform::ptpinstance::params {
   }
 }
 
+class platform::ptpinstance::ptp_directories {
+  include ::platform::ptpinstance::params
+  $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
+  $ptp_options_dir = $::platform::ptpinstance::params::ptp_options_dir
+
+  file { "${ptp_conf_dir}/ptpinstance":
+    ensure => directory,
+    mode   => '0755',
+  }
+  -> file { "${ptp_options_dir}/ptpinstance":
+    ensure => directory,
+    mode   => '0755',
+  }
+}
+
 class platform::ptpinstance::nic_clock (
   $nic_clock_config = {},
   $nic_clock_enabled = false,
@@ -153,22 +200,18 @@ class platform::ptpinstance::nic_clock (
   $ptp_options_dir = $::platform::ptpinstance::params::ptp_options_dir
 
   require ::platform::ptpinstance::nic_clock::nic_reset
+  require ::platform::ptpinstance::ptp_directories
 
-  file { "${ptp_conf_dir}/ptpinstance":
-    ensure => directory,
-    mode   => '0755',
-  }
-  -> tidy { 'purge_conf':
+  tidy { 'purge_conf':
     path    => "${ptp_conf_dir}/ptpinstance",
     matches => ['[^clock]*.conf'],
     recurse => true,
     rmdirs  => false,
   }
   -> file { 'ensure_clock_conf_present':
-    ensure  => present,
-    path    => "${ptp_conf_dir}/ptpinstance/clock-conf.conf",
-    mode    => '0644',
-    require => File["${ptp_conf_dir}/ptpinstance"],
+    ensure => present,
+    path   => "${ptp_conf_dir}/ptpinstance/clock-conf.conf",
+    mode   => '0644',
   }
   if $nic_clock_enabled {
     create_resources('platform::ptpinstance::nic_clock_handler', $nic_clock_config, { 'ptp_conf_dir' => $ptp_conf_dir })
@@ -202,6 +245,62 @@ class platform::ptpinstance::nic_clock::nic_reset (
   exec { 'clear_clock_conf_file':
     command => "echo \"\" > ${ptp_conf_dir}/ptpinstance/clock-conf.conf",
     onlyif  => "stat ${ptp_conf_dir}/ptpinstance/clock-conf.conf",
+  }
+}
+
+class platform::ptpinstance::monitoring (
+  $monitoring_config = {},
+  $monitoring_enabled = false,
+) {
+  include ::platform::ptpinstance::params
+  $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
+  $ptp_options_dir = $::platform::ptpinstance::params::ptp_options_dir
+
+  require ::platform::ptpinstance::ptp_directories
+
+  if $monitoring_enabled {
+    $monitoring_state = {
+      'ensure' => 'running',
+      'enable' => true,
+      'ptp_conf_dir' => $ptp_conf_dir,
+      'ptp_options_dir' => $ptp_options_dir
+    }
+  }
+
+  tidy { 'purge_monitoring_ptp_conf':
+    path    => "${ptp_conf_dir}/ptpinstance",
+    matches => ['[^monitoring-ptp]*.conf'],
+    recurse => true,
+    rmdirs  => false,
+  }
+  -> file { 'gpsd_service':
+    ensure  => file,
+    path    => '/etc/systemd/system/gpsd.service',
+    mode    => '0644',
+    content => template('platform/gpsd.service.erb'),
+  }
+  -> file { 'gpsd_socket':
+    ensure  => file,
+    path    => '/etc/systemd/system/gpsd.socket',
+    mode    => '0644',
+    content => template('platform/gpsd.socket.erb'),
+  }
+  -> exec { 'stop-gpsd-service':
+    command => '/usr/bin/systemctl stop gpsd.service',
+  }
+  -> exec { 'stop-gpsd-socket':
+    command => '/usr/bin/systemctl stop gpsd.socket',
+  }
+  -> exec { 'disable-gpsd-service':
+    command => '/usr/bin/systemctl disable gpsd.service',
+    onlyif  => 'test -f /etc/systemd/system/gpsd.service',
+  }
+  -> exec { 'ptpinstance-monitoring-systemctl-daemon-reload':
+    command => '/usr/bin/systemctl daemon-reload',
+  }
+
+  if $monitoring_enabled {
+    create_resources('platform::ptpinstance::monitoring_handler', { 'monitoring_config' => $monitoring_config }, $monitoring_state)
   }
 }
 
@@ -274,11 +373,7 @@ class platform::ptpinstance (
     }
   }
 
-  file { "${ptp_options_dir}/ptpinstance":
-    ensure => directory,
-    mode   => '0755',
-  }
-  -> tidy { 'purge_sysconf':
+  tidy { 'purge_sysconf':
     path    => "${ptp_options_dir}/ptpinstance/",
     matches => ['*-instance-*'],
     recurse => true,
@@ -374,7 +469,9 @@ class platform::ptpinstance (
 }
 
 class platform::ptpinstance::runtime {
-  class { 'platform::ptpinstance::nic_clock': }
+  class { 'platform::ptpinstance::ptp_directories': }
+  -> class { 'platform::ptpinstance::nic_clock': }
+  -> class { 'platform::ptpinstance::monitoring': }
   -> class { 'platform::ptpinstance': runtime => true }
   -> exec { 'Ensure collectd is restarted':
     command => '/usr/local/sbin/pmon-restart collectd'
