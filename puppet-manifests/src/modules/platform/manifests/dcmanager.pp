@@ -131,7 +131,6 @@ class platform::dcmanager
     # There is no reason to limit their CPUShares on systemcontroller.
     $service_names = [
       'cron',
-      'docker',
       'pmon',
       'ssh',
       'sysinv-agent',
