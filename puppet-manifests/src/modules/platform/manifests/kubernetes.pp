@@ -2234,7 +2234,6 @@ class platform::kubernetes::refresh_admin_config {
 
 class platform::kubernetes::upgrade_abort
   inherits ::platform::kubernetes::params {
-  $software_version = $::platform::params::software_version
   include platform::kubernetes::cordon_node
   include platform::kubernetes::mask_stop_kubelet
   include platform::kubernetes::unmask_start_services
@@ -2282,12 +2281,12 @@ class platform::kubernetes::upgrade_abort
   }
   # Take latest etcd data dir backup for recovery if snapshot restore fails
   -> exec{ 'move etcd data dir to backup':
-      command => "mv -f /opt/etcd/${software_version}/controller.etcd /opt/etcd/${software_version}/controller.etcd.bck",
+      command => 'mv -f /opt/etcd/db/controller.etcd /opt/etcd/db/controller.etcd.bck',
       onlyif  => ["test -f ${etcd_snapshot_file}",
-                  "test ! -d /opt/etcd/${software_version}/controller.etcd.bck"]
+                  'test ! -d /opt/etcd/db/controller.etcd.bck']
   }
   -> exec { 'restore etcd snapshot':
-      command     => "etcdctl --cert ${etcd_cert_file} --key ${etcd_key_file} --cacert ${etcd_ca_cert} --endpoints ${etcd_endpoints} snapshot restore ${etcd_snapshot_file} --data-dir /opt/etcd/${software_version}/controller.etcd --name ${etcd_name} --initial-cluster ${etcd_initial_cluster} ", # lint:ignore:140chars
+      command     => "etcdctl --cert ${etcd_cert_file} --key ${etcd_key_file} --cacert ${etcd_ca_cert} --endpoints ${etcd_endpoints} snapshot restore ${etcd_snapshot_file} --data-dir /opt/etcd/db/controller.etcd --name ${etcd_name} --initial-cluster ${etcd_initial_cluster} ", # lint:ignore:140chars
       environment => [ 'ETCDCTL_API=3' ],
       onlyif      => "test -f ${etcd_snapshot_file}"
   }
@@ -2304,8 +2303,8 @@ class platform::kubernetes::upgrade_abort
   }
   # Remove latest etcd data dir backup if snapshot restore succeeded
   -> exec { 'remove recover etcd data dir':
-      command => "rm -rf /opt/etcd/${software_version}/controller.etcd.bck",
-      onlyif  => "test -d /opt/etcd/${software_version}/controller.etcd.bck",
+      command => 'rm -rf /opt/etcd/db/controller.etcd.bck',
+      onlyif  => 'test -d /opt/etcd/db/controller.etcd.bck',
   }
   # Remove kube config files backup after the abort
   -> exec { 'remove kube config files backup':
@@ -2317,11 +2316,10 @@ class platform::kubernetes::upgrade_abort
 class platform::kubernetes::upgrade_abort_recovery
   inherits ::platform::kubernetes::params {
   include platform::kubernetes::unmask_start_services
-  $software_version = $::platform::params::software_version
 
   exec{ 'restore recover etcd data dir':
-    command => "mv -f /opt/etcd/${software_version}/controller.etcd.bck /opt/etcd/${software_version}/controller.etcd",
-    onlyif  => "test -d /opt/etcd/${software_version}/controller.etcd.bck",
+    command => 'mv -f /opt/etcd/db/controller.etcd.bck /opt/etcd/db/controller.etcd',
+    onlyif  => 'test -d /opt/etcd/db/controller.etcd.bck',
   }
   -> exec { 'restore recover static manifest files':
       command => "mv -f  ${static_pod_manifests_abort}/*.yaml /etc/kubernetes/manifests/",
