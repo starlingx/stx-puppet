@@ -1289,16 +1289,6 @@ class platform::kubernetes::mask_stop_kubelet {
   }
 }
 
-class platform::kubernetes::containerd_pause_image (
-  String $kubeadm_version = $::platform::kubernetes::params::kubeadm_version
-) {
-
-  exec { 'set containerd sandbox pause image':
-    command   => "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm config images list --kubernetes-version ${kubeadm_version} 2>/dev/null | grep pause: | xargs -I '{}' sed -i -e '/sandbox_image =/ s|= .*|= \"registry.local:9001/{}\"|' /etc/containerd/config.toml", # lint:ignore:140chars
-    logoutput => true
-  }
-}
-
 class platform::kubernetes::unmask_start_kubelet
   inherits ::platform::kubernetes::params {
 
@@ -1341,57 +1331,6 @@ class platform::kubernetes::unmask_start_kubelet
     service_name => 'isolcpu_plugin',
     onlyif       => 'systemctl is-enabled isolcpu_plugin | grep -wq masked',
   }
-}
-
-class platform::kubernetes::master::upgrade_kubelet
-  inherits ::platform::kubernetes::params {
-    include platform::kubernetes::containerd_pause_image
-    include platform::kubernetes::mask_stop_kubelet
-    include platform::kubernetes::unmask_start_kubelet
-
-
-
-    Class['platform::kubernetes::mask_stop_kubelet']
-    -> Class['platform::kubernetes::containerd_pause_image']
-    -> Class['platform::kubernetes::unmask_start_kubelet']
-}
-
-class platform::kubernetes::worker::upgrade_kubelet
-  inherits ::platform::kubernetes::params {
-  include ::platform::dockerdistribution::params
-  include platform::kubernetes::containerd_pause_image
-  include platform::kubernetes::mask_stop_kubelet
-  include platform::kubernetes::unmask_start_kubelet
-
-  # workers use kubelet.conf rather than admin.conf
-  $kubelet_version = $::platform::kubernetes::params::kubelet_version
-  $kubeadm_version = $::platform::kubernetes::params::kubeadm_version # lint:ignore:140chars
-  $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
-  $creds_command = '$(cat /tmp/puppet/registry_credentials)'
-
-  $resource_title = 'pull pause image'
-  # Use the upgrade version of kubeadm and kubelet to ensure we get the proper image versions.
-  $command = "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf config images list --kubernetes-version ${kubelet_version} 2>/dev/null | grep pause: | xargs -i crictl pull --creds ${creds_command} registry.local:9001/{}" # lint:ignore:140chars
-  $before_exec = 'upgrade kubelet for worker'
-
-  platform::kubernetes::pull_images_from_registry { 'pull images from private registry':
-    resource_title      => $resource_title,
-    command             => $command,
-    before_exec         => $before_exec,
-    local_registry_auth => $local_registry_auth,
-  }
-
-  platform::kubernetes::kube_command { 'upgrade kubelet for worker':
-    # Use the upgrade version of kubeadm in case the kubeadm configmap format has changed.
-    # The -v6 gives verbose debug output includes health, GET response, delay.
-    command     => "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm -v6 upgrade node",
-    logname     => 'kubeadm-upgrade-node.log',
-    environment => 'KUBECONFIG=/etc/kubernetes/kubelet.conf',
-    timeout     => 300,
-  }
-  -> Class['platform::kubernetes::mask_stop_kubelet']
-  -> Class['platform::kubernetes::containerd_pause_image']
-  -> Class['platform::kubernetes::unmask_start_kubelet']
 }
 
 # TODO(mdecastr): This code is to support upgrades to stx 11, it can be removed in later releases.
