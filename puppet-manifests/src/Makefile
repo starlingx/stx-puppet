@@ -31,6 +31,7 @@ endif
 	install -m 755 -D bin/dual-stack-calico.py $(BINDIR)/dual-stack-calico.py
 	install -m 755 -D bin/dual-stack-multus.py $(BINDIR)/dual-stack-multus.py
 	install -m 755 -D bin/verify-systemd-running.sh $(BINDIR)/verify-systemd-running.sh
+	install -m 755 -D bin/parse_sriov.py $(BINDIR)/parse_sriov.py
 
 	install -d -m 0755 $(CONFIGDIR)
 ifdef hiera_v5
