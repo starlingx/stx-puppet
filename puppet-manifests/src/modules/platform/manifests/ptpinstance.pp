@@ -45,42 +45,6 @@ define platform::ptpinstance::ptp_config_files(
   }
 }
 
-define platform::ptpinstance::monitoring_handler(
-  $global_parameters,
-  $cmdline_opts,
-  $ensure,
-  $enable,
-  $ptp_conf_dir,
-  $ptp_options_dir,
-) {
-  file {'monitoring-ptp.conf':
-    ensure  => file,
-    path    => "${ptp_conf_dir}/ptpinstance/monitoring-ptp.conf",
-    mode    => '0644',
-    content => template('platform/monitoring-ptp.conf.erb'),
-    require => File["${ptp_conf_dir}/ptpinstance"],
-  }
-  -> file {'gpsd-sysconfig':
-    ensure  => file,
-    notify  => Service['gpsd_service'],
-    path    => "${ptp_options_dir}/ptpinstance/monitoring-ptp",
-    mode    => '0644',
-    content => template('platform/monitoring-ptp.erb'),
-    require => File["${ptp_options_dir}/ptpinstance"],
-  }
-  -> service { 'gpsd_service':
-    ensure     => $ensure,
-    enable     => $enable,
-    name       => 'gpsd.service',
-    hasstatus  => true,
-    hasrestart => true,
-    require    => Exec['ptpinstance-monitoring-systemctl-daemon-reload'],
-  }
-  -> exec { 'enable-gpsd-sevice':
-    command => '/usr/bin/systemctl enable gpsd.service',
-  }
-}
-
 define platform::ptpinstance::set_ptp4l_pmc_parameters(
   $_name,
   $service,
@@ -239,64 +203,6 @@ class platform::ptpinstance::nic_clock::nic_reset (
   }
 }
 
-class platform::ptpinstance::monitoring (
-  $monitoring_config = {},
-  $monitoring_enabled = false,
-) {
-  include ::platform::ptpinstance::params
-  $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
-  $ptp_options_dir = $::platform::ptpinstance::params::ptp_options_dir
-
-  if $monitoring_enabled {
-    $monitoring_state = {
-      'ensure' => 'running',
-      'enable' => true,
-      'ptp_conf_dir' => $ptp_conf_dir,
-      'ptp_options_dir' => $ptp_options_dir
-    }
-  }
-
-  file { "${ptp_options_dir}/ptpinstance":
-    ensure => directory,
-    mode   => '0755',
-  }
-  -> tidy { 'purge_monitoring_ptp_conf':
-    path    => "${ptp_conf_dir}/ptpinstance",
-    matches => ['[^monitoring-ptp]*.conf'],
-    recurse => true,
-    rmdirs  => false,
-  }
-  -> file { 'gpsd_service':
-    ensure  => file,
-    path    => '/etc/systemd/system/gpsd.service',
-    mode    => '0644',
-    content => template('platform/gpsd.service.erb'),
-  }
-  -> file { 'gpsd_socket':
-    ensure  => file,
-    path    => '/etc/systemd/system/gpsd.socket',
-    mode    => '0644',
-    content => template('platform/gpsd.socket.erb'),
-  }
-  -> exec { 'stop-gpsd-service':
-    command => '/usr/bin/systemctl stop gpsd.service',
-  }
-  -> exec { 'stop-gpsd-socket':
-    command => '/usr/bin/systemctl stop gpsd.socket',
-  }
-  -> exec { 'disable-gpsd-service':
-    command => '/usr/bin/systemctl disable gpsd.service',
-    onlyif  => 'test -f /etc/systemd/system/gpsd.service',
-  }
-  -> exec { 'ptpinstance-monitoring-systemctl-daemon-reload':
-    command => '/usr/bin/systemctl daemon-reload',
-  }
-
-  if $monitoring_enabled {
-    create_resources('platform::ptpinstance::monitoring_handler', { 'monitoring_config' => $monitoring_config }, $monitoring_state)
-  }
-}
-
 define platform::ptpinstance::disable_e810_gnss_uart_interfaces (
   $_name,
   $global_parameters,
@@ -366,7 +272,11 @@ class platform::ptpinstance (
     }
   }
 
-  tidy { 'purge_sysconf':
+  file { "${ptp_options_dir}/ptpinstance":
+    ensure => directory,
+    mode   => '0755',
+  }
+  -> tidy { 'purge_sysconf':
     path    => "${ptp_options_dir}/ptpinstance/",
     matches => ['*-instance-*'],
     recurse => true,
@@ -463,7 +373,6 @@ class platform::ptpinstance (
 
 class platform::ptpinstance::runtime {
   class { 'platform::ptpinstance::nic_clock': }
-  -> class { 'platform::ptpinstance::monitoring': }
   -> class { 'platform::ptpinstance': runtime => true }
   -> exec { 'Ensure collectd is restarted':
     command => '/usr/local/sbin/pmon-restart collectd'
