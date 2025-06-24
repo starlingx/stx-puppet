@@ -425,7 +425,7 @@ define platform::ptpinstance::ptp_extts_enable (
 ) {
   exec { "${iface}_${channel}_extts_enable_${enable}":
     command  => "PTP=\$(basename /sys/class/net/${iface}/device/ptp/ptp*);\
-      echo ${channel} ${enable} > /sys/class/net/${iface}/device/ptp/\$PTP/extts_enable",
+      echo ${channel} ${enable} > /sys/class/net/${iface}/device/ptp/\$PTP/extts_enable || true",
     provider => shell,
   }
 
@@ -458,7 +458,7 @@ define platform::ptpinstance::ptp_period (
 ) {
   exec { "${iface}_period_${channel}_${start_time_s}_${start_time_ns}_${period_s}_${period_ns}":
     command  => "PTP=\$(basename /sys/class/net/${iface}/device/ptp/ptp*);\
-      echo ${channel} ${start_time_s} ${start_time_ns} ${period_s} ${period_ns} > /sys/class/net/${iface}/device/ptp/\$PTP/period",
+      echo ${channel} ${start_time_s} ${start_time_ns} ${period_s} ${period_ns} > /sys/class/net/${iface}/device/ptp/\$PTP/period || true",
     provider => shell,
   }
 
