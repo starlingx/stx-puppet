@@ -95,7 +95,11 @@ class platform::vswitch::ovs(
   $flows = {},
 ) inherits ::platform::vswitch::params {
   if $enabled {
-    include ::vswitch::dpdk
+    class { '::vswitch::dpdk':
+      package_name => 'openvswitch-switch-dpdk',
+      service_name => 'openvswitch-switch',
+    }
+
     $pmon_ensure = link
     # Since OVS socket memory is configurable, it is required to start the
     # ovsdb server and disable DPDK initialization before the openvswitch
