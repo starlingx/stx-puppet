@@ -938,7 +938,6 @@ class platform::network::interfaces::rate_limit::bypass {
 class platform::network::interfaces::rate_limit (
   $rate_limit_config = {}
 ) {
-  Anchor['platform::networking'] -> Class[$name]
   create_resources('platform::network::interfaces::rate_limit::interface', $rate_limit_config, {})
 }
 

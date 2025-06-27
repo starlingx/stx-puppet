@@ -1539,12 +1539,7 @@ class platform::sm::update_oam_config::runtime {
     # the services below need to be restarted after, but wait for them to reach enabled-active
     -> exec {'wait-for-haproxy':
       command   => '[ $(sm-query service haproxy | grep -c ".*enabled-active.*") -eq 1 ]',
-      tries     => 15,
-      try_sleep => 1,
-    }
-    -> exec {'wait-for-vim-webserver':
-      command   => '[ $(sm-query service vim-webserver | grep -c ".*enabled-active.*") -eq 1 ]',
-      tries     => 15,
+      tries     => 30,
       try_sleep => 1,
     }
     -> exec {'wait-for-registry-token-server':
