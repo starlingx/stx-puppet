@@ -128,8 +128,13 @@ class platform::vswitch::ovs(
 
     Mount[$hugepage_dir] -> Service['openvswitch']
 
+    $hugepage_mountpoint = $::osfamily ? {
+      'Debian' => "/var/rootdirs${hugepage_dir}",
+      default => $hugepage_dir,
+    }
+
     $dpdk_configs = {
-      'other_config:dpdk-hugepage-dir' => { value => $hugepage_dir },
+      'other_config:dpdk-hugepage-dir' => { value => $hugepage_mountpoint },
     }
 
     $dpdk_dependencies = {
