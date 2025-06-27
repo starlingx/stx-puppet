@@ -563,16 +563,16 @@ class platform::ceph::migration::sx_to_dx::active_cluster_updates
   inherits platform::ceph::params {
 
   exec { 'Ensure Fixed Ceph Monitor is running' :
-    command => "/etc/init.d/ceph-init-wrapper start mon.${$::hostname}",
+    command => "/etc/init.d/ceph start mon.${$::hostname}",
   }
   -> exec { 'Ensure Floating Ceph Monitor is running' :
-    command => '/etc/init.d/ceph-init-wrapper start mon.controller',
+    command => '/etc/init.d/ceph start mon.controller',
   }
   -> exec { 'Ensure Ceph OSDs are running' :
-    command => '/etc/init.d/ceph-init-wrapper start osd',
+    command => '/etc/init.d/ceph start osd',
   }
   -> exec { 'Ensure Ceph mds is stoped':
-    command => '/etc/init.d/ceph-init-wrapper stop mds'
+    command => '/etc/init.d/ceph stop mds'
   }
 
   $cephfs_filesystems.each |String $fs, Array $pools| {
@@ -591,7 +591,7 @@ class platform::ceph::migration::sx_to_dx::active_cluster_updates
   }
 
   exec { 'Ensure Ceph mds is re-started':
-    command => '/etc/init.d/ceph-init-wrapper start mds'
+    command => '/etc/init.d/ceph start mds'
   }
   -> exec { 'Update crushmap to support DX' :
     command => template('platform/ceph_crushmap_add_controller1_bucket.erb'),
