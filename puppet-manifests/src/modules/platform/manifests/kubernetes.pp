@@ -445,6 +445,129 @@ class platform::kubernetes::set_crt_permissions {
   }
 }
 
+class platform::kubernetes::haproxy {
+  include ::platform::params
+  include ::platform::network::oam::params
+  include ::platform::network::oam::ipv4::params
+  include ::platform::network::oam::ipv6::params
+  include ::platform::network::cluster_host::params
+  include ::platform::network::cluster_host::ipv4::params
+  include ::platform::network::cluster_host::ipv6::params
+
+  # FLOATING
+  $ipv4_oam_floating_ip = $::platform::network::oam::ipv4::params::controller_address
+  $ipv6_oam_floating_ip = $::platform::network::oam::ipv6::params::controller_address
+  $ipv4_cluster_floating_ip = $::platform::network::cluster_host::ipv4::params::controller_address
+  $ipv6_cluster_floating_ip = $::platform::network::cluster_host::ipv6::params::controller_address
+  $primary_cluster_floating_ip = $::platform::network::cluster_host::params::controller_address
+
+  # HOST
+  $controller_0_hostname = $::platform::params::controller_0_hostname
+  $controller_1_hostname = $::platform::params::controller_1_hostname
+
+  case $::hostname {
+    $controller_0_hostname: {
+      $ipv4_oam_host_ip = $::platform::network::oam::ipv4::params::controller0_address
+      $ipv6_oam_host_ip = $::platform::network::oam::ipv6::params::controller0_address
+      $ipv4_cluster_host_ip = $::platform::network::cluster_host::ipv4::params::controller0_address
+      $ipv6_cluster_host_ip = $::platform::network::cluster_host::ipv6::params::controller0_address
+      if $::platform::params::system_mode == 'simplex' {
+        $primary_cluster_host_ip = $::platform::network::cluster_host::params::controller_address
+      } else {
+        $primary_cluster_host_ip = $::platform::network::cluster_host::params::controller0_address
+      }
+    }
+    $controller_1_hostname: {
+      $ipv4_oam_host_ip = $::platform::network::oam::ipv4::params::controller1_address
+      $ipv6_oam_host_ip = $::platform::network::oam::ipv6::params::controller1_address
+      $ipv4_cluster_host_ip = $::platform::network::cluster_host::ipv4::params::controller1_address
+      $ipv6_cluster_host_ip = $::platform::network::cluster_host::ipv6::params::controller1_address
+      $primary_cluster_host_ip = $::platform::network::cluster_host::params::controller1_address
+    }
+    default: {
+      fail("Hostname must be either ${controller_0_hostname} or ${controller_1_hostname}")
+    }
+  }
+
+  # SSL Bridge (OAM -> HAproxy)
+  $haproxy_port = '6443'
+  $ssl_server_option = 'ssl crt /etc/ssl/private/server-cert.pem'
+  $ssl_client_option = 'check-ssl ssl verify required ca-file /etc/kubernetes/pki/ca.crt'
+
+  $proto_header = 'X-Forwarded-Proto https'
+  $hsts_option = 'Strict-Transport-Security max-age=63072000;\ includeSubDomains'
+  $http_frontend_options = {
+    'default_backend' => 'k8s-backend',
+    'http-request'    => "add-header ${proto_header}",
+    'http-response'   => "add-header ${hsts_option}",
+  }
+
+  $oam_ips = [
+    $ipv4_oam_floating_ip,
+    $ipv6_oam_floating_ip,
+    $ipv4_oam_host_ip,
+    $ipv6_oam_host_ip,
+  ].filter |$value| { $value != undef }.unique
+
+  $oam_ips_serving_rest_api_certificate = $oam_ips.reduce( {} ) |Hash $memo, $item| {
+    $memo + {"${item}:${haproxy_port}" => $ssl_server_option}
+  }
+
+  haproxy::frontend { 'k8s-frontend':
+    collect_exported => false,
+    name             => 'k8s-frontend',
+    bind             => $oam_ips_serving_rest_api_certificate,
+    options          => $http_frontend_options,
+  }
+
+  haproxy::backend { 'k8s-backend':
+    collect_exported => false,
+    name             => 'k8s-backend',
+    options          => {
+      'server' => "s-k8s ${primary_cluster_floating_ip}:${haproxy_port} ${ssl_client_option}",
+    },
+  }
+
+  # SSL Passtrough (Cluster Host -> kube-apiserver)
+  $kube_apiserver_port = '16443'
+
+  $tcp_ssl_hello = 'content accept if { req_ssl_hello_type 1 }'
+  $tcp_req_delay = 'inspect-delay 5s'
+  $tcp_frontend_options = {
+    'mode'            => 'tcp',
+    'option'          => 'tcplog',
+    'default_backend' => 'k8s-backend-internal',
+    'tcp-request'     => [$tcp_ssl_hello,$tcp_req_delay],
+  }
+
+  $cluster_ips = [
+    $ipv4_cluster_floating_ip,
+    $ipv6_cluster_floating_ip,
+    $ipv4_cluster_host_ip,
+    $ipv6_cluster_host_ip,
+  ].filter |$value| { $value != undef }.unique
+
+  $cluster_ips_ssl_passtrough = $cluster_ips.reduce( {} ) |Hash $memo, $item| {
+    $memo + {"${item}:${haproxy_port}" => ' '}
+  }
+
+  haproxy::frontend { 'k8s-frontend-internal':
+    collect_exported => false,
+    name             => 'k8s-frontend-internal',
+    bind             => $cluster_ips_ssl_passtrough,
+    options          => $tcp_frontend_options,
+  }
+
+  haproxy::backend { 'k8s-backend-internal':
+    collect_exported => false,
+    name             => 'k8s-backend-internal',
+    options          => {
+      'mode'   => 'tcp',
+      'server' => "s-k8s-internal ${primary_cluster_host_ip}:${kube_apiserver_port} check",
+    },
+  }
+}
+
 class platform::kubernetes::master::init
   inherits ::platform::kubernetes::params {
 
@@ -648,6 +771,7 @@ class platform::kubernetes::master
   contain ::platform::kubernetes::coredns
   contain ::platform::kubernetes::firewall
   contain ::platform::kubernetes::configuration
+  contain ::platform::kubernetes::haproxy
 
   Class['::platform::sysctl::controller::reserve_ports'] -> Class[$name]
   Class['::platform::k8splatform'] -> Class[$name]
@@ -663,6 +787,7 @@ class platform::kubernetes::master
   -> Class['::platform::kubernetes::master::init']
   -> Class['::platform::kubernetes::coredns']
   -> Class['::platform::kubernetes::firewall']
+  -> Class['::platform::kubernetes::haproxy']
 }
 
 class platform::kubernetes::worker::init

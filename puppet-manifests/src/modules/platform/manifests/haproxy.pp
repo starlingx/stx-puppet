@@ -265,6 +265,7 @@ class platform::haproxy::runtime {
   include ::openstack::keystone::haproxy
   include ::openstack::barbican::haproxy
   include ::platform::smapi::haproxy
+  include ::platform::kubernetes::haproxy
 
   class {'::platform::haproxy::reload':
     stage => post
