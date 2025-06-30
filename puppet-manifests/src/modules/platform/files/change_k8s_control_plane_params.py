@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024 Wind River Systems, Inc.
+# Copyright (c) 2021-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -53,8 +53,9 @@ KUBE_APISERVER_VOLUMES_TAG = 'platform::kubernetes::kube_apiserver_volumes::para
 CONTROLLER_MANAGER_VOLUMES_TAG = 'platform::kubernetes::kube_controller_manager_volumes::params::'
 SCHEDULER_VOLUMES_TAG = 'platform::kubernetes::kube_scheduler_volumes::params::'
 
-APISERVER_API_ENDPOINT = 'https://localhost:6443'
-APISERVER_READYZ_ENDPOINT = 'https://localhost:6443/readyz'
+KUBE_APISERVER_INTERNAL_PORT = 16443
+APISERVER_API_ENDPOINT = 'https://localhost:%s' % str(KUBE_APISERVER_INTERNAL_PORT)
+APISERVER_READYZ_ENDPOINT = APISERVER_API_ENDPOINT + '/readyz'
 SCHEDULER_HEALTHZ_ENDPOINT = "https://127.0.0.1:10259/healthz"
 CONTROLLER_MANAGER_HEALTHZ_ENDPOINT = "https://127.0.0.1:10257/healthz"
 KUBELET_HEALTHZ_ENDPOINT = "http://localhost:10248/healthz"
@@ -65,12 +66,14 @@ RECOVERY_TRY_SLEEP = 5
 
 kube_operator = kubernetes.KubeOperator(host=APISERVER_API_ENDPOINT)
 
-
-INITCONFIG_TEMPLATE = '''---
+INITCONFIG_BASE_TEMPLATE = '''---
 apiVersion: kubeadm.k8s.io/v1beta3
 kind: InitConfiguration
 localAPIEndpoint:
-  advertiseAddress: {}'''
+  advertiseAddress: {}
+  bindPort: %s'''
+
+INITCONFIG_TEMPLATE = INITCONFIG_BASE_TEMPLATE % str(KUBE_APISERVER_INTERNAL_PORT)
 
 
 class TimeoutException(Exception):
