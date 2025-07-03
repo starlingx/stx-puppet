@@ -771,7 +771,6 @@ class platform::kubernetes::master
   contain ::platform::kubernetes::coredns
   contain ::platform::kubernetes::firewall
   contain ::platform::kubernetes::configuration
-  contain ::platform::kubernetes::haproxy
 
   Class['::platform::sysctl::controller::reserve_ports'] -> Class[$name]
   Class['::platform::k8splatform'] -> Class[$name]
@@ -787,7 +786,13 @@ class platform::kubernetes::master
   -> Class['::platform::kubernetes::master::init']
   -> Class['::platform::kubernetes::coredns']
   -> Class['::platform::kubernetes::firewall']
-  -> Class['::platform::kubernetes::haproxy']
+
+  if (!str2bool($::usm_upgrade_in_progress) or str2bool($::upgrade_kube_apiserver_port_updated)) {
+    # TODO(mdecastr): This code is to support upgrades to stx 11,
+    # the condition can be removed in later releases, keeping the include.
+    include ::platform::kubernetes::haproxy
+    Class['::platform::kubernetes::firewall'] -> Class['::platform::kubernetes::haproxy']
+  }
 }
 
 class platform::kubernetes::worker::init
@@ -1442,6 +1447,37 @@ class platform::kubernetes::master::change_apiserver_parameters (
     exec { 'update configmap and apply changes to control plane components':
       command => "python /usr/share/puppet/modules/platform/files/change_k8s_control_plane_params.py ${cluster_host_addr} ${::is_controller_active}",  # lint:ignore:140chars
       timeout => 600}
+  }
+
+  if str2bool($::usm_upgrade_in_progress) {
+    # TODO(mdecastr): This code is to support upgrades to stx 11,
+    # it can be removed in later releases.
+    $old_kube_apiserver_port = '6443'
+    $new_kube_apiserver_port = '16443'
+    Exec['update configmap and apply changes to control plane components']
+    -> exec { 'Replace the kube-apiserver port in system kubeconfig files':
+        command   => "sed -i -e \'s/:${old_kube_apiserver_port}/:${new_kube_apiserver_port}/g\' /etc/kubernetes/*.conf", # lint:ignore:140chars
+        logoutput => false,
+        unless    => "grep -q :${new_kube_apiserver_port} /etc/kubernetes/admin.conf",
+      }
+    # Restart kube-scheduler, kube-controller-manager and kubelet after changing the port in .conf files
+    -> exec { 'Restart kube-scheduler':
+        command => "/usr/bin/kill -s SIGHUP $(pidof kube-scheduler)",
+        returns => [0,1],
+      }
+    -> exec { 'Restart kube-controller-manager':
+        command => "/usr/bin/kill -s SIGHUP $(pidof kube-controller-manager)",
+        returns => [0,1],
+      }
+    -> exec { 'restart_kubelet':
+        command => '/usr/local/sbin/pmon-restart kubelet',
+      }
+    -> file { '/etc/platform/.upgrade_kube_apiserver_port_updated':
+        ensure => present,
+        owner  => 'root',
+        group  => 'root',
+        mode   => '0640',
+      }
   }
 }
 
