@@ -53,9 +53,10 @@ KUBE_APISERVER_VOLUMES_TAG = 'platform::kubernetes::kube_apiserver_volumes::para
 CONTROLLER_MANAGER_VOLUMES_TAG = 'platform::kubernetes::kube_controller_manager_volumes::params::'
 SCHEDULER_VOLUMES_TAG = 'platform::kubernetes::kube_scheduler_volumes::params::'
 
+KUBE_APISERVER_MANIFEST = '/etc/kubernetes/manifests/kube-apiserver.yaml'
 KUBE_APISERVER_INTERNAL_PORT = 16443
-APISERVER_API_ENDPOINT = 'https://localhost:%s' % str(KUBE_APISERVER_INTERNAL_PORT)
-APISERVER_READYZ_ENDPOINT = APISERVER_API_ENDPOINT + '/readyz'
+KUBE_APISERVER_EXTERNAL_PORT = 6443
+
 SCHEDULER_HEALTHZ_ENDPOINT = "https://127.0.0.1:10259/healthz"
 CONTROLLER_MANAGER_HEALTHZ_ENDPOINT = "https://127.0.0.1:10257/healthz"
 KUBELET_HEALTHZ_ENDPOINT = "http://localhost:10248/healthz"
@@ -63,8 +64,6 @@ KUBELET_HEALTHZ_ENDPOINT = "http://localhost:10248/healthz"
 RECOVERY_TIMEOUT = 5
 RECOVERY_TRIES = 30
 RECOVERY_TRY_SLEEP = 5
-
-kube_operator = kubernetes.KubeOperator(host=APISERVER_API_ENDPOINT)
 
 INITCONFIG_BASE_TEMPLATE = '''---
 apiVersion: kubeadm.k8s.io/v1beta3
@@ -223,6 +222,29 @@ def update_k8s_kubelet(config_filename, error_log_file):
         return 1
 
 
+# This code is to support upgrades to stx 11, it can be removed in later releases.
+def is_kube_apiserver_port_updated():
+    with open(KUBE_APISERVER_MANIFEST, 'r') as file:
+        for line in file.readlines():
+            if '--secure-port' in line:
+                return str(KUBE_APISERVER_INTERNAL_PORT) in line
+    raise Exception('Could not read secure-port from kube-apiserver manifest.')
+
+
+def get_api_server_endpoint():
+    if is_kube_apiserver_port_updated():
+        return 'https://localhost:%s' % str(KUBE_APISERVER_INTERNAL_PORT)
+    return 'https://localhost:%s' % str(KUBE_APISERVER_EXTERNAL_PORT)
+
+
+def get_api_server_readyz_endpoint():
+    return get_api_server_endpoint() + '/readyz'
+
+
+def get_kube_operator():
+    return kubernetes.KubeOperator(host=get_api_server_endpoint())
+
+
 def patch_kubeadmin_configmap(new_data, is_controller_active):
     """The function patch the kubeadm-config configmap on the active controller.
     Return:
@@ -239,7 +261,9 @@ def patch_kubeadmin_configmap(new_data, is_controller_active):
         newyaml.dump(new_data, outstream)
         configmap_data = {'data': {'ClusterConfiguration': outstream.getvalue()}}
 
-        kube_operator.kube_patch_config_map(configmap_name, 'kube-system', configmap_data)
+        get_kube_operator().kube_patch_config_map(configmap_name,
+                                                  'kube-system',
+                                                  configmap_data)
         LOG.debug('Successfully patched kubeadm configmap.')
     except Exception as e:
         LOG.error("Unable to patch kubeadm config_map: %s", e)
@@ -370,7 +394,7 @@ def k8s_health_check(timeout, tries, try_sleep, healthz_endpoint):
     _tries = tries
 
     valid_endpoints = {
-        APISERVER_READYZ_ENDPOINT: 'apiserver',
+        get_api_server_readyz_endpoint(): 'apiserver',
         SCHEDULER_HEALTHZ_ENDPOINT: 'scheduler',
         CONTROLLER_MANAGER_HEALTHZ_ENDPOINT: 'controller_manager',
         KUBELET_HEALTHZ_ENDPOINT: 'kubelet'}
@@ -472,7 +496,7 @@ def restore_k8s_control_plane_config(cluster_config_bak_file,
     # Wait for kube-apiserver to be up before executing next steps
     k8s_apiserver_healthy = k8s_health_check(
         timeout=timeout, try_sleep=try_sleep, tries=tries,
-        healthz_endpoint=APISERVER_READYZ_ENDPOINT)
+        healthz_endpoint=get_api_server_readyz_endpoint())
     if not k8s_apiserver_healthy:
         return 2
 
@@ -776,7 +800,7 @@ def get_k8s_version(timeout=None, tries=None, try_sleep=None):
     tries = RECOVERY_TRIES if tries is None else tries
     try_sleep = RECOVERY_TRY_SLEEP if try_sleep is None else try_sleep
     try:
-        return kube_operator.kube_get_kubernetes_version()
+        return get_kube_operator().kube_get_kubernetes_version()
     except Exception:
         _tries = tries
         LOG.debug('Retrying to get k8s version ...')
@@ -785,7 +809,7 @@ def get_k8s_version(timeout=None, tries=None, try_sleep=None):
             try:
                 with time_limit(timeout):
                     try:
-                        return kube_operator.kube_get_kubernetes_version()
+                        return get_kube_operator().kube_get_kubernetes_version()
                     except Exception:
                         pass
             except TimeoutException:
@@ -808,7 +832,7 @@ def get_k8s_configmap(configmap, namespace='kube-system',
     tries = RECOVERY_TRIES if tries is None else tries
     try_sleep = RECOVERY_TRY_SLEEP if try_sleep is None else try_sleep
     try:
-        return kube_operator.kube_read_config_map(
+        return get_kube_operator().kube_read_config_map(
             name=configmap, namespace=namespace)
     except Exception:
         _tries = tries
@@ -818,8 +842,9 @@ def get_k8s_configmap(configmap, namespace='kube-system',
             try:
                 with time_limit(timeout):
                     try:
-                        k8s_configmap = kube_operator.kube_read_config_map(
-                            name=configmap, namespace=namespace)
+                        k8s_configmap = \
+                            get_kube_operator().kube_read_config_map(
+                                name=configmap, namespace=namespace)
                         return k8s_configmap
                     except Exception:
                         pass
@@ -860,7 +885,7 @@ def update_kubelet_configmap(latest_config, is_controller_active):
         current_kubelet_configmap = get_k8s_configmap(
             configmap_name, namespace=namespace)
         if current_kubelet_configmap:
-            kube_operator.kube_delete_config_map(
+            get_kube_operator().kube_delete_config_map(
                 name=configmap_name, namespace=namespace)
     except Exception as e:
         LOG.error('Deleting current kubelet confimap: %s', e)
@@ -868,7 +893,7 @@ def update_kubelet_configmap(latest_config, is_controller_active):
 
     # create new kubelet configmap from latest applied config
     try:
-        kube_operator.kube_create_config_map_from_file(
+        get_kube_operator().kube_create_config_map_from_file(
             namespace, configmap_name, latest_config,
             data_section_name='kubelet')
     except Exception as e:
@@ -1280,7 +1305,7 @@ def main():
     # and kube-apiserver is down.
     is_k8s_apiserver_up = k8s_health_check(
         timeout=timeout, try_sleep=try_sleep, tries=tries,
-        healthz_endpoint=APISERVER_READYZ_ENDPOINT)
+        healthz_endpoint=get_api_server_readyz_endpoint())
 
     # K8s control-plane backup config files
     if not os.path.isfile(kubeadm_cm_bak_file) or\
@@ -1499,7 +1524,7 @@ def main():
     # Wait for kube-apiserver to be up before executing next steps
     is_k8s_apiserver_healthy = k8s_health_check(
         timeout=timeout, try_sleep=try_sleep, tries=tries,
-        healthz_endpoint=APISERVER_READYZ_ENDPOINT)
+        healthz_endpoint=get_api_server_readyz_endpoint())
 
     # Check kube-apiserver health, then backup and restore
     if automatic_recovery:
@@ -1615,7 +1640,7 @@ def main():
     LOG.debug("Check all k8s control-plane components are up and running.")
     is_k8s_apiserver_healthy = k8s_health_check(
         timeout=timeout, try_sleep=try_sleep, tries=tries,
-        healthz_endpoint=APISERVER_READYZ_ENDPOINT)
+        healthz_endpoint=get_api_server_readyz_endpoint())
     is_k8s_controller_manager_healthy = k8s_health_check(
         timeout=timeout, try_sleep=try_sleep, tries=tries,
         healthz_endpoint=CONTROLLER_MANAGER_HEALTHZ_ENDPOINT)
