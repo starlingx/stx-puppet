@@ -1942,3 +1942,18 @@ class platform::sm::rook::runtime {
     }
   }
 }
+
+class platform::sm::duplex_migration::runtime {
+  # this is done during migration to preserve the floating address configured in linux until
+  # the system can unlock as duplex
+  exec { 'Unmanage management-ipv4':
+    command   => 'sm-unmanage service management-ipv4',
+    onlyif    => 'sm-dump | grep -q management-ipv4',
+    logoutput => true,
+  }
+  -> exec { 'Unmanage management-ipv6':
+    command   => 'sm-unmanage service management-ipv6',
+    onlyif    => 'sm-dump | grep -q management-ipv6',
+    logoutput => true,
+  }
+}

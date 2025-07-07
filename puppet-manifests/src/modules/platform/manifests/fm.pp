@@ -86,13 +86,17 @@ class platform::fm::haproxy
   include ::platform::params
   include ::platform::haproxy::params
 
-  platform::haproxy::proxy { 'fm-api-internal':
-    server_name        => 's-fm-api-internal',
-    public_ip_address  => $::platform::haproxy::params::private_ip_address,
-    public_port        => $api_port,
-    private_ip_address => $api_host,
-    private_port       => $api_port,
-    public_api         => false,
+  $system_mode = $::platform::params::system_mode
+
+  if $system_mode != 'simplex' {
+    platform::haproxy::proxy { 'fm-api-internal':
+      server_name        => 's-fm-api-internal',
+      public_ip_address  => $::platform::haproxy::params::private_ip_address,
+      public_port        => $api_port,
+      private_ip_address => $api_host,
+      private_port       => $api_port,
+      public_api         => false,
+    }
   }
 
   platform::haproxy::proxy { 'fm-api-public':

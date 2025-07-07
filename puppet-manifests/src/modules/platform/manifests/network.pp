@@ -1103,12 +1103,21 @@ class platform::network::interfaces (
   create_resources('network_config', $network_config, {})
 }
 
+class platform::network::blackhole (
+  $ipv4_host = undef,
+  $ipv4_subnet = undef,
+  $ipv6_host = undef,
+  $ipv6_subnet = undef,
+) {
+}
 
 class platform::network::apply {
+  include ::platform::params
   include ::platform::network::interfaces
   include ::platform::network::addresses
   include ::platform::network::routes
   include ::platform::network::interfaces::rate_limit
+  include ::platform::network::blackhole
 
   Exec['cleanup-interfaces-file']
   -> Network_config <| |>
@@ -1124,10 +1133,14 @@ class platform::network::apply {
   Network_config <| |>
   -> Network_route <| |>
   -> Exec['apply-network-config']
+  -> Exec['install-ipv4-blackhole-address-rule-simplex']
+  -> Exec['remove-ipv4-blackhole-address-rule-duplex']
 
   Network_config <| |>
   -> Platform::Network::Network_route6 <| |>
   -> Exec['apply-network-config']
+  -> Exec['install-ipv6-blackhole-address-rule-simplex']
+  -> Exec['remove-ipv6-blackhole-address-rule-duplex']
 
   exec {'apply-network-config':
     command => 'apply_network_config.py',
@@ -1148,6 +1161,37 @@ class platform::network::apply {
     logoutput => true,
     onlyif    => 'test -f /var/run/network-scripts.puppet/interfaces',
   }
+
+  # The commands below are used for the DRBD peer in AIO-SX as it needs one address to be provided
+  # not using a blackhole route because it triggers connection errors messages from the DRBD kernel modules
+  # this rule will prevent these packets to reach the outside world
+  # lint:ignore:140chars
+  exec { 'install-ipv4-blackhole-address-rule-simplex':
+    command   => "iptables -t raw -A OUTPUT -d ${::platform::network::blackhole::ipv4_host} -j DROP -m comment --comment 'stx drop rule for blackhole address in AIO-SX'",
+    logoutput => true,
+    unless    => "iptables -t raw -L OUTPUT | grep -q 'DROP.*${::platform::network::blackhole::ipv4_host}';",
+    onlyif    => 'test -f /etc/platform/simplex',
+  }
+
+  exec { 'install-ipv6-blackhole-address-rule-simplex':
+    command   => "ip6tables -t raw -A OUTPUT -d ${::platform::network::blackhole::ipv6_host} -j DROP  -m comment --comment 'stx drop rule for blackhole address in AIO-SX'",
+    logoutput => true,
+    unless    => "ip6tables -t raw -L OUTPUT | grep -q 'DROP.*${::platform::network::blackhole::ipv6_host}';",
+    onlyif    => 'test -f /etc/platform/simplex',
+  }
+
+  exec { 'remove-ipv4-blackhole-address-rule-duplex':
+    command   => "iptables -t raw -D OUTPUT \$(iptables -t raw -L OUTPUT -n --line-numbers | grep -E 'DROP.*${::platform::network::blackhole::ipv4_host}' | awk '{print \$1}')",
+    logoutput => true,
+    onlyif    => ["iptables -t raw -L OUTPUT | grep -q -E 'DROP.*${::platform::network::blackhole::ipv4_host}';", 'test ! -f /etc/platform/simplex'],
+  }
+
+  exec { 'remove-ipv6-blackhole-address-rule-duplex':
+    command   => "ip6tables -t raw -D OUTPUT \$(ip6tables -t raw -L OUTPUT -n --line-numbers | grep -E 'DROP.*${::platform::network::blackhole::ipv6_host}' | awk '{print \$1}')",
+    logoutput => true,
+    onlyif    => ["ip6tables -t raw -L OUTPUT | grep -q -E 'DROP.*${::platform::network::blackhole::ipv6_host}';", 'test ! -f /etc/platform/simplex'],
+  }
+  # lint:endignore:140chars
 }
 
 
