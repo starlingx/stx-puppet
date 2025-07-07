@@ -72,8 +72,6 @@ localAPIEndpoint:
   advertiseAddress: {}
   bindPort: %s'''
 
-INITCONFIG_TEMPLATE = INITCONFIG_BASE_TEMPLATE % str(KUBE_APISERVER_INTERNAL_PORT)
-
 
 class TimeoutException(Exception):
     pass
@@ -130,6 +128,19 @@ def _search_string_on_file(file_path, word):
     return False
 
 
+# This code is to support upgrades to stx 11, it can be removed in later releases.
+def is_kube_apiserver_port_rollback_in_progress():
+    return os.path.exists('/etc/platform/.upgrade_kube_apiserver_port_rollback')
+
+
+# This code is to support upgrades to stx 11, it can changed in later releases
+# to return only the KUBE_APISERVER_INTERNAL_PORT.
+def get_kubeadm_initconfig_template():
+    if is_kube_apiserver_port_rollback_in_progress():
+        return INITCONFIG_BASE_TEMPLATE % str(KUBE_APISERVER_EXTERNAL_PORT)
+    return INITCONFIG_BASE_TEMPLATE % str(KUBE_APISERVER_INTERNAL_PORT)
+
+
 def update_k8s_control_plane_components(config_filename, cluster_host_addr,
                                         target_component='apiserver'):
     """The function updates a k8s control-plane component."""
@@ -146,7 +157,7 @@ def update_k8s_control_plane_components(config_filename, cluster_host_addr,
     # Append the InitConfiguration to specify the local API endpoint
     try:
         with open(tmp_config_filename, 'a') as file:
-            file.write(INITCONFIG_TEMPLATE.format(cluster_host_addr))
+            file.write(get_kubeadm_initconfig_template().format(cluster_host_addr))
     except Exception as e:
         LOG.error('Problem initializing kubeadm config file with '
                   'InitConfiguration: %s', e)
@@ -231,6 +242,8 @@ def is_kube_apiserver_port_updated():
     raise Exception('Could not read secure-port from kube-apiserver manifest.')
 
 
+# This code is to support upgrades to stx 11, it can be changed to return only the
+# KUBE_APISERVER_INTERNAL_PORT version in later releases.
 def get_api_server_endpoint():
     if is_kube_apiserver_port_updated():
         return 'https://localhost:%s' % str(KUBE_APISERVER_INTERNAL_PORT)
