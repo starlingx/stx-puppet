@@ -2,6 +2,7 @@
 class platform::grub {
   include platform::grub::security_features
   include platform::grub::kernel_image
+  include platform::grub::system_mode
 }
 
 # update grub security feature kernel parameters
@@ -61,6 +62,15 @@ class platform::grub::kernel_image {
     exec { 'set standard kernel':
       command => '/usr/local/bin/puppet-update-grub-env.py --set-kernel-standard',
     }
+  }
+}
+
+# add system_mode variable to boot.env
+class platform::grub::system_mode {
+  include platform::params
+
+  exec { 'Update system_mode to boot.env':
+    command => "/usr/local/bin/puppet-update-grub-env.py --set-boot-variable system_mode=${platform::params::system_mode}",
   }
 }
 

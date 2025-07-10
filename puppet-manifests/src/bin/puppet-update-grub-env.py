@@ -26,7 +26,6 @@ import glob
 import sys
 
 BOOT_ENV = "/boot/efi/EFI/BOOT/boot.env"
-KERNEL_PARAMS_STRING = "kernel_params"
 
 
 # Get value of kernel_params from conf
@@ -52,7 +51,8 @@ def read_kernel_params(conf):
 def write_conf(conf, string):
     """Write key=value string to conf"""
     try:
-        cmd_unset = ['grub-editenv', conf, 'unset', KERNEL_PARAMS_STRING]
+        key = string.split("=")[0]
+        cmd_unset = ['grub-editenv', conf, 'unset', key]
         subprocess.check_output(cmd_unset)
 
         cmd_set = ['grub-editenv', conf, 'set', string]
@@ -110,6 +110,15 @@ def set_parser():
                         dest='list_kernels',
                         help='List available kernels',
                         action='store_true')
+
+    parser.add_argument('--set-boot-variable',
+                        dest='set_boot_variable',
+                        help='Update a variable value in boot.env')
+
+    parser.add_argument('--boot-index',
+                        dest='boot_index',
+                        choices=['1', '2'],
+                        help='Indicate the /boot/<1|2> dir to be updated')
 
     return parser
 
@@ -218,8 +227,20 @@ def edit_boot_env(args):
     write_conf(BOOT_ENV, kernel_params)
 
 
-def get_kernel_dir():
+def edit_boot_env_variable(args):
+    if "=" in args.set_boot_variable:
+        write_conf(BOOT_ENV, args.set_boot_variable)
+    else:
+        err_msg = "Invalid key=value: %s" % args.set_boot_variable
+        print(err_msg)
+        raise KeyError(err_msg)
+
+
+def get_kernel_dir(boot_index=None):
     """Get kernel directory"""
+
+    if boot_index:
+        return f"boot/{boot_index}"
 
     cmdline = ""
     with open("/proc/cmdline", encoding="utf-8") as f_cmdline:
@@ -233,7 +254,8 @@ def get_kernel_dir():
 def edit_kernel_env(args):
     """Edit kernel environment"""
 
-    kernel_dir = get_kernel_dir()
+    boot_index = args.boot_index if args.boot_index else None
+    kernel_dir = get_kernel_dir(boot_index=boot_index)
     path_all = os.path.join(kernel_dir, "vmlinuz*-amd64")
     path_rt = os.path.join(kernel_dir, "vmlinuz*rt*-amd64")
 
@@ -315,6 +337,9 @@ def main():
 
     if args.list_kernel_params:
         list_kernel_params()
+
+    if args.set_boot_variable:
+        edit_boot_env_variable(args)
 
 
 if __name__ == "__main__":
