@@ -31,6 +31,7 @@ include ::platform::ntp::client
 include ::platform::strongswan::apparmor
 include ::platform::ptpinstance
 include ::platform::ptpinstance::nic_clock
+include ::platform::ptpinstance::monitoring
 include ::platform::lldp
 include ::platform::patching
 include ::platform::usm
@@ -58,6 +59,7 @@ include ::platform::rook
 include ::platform::tty
 include ::platform::crashdump
 include ::platform::logpermission
+include ::platform::stalld
 
 class { '::platform::config::worker::post':
   stage => post,

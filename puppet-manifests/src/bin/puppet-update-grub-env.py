@@ -26,7 +26,7 @@ import glob
 import sys
 
 BOOT_ENV = "/boot/efi/EFI/BOOT/boot.env"
-KERNEL_PARAMS_STRING = "kernel_params"
+
 
 # Get value of kernel_params from conf
 def read_kernel_params(conf):
@@ -46,11 +46,13 @@ def read_kernel_params(conf):
 
     return res
 
+
 # Write key=value string to conf
 def write_conf(conf, string):
     """Write key=value string to conf"""
     try:
-        cmd_unset = ['grub-editenv', conf, 'unset', KERNEL_PARAMS_STRING]
+        key = string.split("=")[0]
+        cmd_unset = ['grub-editenv', conf, 'unset', key]
         subprocess.check_output(cmd_unset)
 
         cmd_set = ['grub-editenv', conf, 'set', string]
@@ -58,6 +60,7 @@ def write_conf(conf, string):
     except Exception as err:
         print(err)
         raise
+
 
 def set_parser():
     """Set command parser"""
@@ -108,7 +111,17 @@ def set_parser():
                         help='List available kernels',
                         action='store_true')
 
+    parser.add_argument('--set-boot-variable',
+                        dest='set_boot_variable',
+                        help='Update a variable value in boot.env')
+
+    parser.add_argument('--boot-index',
+                        dest='boot_index',
+                        choices=['1', '2'],
+                        help='Indicate the /boot/<1|2> dir to be updated')
+
     return parser
+
 
 def convert_dict_to_value(kernel_params_dict):
     """Dictionary to value"""
@@ -127,6 +140,7 @@ def convert_dict_to_value(kernel_params_dict):
         kernel_params += f" {kernel_params_dict['hugepage']}"
 
     return f"kernel_params={kernel_params}"
+
 
 def convert_value_to_dict(value):
     """Value to dictionary"""
@@ -156,7 +170,6 @@ def convert_value_to_dict(value):
         else:
             key, val = param, ''
 
-
         kernel_params_dict[key] = val
 
     if hugepage_cache:
@@ -176,6 +189,7 @@ def convert_value_to_dict(value):
         kernel_params_dict['hugepage'] = hugepage_cache
 
     return kernel_params_dict
+
 
 def edit_boot_env(args):
     """Edit boot environment"""
@@ -212,8 +226,21 @@ def edit_boot_env(args):
     kernel_params = convert_dict_to_value(kernel_params_dict)
     write_conf(BOOT_ENV, kernel_params)
 
-def get_kernel_dir():
+
+def edit_boot_env_variable(args):
+    if "=" in args.set_boot_variable:
+        write_conf(BOOT_ENV, args.set_boot_variable)
+    else:
+        err_msg = "Invalid key=value: %s" % args.set_boot_variable
+        print(err_msg)
+        raise KeyError(err_msg)
+
+
+def get_kernel_dir(boot_index=None):
     """Get kernel directory"""
+
+    if boot_index:
+        return f"boot/{boot_index}"
 
     cmdline = ""
     with open("/proc/cmdline", encoding="utf-8") as f_cmdline:
@@ -223,11 +250,13 @@ def get_kernel_dir():
 
     return "/boot/1"
 
+
 def edit_kernel_env(args):
     """Edit kernel environment"""
 
-    kernel_dir = get_kernel_dir()
-    path_all = os.path.join(kernel_dir,"vmlinuz*-amd64")
+    boot_index = args.boot_index if args.boot_index else None
+    kernel_dir = get_kernel_dir(boot_index=boot_index)
+    path_all = os.path.join(kernel_dir, "vmlinuz*-amd64")
     path_rt = os.path.join(kernel_dir, "vmlinuz*rt*-amd64")
 
     glob_all_kernels = [os.path.basename(f) for f in glob.glob(path_all)]
@@ -235,11 +264,12 @@ def edit_kernel_env(args):
     glob_std_kernels = list(set(glob_all_kernels) - set(glob_rt_kernels))
 
     if args.set_kernel_lowlatency:
-        kernel = f"kernel={sorted(glob_rt_kernels, reverse=True).pop()}"
+        set_kernel = sorted(glob_rt_kernels, reverse=True).pop()
     elif args.set_kernel_standard:
-        kernel = f"kernel={sorted(glob_std_kernels, reverse=True).pop()}"
+        set_kernel = sorted(glob_std_kernels, reverse=True).pop()
     else:
-        kernel = f"kernel={args.set_kernel}"
+        set_kernel = args.set_kernel
+    kernel = f"kernel={set_kernel}"
 
     if not kernel:
         err = f"Kernel not found in ${kernel_dir}"
@@ -251,8 +281,9 @@ def edit_kernel_env(args):
     write_conf(kernel_env, kernel)
 
     # write key-value kernel_rollback=... to kernel.env file
-    kernel_rollback_env = f"kernel_rollback={kernel}"
-    write_conf(kernel_env, kernel_rollback_env)
+    kernel_rollback = f"kernel_rollback={set_kernel}"
+    write_conf(kernel_env, kernel_rollback)
+
 
 def list_kernels():
     """List kernels"""
@@ -272,6 +303,7 @@ def list_kernels():
 
     print(output)
 
+
 def list_kernel_params():
     """List kernel params"""
 
@@ -287,6 +319,7 @@ def list_kernel_params():
         if line.startswith('kernel_params='):
             print(line)
             break
+
 
 def main():
     """Main"""
@@ -304,6 +337,10 @@ def main():
 
     if args.list_kernel_params:
         list_kernel_params()
+
+    if args.set_boot_variable:
+        edit_boot_env_variable(args)
+
 
 if __name__ == "__main__":
     main()

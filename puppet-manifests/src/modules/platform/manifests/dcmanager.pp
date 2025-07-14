@@ -10,6 +10,7 @@ class platform::dcmanager::params (
   $deploy_base_dir = '/opt/platform/deploy',
   $iso_base_dir_source = '/opt/platform/iso',
   $iso_base_dir_target = '/var/www/pages/iso',
+  $orch_worker_workers = undef,
   $state_workers = undef,
   $audit_worker_workers = undef,
   $rabbit_host = 'localhost',
@@ -78,12 +79,19 @@ class platform::dcmanager
       $audit_worker_workers_value = $::platform::dcmanager::params::audit_worker_workers
     }
 
+    if $::platform::dcmanager::params::orch_worker_workers == undef {
+      $orch_worker_workers_value = min($::platform::params::eng_workers_by_2, 4)
+    } else {
+      $orch_worker_workers_value = $::platform::dcmanager::params::orch_worker_workers
+    }
+
     class { '::dcmanager':
       rabbit_host          => $::platform::dcmanager::params::rabbit_host,
       rabbit_port          => $::platform::amqp::params::port,
       rabbit_userid        => $::platform::amqp::params::auth_user,
       rabbit_password      => $::platform::amqp::params::auth_password,
       state_workers        => $state_workers_value,
+      orch_worker_workers  => $orch_worker_workers_value,
       audit_worker_workers => $audit_worker_workers_value,
     }
     file {$iso_base_dir_source:
@@ -106,6 +114,7 @@ class platform::dcmanager
       CPUShares=1024
       CPUQuota=
       CPUQuotaPeriodSec=
+      Slice=system.slice
       | DISABLECPU
 
     # Create systemd DropIn overrides files for systemcontroller role
@@ -121,14 +130,17 @@ class platform::dcmanager
     # software, sw-patch-controller-daemon.
     # There is no reason to limit their CPUShares on systemcontroller.
     $service_names = [
+      'cron',
       'pmon',
       'ssh',
       'sysinv-agent',
       'collectd',
       'fm-api',
+      'rsync',
       'sm-api',
       'software-controller-daemon',
       'software',
+      'systemd-udevd',
       'sw-patch-controller-daemon'
     ]
     $services = $service_names.map |$var| { "${var}.service" }
@@ -150,6 +162,26 @@ class platform::dcmanager
       mode    => '0644',
     }
 
+    # Define systemd DropIn override to set default CPUShares for init.scope
+    $disable_scope_cpu = @("DISABLESCOPECPU"/L)
+      [Scope]
+      CPUShares=1024
+      | DISABLESCOPECPU
+
+    file { '/etc/systemd/system/init.scope.d/':
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => '0755',
+    }
+    -> file { '/etc/systemd/system/init.scope.d/init.scope-cpu-shares.conf':
+      ensure  => file,
+      content => inline_template($disable_scope_cpu),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0644',
+    }
+
     # Reload systemd to pick up DropIns
     -> exec { 'systemctl daemon reload - dcmanager overrides':
       command   => 'systemctl daemon-reload',
@@ -159,6 +191,12 @@ class platform::dcmanager
     # Restart services only if they already running
     -> exec { 'restart services - dcmanager overrides':
       command   => "systemctl try-restart ${services_string}",
+      logoutput => true,
+    }
+
+    # Restart init.scope
+    -> exec { 'restart init.scope - dcmanager overrides':
+      command   => 'init u',
       logoutput => true,
     }
   }

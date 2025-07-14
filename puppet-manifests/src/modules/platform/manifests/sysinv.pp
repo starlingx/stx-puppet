@@ -5,7 +5,26 @@ class platform::sysinv::params (
   $fm_catalog_info = 'faultmanagement:fm:internalURL',
   $server_timeout = '600s',
   $sysinv_api_workers = undef,
-) { }
+) {
+  # Set default values for database connection for AIO systems (except for
+  # systemcontroller on DC)
+  if ($::platform::params::system_type == 'All-in-one' and
+      $::platform::params::distributed_cloud_role != 'systemcontroller') {
+    $db_idle_timeout = 60
+    $db_pool_size = 1
+    $db_over_size = 5
+  } else {
+    $db_idle_timeout = undef
+    $db_pool_size = undef
+    $db_over_size = undef
+  }
+}
+
+class platform::sysinv::custom::params (
+  $db_idle_timeout = undef,
+  $db_pool_size    = undef,
+  $db_over_size    = undef,
+) {}
 
 class platform::sysinv
   inherits ::platform::sysinv::params {
@@ -14,6 +33,7 @@ class platform::sysinv
 
   include ::platform::params
   include ::platform::drbd::platform::params
+  include ::platform::sysinv::custom::params
 
   # sysinv-agent is started on all hosts
   include ::sysinv::agent
@@ -67,6 +87,38 @@ class platform::sysinv
   sysinv_config {
     'app_framework/missing_auto_update': value => true;
     'app_framework/skip_k8s_application_audit': value => false;
+  }
+
+  # On AIO systems, restrict the connection pool size
+  # If database information doesn't exist in yaml file, use default values
+  if $::platform::sysinv::custom::params::db_idle_timeout {
+    Sysinv_config <| title == 'database/connection_recycle_time' |> {
+      value => $::platform::sysinv::custom::params::db_idle_timeout,
+    }
+  } else {
+    Sysinv_config <| title == 'database/connection_recycle_time' |> {
+      value => $::platform::sysinv::params::db_idle_timeout,
+    }
+  }
+
+  if $::platform::sysinv::custom::params::db_pool_size {
+    Sysinv_config <| title == 'database/max_pool_size' |> {
+      value => $::platform::sysinv::custom::params::db_pool_size,
+    }
+  } else {
+    Sysinv_config <| title == 'database/max_pool_size' |> {
+      value => $::platform::sysinv::params::db_pool_size,
+    }
+  }
+
+  if $::platform::sysinv::custom::params::db_over_size {
+    Sysinv_config <| title == 'database/max_overflow' |> {
+      value => $::platform::sysinv::custom::params::db_over_size,
+    }
+  } else {
+    Sysinv_config <| title == 'database/max_overflow' |> {
+      value => $::platform::sysinv::params::db_over_size,
+    }
   }
 }
 

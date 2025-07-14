@@ -1,1 +1,4 @@
 .tox
+.stestr
+# IDE
+.vscode/*

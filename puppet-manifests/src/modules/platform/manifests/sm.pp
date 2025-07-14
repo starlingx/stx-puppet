@@ -1313,6 +1313,12 @@ class platform::sm
     -> exec { 'Provision DCManager-State in SM (service dcmanager-state)':
       command => 'sm-provision service dcmanager-state',
     }
+    -> exec { 'Provision DCCertmon (service-group-member dccertmon)':
+      command => 'sm-provision service-group-member distributed-cloud-services dccertmon',
+    }
+    -> exec { 'Provision DCCertmon in SM (service dccertmon)':
+      command => 'sm-provision service dccertmon',
+    }
     -> exec { 'Provision DCManager-Audit (service-group-member dcmanager-audit)':
       command => 'sm-provision service-group-member distributed-cloud-services dcmanager-audit',
     }
@@ -1330,6 +1336,12 @@ class platform::sm
     }
     -> exec { 'Provision DCManager-Orchestrator in SM (service dcmanager-orchestrator)':
       command => 'sm-provision service dcmanager-orchestrator',
+    }
+    -> exec { 'Provision DCManager-Orchestrator-Worker (service-group-member dcmanager-orchestrator-worker)':
+      command => 'sm-provision service-group-member distributed-cloud-services dcmanager-orchestrator-worker',
+    }
+    -> exec { 'Provision DCManager-Orchestrator-Worker in SM (service dcmanager-orchestrator-worker)':
+      command => 'sm-provision service dcmanager-orchestrator-worker',
     }
     -> exec { 'Provision DCManager-RestApi (service-group-member dcmanager-api)':
       command => 'sm-provision service-group-member distributed-cloud-services dcmanager-api',
@@ -1361,12 +1373,6 @@ class platform::sm
     -> exec { 'Provision DCOrch-Sysinv-Api-Proxy in SM (service dcorch-sysinv-api-proxy)':
       command => 'sm-provision service dcorch-sysinv-api-proxy',
     }
-    -> exec { 'Provision DCOrch-Patch-Api-Proxy (service-group-member dcorch-patch-api-proxy)':
-      command => 'sm-provision service-group-member distributed-cloud-services dcorch-patch-api-proxy',
-    }
-    -> exec { 'Provision DCOrch-Patch-Api-Proxy in SM (service dcorch-patch-api-proxy)':
-      command => 'sm-provision service dcorch-patch-api-proxy',
-    }
     -> exec { 'Provision DCOrch-USM-Api-Proxy (service-group-member dcorch-usm-api-proxy)':
       command => 'sm-provision service-group-member distributed-cloud-services dcorch-usm-api-proxy',
     }
@@ -1391,6 +1397,9 @@ class platform::sm
     -> exec { 'Configure Platform - DCManager-State':
       command => "sm-configure service_instance dcmanager-state dcmanager-state \"\"",
     }
+    -> exec { 'Configure Platform - DCCertmon':
+      command => "sm-configure service_instance dccertmon dccertmon \"\"",
+    }
     -> exec { 'Configure Platform - DCManager-Audit':
       command => "sm-configure service_instance dcmanager-audit dcmanager-audit \"\"",
     }
@@ -1399,6 +1408,9 @@ class platform::sm
     }
     -> exec { 'Configure Platform - DCManager-Orchestrator':
       command => "sm-configure service_instance dcmanager-orchestrator dcmanager-orchestrator \"\"",
+    }
+    -> exec { 'Configure Platform - DCManager-Orchestrator-Worker':
+      command => "sm-configure service_instance dcmanager-orchestrator-worker dcmanager-orchestrator-worker \"\"",
     }
     -> exec { 'Configure OpenStack - DCManager-API':
       command => "sm-configure service_instance dcmanager-api dcmanager-api \"\"",
@@ -1414,9 +1426,6 @@ class platform::sm
     }
     -> exec { 'Configure OpenStack - DCOrch-sysinv-api-proxy':
       command => "sm-configure service_instance dcorch-sysinv-api-proxy dcorch-sysinv-api-proxy \"\"",
-    }
-    -> exec { 'Configure OpenStack - DCOrch-patch-api-proxy':
-      command => "sm-configure service_instance dcorch-patch-api-proxy dcorch-patch-api-proxy \"\"",
     }
     -> exec { 'Configure OpenStack - DCOrch-usm-api-proxy':
       command => "sm-configure service_instance dcorch-usm-api-proxy dcorch-usm-api-proxy \"\"",
@@ -1530,12 +1539,7 @@ class platform::sm::update_oam_config::runtime {
     # the services below need to be restarted after, but wait for them to reach enabled-active
     -> exec {'wait-for-haproxy':
       command   => '[ $(sm-query service haproxy | grep -c ".*enabled-active.*") -eq 1 ]',
-      tries     => 15,
-      try_sleep => 1,
-    }
-    -> exec {'wait-for-vim-webserver':
-      command   => '[ $(sm-query service vim-webserver | grep -c ".*enabled-active.*") -eq 1 ]',
-      tries     => 15,
+      tries     => 30,
       try_sleep => 1,
     }
     -> exec {'wait-for-registry-token-server':
@@ -1936,5 +1940,20 @@ class platform::sm::rook::runtime {
         command => 'sm-deprovision service-group-member controller-services drbd-rook --apply',
       }
     }
+  }
+}
+
+class platform::sm::duplex_migration::runtime {
+  # this is done during migration to preserve the floating address configured in linux until
+  # the system can unlock as duplex
+  exec { 'Unmanage management-ipv4':
+    command   => 'sm-unmanage service management-ipv4',
+    onlyif    => 'sm-dump | grep -q management-ipv4',
+    logoutput => true,
+  }
+  -> exec { 'Unmanage management-ipv6':
+    command   => 'sm-unmanage service management-ipv6',
+    onlyif    => 'sm-dump | grep -q management-ipv6',
+    logoutput => true,
   }
 }

@@ -24,6 +24,8 @@ class platform::docker::params (
   $ghcr_registry_secure        = true,
   $registryk8s_registry_secure = true,
   $icr_registry_secure         = true,
+  $max_concurrent_downloads    = 3,
+  $max_concurrent_uploads      = 5,
 ) {
 
   include ::platform::network::oam::params
@@ -127,10 +129,45 @@ class platform::docker::proxyconfig
   }
 }
 
+class platform::docker::cpusharesconfig
+{
+  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+    # Define systemd DropIn override to set default CPUShares and
+    # remove CPUQuota.
+    $disable_cpu = @("DISABLECPU"/L)
+      [Service]
+      CPUShares=1024
+      CPUQuota=
+      CPUQuotaPeriodSec=
+      Slice=system.slice
+      | DISABLECPU
+
+    file { '/etc/systemd/system/docker.service.d/docker-cpu-shares.conf':
+      ensure  => file,
+      content => inline_template($disable_cpu),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0644',
+    }
+    # Reload systemd to pick up DropIn
+    -> exec { 'systemctl daemon reload - docker cpushares overrides':
+      command   => 'systemctl daemon-reload',
+      logoutput => true,
+    }
+    # Restart service only if already running
+    -> exec { 'restart docker service - docker cpushares overrides':
+      command   => 'systemctl try-restart docker.service',
+      logoutput => true,
+    }
+  }
+}
+
 class platform::docker::config
   inherits ::platform::docker::params {
 
+  include ::platform::docker::daemonconfig
   include ::platform::docker::proxyconfig
+  include ::platform::docker::cpusharesconfig
 
   # Docker restarts will trigger a containerd restart and containerd needs a
   # default route present for it's CRI plugin to load correctly. Since we are
@@ -224,8 +261,33 @@ class platform::docker::haproxy
   }
 }
 
+class platform::docker::daemonconfig
+{
+  include ::platform::docker::params
+  include ::platform::dockerdistribution::registries
+
+  $insecure_registries = $::platform::dockerdistribution::registries::insecure_registries
+  $max_concurrent_uploads = $::platform::docker::params::max_concurrent_uploads
+  $max_concurrent_downloads = $::platform::docker::params::max_concurrent_downloads
+
+  file { '/etc/docker':
+    ensure => 'directory',
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0700',
+  }
+  -> file { '/etc/docker/daemon.json':
+    ensure  => present,
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+    content => template('platform/insecuredockerregistry.conf.erb'),
+  }
+}
+
 class platform::docker::runtime
 {
+  include ::platform::docker::daemonconfig
   include ::platform::docker::proxyconfig
   include ::platform::containerd::proxyconfig
 

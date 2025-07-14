@@ -265,6 +265,11 @@ class platform::haproxy::runtime {
   include ::openstack::keystone::haproxy
   include ::openstack::barbican::haproxy
   include ::platform::smapi::haproxy
+  # TODO(mdecastr): This code is to support upgrades to stx 11,
+  # the condition can be removed in later releases, keeping the include.
+  if (!str2bool($::usm_upgrade_in_progress) or str2bool($::upgrade_kube_apiserver_port_updated)) {
+    include ::platform::kubernetes::haproxy
+  }
 
   class {'::platform::haproxy::reload':
     stage => post
@@ -276,4 +281,3 @@ class platform::haproxy::restart::runtime {
     stage => post
   }
 }
-

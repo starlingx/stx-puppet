@@ -1,7 +1,6 @@
 class platform::k8splatform::params (
   $slice                  = 'k8splatform.slice',
-  $k8splatform_shares     = 10240,
-
+  $k8splatform_shares     = 1024,
   $etcd_shares            = 1024,
   $etcd_quota_scale       = '',
   $containerd_shares      = 1024,
@@ -30,6 +29,11 @@ class platform::k8splatform
 
 class platform::k8splatform::config
   inherits ::platform::k8splatform::params {
+
+  $k8splatform_cpushares = $::platform::params::distributed_cloud_role ? {
+    'systemcontroller' => 10240,
+    default            => $platform::k8splatform::params::k8splatform_shares
+  }
 
   file { '/etc/systemd/system/k8splatform.slice':
     ensure  => file,

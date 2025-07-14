@@ -12,7 +12,6 @@ class platform::dcorch::params (
   $sysinv_api_proxy_port = undef,
   $cinder_api_proxy_port = 28776,
   $cinder_enable_ports   = false,
-  $patch_api_proxy_port = undef,
   $usm_api_proxy_port = undef,
   $identity_api_proxy_port = undef,
   $sysinv_api_proxy_client_timeout = '600s',
@@ -152,11 +151,6 @@ class platform::dcorch::haproxy
       public_port  => $cinder_api_proxy_port,
       private_port => $cinder_api_proxy_port,
     }
-    platform::haproxy::proxy { 'dcorch-patch-api-proxy':
-      server_name  => 's-dcorch-patch-api-proxy',
-      public_port  => $patch_api_proxy_port,
-      private_port => $patch_api_proxy_port,
-    }
     platform::haproxy::proxy { 'dcorch-usm-api-proxy':
       server_name  => 's-dcorch-usm-api-proxy',
       public_port  => $usm_api_proxy_port,
@@ -185,14 +179,6 @@ class platform::dcorch::haproxy
       private_port      => $sysinv_api_proxy_port,
       client_timeout    => $sysinv_api_proxy_client_timeout,
       server_timeout    => $sysinv_api_proxy_server_timeout,
-    }
-    # Configure rules for https enabled patching api proxy admin endpoint.
-    platform::haproxy::proxy { 'dcorch-patch-api-proxy-admin':
-      https_ep_type     => 'admin',
-      server_name       => 's-dcorch-patch-api-proxy',
-      public_ip_address => $::platform::haproxy::params::private_ip_address,
-      public_port       => $patch_api_proxy_port + 1,
-      private_port      => $patch_api_proxy_port,
     }
     # Configure rules for https enabled usm api proxy admin endpoint.
     platform::haproxy::proxy { 'dcorch-usm-api-proxy-admin':

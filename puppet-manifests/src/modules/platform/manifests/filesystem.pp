@@ -152,6 +152,7 @@ define platform::filesystem::resize(
   # type metadata from a previous install
   -> exec { "resizing: wipe end of device ${device}":
     command => "dd if=/dev/zero of=${device} bs=1M seek=$(($(blockdev --getsz ${device})/2048 - 10)) count=10",
+    onlyif  => "blkid -s TYPE -o value ${devmapper} | grep -v xfs",
   }
   -> exec { "resize2fs ${devmapper}":
     command => "resize2fs ${devmapper}",

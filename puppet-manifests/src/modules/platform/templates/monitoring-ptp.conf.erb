@@ -1,0 +1,9 @@
+[global]
+##
+## Default Data Set
+##
+<%- if @global_parameters -%>
+<%- @global_parameters.each do |key,value| -%>
+<%= key %> <%= value %>
+<%- end -%>
+<%- end -%>

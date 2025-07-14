@@ -30,21 +30,35 @@ for namespace in $namespaces; do
     fi
 done
 
-# Trigger rollout restart
-for namespace in ${!deployments[@]}; do
-    for name in ${deployments[$namespace]}; do
-        kubectl rollout restart deployment $name -n $namespace
+# Trigger rollout restart. If strategy is OnDelete, delete all pods.
+function trigger_restart () {
+    local kind=$1
+    local namespace=$2
+    local sets=$3
+    for name in $sets; do
+        kubectl rollout restart "$kind" "$name" -n "$namespace"
+
+        local strategy
+        strategy="$(
+            kubectl get "$kind" "$name" -n "$namespace" -o jsonpath='{.spec.updateStrategy.type}'
+        )"
+
+        if [ "$strategy" = "OnDelete" ]; then
+            app="$(kubectl get "$kind" "$name" -n "$namespace" \
+                -o jsonpath='{.spec.selector.matchLabels.app}')"
+            kubectl delete pod -l app="$app" -n "$namespace"
+        fi
     done
+}
+
+for namespace in ${!deployments[@]}; do
+    trigger_restart deployment "$namespace" "${deployments[$namespace]}"
 done
 for namespace in ${!daemonsets[@]}; do
-    for name in ${daemonsets[$namespace]}; do
-        kubectl rollout restart daemonset $name -n $namespace
-    done
+    trigger_restart daemonset "$namespace" "${daemonsets[$namespace]}"
 done
 for namespace in ${!statefulsets[@]}; do
-    for name in ${statefulsets[$namespace]}; do
-        kubectl rollout restart statefulset $name -n $namespace
-    done
+    trigger_restart statefulset "$namespace" "${statefulsets[$namespace]}"
 done
 
 # Check the rollout status. Check every 45 seconds for, at least, 30 mins.
@@ -60,7 +74,19 @@ function check_status () {
     local sets=$4
     local ret=0
     for name in $sets; do
-        kubectl rollout status --timeout=100ms $kind $name -n $namespace 2>/dev/null
+        local strategy
+        strategy="$(
+            kubectl get "$kind" "$name" -n "$namespace" -o jsonpath='{.spec.updateStrategy.type}'
+        )"
+        if [ "$strategy" = "OnDelete" ]; then
+            app="$(kubectl get "$kind" "$name" -n "$namespace" \
+                -o jsonpath='{.spec.selector.matchLabels.app}')"
+            kubectl wait --for=condition=Ready --timeout=500ms \
+                pod -l app="$app" -n "$namespace" 2>/dev/null
+        else
+            kubectl rollout status --timeout=100ms $kind $name -n $namespace 2>/dev/null
+        fi
+
         if [ $? -ne 0 ]; then
             ret=1
             if [ $retry -eq $max_retries ]; then

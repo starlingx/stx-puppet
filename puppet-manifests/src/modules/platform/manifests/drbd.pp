@@ -13,12 +13,28 @@ class platform::drbd::params (
   $secure = false,
 ) {
   include ::platform::params
+  include ::platform::network::blackhole
+
   $host1 = $::platform::params::controller_0_hostname
   $host2 = $::platform::params::controller_1_hostname
 
   include ::platform::network::mgmt::params
   $ip1 = $::platform::network::mgmt::params::controller0_address
-  $ip2 = $::platform::network::mgmt::params::controller1_address
+
+  # adding a dummy address that will fail to respond. The selected destination addresses
+  # discard packets via iptables
+  $system_mode = $::platform::params::system_mode
+
+  if $system_mode == 'simplex' {
+    if $::platform::network::mgmt::params::controller0_address =~ Stdlib::IP::Address::V6 {
+      $ip2 = $::platform::network::blackhole::ipv6_host
+    } else {
+      $ip2 = $::platform::network::blackhole::ipv4_host
+    }
+  }
+  else {
+    $ip2 = $::platform::network::mgmt::params::controller1_address
+  }
 
   $manage = str2bool($::is_initial_config)
 }

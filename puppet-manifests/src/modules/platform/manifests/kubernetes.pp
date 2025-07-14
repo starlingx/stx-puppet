@@ -12,6 +12,7 @@ class platform::kubernetes::params (
   $apiserver_cluster_ip = undef,
   $dns_service_ip = undef,
   $host_labels = [],
+  $k8s_cpushares = 10240,
   $k8s_cpuset = undef,
   $k8s_nodeset = undef,
   $k8s_platform_cpuset = undef,
@@ -106,6 +107,21 @@ define platform::kubernetes::pull_images_from_registry (
   }
 }
 
+# Define for kubelet to be monitored by pmond
+define platform::kubernetes::pmond_kubelet_file(
+  $custom_title = 'default',  # Default title
+) {
+  # Create the file if not present
+  file { '/etc/pmon.d/kubelet.conf':
+    ensure  => file,
+    replace => 'no',
+    content => template('platform/kubelet-pmond-conf.erb'),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+  }
+}
+
 class platform::kubernetes::configuration {
 
   # Check to ensure that this code is not executed
@@ -172,6 +188,7 @@ class platform::kubernetes::cgroup
 
   $k8s_cpuset = $::platform::kubernetes::params::k8s_cpuset
   $k8s_nodeset = $::platform::kubernetes::params::k8s_nodeset
+  $k8s_cpushares = $::platform::kubernetes::params::k8s_cpushares
 
   # Default to float across all cpus and numa nodes
   if !defined('$k8s_cpuset') {
@@ -230,6 +247,13 @@ class platform::kubernetes::cgroup
         owner  => 'root',
         group  => 'root',
         mode   => '0644',
+      }
+    }
+    if $::platform::params::distributed_cloud_role != 'systemcontroller' and $controller == 'cpu' {
+      $cgroup_cpushares = "${cgroup_dir}/cpu.shares"
+      File[ $cgroup_dir ]
+      -> exec { "Create ${cgroup_cpushares}" :
+        command => "/bin/echo ${k8s_cpushares} > ${cgroup_cpushares} || :",
       }
     }
   }
@@ -421,6 +445,129 @@ class platform::kubernetes::set_crt_permissions {
   }
 }
 
+class platform::kubernetes::haproxy {
+  include ::platform::params
+  include ::platform::network::oam::params
+  include ::platform::network::oam::ipv4::params
+  include ::platform::network::oam::ipv6::params
+  include ::platform::network::cluster_host::params
+  include ::platform::network::cluster_host::ipv4::params
+  include ::platform::network::cluster_host::ipv6::params
+
+  # FLOATING
+  $ipv4_oam_floating_ip = $::platform::network::oam::ipv4::params::controller_address
+  $ipv6_oam_floating_ip = $::platform::network::oam::ipv6::params::controller_address
+  $ipv4_cluster_floating_ip = $::platform::network::cluster_host::ipv4::params::controller_address
+  $ipv6_cluster_floating_ip = $::platform::network::cluster_host::ipv6::params::controller_address
+  $primary_cluster_floating_ip = $::platform::network::cluster_host::params::controller_address
+
+  # HOST
+  $controller_0_hostname = $::platform::params::controller_0_hostname
+  $controller_1_hostname = $::platform::params::controller_1_hostname
+
+  case $::hostname {
+    $controller_0_hostname: {
+      $ipv4_oam_host_ip = $::platform::network::oam::ipv4::params::controller0_address
+      $ipv6_oam_host_ip = $::platform::network::oam::ipv6::params::controller0_address
+      $ipv4_cluster_host_ip = $::platform::network::cluster_host::ipv4::params::controller0_address
+      $ipv6_cluster_host_ip = $::platform::network::cluster_host::ipv6::params::controller0_address
+      if $::platform::params::system_mode == 'simplex' {
+        $primary_cluster_host_ip = $::platform::network::cluster_host::params::controller_address
+      } else {
+        $primary_cluster_host_ip = $::platform::network::cluster_host::params::controller0_address
+      }
+    }
+    $controller_1_hostname: {
+      $ipv4_oam_host_ip = $::platform::network::oam::ipv4::params::controller1_address
+      $ipv6_oam_host_ip = $::platform::network::oam::ipv6::params::controller1_address
+      $ipv4_cluster_host_ip = $::platform::network::cluster_host::ipv4::params::controller1_address
+      $ipv6_cluster_host_ip = $::platform::network::cluster_host::ipv6::params::controller1_address
+      $primary_cluster_host_ip = $::platform::network::cluster_host::params::controller1_address
+    }
+    default: {
+      fail("Hostname must be either ${controller_0_hostname} or ${controller_1_hostname}")
+    }
+  }
+
+  # SSL Bridge (OAM -> HAproxy)
+  $haproxy_port = '6443'
+  $ssl_server_option = 'ssl crt /etc/ssl/private/server-cert.pem'
+  $ssl_client_option = 'check-ssl ssl verify required ca-file /etc/kubernetes/pki/ca.crt'
+
+  $proto_header = 'X-Forwarded-Proto https'
+  $hsts_option = 'Strict-Transport-Security max-age=63072000;\ includeSubDomains'
+  $http_frontend_options = {
+    'default_backend' => 'k8s-backend',
+    'http-request'    => "add-header ${proto_header}",
+    'http-response'   => "add-header ${hsts_option}",
+  }
+
+  $oam_ips = [
+    $ipv4_oam_floating_ip,
+    $ipv6_oam_floating_ip,
+    $ipv4_oam_host_ip,
+    $ipv6_oam_host_ip,
+  ].filter |$value| { $value != undef }.unique
+
+  $oam_ips_serving_rest_api_certificate = $oam_ips.reduce( {} ) |Hash $memo, $item| {
+    $memo + {"${item}:${haproxy_port}" => $ssl_server_option}
+  }
+
+  haproxy::frontend { 'k8s-frontend':
+    collect_exported => false,
+    name             => 'k8s-frontend',
+    bind             => $oam_ips_serving_rest_api_certificate,
+    options          => $http_frontend_options,
+  }
+
+  haproxy::backend { 'k8s-backend':
+    collect_exported => false,
+    name             => 'k8s-backend',
+    options          => {
+      'server' => "s-k8s ${primary_cluster_floating_ip}:${haproxy_port} ${ssl_client_option}",
+    },
+  }
+
+  # SSL Passtrough (Cluster Host -> kube-apiserver)
+  $kube_apiserver_port = '16443'
+
+  $tcp_ssl_hello = 'content accept if { req_ssl_hello_type 1 }'
+  $tcp_req_delay = 'inspect-delay 5s'
+  $tcp_frontend_options = {
+    'mode'            => 'tcp',
+    'option'          => 'tcplog',
+    'default_backend' => 'k8s-backend-internal',
+    'tcp-request'     => [$tcp_ssl_hello,$tcp_req_delay],
+  }
+
+  $cluster_ips = [
+    $ipv4_cluster_floating_ip,
+    $ipv6_cluster_floating_ip,
+    $ipv4_cluster_host_ip,
+    $ipv6_cluster_host_ip,
+  ].filter |$value| { $value != undef }.unique
+
+  $cluster_ips_ssl_passtrough = $cluster_ips.reduce( {} ) |Hash $memo, $item| {
+    $memo + {"${item}:${haproxy_port}" => ' '}
+  }
+
+  haproxy::frontend { 'k8s-frontend-internal':
+    collect_exported => false,
+    name             => 'k8s-frontend-internal',
+    bind             => $cluster_ips_ssl_passtrough,
+    options          => $tcp_frontend_options,
+  }
+
+  haproxy::backend { 'k8s-backend-internal':
+    collect_exported => false,
+    name             => 'k8s-backend-internal',
+    options          => {
+      'mode'   => 'tcp',
+      'server' => "s-k8s-internal ${primary_cluster_host_ip}:${kube_apiserver_port} check",
+    },
+  }
+}
+
 class platform::kubernetes::master::init
   inherits ::platform::kubernetes::params {
 
@@ -524,15 +671,6 @@ class platform::kubernetes::master::init
       mode    => '0644',
     }
 
-    # set kubelet monitored by pmond
-    -> file { '/etc/pmon.d/kubelet.conf':
-      ensure  => file,
-      content => template('platform/kubelet-pmond-conf.erb'),
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0644',
-    }
-
     # Reload systemd
     -> exec { 'perform systemctl daemon reload for kubelet override':
       command   => 'systemctl daemon-reload',
@@ -602,7 +740,12 @@ class platform::kubernetes::master::init
       command   => 'systemctl --no-block try-restart kubelet.service',
       logoutput => true,
     }
+
   }
+
+  # TODO(sshathee) move this to if block for stx-10 to stx-11 upgrade
+  # set kubelet to be monitored by pmond
+  platform::kubernetes::pmond_kubelet_file { 'kubelet_monitoring': }
 
   # Run kube-cert-rotation daily
   cron { 'kube-cert-rotation':
@@ -643,6 +786,13 @@ class platform::kubernetes::master
   -> Class['::platform::kubernetes::master::init']
   -> Class['::platform::kubernetes::coredns']
   -> Class['::platform::kubernetes::firewall']
+
+  if (!str2bool($::usm_upgrade_in_progress) or str2bool($::upgrade_kube_apiserver_port_updated)) {
+    # TODO(mdecastr): This code is to support upgrades to stx 11,
+    # the condition can be removed in later releases, keeping the include.
+    include ::platform::kubernetes::haproxy
+    Class['::platform::kubernetes::firewall'] -> Class['::platform::kubernetes::haproxy']
+  }
 }
 
 class platform::kubernetes::worker::init
@@ -702,14 +852,8 @@ class platform::kubernetes::worker::init
     mode    => '0644',
   }
 
-  # set kubelet monitored by pmond
-  -> file { '/etc/pmon.d/kubelet.conf':
-    ensure  => file,
-    content => template('platform/kubelet-pmond-conf.erb'),
-    owner   => 'root',
-    group   => 'root',
-    mode    => '0644',
-  }
+  # set kubelet to be monitored by pmond
+  platform::kubernetes::pmond_kubelet_file { 'kubelet_monitoring': }
 
   # Reload systemd to pick up overrides
   -> exec { 'perform systemctl daemon reload for kubelet override':
@@ -966,6 +1110,23 @@ class platform::kubernetes::pre_pull_control_plane_images
   }
 }
 
+define platform::kubernetes::patch_coredns_kubeproxy_serviceaccount($current_version) {
+  if versioncmp(regsubst($current_version, '^v', ''), '1.30.0') >= 0 {
+    exec { 'Patch pull secret into kube-proxy service account':
+      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch serviceaccount kube-proxy -p \'{"imagePullSecrets": [{"name": "registry-local-secret"}]}\'', # lint:ignore:140chars
+      logoutput => true,
+      }
+    -> exec { 'Patch pull secret into coredns service account':
+        command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch serviceaccount coredns -p \'{"metadata": {"labels": {"kubernetes.io/cluster-service": "true","addonmanager.kubernetes.io/mode": "Reconcile"}},"imagePullSecrets": [{"name": "default-registry-key"}]}\'', # lint:ignore:140chars
+        logoutput => true,
+      }
+    -> exec { 'Restart the coredns and kube-proxy pods':
+        command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf rollout restart deployment coredns -n kube-system && kubectl --kubeconfig=/etc/kubernetes/admin.conf rollout restart daemonset kube-proxy -n kube-system', # lint:ignore:140chars
+        logoutput => true,
+      }
+  }
+}
+
 class platform::kubernetes::upgrade_first_control_plane
   inherits ::platform::kubernetes::params {
 
@@ -1000,8 +1161,12 @@ class platform::kubernetes::upgrade_first_control_plane
   # This issue not present in the fresh install with K8s 1.29.
   -> file { '/etc/kubernetes/admin.conf':
     owner => 'root',
-    group => 'sys_protected',
+    group => 'root',
     mode  => '0640',
+  }
+  -> exec { 'set_acl_on_admin_conf':
+    command   => 'setfacl -m g:sys_protected:r /etc/kubernetes/admin.conf',
+    logoutput => true,
   }
 
   if $::platform::params::system_mode != 'simplex' {
@@ -1022,6 +1187,12 @@ class platform::kubernetes::upgrade_first_control_plane
       logoutput => true,
       require   => Exec['upgrade first control plane']
     }
+  }
+  # Upgrading the K8s control plane from version 1.29 to 1.30
+  # resets the configurations of the CoreDNS and kube-proxy service accounts.
+  # The following change will restore the configurations for these service accounts.
+  -> platform::kubernetes::patch_coredns_kubeproxy_serviceaccount { 'patch_serviceaccount':
+      current_version => $version
   }
 }
 
@@ -1060,6 +1231,12 @@ class platform::kubernetes::upgrade_control_plane
     logoutput => true,
   }
 
+  # Upgrading the K8s control plane from version 1.29 to 1.30
+  # resets the configurations of the CoreDNS and kube-proxy service accounts.
+  # The following change will restore the configurations for these service accounts.
+  -> platform::kubernetes::patch_coredns_kubeproxy_serviceaccount { 'patch_serviceaccount':
+      current_version => $version
+  }
 }
 
 # Define for unmasking and starting a service
@@ -1271,6 +1448,37 @@ class platform::kubernetes::master::change_apiserver_parameters (
       command => "python /usr/share/puppet/modules/platform/files/change_k8s_control_plane_params.py ${cluster_host_addr} ${::is_controller_active}",  # lint:ignore:140chars
       timeout => 600}
   }
+
+  if str2bool($::usm_upgrade_in_progress) {
+    # TODO(mdecastr): This code is to support upgrades to stx 11,
+    # it can be removed in later releases.
+    $old_kube_apiserver_port = '6443'
+    $new_kube_apiserver_port = '16443'
+    Exec['update configmap and apply changes to control plane components']
+    -> exec { 'Replace the kube-apiserver port in system kubeconfig files':
+        command   => "sed -i -e \'s/:${old_kube_apiserver_port}/:${new_kube_apiserver_port}/g\' /etc/kubernetes/*.conf", # lint:ignore:140chars
+        logoutput => false,
+        unless    => "grep -q :${new_kube_apiserver_port} /etc/kubernetes/admin.conf",
+      }
+    # Restart kube-scheduler, kube-controller-manager and kubelet after changing the port in .conf files
+    -> exec { 'Restart kube-scheduler':
+        command => "/usr/bin/kill -s SIGHUP $(pidof kube-scheduler)",
+        returns => [0,1],
+      }
+    -> exec { 'Restart kube-controller-manager':
+        command => "/usr/bin/kill -s SIGHUP $(pidof kube-controller-manager)",
+        returns => [0,1],
+      }
+    -> exec { 'restart_kubelet':
+        command => '/usr/local/sbin/pmon-restart kubelet',
+      }
+    -> file { '/etc/platform/.upgrade_kube_apiserver_port_updated':
+        ensure => present,
+        owner  => 'root',
+        group  => 'root',
+        mode   => '0640',
+      }
+  }
 }
 
 class platform::kubernetes::certsans::runtime
@@ -1327,83 +1535,190 @@ class platform::kubernetes::certsans::runtime
   } else {
     $localhost_address = '127.0.0.1'
   }
+
   if $sec_mgmt_subnet_ver != undef {
     if $sec_mgmt_subnet_ver == $ipv4_val {
-      $certsans_sec_localhost = ',127.0.0.1'
+      $certsans_sec_localhost_array = ['127.0.0.1']
     } elsif $sec_mgmt_subnet_ver == $ipv6_val {
-      $certsans_sec_localhost = ',::1'
+      $certsans_sec_localhost_array = ['::1']
     }
   } else {
-    $certsans_sec_localhost = ''
+    $certsans_sec_localhost_array = []
   }
 
   if $::platform::params::system_mode == 'simplex' {
-    $certsans_prim = "${platform::network::cluster_host::params::controller_address}, \
-                  ${platform::network::cluster_host::params::controller0_address}, \
-                  ${localhost_address}, \
-                  ${platform::network::oam::params::controller_address}"
 
-    if $sec_oam_subnet_ver == $ipv4_val {
-      $certsans_oam_sec = ",${platform::network::oam::ipv4::params::controller_address}"
-    } elsif $sec_oam_subnet_ver == $ipv6_val {
-      $certsans_oam_sec = ",${platform::network::oam::ipv6::params::controller_address}"
+    # primary addresses
+    $primary_floating_array = [$::platform::network::cluster_host::params::controller_address,
+                                $::platform::network::oam::params::controller_address,
+                                $localhost_address]
+    if ($::platform::network::cluster_host::params::controller0_address != undef) {
+      $primary_unit_cluster_array = [$::platform::network::cluster_host::params::controller0_address]
     } else {
-      $certsans_oam_sec = ''
+      $primary_unit_cluster_array = []
+    }
+    $certsans_prim_array = $primary_floating_array + $primary_unit_cluster_array
+
+    # secondary addresses: OAM
+    if $sec_oam_subnet_ver == $ipv4_val {
+      $certsans_oam_sec_array = [$::platform::network::oam::ipv4::params::controller_address]
+    } elsif $sec_oam_subnet_ver == $ipv6_val {
+      $certsans_oam_sec_array = [$::platform::network::oam::ipv6::params::controller_address]
+    } else {
+      $certsans_oam_sec_array = []
     }
 
     if $sec_cluster_host_subnet_ver == $ipv4_val {
-      $certsans_cluster_host_sec = ",${platform::network::cluster_host::ipv4::params::controller_address}, \
-                                     ${platform::network::cluster_host::ipv4::params::controller0_address}"
+
+      $sec_cluster_float_array = [$::platform::network::cluster_host::ipv4::params::controller_address]
+      if ($::platform::network::cluster_host::ipv4::params::controller0_address != undef) {
+        $sec_cluster_unit_array = [$::platform::network::cluster_host::ipv4::params::controller0_address]
+      } else {
+        $sec_cluster_unit_array = []
+      }
+      $certsans_cluster_sec_array = $sec_cluster_float_array + $sec_cluster_unit_array
+
     } elsif $sec_cluster_host_subnet_ver == $ipv6_val {
-      $certsans_cluster_host_sec = ",${platform::network::cluster_host::ipv6::params::controller_address}, \
-                                     ${platform::network::cluster_host::ipv6::params::controller0_address}"
+
+      $sec_cluster_float_array = [$::platform::network::cluster_host::ipv6::params::controller_address]
+      if ($::platform::network::cluster_host::ipv6::params::controller0_address != undef) {
+        $sec_cluster_unit_array = [$::platform::network::cluster_host::ipv6::params::controller0_address]
+      } else {
+        $sec_cluster_unit_array = []
+      }
+      $certsans_cluster_sec_array = $sec_cluster_float_array + $sec_cluster_unit_array
+
     } else {
-      $certsans_cluster_host_sec = ''
+      $certsans_cluster_sec_array = []
     }
-
-    $certsans_sec_hosts = "${certsans_oam_sec}${certsans_cluster_host_sec}"
-
-    $certsans_sec = "${certsans_sec_hosts}${certsans_sec_localhost}"
+    $certsans_sec_hosts_array = $certsans_oam_sec_array + $certsans_cluster_sec_array + $certsans_sec_localhost_array
 
   } else {
-    $certsans_prim = "${platform::network::cluster_host::params::controller_address}, \
-                  ${platform::network::cluster_host::params::controller0_address}, \
-                  ${platform::network::cluster_host::params::controller1_address}, \
-                  ${localhost_address}, \
-                  ${platform::network::oam::params::controller_address}, \
-                  ${platform::network::oam::params::controller0_address}, \
-                  ${platform::network::oam::params::controller1_address}"
+    $primary_floating_array = [$::platform::network::cluster_host::params::controller_address,
+                                $::platform::network::oam::params::controller_address,
+                                $localhost_address]
 
+    # primary OAM unit addresses
+    if ($::platform::network::oam::params::controller0_address != undef) and
+        ($::platform::network::oam::params::controller1_address != undef) {
+      $primary_unit_oam_array = [$::platform::network::oam::params::controller0_address,
+                                  $::platform::network::oam::params::controller1_address]
+    } elsif ($::platform::network::oam::params::controller0_address != undef) and
+            ($::platform::network::oam::params::controller1_address == undef) {
+      $primary_unit_oam_array = [$::platform::network::oam::params::controller0_address]
+    } elsif ($::platform::network::oam::params::controller0_address == undef) and
+            ($::platform::network::oam::params::controller1_address != undef) {
+      $primary_unit_oam_array = [$::platform::network::oam::params::controller1_address]
+    } else {
+      $primary_unit_oam_array = []
+    }
+
+    # primary Cluster-host unit addresses
+    if ($::platform::network::cluster_host::params::controller0_address != undef) and
+        ($::platform::network::cluster_host::params::controller0_address != undef) {
+      $primary_unit_cluster_array = [$::platform::network::cluster_host::params::controller0_address,
+                                      $::platform::network::cluster_host::params::controller1_address]
+    } elsif ($::platform::network::cluster_host::params::controller0_address != undef) and
+            ($::platform::network::cluster_host::params::controller1_address == undef) {
+      $primary_unit_cluster_array = [$::platform::network::cluster_host::params::controller0_address]
+    } elsif ($::platform::network::cluster_host::params::controller0_address == undef) and
+            ($::platform::network::cluster_host::params::controller1_address != undef) {
+      $primary_unit_cluster_array = [$::platform::network::cluster_host::params::controller1_address]
+    } else {
+      $primary_unit_cluster_array = []
+    }
+
+    $certsans_prim_array = $primary_floating_array + $primary_unit_oam_array + $primary_unit_cluster_array
+
+    # secondary OAM addresses
     if $sec_oam_subnet_ver == $ipv4_val {
-      $certsans_oam_sec = ",${platform::network::oam::ipv4::params::controller_address}, \
-                            ${platform::network::oam::ipv4::params::controller0_address}, \
-                            ${platform::network::oam::ipv4::params::controller1_address}"
+      $secondary_oam_floating_array = [$::platform::network::oam::ipv4::params::controller_address]
+
+      if ($::platform::network::oam::ipv4::params::controller0_address != undef) and
+          ($::platform::network::oam::ipv4::params::controller1_address != undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv4::params::controller0_address,
+                                      $::platform::network::oam::ipv4::params::controller1_address]
+      } elsif ($::platform::network::oam::ipv4::params::controller0_address != undef) and
+              ($::platform::network::oam::ipv4::params::controller1_address == undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv4::params::controller0_address]
+      } elsif ($::platform::network::oam::ipv4::params::controller0_address == undef) and
+              ($::platform::network::oam::ipv4::params::controller1_address != undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv4::params::controller1_address]
+      } else {
+        $secondary_unit_oam_array = []
+      }
+      $certsans_oam_sec_array = $secondary_oam_floating_array + $secondary_unit_oam_array
+
     } elsif $sec_oam_subnet_ver == $ipv6_val {
-      $certsans_oam_sec = ",${platform::network::oam::ipv6::params::controller_address}, \
-                            ${platform::network::oam::ipv6::params::controller0_address}, \
-                            ${platform::network::oam::ipv6::params::controller1_address}"
+      $secondary_oam_floating_array = [$::platform::network::oam::ipv6::params::controller_address]
+
+      if ($::platform::network::oam::ipv6::params::controller0_address != undef) and
+          ($::platform::network::oam::ipv6::params::controller1_address != undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv6::params::controller0_address,
+                                      $::platform::network::oam::ipv6::params::controller1_address]
+      } elsif ($::platform::network::oam::ipv6::params::controller0_address != undef) and
+              ($::platform::network::oam::ipv6::params::controller1_address == undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv6::params::controller0_address]
+      } elsif ($::platform::network::oam::ipv6::params::controller0_address == undef) and
+              ($::platform::network::oam::ipv6::params::controller1_address != undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv6::params::controller1_address]
+      } else {
+        $secondary_unit_oam_array = []
+      }
+      $certsans_oam_sec_array = $secondary_oam_floating_array + $secondary_unit_oam_array
+
     } else {
-      $certsans_oam_sec = ''
+      $certsans_oam_sec_array = []
     }
 
+    # secondary Cluster-host addresses
     if $sec_cluster_host_subnet_ver == $ipv4_val {
-      $certsans_cluster_host_sec = ",${platform::network::cluster_host::ipv4::params::controller_address}, \
-                                     ${platform::network::cluster_host::ipv4::params::controller0_address}, \
-                                     ${platform::network::cluster_host::ipv4::params::controller1_address}"
+
+      $sec_cluster_host_floating_array = [$::platform::network::cluster_host::ipv4::params::controller_address]
+
+      if ($::platform::network::cluster_host::ipv4::params::controller0_address != undef) and
+          ($::platform::network::cluster_host::ipv4::params::controller1_address != undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv4::params::controller0_address,
+                                        $::platform::network::cluster_host::ipv4::params::controller1_address]
+      } elsif ($::platform::network::cluster_host::ipv4::params::controller0_address != undef) and
+              ($::platform::network::cluster_host::ipv4::params::controller1_address == undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv4::params::controller0_address]
+      } elsif ($::platform::network::cluster_host::ipv4::params::controller0_address == undef) and
+              ($::platform::network::cluster_host::ipv4::params::controller1_address != undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv4::params::controller1_address]
+      } else {
+        $sec_unit_cluster_host_array = []
+      }
+      $certsans_cluster_host_sec_array = $sec_cluster_host_floating_array + $sec_unit_cluster_host_array
+
     } elsif $sec_cluster_host_subnet_ver == $ipv6_val {
-      $certsans_cluster_host_sec = ",${platform::network::cluster_host::ipv6::params::controller_address}, \
-                                     ${platform::network::cluster_host::ipv6::params::controller0_address}, \
-                                     ${platform::network::cluster_host::ipv6::params::controller1_address}"
+
+      $sec_cluster_host_floating_array = [$::platform::network::cluster_host::ipv6::params::controller_address]
+
+      if ($::platform::network::cluster_host::ipv6::params::controller0_address != undef) and
+          ($::platform::network::cluster_host::ipv6::params::controller1_address != undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv6::params::controller0_address,
+                                        $::platform::network::cluster_host::ipv6::params::controller1_address]
+      } elsif ($::platform::network::cluster_host::ipv6::params::controller0_address != undef) and
+              ($::platform::network::cluster_host::ipv6::params::controller1_address == undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv6::params::controller0_address]
+      } elsif ($::platform::network::cluster_host::ipv6::params::controller0_address == undef) and
+              ($::platform::network::cluster_host::ipv6::params::controller1_address != undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv6::params::controller1_address]
+      } else {
+        $sec_unit_cluster_host_array = []
+      }
+      $certsans_cluster_host_sec_array = $sec_cluster_host_floating_array + $sec_unit_cluster_host_array
+
     } else {
-      $certsans_cluster_host_sec = ''
+      $certsans_cluster_host_sec_array = []
     }
 
-    $certsans_sec_hosts = "${certsans_oam_sec}${certsans_cluster_host_sec}"
-
-    $certsans_sec = "${certsans_sec_hosts}${certsans_sec_localhost}"
+    $certsans_sec_hosts_array = $certsans_oam_sec_array + $certsans_cluster_host_sec_array + $certsans_sec_localhost_array
   }
+  $certsans_array = $certsans_prim_array + $certsans_sec_hosts_array
 
-  $certsans = "\"${certsans_prim}${certsans_sec}\""
+  $certsans = join($certsans_array,',')
 
   exec { 'update kube-apiserver certSANs':
     provider => shell,
@@ -1488,7 +1803,7 @@ class platform::kubernetes::master::rootca::trustbothcas::runtime
   # Wait for kube-apiserver to be up before executing next steps
   # Uses a k8s API health endpoint for that: https://kubernetes.io/docs/reference/using-api/health-checks/
   -> exec { 'wait_for_kube_apiserver':
-    command   => '/usr/bin/curl -k -f -m 15 https://localhost:6443/readyz',
+    command   => '/usr/bin/curl -k -f -m 15 https://localhost:16443/readyz',
     timeout   => 30,
     tries     => 18,
     try_sleep => 5,
@@ -1504,7 +1819,7 @@ class platform::kubernetes::master::rootca::trustbothcas::runtime
   }
   # Restart kubelet to truct both certs
   -> exec { 'restart_kubelet':
-    command => '/usr/bin/systemctl restart kubelet',
+    command => '/usr/local/sbin/pmon-restart kubelet',
   }
 }
 
@@ -1535,12 +1850,14 @@ class platform::kubernetes::worker::rootca::trustbothcas::runtime
   }
   # Restart kubelet to trust both certs
   -> exec { 'restart_kubelet':
-    command => '/usr/bin/systemctl restart kubelet',
+    command => '/usr/local/sbin/pmon-restart kubelet',
   }
 }
 
 class platform::kubernetes::master::rootca::trustnewca::runtime
   inherits ::platform::kubernetes::params {
+  include ::platform::params
+
   # Copy the new root CA cert in place
   exec { 'put_new_ca_cert_in_place':
     command => "/bin/cp ${rootca_certfile_new} ${rootca_certfile}",
@@ -1567,6 +1884,11 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
   # Restart cert-mon since it uses admin.conf
   -> exec { 'restart_cert_mon':
     command => 'sm-restart-safe service cert-mon',
+  }
+  # Restart dccertmon since it uses admin.conf
+  -> exec { 'restart_dccertmon':
+    command => 'sm-restart-safe service dccertmon',
+    onlyif  => "test '${::platform::params::distributed_cloud_role }' == 'systemcontroller'",
   }
   # Restart kube-apiserver to pick up the new cert
   -> exec { 'restart_apiserver':
@@ -1597,7 +1919,7 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
   # Wait for kube-apiserver to be up before executing next steps
   # Uses a k8s API health endpoint for that: https://kubernetes.io/docs/reference/using-api/health-checks/
   -> exec { 'wait_for_kube_apiserver':
-    command   => '/usr/bin/curl -k -f -m 15 https://localhost:6443/readyz',
+    command   => '/usr/bin/curl -k -f -m 15 https://localhost:16443/readyz',
     timeout   => 30,
     tries     => 18,
     try_sleep => 5,
@@ -1614,7 +1936,7 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
   }
   # Restart kubelet to trust only the new cert
   -> exec { 'restart_kubelet':
-    command => '/usr/bin/systemctl restart kubelet',
+    command => '/usr/local/sbin/pmon-restart kubelet',
   }
   # Remove the new cert file
   -> exec { 'remove_new_cert_file':
@@ -1648,7 +1970,7 @@ class platform::kubernetes::worker::rootca::trustnewca::runtime
   }
   # Restart kubelet to trust only the new cert
   -> exec { 'restart_kubelet':
-    command => '/usr/bin/systemctl restart kubelet',
+    command => '/usr/local/sbin/pmon-restart kubelet',
   }
 }
 
@@ -1996,21 +2318,8 @@ class platform::kubernetes::update_kubelet_config::runtime
     timeout     => 60,
   }
 
-  # Temporary workaround for pmon-restart failures
-  # TODO(kdhokte) Replace with pmon-restart once pmon issue is fixed
-  # Ensure that kubelet is only managed by systemd when it is restarted
-
-  -> exec { 'temporarily stop kubelet being monitored by pmon':
-      command => '/usr/local/sbin/pmon-stop kubelet',
-  }
-
   -> exec { 'restart kubelet':
-      command   => '/usr/bin/systemctl restart kubelet.service',
-      logoutput => true,
-  }
-
-  -> exec { 'start monitoring kubelet by pmon again':
-      command => '/usr/local/sbin/pmon-start kubelet',
+      command => '/usr/local/sbin/pmon-restart kubelet',
   }
 
 }
@@ -2075,8 +2384,12 @@ class platform::kubernetes::refresh_admin_config {
   }
   -> file { '/etc/kubernetes/admin.conf':
     owner => 'root',
-    group => 'sys_protected',
+    group => 'root',
     mode  => '0640',
+  }
+  -> exec { 'set_acl_on_admin_conf':
+    command   => 'setfacl -m g:sys_protected:r /etc/kubernetes/admin.conf',
+    logoutput => true,
   }
 }
 
