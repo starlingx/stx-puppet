@@ -9,7 +9,7 @@ class platform::etcd::params (
 
   $sw_version = $::platform::params::software_version
   $etcd_basedir = '/opt/etcd'
-  $etcd_versioned_dir = "${etcd_basedir}/${sw_version}"
+  $etcd_dir = "${etcd_basedir}/db"
 
   if $bind_address_version == $::platform::params::ipv6 {
     $client_url = "https://[${bind_address}]:${port},https://[127.0.0.1]:${port}"
@@ -86,7 +86,7 @@ class platform::etcd::init (
     cluster_enabled       => false,
     listen_client_urls    => $client_url,
     advertise_client_urls => $client_url,
-    data_dir              => "${etcd_versioned_dir}/${node}.etcd",
+    data_dir              => "${etcd_dir}/${node}.etcd",
     proxy                 => 'off',
     client_cert_auth      => $client_cert_auth,
     cert_file             => $cert_file,
@@ -116,7 +116,7 @@ class platform::etcd::datadir
   Class['::platform::drbd::etcd'] -> Class[$name]
 
   if $::platform::params::init_database {
-    file { $etcd_versioned_dir:
+    file { $etcd_dir:
         ensure => 'directory',
         owner  => 'root',
         group  => 'root',
@@ -131,7 +131,7 @@ class platform::etcd::datadir::bootstrap
   require ::platform::drbd::etcd::bootstrap
   Class['::platform::drbd::etcd::bootstrap'] -> Class[$name]
 
-  file { $etcd_versioned_dir:
+  file { $etcd_dir:
       ensure => 'directory',
       owner  => 'root',
       group  => 'root',
