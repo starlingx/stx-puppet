@@ -36,6 +36,7 @@ fullname = os.path.join(root_logs, 'k8s_update.log')
 fileHandler = logging.FileHandler(fullname)
 fileHandler.setFormatter(log_format)
 LOG.addHandler(fileHandler)
+os.chmod(fullname, 0o640)
 LOG.debug('Starting k8s update process.')
 
 post_k8s_tasks = []
