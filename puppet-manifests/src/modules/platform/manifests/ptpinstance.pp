@@ -48,6 +48,24 @@ define platform::ptpinstance::monitoring_handler(
   $ptp_conf_dir,
   $ptp_options_dir,
 ) {
+  if $global_parameters['devices'] {
+    $ptp_devices = split($global_parameters['devices'], ' ')
+  }
+  else {
+    $ptp_devices = []
+  }
+
+  $ptp_devices.each |String $ptp_device| {
+    if find_file($ptp_device) {
+      file { $ptp_device:
+      recurse => false,
+      owner   => 'root',
+      group   => 'dialout',
+      mode    => '0660',
+      }
+    }
+  }
+
   file {'monitoring-ptp.conf':
     ensure  => file,
     path    => "${ptp_conf_dir}/ptpinstance/monitoring-ptp.conf",
