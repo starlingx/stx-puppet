@@ -29,6 +29,10 @@ class platform::strongswan::params (
   $strongswan = {},
   $is_active_controller = false,
 ) {
+  $swanctl_dir          = '/etc/swanctl'
+  $swanctl_current_conf = "${swanctl_dir}/swanctl.conf"
+  $swanctl_active_conf  = "${swanctl_dir}/swanctl_active.conf"
+  $swanctl_standby_conf = "${swanctl_dir}/swanctl_standby.conf"
 }
 
 define platform::strongswan::generate_swanctl_conf(
@@ -42,7 +46,6 @@ define platform::strongswan::generate_swanctl_conf(
 
   $_swanctl_conf = @("EOT"/L)
     ${_connections}
-
     ${includes}
     | EOT
 
@@ -53,12 +56,71 @@ define platform::strongswan::generate_swanctl_conf(
   }
 }
 
+# TODO (mbenedit): This function is to support upgrades to stx 11, it can be
+# removed in later releases. The function receives an array of filepaths to be
+# included at the end of strongswan configuration files (/etc/swanctl/
+# swanctl_active.conf and /etc/swanctl/swanctl_standby.conf).
+class platform::strongswan::include_files (
+  $filepaths = ['conf.d/*.conf',],
+) inherits ::platform::strongswan::params {
+  $swanctl_active_conf  = $::platform::strongswan::params::swanctl_active_conf
+  $swanctl_standby_conf = $::platform::strongswan::params::swanctl_standby_conf
+
+  $filepaths.each |$fp| {
+    # Escape / and * from filepath
+    $escaped_filepath = regsubst($fp, '([/*])', '\\\\\1', 'G')
+    $include_filepath = "include ${escaped_filepath}"
+    $escaped_include  = "$ a\\\\${include_filepath}"
+
+    # Write in swanctl.conf files adding include sections
+    exec { "Include ${fp} at the end of ${swanctl_active_conf}":
+      command => "/bin/sed -i \"${escaped_include}\" ${swanctl_active_conf}",
+      unless  => "grep -xq \"${include_filepath}\" ${swanctl_active_conf}",
+    }
+
+    exec { "Include ${fp} at the end of ${swanctl_standby_conf}":
+      command => "/bin/sed -i \"${escaped_include}\" ${swanctl_standby_conf}",
+      unless  => "grep -xq \"${include_filepath}\" ${swanctl_standby_conf}",
+    }
+  }
+}
+
+# TODO (mbenedit): This function is to support upgrade rollback from stx 11,
+# it can be removed in later releases. The function receives an array of
+# filepaths to be removed from include section at the end of strongswan
+# configuration files (/etc/swanctl/swanctl_active.conf and /etc/swanctl/
+# swanctl_standby.conf).
+class platform::strongswan::exclude_files (
+  $filepaths = ['conf.d/*.conf',],
+) inherits ::platform::strongswan::params {
+  $swanctl_active_conf  = $::platform::strongswan::params::swanctl_active_conf
+  $swanctl_standby_conf = $::platform::strongswan::params::swanctl_standby_conf
+
+  $filepaths.each |$fp| {
+    # Escape /, * and . from filepath
+    $escaped_filepath = regsubst($fp, '([/*.])', '\\\\\1', 'G')
+    $include_filepath = "include ${escaped_filepath}"
+    $escaped_exclude = "/${escaped_filepath}/d"
+
+    # Remove include sections of swanctl.conf containing the filepath $fp
+    exec { "Remove includes for filepath ${fp} in ${swanctl_active_conf}":
+      command => "/bin/sed -i \"${escaped_exclude}\" ${swanctl_active_conf}",
+      onlyif  => "grep -xq \"${include_filepath}\" ${swanctl_active_conf}",
+    }
+
+    exec { "Remove includes for filepath ${fp} in ${swanctl_standby_conf}":
+      command => "/bin/sed -i \"${escaped_exclude}\" ${swanctl_standby_conf}",
+      onlyif  => "grep -xq \"${include_filepath}\" ${swanctl_standby_conf}",
+    }
+  }
+}
+
 class platform::strongswan::swanctl_config (
   $includes = undef,
   $connections = {},
   $connections_active = {},
   $is_active_controller = undef,
-) {
+) inherits ::platform::strongswan::params {
   platform::strongswan::generate_swanctl_conf { 'Generate swanctl.conf':
     includes    => $includes,
     connections => $connections,
@@ -71,10 +133,10 @@ class platform::strongswan::swanctl_config (
   # on their role (active or standby) at the time it is configed.
   # During swact, the symlink will be updated accordingly.
   if !empty($connections_active) {
-    $swanctl_dir='/etc/swanctl'
-    $swanctl_current_conf="${swanctl_dir}/swanctl.conf"
-    $swanctl_active_conf="${swanctl_dir}/swanctl_active.conf"
-    $swanctl_standby_conf="${swanctl_dir}/swanctl_standby.conf"
+    $swanctl_dir          = $::platform::strongswan::params::swanctl_dir
+    $swanctl_current_conf = $::platform::strongswan::params::swanctl_current_conf
+    $swanctl_active_conf  = $::platform::strongswan::params::swanctl_active_conf
+    $swanctl_standby_conf = $::platform::strongswan::params::swanctl_standby_conf
 
     platform::strongswan::generate_swanctl_conf{ 'Generate swanctl_active.conf':
       includes    => $includes,
