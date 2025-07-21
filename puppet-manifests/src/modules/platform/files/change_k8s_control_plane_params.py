@@ -1449,6 +1449,23 @@ def main():
             LOG.error('Exporting configmap from volume: %s', str(volume_dict))
             return 3
 
+    # controlPlaneEndpoint (upgrade)
+    # This code is to support upgrades to stx 11, it can be removed in later releases.
+    # In stx 11, haproxy will listen in port 6443, and kube-apiserver in port 16443.
+    # In upgrades, the controlPlaneEndpoint field will carry the previous kube-apiserver port,
+    # so we need to replaced it for the new one.
+    controlPlaneEndpoint = cluster_cfg.get('controlPlaneEndpoint', '')
+    external_port_bind = ':' + str(KUBE_APISERVER_EXTERNAL_PORT)
+    internal_port_bind = ':' + str(KUBE_APISERVER_INTERNAL_PORT)
+    if not is_kube_apiserver_port_rollback_in_progress():
+        if external_port_bind in controlPlaneEndpoint:
+            cluster_cfg['controlPlaneEndpoint'] = controlPlaneEndpoint.replace(external_port_bind,
+                                                                               internal_port_bind)
+    else:
+        if internal_port_bind in controlPlaneEndpoint:
+            cluster_cfg['controlPlaneEndpoint'] = controlPlaneEndpoint.replace(internal_port_bind,
+                                                                               external_port_bind)
+
     # controller manager section --------------------------------------------------
     for param, value in service_params['controllerManager'].items():
         if param in controller_manager_schema['root'].keys():

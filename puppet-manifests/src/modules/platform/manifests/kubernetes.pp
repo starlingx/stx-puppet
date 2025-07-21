@@ -1607,6 +1607,7 @@ class platform::kubernetes::certsans::runtime
 
     # primary addresses
     $primary_floating_array = [$::platform::network::cluster_host::params::controller_address,
+                                $::platform::network::mgmt::params::controller_address,
                                 $::platform::network::oam::params::controller_address,
                                 $localhost_address]
     if ($::platform::network::cluster_host::params::controller0_address != undef) {
@@ -1614,7 +1615,13 @@ class platform::kubernetes::certsans::runtime
     } else {
       $primary_unit_cluster_array = []
     }
-    $certsans_prim_array = $primary_floating_array + $primary_unit_cluster_array
+    if ($::platform::network::mgmt::params::controller0_address != undef) {
+      $primary_unit_mgmt_array = [$::platform::network::mgmt::params::controller0_address]
+    } else {
+      $primary_unit_mgmt_array = []
+    }
+    $certsans_prim_array = ($primary_floating_array + $primary_unit_cluster_array +
+                              $primary_unit_mgmt_array)
 
     # secondary addresses: OAM
     if $sec_oam_subnet_ver == $ipv4_val {
@@ -1648,10 +1655,37 @@ class platform::kubernetes::certsans::runtime
     } else {
       $certsans_cluster_sec_array = []
     }
-    $certsans_sec_hosts_array = $certsans_oam_sec_array + $certsans_cluster_sec_array + $certsans_sec_localhost_array
+
+    if $sec_mgmt_subnet_ver == $ipv4_val {
+
+      $sec_mgmt_float_array = [$::platform::network::mgmt::ipv4::params::controller_address]
+      if ($::platform::network::mgmt::ipv4::params::controller0_address != undef) {
+        $sec_mgmt_unit_array = [$::platform::network::mgmt::ipv4::params::controller0_address]
+      } else {
+        $sec_mgmt_unit_array = []
+      }
+      $certsans_mgmt_sec_array = $sec_mgmt_float_array + $sec_mgmt_unit_array
+
+    } elsif $sec_mgmt_subnet_ver == $ipv6_val {
+
+      $sec_mgmt_float_array = [$::platform::network::mgmt::ipv6::params::controller_address]
+      if ($::platform::network::mgmt::ipv6::params::controller0_address != undef) {
+        $sec_mgmt_unit_array = [$::platform::network::mgmt::ipv6::params::controller0_address]
+      } else {
+        $sec_mgmt_unit_array = []
+      }
+      $certsans_mgmt_sec_array = $sec_mgmt_float_array + $sec_mgmt_unit_array
+
+    } else {
+      $certsans_mgmt_sec_array = []
+    }
+
+    $certsans_sec_hosts_array = ($certsans_oam_sec_array + $certsans_cluster_sec_array +
+                                  $certsans_mgmt_sec_array + $certsans_sec_localhost_array)
 
   } else {
     $primary_floating_array = [$::platform::network::cluster_host::params::controller_address,
+                                $::platform::network::mgmt::params::controller_address,
                                 $::platform::network::oam::params::controller_address,
                                 $localhost_address]
 
@@ -1685,7 +1719,23 @@ class platform::kubernetes::certsans::runtime
       $primary_unit_cluster_array = []
     }
 
-    $certsans_prim_array = $primary_floating_array + $primary_unit_oam_array + $primary_unit_cluster_array
+    # primary management unit addresses
+    if ($::platform::network::mgmt::params::controller0_address != undef) and
+        ($::platform::network::mgmt::params::controller0_address != undef) {
+      $primary_unit_mgmt_array = [$::platform::network::mgmt::params::controller0_address,
+                                      $::platform::network::mgmt::params::controller1_address]
+    } elsif ($::platform::network::mgmt::params::controller0_address != undef) and
+            ($::platform::network::mgmt::params::controller1_address == undef) {
+      $primary_unit_mgmt_array = [$::platform::network::mgmt::params::controller0_address]
+    } elsif ($::platform::network::mgmt::params::controller0_address == undef) and
+            ($::platform::network::mgmt::params::controller1_address != undef) {
+      $primary_unit_mgmt_array = [$::platform::network::mgmt::params::controller1_address]
+    } else {
+      $primary_unit_mgmt_array = []
+    }
+
+    $certsans_prim_array = ($primary_floating_array + $primary_unit_oam_array +
+                              $primary_unit_cluster_array + $primary_unit_mgmt_array)
 
     # secondary OAM addresses
     if $sec_oam_subnet_ver == $ipv4_val {
@@ -1771,10 +1821,54 @@ class platform::kubernetes::certsans::runtime
       $certsans_cluster_host_sec_array = []
     }
 
-    $certsans_sec_hosts_array = $certsans_oam_sec_array + $certsans_cluster_host_sec_array + $certsans_sec_localhost_array
-  }
-  $certsans_array = $certsans_prim_array + $certsans_sec_hosts_array
+    # secondary management addresses
+    if $sec_mgmt_subnet_ver == $ipv4_val {
 
+      $sec_mgmt_floating_array = [$::platform::network::mgmt::ipv4::params::controller_address]
+
+      if ($::platform::network::mgmt::ipv4::params::controller0_address != undef) and
+          ($::platform::network::mgmt::ipv4::params::controller1_address != undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv4::params::controller0_address,
+                                        $::platform::network::mgmt::ipv4::params::controller1_address]
+      } elsif ($::platform::network::mgmt::ipv4::params::controller0_address != undef) and
+              ($::platform::network::mgmt::ipv4::params::controller1_address == undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv4::params::controller0_address]
+      } elsif ($::platform::network::mgmt::ipv4::params::controller0_address == undef) and
+              ($::platform::network::mgmt::ipv4::params::controller1_address != undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv4::params::controller1_address]
+      } else {
+        $sec_unit_mgmt_array = []
+      }
+      $certsans_mgmt_sec_array = $sec_mgmt_floating_array + $sec_unit_mgmt_array
+
+    } elsif $sec_mgmt_subnet_ver == $ipv6_val {
+
+      $sec_mgmt_floating_array = [$::platform::network::mgmt::ipv6::params::controller_address]
+
+      if ($::platform::network::mgmt::ipv6::params::controller0_address != undef) and
+          ($::platform::network::mgmt::ipv6::params::controller1_address != undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv6::params::controller0_address,
+                                        $::platform::network::mgmt::ipv6::params::controller1_address]
+      } elsif ($::platform::network::mgmt::ipv6::params::controller0_address != undef) and
+              ($::platform::network::mgmt::ipv6::params::controller1_address == undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv6::params::controller0_address]
+      } elsif ($::platform::network::mgmt::ipv6::params::controller0_address == undef) and
+              ($::platform::network::mgmt::ipv6::params::controller1_address != undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv6::params::controller1_address]
+      } else {
+        $sec_unit_mgmt_array = []
+      }
+      $certsans_mgmt_sec_array = $sec_mgmt_floating_array + $sec_unit_mgmt_array
+
+    } else {
+      $certsans_mgmt_sec_array = []
+    }
+
+    $certsans_sec_hosts_array = ($certsans_oam_sec_array + $certsans_cluster_host_sec_array +
+                                  $certsans_mgmt_sec_array + $certsans_sec_localhost_array)
+  }
+
+  $certsans_array = ($certsans_prim_array + $certsans_sec_hosts_array).filter |$value| { $value != undef }
   $certsans = join($certsans_array,',')
 
   exec { 'update kube-apiserver certSANs':
