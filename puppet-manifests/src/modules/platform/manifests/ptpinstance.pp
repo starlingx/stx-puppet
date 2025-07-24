@@ -90,6 +90,16 @@ define platform::ptpinstance::monitoring_handler(
   -> exec { 'enable-gpsd-sevice':
     command => '/usr/bin/systemctl enable gpsd.service',
   }
+
+  $ptp_devices.each |String $ptp_device| {
+      $escape_ptp_device = regsubst($ptp_device, /\//, '-', 'G')
+      exec { "start-gpspipe@${ptp_device}":
+        command  => "/usr/bin/systemctl start gpspipe@${escape_ptp_device}.service || true",
+      }
+      -> exec { "enable-gpspipe@${ptp_device}":
+        command => "/usr/bin/systemctl enable gpspipe@${escape_ptp_device}",
+      }
+  }
 }
 
 define platform::ptpinstance::set_ptp4l_pmc_parameters(
@@ -300,15 +310,28 @@ class platform::ptpinstance::monitoring (
     mode    => '0644',
     content => template('platform/gpsd.socket.erb'),
   }
+  -> file { 'gpspipe_service':
+      ensure  => file,
+      path    => '/etc/systemd/system/gpspipe@.service',
+      mode    => '0644',
+      content => template('platform/gpspipe.service.erb'),
+  }
   -> exec { 'stop-gpsd-service':
     command => '/usr/bin/systemctl stop gpsd.service',
   }
   -> exec { 'stop-gpsd-socket':
     command => '/usr/bin/systemctl stop gpsd.socket',
   }
+  -> exec { 'stop-gpspipe-services':
+    command => '/usr/bin/systemctl stop gpspipe@*',
+  }
   -> exec { 'disable-gpsd-service':
     command => '/usr/bin/systemctl disable gpsd.service',
     onlyif  => 'test -f /etc/systemd/system/gpsd.service',
+  }
+  -> exec { 'disable-gpspipe-services':
+    command => '/usr/bin/systemctl disable gpspipe@',
+    onlyif  => 'test -f /etc/systemd/system/gpspipe@.service',
   }
   -> exec { 'ptpinstance-monitoring-systemctl-daemon-reload':
     command => '/usr/bin/systemctl daemon-reload',
