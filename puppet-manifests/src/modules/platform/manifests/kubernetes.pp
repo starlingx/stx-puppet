@@ -1034,7 +1034,11 @@ class platform::kubernetes::firewall
 
   include ::platform::params
   include ::platform::network::oam::params
+  include ::platform::network::oam::ipv4::params
+  include ::platform::network::oam::ipv6::params
   include ::platform::network::mgmt::params
+  include ::platform::network::mgmt::ipv4::params
+  include ::platform::network::mgmt::ipv6::params
   include ::platform::docker::params
 
   # add http_proxy and https_proxy port to k8s firewall
@@ -1066,25 +1070,57 @@ class platform::kubernetes::firewall
   }
 
   $system_mode = $::platform::params::system_mode
-  $oam_float_ip = $::platform::network::oam::params::controller_address
-  $oam_interface = $::platform::network::oam::params::interface_name
-  $mgmt_subnet = $::platform::network::mgmt::params::subnet_network
-  $mgmt_prefixlen = $::platform::network::mgmt::params::subnet_prefixlen
-
-  $s_mgmt_subnet = "${mgmt_subnet}/${mgmt_prefixlen}"
-  $d_mgmt_subnet = "! ${s_mgmt_subnet}"
 
   if $system_mode != 'simplex' {
-    platform::firewall::rule { 'kubernetes-nat':
-      service_name => 'kubernetes',
-      table        => $table,
-      chain        => $chain,
-      proto        => $transport,
-      jump         => $jump,
-      host         => $s_mgmt_subnet,
-      destination  => $d_mgmt_subnet,
-      outiface     => $oam_interface,
-      tosource     => $oam_float_ip,
+
+    $oam_interface = $::platform::network::oam::params::interface_name
+
+    if ($::platform::network::oam::ipv4::params::subnet_version == $::platform::params::ipv4)
+      and ($::platform::network::mgmt::ipv4::params::subnet_version == $::platform::params::ipv4) {
+
+      $oam_float_ip4 = $::platform::network::oam::ipv4::params::controller_address
+      $mgmt_subnet4 = $::platform::network::mgmt::ipv4::params::subnet_network
+      $mgmt_prefixlen4 = $::platform::network::mgmt::ipv4::params::subnet_prefixlen
+
+      $s_mgmt_subnet4 = "${mgmt_subnet4}/${mgmt_prefixlen4}"
+      $d_mgmt_subnet4 = "! ${s_mgmt_subnet4}"
+
+      platform::firewall::rule { 'kubernetes-nat4':
+        service_name => 'kubernetes',
+        table        => $table,
+        chain        => $chain,
+        proto        => $transport,
+        jump         => $jump,
+        host         => $s_mgmt_subnet4,
+        destination  => $d_mgmt_subnet4,
+        outiface     => $oam_interface,
+        tosource     => $oam_float_ip4,
+        l3proto      => $::platform::params::ipv4
+      }
+    }
+
+    if ($::platform::network::oam::ipv6::params::subnet_version == $::platform::params::ipv6)
+      and ($::platform::network::mgmt::ipv6::params::subnet_version == $::platform::params::ipv6) {
+
+      $oam_float_ip6 = $::platform::network::oam::ipv6::params::controller_address
+      $mgmt_subnet6 = $::platform::network::mgmt::ipv6::params::subnet_network
+      $mgmt_prefixlen6 = $::platform::network::mgmt::ipv6::params::subnet_prefixlen
+
+      $s_mgmt_subnet6 = "${mgmt_subnet6}/${mgmt_prefixlen6}"
+      $d_mgmt_subnet6 = "! ${s_mgmt_subnet6}"
+
+      platform::firewall::rule { 'kubernetes-nat6':
+        service_name => 'kubernetes',
+        table        => $table,
+        chain        => $chain,
+        proto        => $transport,
+        jump         => $jump,
+        host         => $s_mgmt_subnet6,
+        destination  => $d_mgmt_subnet6,
+        outiface     => $oam_interface,
+        tosource     => $oam_float_ip6,
+        l3proto      => $::platform::params::ipv6
+      }
     }
   }
 }

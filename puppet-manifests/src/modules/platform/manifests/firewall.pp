@@ -10,12 +10,20 @@ define platform::firewall::rule (
   $proto = 'tcp',
   $table = undef,
   $tosource = undef,
+  $l3proto = undef,
 ) {
 
   include ::platform::params
   include ::platform::network::oam::params
 
-  $ip_version = $::platform::network::oam::params::subnet_version
+  if $l3proto == undef {
+    # if not provided use the primary OAM address subnet_version
+    $ip_version = $::platform::network::oam::params::subnet_version
+  } elsif $l3proto == $::platform::params::ipv4 {
+    $ip_version = $::platform::params::ipv4
+  } elsif $l3proto == $::platform::params::ipv6 {
+    $ip_version = $::platform::params::ipv6
+  }
 
   $provider = $ip_version ? {
     6 => 'ip6tables',
