@@ -61,7 +61,7 @@ platform::mtce::params::auth_region: 'RegionOne'
 platform::mtce::params::mtce_multicast: '239.1.1.2'
 platform::mtce::agent::params::worker_boot_timeout: 720
 platform::mtce::agent::params::controller_boot_timeout: 1200
-platform::mtce::agent::params::heartbeat_period: 100
+platform::mtce::agent::params::heartbeat_period: 1000
 platform::mtce::agent::params::heartbeat_failure_action: 'fail'
 platform::mtce::agent::params::heartbeat_failure_threshold: 10
 platform::mtce::agent::params::heartbeat_degrade_threshold: 6
