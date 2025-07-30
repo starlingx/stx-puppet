@@ -4,7 +4,11 @@
 ##
 <%- if @global_parameters -%>
 <%- @global_parameters.each do |key,value| -%>
+<%- if @service == 'ts2phc' and key == 'ts2phc.nmea_serialport' and @gpsd_monitored_devices.include?(value) -%>
+<%= key %> <%= value %>.pty
+<%- else -%>
 <%= key %> <%= value %>
+<%- end -%>
 <%- end -%>
 <%- end -%>
 

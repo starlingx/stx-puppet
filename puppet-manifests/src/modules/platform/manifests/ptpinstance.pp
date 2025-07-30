@@ -9,6 +9,7 @@ define platform::ptpinstance::ptp_config_files(
   $id,
   $ptp_conf_dir,
   $ptp_options_dir,
+  $gpsd_monitored_devices,
   $pmc_gm_settings = '',
   $device_parameters = '',
   $gnss_uart_disable = '',
@@ -354,15 +355,23 @@ define platform::ptpinstance::disable_e810_gnss_uart_interfaces (
   $pmc_gm_settings = '',
   $external_source = '',
 ) {
-  $gnss_device = $global_parameters['ts2phc.nmea_serialport']
+  $gnss_device_ori = $global_parameters['ts2phc.nmea_serialport']
 
-  if empty($gnss_device) {
+  if empty($gnss_device_ori) {
     notice("ts2phc.nmea_serialport not set for ${_name}")
   }
   elsif $service == 'ts2phc' and $gnss_uart_disable {
     # These values were obtained from Intel's User Guide for the E810 NIC
     $uart1_cmd = '\xb5\x62\x06\x8a\x09\x00\x00\x05\x00\x00\x05\x00\x52\x10\x00\x05\x80'
     $uart2_cmd = '\xb5\x62\x06\x8a\x09\x00\x00\x05\x00\x00\x05\x00\x53\x10\x00\x06\x83'
+
+    # truncate suffix .pty (gpspipe output device) if any, to get the actual gnss device
+    $suffix = '.pty'
+    if $gnss_device_ori =~ "${suffix}$" {
+      $gnss_device = $gnss_device_ori[0, -$suffix.length - 1]
+    } else {
+      $gnss_device = $gnss_device_ori
+    }
 
     notice("Trying to disable UART devices for serial port ${gnss_device}")
 
@@ -382,11 +391,22 @@ define platform::ptpinstance::disable_e810_gnss_uart_interfaces (
 class platform::ptpinstance (
   $enabled = false,
   $runtime = false,
+  $previous_gpsd_monitored_devices = [],
   $config = []
 ) {
   include ::platform::ptpinstance::params
   $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
   $ptp_options_dir = $::platform::ptpinstance::params::ptp_options_dir
+
+  include  ::platform::ptpinstance::monitoring
+  $monitoring_config = $::platform::ptpinstance::monitoring::monitoring_config
+  $monitoring_enabled = $::platform::ptpinstance::monitoring::monitoring_enabled
+
+  if $monitoring_enabled and $monitoring_config['global_parameters']['devices'] {
+    $gpsd_monitored_devices = split($monitoring_config['global_parameters']['devices'], ' ')
+  } else {
+    $gpsd_monitored_devices = []
+  }
 
   if $enabled {
     $ptp_state = {
@@ -466,7 +486,26 @@ class platform::ptpinstance (
   -> exec { 'stop-ts2phc-instance':
     command => '/usr/bin/systemctl stop ts2phc@*',
   }
-  -> exec { 'disable-ts2phc-instance':
+
+  # once ts2phc stopped, change previous monitored devices to nmea mode
+  # /usr/bin/gpsctl -f --nmea /dev/gnss0
+  # without ts2phc stopped, would give following error
+  # gpsctl:ERROR: SER: /dev/gnss0 already opened by another process
+  # gpsctl:ERROR: initial GPS device /dev/gnss0 open failed
+  #
+  $devices_to_set_nmea = $previous_gpsd_monitored_devices - $gpsd_monitored_devices
+  notice("Devices to set back to NMEA: ${devices_to_set_nmea} (previous - current devices:\
+  ${previous_gpsd_monitored_devices} - ${gpsd_monitored_devices})")
+
+  $devices_to_set_nmea.each |String $device_to_set_nmea| {
+    notice("Reverting previously monitored gnss device ${device_to_set_nmea} mode back to nmea")
+    exec { "set_nmea_${device_to_set_nmea}":
+      command => "/usr/bin/gpsctl -f --nmea ${device_to_set_nmea}",
+      onlyif  => "/usr/bin/test -c ${device_to_set_nmea}",
+    }
+  }
+
+  exec { 'disable-ts2phc-instance':
     command => '/usr/bin/systemctl disable ts2phc@*',
     onlyif  => 'test -f /etc/systemd/system/ts2phc@.service',
   }
@@ -494,7 +533,9 @@ class platform::ptpinstance (
   }
 
   if $enabled {
-    create_resources('platform::ptpinstance::ptp_config_files', $config, $ptp_state)
+    create_resources('platform::ptpinstance::ptp_config_files', $config,
+                      $ptp_state.merge({'gpsd_monitored_devices' => $gpsd_monitored_devices})
+    )
     create_resources('platform::ptpinstance::set_ptp4l_pmc_parameters', $config, $ptp_state)
   }
 
@@ -506,11 +547,31 @@ class platform::ptpinstance (
   }
 }
 
+class platform::ptpinstance::monitoring_read_devices {
+  # gpsd_monitored_devices: list, read DEVICES=".." from
+  # ptp_options_dir/ptpinstance/monitoring-ptp
+  include ::platform::ptpinstance::params
+  $ptp_options_dir = $::platform::ptpinstance::params::ptp_options_dir
+  $file_path = "${ptp_options_dir}/ptpinstance/monitoring-ptp"
+  if find_file($file_path) {
+    $file_content = file($file_path)
+    $devices = $file_content.match(/^DEVICES="([^"]+)"/)[1]
+    $gpsd_monitored_devices = split($devices, ' ')
+  } else {
+    $gpsd_monitored_devices = []
+  }
+  notice("gpsd_monitored_devices: ${gpsd_monitored_devices}" )
+}
+
 class platform::ptpinstance::runtime {
   class { 'platform::ptpinstance::ptp_directories': }
+  -> class { 'platform::ptpinstance::monitoring_read_devices': }
   -> class { 'platform::ptpinstance::nic_clock': }
   -> class { 'platform::ptpinstance::monitoring': }
-  -> class { 'platform::ptpinstance': runtime => true }
+  -> class { 'platform::ptpinstance': runtime => true,
+              previous_gpsd_monitored_devices =>
+              $::platform::ptpinstance::monitoring_read_devices::gpsd_monitored_devices
+  }
   -> exec { 'Ensure collectd is restarted':
     command => '/usr/local/sbin/pmon-restart collectd'
   }
