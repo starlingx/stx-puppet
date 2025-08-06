@@ -29,6 +29,10 @@ QAT_401XX_DEV_NO="4942"
 QAT_420XX_DEV_NO="4946"
 QAT_4XXX_DEV_STR="4xxx"
 QAT_420XX_DEV_STR="420xx"
+QAT_4XXXVF_DEV_NO="4941"
+QAT_401XXVF_DEV_NO="4943"
+QAT_420XXVF_DEV_NO="4947"
+QAT_VF_DEVS=("$QAT_4XXXVF_DEV_NO" "$QAT_401XXVF_DEV_NO" "$QAT_420XXVF_DEV_NO")
 
 INSTALL="/usr/bin/install -c"
 QAT_4XXX_NUM_VFS=16
@@ -152,6 +156,17 @@ create_config_files() {
     create_vf_config ${pf_seq} ${vf_cnt}
 }
 
+# Bind QAT devices to vfio-pci driver
+bind_to_vfio() {
+    for dev in "${QAT_VF_DEVS[@]}"; do
+        if echo "$INTEL_VENDORID $dev" > /sys/bus/pci/drivers/vfio-pci/new_id; then
+            log_message "Set QAT device ID ${dev} to vfio-pci"
+        else
+            log_message "Failed to set QAT device ID ${dev} for vfio-pci."
+        fi
+    done
+}
+
 # Check if the script is running as the superuser
 if [[ ${EUID} -ne 0 ]]; then
     log_message "This config_qat.sh must be run as root (sudo)."
@@ -205,6 +220,8 @@ for vf in "$@"; do
     create_config_files ${pf_seq} ${vf_cnt}
     pf_seq=${pf_seq}+1
 done
+
+bind_to_vfio
 
 # Delete temp folders
 rm -rf ${TEMP_LOCATION}
