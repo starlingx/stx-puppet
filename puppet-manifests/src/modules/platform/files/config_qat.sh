@@ -13,7 +13,7 @@
 
 CONFIG_DIRECTORY="/etc"
 CONFIG_4XXX_FILE_PREFIX="4xxx*"
-CONFIG_420XX_FILE_PREFIX="420xx"
+CONFIG_420XX_FILE_PREFIX="420xx*"
 TEMP_LOCATION="/tmp/qat_config_files"
 CONFIG_SCRIPT_DIR="/etc/qat/script_files"
 CONFIG_PF_SCRIPT="generate_conf_files.sh"
