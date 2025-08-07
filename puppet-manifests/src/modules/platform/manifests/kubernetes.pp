@@ -498,16 +498,37 @@ class platform::kubernetes::haproxy {
     }
   }
 
+  $ca_crt = '/etc/kubernetes/pki/ca.crt'
+  $client_crt = '/etc/kubernetes/pki/haproxy_client.pem'
+  $server_crt = '/etc/ssl/private/server-cert.pem'
+
   # SSL Bridge (OAM -> HAproxy)
+  # For clients from OAM, we would have one frontend and two backends. The default way
+  # to authenticate is tokens, but client certificates are set as optional and verified
+  # in the frontend.
+  # The request is then:
+  # - Sent to the default backend (tokens)
+  # - Sent to the alternative backend (client certificates with expected subject)
+  # - Denied (invalid client certificate or invalid subject fields)
+
   $haproxy_port = '6443'
-  $ssl_server_option = 'ssl crt /etc/ssl/private/server-cert.pem'
-  $ssl_client_option = 'check-ssl ssl verify required ca-file /etc/kubernetes/pki/ca.crt'
+  $ssl_server_option = "ssl crt ${server_crt} verify optional ca-file ${ca_crt}"
+  $ssl_client_option_auth_token = "check-ssl ssl verify required ca-file ${ca_crt}"
+  $ssl_client_option_auth_crt = "check-ssl ssl verify required crt ${client_crt} ca-file ${ca_crt}"
+
+  # Option to deny client certificates without the expected subject:
+  # O = kubeadm:cluster-admins, CN = kubernetes-admin
+  $acl_k8s_subject_cn = 'k8s_admin_subject_CN ssl_c_s_dn(CN) -m str kubernetes-admin'
+  $acl_k8s_subject_o = 'k8s_admin_subject_O ssl_c_s_dn(O) -m str kubeadm:cluster-admins'
+  $http_req_deny_client = 'deny if { ssl_fc_has_crt } !k8s_admin_subject_CN !k8s_admin_subject_O'
 
   $proto_header = 'X-Forwarded-Proto https'
   $hsts_option = 'Strict-Transport-Security max-age=63072000;\ includeSubDomains'
   $http_frontend_options = {
+    'use_backend'     => 'k8s-backend-client-crt if { ssl_fc_has_crt }',
     'default_backend' => 'k8s-backend',
-    'http-request'    => "add-header ${proto_header}",
+    'acl'             => [$acl_k8s_subject_cn,$acl_k8s_subject_o],
+    'http-request'    => ["add-header ${proto_header}",$http_req_deny_client],
     'http-response'   => "add-header ${hsts_option}",
   }
 
@@ -529,11 +550,21 @@ class platform::kubernetes::haproxy {
     options          => $http_frontend_options,
   }
 
+  # In OAM, we need two backends: one for requests with tokens (default) and one for
+  # requests with client certificates (only admin credentials)
   haproxy::backend { 'k8s-backend':
     collect_exported => false,
     name             => 'k8s-backend',
     options          => {
-      'server' => "s-k8s ${primary_cluster_floating_ip}:${haproxy_port} ${ssl_client_option}",
+      'server' => "s-k8s ${primary_cluster_floating_ip}:${haproxy_port} ${ssl_client_option_auth_token}",
+    },
+  }
+
+  haproxy::backend { 'k8s-backend-client-crt':
+    collect_exported => false,
+    name             => 'k8s-backend-client-crt',
+    options          => {
+      'server' => "s-k8s ${primary_cluster_floating_ip}:${haproxy_port} ${ssl_client_option_auth_crt}",
     },
   }
 
@@ -784,6 +815,7 @@ class platform::kubernetes::master
   contain ::platform::kubernetes::coredns
   contain ::platform::kubernetes::firewall
   contain ::platform::kubernetes::configuration
+  contain ::platform::haproxy::k8s_client_certificate
 
   Class['::platform::sysctl::controller::reserve_ports'] -> Class[$name]
   Class['::platform::k8splatform'] -> Class[$name]
@@ -799,6 +831,7 @@ class platform::kubernetes::master
   -> Class['::platform::kubernetes::master::init']
   -> Class['::platform::kubernetes::coredns']
   -> Class['::platform::kubernetes::firewall']
+  -> Class['::platform::haproxy::k8s_client_certificate']
 
   if (!str2bool($::usm_upgrade_in_progress) or str2bool($::upgrade_kube_apiserver_port_updated)) {
     # TODO(mdecastr): This code is to support upgrades to stx 11,
@@ -1985,6 +2018,8 @@ class platform::kubernetes::master::rootca::pods::trustnewca::runtime
 
 class platform::kubernetes::master::rootca::updatecerts::runtime
   inherits ::platform::kubernetes::params {
+  include ::platform::haproxy::k8s_client_certificate
+  include ::platform::haproxy::reload
 
   # Create directory to use crt and key from secret in kubernetes components configuration
   file { '/tmp/kube_rootca_update':
@@ -2036,6 +2071,11 @@ class platform::kubernetes::master::rootca::updatecerts::runtime
     command     => "kubectl config set-credentials kubernetes-admin --client-key /tmp/kube_rootca_update/kubernetes-admin.key \
                     --client-certificate /tmp/kube_rootca_update/kubernetes-admin.crt --embed-certs",
   }
+
+  # Refresh haproxy client certificate and reload haproxy to pick the new
+  # client certificate/key pair
+  -> Class['::platform::haproxy::k8s_client_certificate']
+  -> Class['::platform::haproxy::reload']
 
   # Update super-admin.conf with new cert/key
   -> exec { 'update_super_admin_conf_credentials':
