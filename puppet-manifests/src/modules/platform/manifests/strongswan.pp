@@ -63,6 +63,7 @@ define platform::strongswan::generate_swanctl_conf(
 class platform::strongswan::include_files (
   $filepaths = ['conf.d/*.conf',],
 ) inherits ::platform::strongswan::params {
+  $swanctl_conf = $::platform::strongswan::params::swanctl_current_conf
   $swanctl_active_conf  = $::platform::strongswan::params::swanctl_active_conf
   $swanctl_standby_conf = $::platform::strongswan::params::swanctl_standby_conf
 
@@ -72,15 +73,22 @@ class platform::strongswan::include_files (
     $include_filepath = "include ${escaped_filepath}"
     $escaped_include  = "$ a\\\\${include_filepath}"
 
-    # Write in swanctl.conf files adding include sections
-    exec { "Include ${fp} at the end of ${swanctl_active_conf}":
-      command => "/bin/sed -i \"${escaped_include}\" ${swanctl_active_conf}",
-      unless  => "grep -xq \"${include_filepath}\" ${swanctl_active_conf}",
-    }
+    if $::personality == 'controller' {
+      # Write in swanctl.conf files adding include sections
+      exec { "Include ${fp} at the end of ${swanctl_active_conf}":
+        command => "/bin/sed -i \"${escaped_include}\" ${swanctl_active_conf}",
+        unless  => "grep -xq \"${include_filepath}\" ${swanctl_active_conf}",
+      }
 
-    exec { "Include ${fp} at the end of ${swanctl_standby_conf}":
-      command => "/bin/sed -i \"${escaped_include}\" ${swanctl_standby_conf}",
-      unless  => "grep -xq \"${include_filepath}\" ${swanctl_standby_conf}",
+      exec { "Include ${fp} at the end of ${swanctl_standby_conf}":
+        command => "/bin/sed -i \"${escaped_include}\" ${swanctl_standby_conf}",
+        unless  => "grep -xq \"${include_filepath}\" ${swanctl_standby_conf}",
+      }
+    } else {
+      exec { "Include ${fp} at the end of ${swanctl_conf}":
+        command => "/bin/sed -i \"${escaped_include}\" ${swanctl_conf}",
+        unless  => "grep -xq \"${include_filepath}\" ${swanctl_conf}",
+      }
     }
   }
 }
@@ -93,6 +101,7 @@ class platform::strongswan::include_files (
 class platform::strongswan::exclude_files (
   $filepaths = ['conf.d/*.conf',],
 ) inherits ::platform::strongswan::params {
+  $swanctl_conf = $::platform::strongswan::params::swanctl_current_conf
   $swanctl_active_conf  = $::platform::strongswan::params::swanctl_active_conf
   $swanctl_standby_conf = $::platform::strongswan::params::swanctl_standby_conf
 
@@ -102,15 +111,22 @@ class platform::strongswan::exclude_files (
     $include_filepath = "include ${escaped_filepath}"
     $escaped_exclude = "/${escaped_filepath}/d"
 
-    # Remove include sections of swanctl.conf containing the filepath $fp
-    exec { "Remove includes for filepath ${fp} in ${swanctl_active_conf}":
-      command => "/bin/sed -i \"${escaped_exclude}\" ${swanctl_active_conf}",
-      onlyif  => "grep -xq \"${include_filepath}\" ${swanctl_active_conf}",
-    }
+    if $::personality == 'controller' {
+      # Remove include sections of swanctl.conf containing the filepath $fp
+      exec { "Remove includes for filepath ${fp} in ${swanctl_active_conf}":
+        command => "/bin/sed -i \"${escaped_exclude}\" ${swanctl_active_conf}",
+        onlyif  => "grep -xq \"${include_filepath}\" ${swanctl_active_conf}",
+      }
 
-    exec { "Remove includes for filepath ${fp} in ${swanctl_standby_conf}":
-      command => "/bin/sed -i \"${escaped_exclude}\" ${swanctl_standby_conf}",
-      onlyif  => "grep -xq \"${include_filepath}\" ${swanctl_standby_conf}",
+      exec { "Remove includes for filepath ${fp} in ${swanctl_standby_conf}":
+        command => "/bin/sed -i \"${escaped_exclude}\" ${swanctl_standby_conf}",
+        onlyif  => "grep -xq \"${include_filepath}\" ${swanctl_standby_conf}",
+      }
+    } else {
+      exec { "Remove includes for filepath ${fp} in ${swanctl_conf}":
+        command => "/bin/sed -i \"${escaped_exclude}\" ${swanctl_conf}",
+        onlyif  => "grep -xq \"${include_filepath}\" ${swanctl_conf}",
+      }
     }
   }
 }
