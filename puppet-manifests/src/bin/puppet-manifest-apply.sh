@@ -141,6 +141,8 @@ done
 
 
 # Exit function to save logs from initial apply
+# SC2329 is a false positive here because 'finish' is invoked via 'trap'.
+# shellcheck disable=SC2329
 function finish {
     local SAVEDLOGS=/var/log/puppet/first_apply.tgz
     if [ ! -f ${SAVEDLOGS} ]; then

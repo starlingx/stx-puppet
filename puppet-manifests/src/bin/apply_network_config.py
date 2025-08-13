@@ -35,6 +35,8 @@ IFSTATE_BASE_PATH = "/run/network/ifstate."
 DEVLINK_BASE_PATH = "/sys/class/net/"
 CFG_PREFIX = "ifcfg-"
 TERM_WAIT_TIME = 10
+FLOCK_MAX_RETRY = 15
+FLOCK_WAIT_INTERVAL = 5
 
 # Interface types
 ETH = "eth"
@@ -744,7 +746,8 @@ def add_route_to_kernel(route):
 def acquire_sysinv_agent_lock():
     LOG.info("Acquiring lock to synchronize with sysinv-agent audit")
     lock_file_fd = os.open(SYSINV_LOCK_FILE, os.O_CREAT | os.O_RDONLY)
-    return acquire_file_lock(lock_file_fd, fcntl.LOCK_EX | fcntl.LOCK_NB, 5, 5)
+    return acquire_file_lock(lock_file_fd, fcntl.LOCK_EX | fcntl.LOCK_NB,
+                             FLOCK_MAX_RETRY, FLOCK_WAIT_INTERVAL)
 
 
 def release_sysinv_agent_lock(lockfd):
