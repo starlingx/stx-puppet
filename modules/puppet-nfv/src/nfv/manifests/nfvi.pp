@@ -98,6 +98,7 @@ class nfv::nfvi (
   $usm_timeout                              = 60,
   $usm_sw_deploy_execute_timeout            = 3600,
   $usm_sw_deploy_rollback_timeout           = 3600,
+  $usm_sw_deploy_delete_timeout             = 300,
 ) {
 
   include nfv::params
@@ -222,6 +223,7 @@ class nfv::nfvi (
     'nfvi-timeouts/usm': value => $usm_timeout;
     'nfvi-timeouts/usm.sw_deploy_execute': value => $usm_sw_deploy_execute_timeout;
     'nfvi-timeouts/usm.sw_deploy_rollback': value => $usm_sw_deploy_rollback_timeout;
+    'nfvi-timeouts/usm.sw_deploy_delete': value => $usm_sw_deploy_delete_timeout;
   }
 
   if $identity_uri {
