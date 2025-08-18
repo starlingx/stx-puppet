@@ -1,0 +1,10 @@
+[Unit]
+Description=Manage I2C parameters of i801 module
+
+[Service]
+Type=simple
+ExecStartPre=/sbin/modprobe -r <%=@device_name%>
+ExecStart=/sbin/modprobe <%=@device_name%> disable_features=<%=@disable_features_list%>
+
+[Install]
+WantedBy=multi-user.target
