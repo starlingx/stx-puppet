@@ -41,7 +41,7 @@ define platform::ptpinstance::ptp_config_files(
   }
 }
 
-define platform::ptpinstance::monitoring_handler(
+define platform::ptpinstance::gnss_monitor_handler(
   $global_parameters,
   $cmdline_opts,
   $ensure,
@@ -67,18 +67,18 @@ define platform::ptpinstance::monitoring_handler(
     }
   }
 
-  file {'monitoring-ptp.conf':
+  file {'gnss-monitor-ptp.conf':
     ensure  => file,
-    path    => "${ptp_conf_dir}/ptpinstance/monitoring-ptp.conf",
+    path    => "${ptp_conf_dir}/ptpinstance/gnss-monitor-ptp.conf",
     mode    => '0644',
-    content => template('platform/monitoring-ptp.conf.erb'),
+    content => template('platform/gnss-monitor-ptp.conf.erb'),
   }
   -> file {'gpsd-sysconfig':
     ensure  => file,
     notify  => Service['gpsd_service'],
-    path    => "${ptp_options_dir}/ptpinstance/monitoring-ptp",
+    path    => "${ptp_options_dir}/ptpinstance/gnss-monitor-ptp",
     mode    => '0644',
-    content => template('platform/monitoring-ptp.erb'),
+    content => template('platform/gnss-monitor-ptp.erb'),
   }
   -> service { 'gpsd_service':
     ensure     => $ensure,
@@ -86,7 +86,7 @@ define platform::ptpinstance::monitoring_handler(
     name       => 'gpsd.service',
     hasstatus  => true,
     hasrestart => true,
-    require    => Exec['ptpinstance-monitoring-systemctl-daemon-reload'],
+    require    => Exec['ptpinstance-gnss-monitor-systemctl-daemon-reload'],
   }
   -> exec { 'enable-gpsd-sevice':
     command => '/usr/bin/systemctl enable gpsd.service',
@@ -274,7 +274,7 @@ class platform::ptpinstance::nic_clock::nic_reset (
   }
 }
 
-class platform::ptpinstance::monitoring (
+class platform::ptpinstance::gnss_monitor (
   $monitoring_config = {},
   $monitoring_enabled = false,
 ) {
@@ -293,9 +293,9 @@ class platform::ptpinstance::monitoring (
     }
   }
 
-  tidy { 'purge_monitoring_ptp_conf':
+  tidy { 'purge_gnss_monitor_ptp_conf':
     path    => "${ptp_conf_dir}/ptpinstance",
-    matches => ['[^monitoring-ptp]*.conf'],
+    matches => ['[^gnss-monitor-ptp]*.conf'],
     recurse => true,
     rmdirs  => false,
   }
@@ -334,12 +334,12 @@ class platform::ptpinstance::monitoring (
     command => '/usr/bin/systemctl disable gpspipe@',
     onlyif  => 'test -f /etc/systemd/system/gpspipe@.service',
   }
-  -> exec { 'ptpinstance-monitoring-systemctl-daemon-reload':
+  -> exec { 'ptpinstance-gnss-monitor-systemctl-daemon-reload':
     command => '/usr/bin/systemctl daemon-reload',
   }
 
   if $monitoring_enabled {
-    create_resources('platform::ptpinstance::monitoring_handler', { 'monitoring_config' => $monitoring_config }, $monitoring_state)
+    create_resources('platform::ptpinstance::gnss_monitor_handler', { 'monitoring_config' => $monitoring_config }, $monitoring_state)
   }
 }
 
@@ -398,9 +398,9 @@ class platform::ptpinstance (
   $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
   $ptp_options_dir = $::platform::ptpinstance::params::ptp_options_dir
 
-  include  ::platform::ptpinstance::monitoring
-  $monitoring_config = $::platform::ptpinstance::monitoring::monitoring_config
-  $monitoring_enabled = $::platform::ptpinstance::monitoring::monitoring_enabled
+  include  ::platform::ptpinstance::gnss_monitor
+  $monitoring_config = $::platform::ptpinstance::gnss_monitor::monitoring_config
+  $monitoring_enabled = $::platform::ptpinstance::gnss_monitor::monitoring_enabled
 
   if $monitoring_enabled and $monitoring_config['global_parameters']['devices'] {
     $gpsd_monitored_devices = split($monitoring_config['global_parameters']['devices'], ' ')
@@ -547,12 +547,12 @@ class platform::ptpinstance (
   }
 }
 
-class platform::ptpinstance::monitoring_read_devices {
+class platform::ptpinstance::gnss_monitor_read_devices {
   # gpsd_monitored_devices: list, read DEVICES=".." from
-  # ptp_options_dir/ptpinstance/monitoring-ptp
+  # ptp_options_dir/ptpinstance/gnss-monitor-ptp
   include ::platform::ptpinstance::params
   $ptp_options_dir = $::platform::ptpinstance::params::ptp_options_dir
-  $file_path = "${ptp_options_dir}/ptpinstance/monitoring-ptp"
+  $file_path = "${ptp_options_dir}/ptpinstance/gnss-monitor-ptp"
   if find_file($file_path) {
     $file_content = file($file_path)
     $devices = $file_content.match(/^DEVICES="([^"]+)"/)[1]
@@ -565,12 +565,12 @@ class platform::ptpinstance::monitoring_read_devices {
 
 class platform::ptpinstance::runtime {
   class { 'platform::ptpinstance::ptp_directories': }
-  -> class { 'platform::ptpinstance::monitoring_read_devices': }
+  -> class { 'platform::ptpinstance::gnss_monitor_read_devices': }
   -> class { 'platform::ptpinstance::nic_clock': }
-  -> class { 'platform::ptpinstance::monitoring': }
+  -> class { 'platform::ptpinstance::gnss_monitor': }
   -> class { 'platform::ptpinstance': runtime => true,
               previous_gpsd_monitored_devices =>
-              $::platform::ptpinstance::monitoring_read_devices::gpsd_monitored_devices
+              $::platform::ptpinstance::gnss_monitor_read_devices::gpsd_monitored_devices
   }
   -> exec { 'Ensure collectd is restarted':
     command => '/usr/local/sbin/pmon-restart collectd'
