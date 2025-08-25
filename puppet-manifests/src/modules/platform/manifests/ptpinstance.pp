@@ -555,7 +555,7 @@ class platform::ptpinstance::gnss_monitor_read_devices {
   $file_path = "${ptp_options_dir}/ptpinstance/gnss-monitor-ptp"
   if find_file($file_path) {
     $file_content = file($file_path)
-    $devices = $file_content.match(/^DEVICES="([^"]+)"/)[1]
+    $devices = $file_content.match(/^DEVICES="([^"]*)"/)[1]
     $gpsd_monitored_devices = split($devices, ' ')
   } else {
     $gpsd_monitored_devices = []
