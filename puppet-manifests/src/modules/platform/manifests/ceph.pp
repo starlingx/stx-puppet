@@ -60,11 +60,7 @@ class platform::ceph
         # 1 node configuration, a single monitor is available
         $mon_initial_members = $mon_0_host
         $osd_pool_default_size = 1
-        if $ceph_network == 'management' {
-          $mon_host = $floating_mon_addr
-        } else {
-          $mon_host = $mon_0_addr
-        }
+        $mon_host = $floating_mon_addr
       } else {
         # 2 node configuration, we have a floating monitor
         $mon_initial_members = $floating_mon_host
