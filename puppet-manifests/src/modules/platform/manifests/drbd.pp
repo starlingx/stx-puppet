@@ -308,7 +308,7 @@ class platform::drbd::dc_vault (
   if str2bool($::is_standalone_controller) {
     $drbd_primary = true
     $drbd_initial = true
-    $drbd_automount = true
+    $drbd_automount = undef
     $drbd_manage = true
   } else {
     $drbd_primary = undef
