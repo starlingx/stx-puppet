@@ -453,6 +453,9 @@ class platform::kubernetes::haproxy {
   include ::platform::network::mgmt::params
   include ::platform::network::mgmt::ipv4::params
   include ::platform::network::mgmt::ipv6::params
+  include ::platform::network::admin::params
+  include ::platform::network::admin::ipv4::params
+  include ::platform::network::admin::ipv6::params
   include ::platform::network::cluster_host::params
   include ::platform::network::cluster_host::ipv4::params
   include ::platform::network::cluster_host::ipv6::params
@@ -462,6 +465,8 @@ class platform::kubernetes::haproxy {
   $ipv6_oam_floating_ip = $::platform::network::oam::ipv6::params::controller_address
   $ipv4_mgmt_floating_ip = $::platform::network::mgmt::ipv4::params::controller_address
   $ipv6_mgmt_floating_ip = $::platform::network::mgmt::ipv6::params::controller_address
+  $ipv4_admin_floating_ip = $::platform::network::admin::ipv4::params::controller_address
+  $ipv6_admin_floating_ip = $::platform::network::admin::ipv6::params::controller_address
   $ipv4_cluster_floating_ip = $::platform::network::cluster_host::ipv4::params::controller_address
   $ipv6_cluster_floating_ip = $::platform::network::cluster_host::ipv6::params::controller_address
   $primary_cluster_floating_ip = $::platform::network::cluster_host::params::controller_address
@@ -476,6 +481,8 @@ class platform::kubernetes::haproxy {
       $ipv6_oam_host_ip = $::platform::network::oam::ipv6::params::controller0_address
       $ipv4_mgmt_host_ip = $::platform::network::mgmt::ipv4::params::controller0_address
       $ipv6_mgmt_host_ip = $::platform::network::mgmt::ipv6::params::controller0_address
+      $ipv4_admin_host_ip = $::platform::network::admin::ipv4::params::controller0_address
+      $ipv6_admin_host_ip = $::platform::network::admin::ipv6::params::controller0_address
       $ipv4_cluster_host_ip = $::platform::network::cluster_host::ipv4::params::controller0_address
       $ipv6_cluster_host_ip = $::platform::network::cluster_host::ipv6::params::controller0_address
       if $::platform::params::system_mode == 'simplex' {
@@ -489,6 +496,8 @@ class platform::kubernetes::haproxy {
       $ipv6_oam_host_ip = $::platform::network::oam::ipv6::params::controller1_address
       $ipv4_mgmt_host_ip = $::platform::network::mgmt::ipv4::params::controller1_address
       $ipv6_mgmt_host_ip = $::platform::network::mgmt::ipv6::params::controller1_address
+      $ipv4_admin_host_ip = $::platform::network::admin::ipv4::params::controller1_address
+      $ipv6_admin_host_ip = $::platform::network::admin::ipv6::params::controller1_address
       $ipv4_cluster_host_ip = $::platform::network::cluster_host::ipv4::params::controller1_address
       $ipv6_cluster_host_ip = $::platform::network::cluster_host::ipv6::params::controller1_address
       $primary_cluster_host_ip = $::platform::network::cluster_host::params::controller1_address
@@ -589,6 +598,10 @@ class platform::kubernetes::haproxy {
     $ipv6_mgmt_floating_ip,
     $ipv4_mgmt_host_ip,
     $ipv6_mgmt_host_ip,
+    $ipv4_admin_floating_ip,
+    $ipv6_admin_floating_ip,
+    $ipv4_admin_host_ip,
+    $ipv6_admin_host_ip,
   ].filter |$value| { $value != undef }.unique
 
   $internal_ips_ssl_passtrough = $internal_ips.reduce( {} ) |Hash $memo, $item| {
