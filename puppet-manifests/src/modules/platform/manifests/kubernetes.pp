@@ -1447,6 +1447,17 @@ class platform::kubernetes::certsans::runtime
     $sec_mgmt_subnet_ver = undef
   }
 
+  $prim_admin_subnet_ver = $::platform::network::admin::params::subnet_version
+  $ipv4_admin_subnet_ver = $::platform::network::admin::ipv4::params::subnet_version
+  $ipv6_admin_subnet_ver = $::platform::network::admin::ipv6::params::subnet_version
+  if $prim_admin_subnet_ver == $ipv6_val and $ipv4_admin_subnet_ver != undef {
+    $sec_admin_subnet_ver = $ipv4_admin_subnet_ver
+  } elsif $prim_admin_subnet_ver == $ipv4_val and $ipv6_admin_subnet_ver != undef {
+    $sec_admin_subnet_ver = $ipv6_admin_subnet_ver
+  } else {
+    $sec_admin_subnet_ver = undef
+  }
+
   $prim_cluster_host_subnet_ver = $::platform::network::cluster_host::params::subnet_version
   $ipv4_cluster_host_subnet_ver = $::platform::network::cluster_host::ipv4::params::subnet_version
   $ipv6_cluster_host_subnet_ver = $::platform::network::cluster_host::ipv6::params::subnet_version
@@ -1490,6 +1501,7 @@ class platform::kubernetes::certsans::runtime
     # primary addresses
     $primary_floating_array = [$::platform::network::cluster_host::params::controller_address,
                                 $::platform::network::mgmt::params::controller_address,
+                                $::platform::network::admin::params::controller_address,
                                 $::platform::network::oam::params::controller_address,
                                 $localhost_address]
     if ($::platform::network::cluster_host::params::controller0_address != undef) {
@@ -1497,13 +1509,21 @@ class platform::kubernetes::certsans::runtime
     } else {
       $primary_unit_cluster_array = []
     }
+
     if ($::platform::network::mgmt::params::controller0_address != undef) {
       $primary_unit_mgmt_array = [$::platform::network::mgmt::params::controller0_address]
     } else {
       $primary_unit_mgmt_array = []
     }
+
+    if ($::platform::network::admin::params::controller0_address != undef) {
+      $primary_unit_admin_array = [$::platform::network::admin::params::controller0_address]
+    } else {
+      $primary_unit_admin_array = []
+    }
+
     $certsans_prim_array = ($primary_floating_array + $primary_unit_cluster_array +
-                              $primary_unit_mgmt_array)
+                              $primary_unit_mgmt_array + $primary_unit_admin_array)
 
     # secondary addresses: OAM
     if $sec_oam_subnet_ver == $ipv4_val {
@@ -1562,12 +1582,38 @@ class platform::kubernetes::certsans::runtime
       $certsans_mgmt_sec_array = []
     }
 
+    if $sec_admin_subnet_ver == $ipv4_val {
+
+      $sec_admin_float_array = [$::platform::network::admin::ipv4::params::controller_address]
+      if ($::platform::network::admin::ipv4::params::controller0_address != undef) {
+        $sec_admin_unit_array = [$::platform::network::admin::ipv4::params::controller0_address]
+      } else {
+        $sec_admin_unit_array = []
+      }
+      $certsans_admin_sec_array = $sec_admin_float_array + $sec_admin_unit_array
+
+    } elsif $sec_admin_subnet_ver == $ipv6_val {
+
+      $sec_admin_float_array = [$::platform::network::admin::ipv6::params::controller_address]
+      if ($::platform::network::admin::ipv6::params::controller0_address != undef) {
+        $sec_admin_unit_array = [$::platform::network::admin::ipv6::params::controller0_address]
+      } else {
+        $sec_admin_unit_array = []
+      }
+      $certsans_admin_sec_array = $sec_admin_float_array + $sec_admin_unit_array
+
+    } else {
+      $certsans_admin_sec_array = []
+    }
+
     $certsans_sec_hosts_array = ($certsans_oam_sec_array + $certsans_cluster_sec_array +
-                                  $certsans_mgmt_sec_array + $certsans_sec_localhost_array)
+                                  $certsans_mgmt_sec_array + $certsans_admin_sec_array +
+                                  $certsans_sec_localhost_array)
 
   } else {
     $primary_floating_array = [$::platform::network::cluster_host::params::controller_address,
                                 $::platform::network::mgmt::params::controller_address,
+                                $::platform::network::admin::params::controller_address,
                                 $::platform::network::oam::params::controller_address,
                                 $localhost_address]
 
@@ -1588,7 +1634,7 @@ class platform::kubernetes::certsans::runtime
 
     # primary Cluster-host unit addresses
     if ($::platform::network::cluster_host::params::controller0_address != undef) and
-        ($::platform::network::cluster_host::params::controller0_address != undef) {
+        ($::platform::network::cluster_host::params::controller1_address != undef) {
       $primary_unit_cluster_array = [$::platform::network::cluster_host::params::controller0_address,
                                       $::platform::network::cluster_host::params::controller1_address]
     } elsif ($::platform::network::cluster_host::params::controller0_address != undef) and
@@ -1603,7 +1649,7 @@ class platform::kubernetes::certsans::runtime
 
     # primary management unit addresses
     if ($::platform::network::mgmt::params::controller0_address != undef) and
-        ($::platform::network::mgmt::params::controller0_address != undef) {
+        ($::platform::network::mgmt::params::controller1_address != undef) {
       $primary_unit_mgmt_array = [$::platform::network::mgmt::params::controller0_address,
                                       $::platform::network::mgmt::params::controller1_address]
     } elsif ($::platform::network::mgmt::params::controller0_address != undef) and
@@ -1616,8 +1662,24 @@ class platform::kubernetes::certsans::runtime
       $primary_unit_mgmt_array = []
     }
 
+    # primary admin unit addresses
+    if ($::platform::network::admin::params::controller0_address != undef) and
+        ($::platform::network::admin::params::controller1_address != undef) {
+      $primary_unit_admin_array = [$::platform::network::admin::params::controller0_address,
+                                      $::platform::network::admin::params::controller1_address]
+    } elsif ($::platform::network::admin::params::controller0_address != undef) and
+            ($::platform::network::admin::params::controller1_address == undef) {
+      $primary_unit_admin_array = [$::platform::network::admin::params::controller0_address]
+    } elsif ($::platform::network::admin::params::controller0_address == undef) and
+            ($::platform::network::admin::params::controller1_address != undef) {
+      $primary_unit_admin_array = [$::platform::network::admin::params::controller1_address]
+    } else {
+      $primary_unit_admin_array = []
+    }
+
     $certsans_prim_array = ($primary_floating_array + $primary_unit_oam_array +
-                              $primary_unit_cluster_array + $primary_unit_mgmt_array)
+                              $primary_unit_cluster_array + $primary_unit_mgmt_array +
+                              $primary_unit_admin_array)
 
     # secondary OAM addresses
     if $sec_oam_subnet_ver == $ipv4_val {
@@ -1746,9 +1808,53 @@ class platform::kubernetes::certsans::runtime
       $certsans_mgmt_sec_array = []
     }
 
+    # secondary admin addresses
+    if $sec_admin_subnet_ver == $ipv4_val {
+
+      $sec_admin_floating_array = [$::platform::network::admin::ipv4::params::controller_address]
+
+      if ($::platform::network::admin::ipv4::params::controller0_address != undef) and
+          ($::platform::network::admin::ipv4::params::controller1_address != undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv4::params::controller0_address,
+                                        $::platform::network::admin::ipv4::params::controller1_address]
+      } elsif ($::platform::network::admin::ipv4::params::controller0_address != undef) and
+              ($::platform::network::admin::ipv4::params::controller1_address == undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv4::params::controller0_address]
+      } elsif ($::platform::network::admin::ipv4::params::controller0_address == undef) and
+              ($::platform::network::admin::ipv4::params::controller1_address != undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv4::params::controller1_address]
+      } else {
+        $sec_unit_admin_array = []
+      }
+      $certsans_admin_sec_array = $sec_admin_floating_array + $sec_unit_admin_array
+
+    } elsif $sec_admin_subnet_ver == $ipv6_val {
+
+      $sec_admin_floating_array = [$::platform::network::admin::ipv6::params::controller_address]
+
+      if ($::platform::network::admin::ipv6::params::controller0_address != undef) and
+          ($::platform::network::admin::ipv6::params::controller1_address != undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv6::params::controller0_address,
+                                        $::platform::network::admin::ipv6::params::controller1_address]
+      } elsif ($::platform::network::admin::ipv6::params::controller0_address != undef) and
+              ($::platform::network::admin::ipv6::params::controller1_address == undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv6::params::controller0_address]
+      } elsif ($::platform::network::admin::ipv6::params::controller0_address == undef) and
+              ($::platform::network::admin::ipv6::params::controller1_address != undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv6::params::controller1_address]
+      } else {
+        $sec_unit_admin_array = []
+      }
+      $certsans_admin_sec_array = $sec_admin_floating_array + $sec_unit_admin_array
+
+    } else {
+      $certsans_admin_sec_array = []
+    }
+
     $certsans_sec_hosts_array = ($certsans_oam_sec_array + $certsans_cluster_host_sec_array +
-                                  $certsans_mgmt_sec_array + $certsans_sec_localhost_array)
-  }
+                                  $certsans_mgmt_sec_array + $certsans_admin_sec_array +
+                                  $certsans_sec_localhost_array)
+    }
 
   $certsans_array = ($certsans_prim_array + $certsans_sec_hosts_array).filter |$value| { $value != undef }
   $certsans = join($certsans_array,',')
