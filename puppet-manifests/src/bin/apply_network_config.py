@@ -1043,6 +1043,11 @@ def check_enrollment_config():
         for iface, cfg in iface_cfgs.items():
             LOG.info(f"Enrollment: Configuring interface {iface} with gateway {cfg['gateway']}")
             ensure_iface_configured(iface, cfg)
+    try:
+        os.remove(CLOUD_INIT_FILE)
+        LOG.info(f"Enrollment: Removed '{CLOUD_INIT_FILE}' to prevent config conflicts")
+    except OSError as e:
+        LOG.error(f"Enrollment: OS error while removing '{CLOUD_INIT_FILE}': {e}")
 
 
 def get_ifaces_with_dhcp(iface_configs):

@@ -2095,7 +2095,9 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
                      '2620:10a:a001:d41::1'),
             ('info', 'Adding route: default via 2620:10a:a001:d41::1 dev vlan401'),
             ('info', 'Route to specified network already exists, replacing: default via fd05::111 '
-                     'dev ens1f0 metric 1024 pref medium')],
+                     'dev ens1f0 metric 1024 pref medium'),
+            ('info', "Enrollment: Removed '/etc/network/interfaces.d/50-cloud-init' to prevent "
+                     'config conflicts')],
             self._log.get_history())
 
     def test_check_cloud_init_multiple_ifaces(self):
@@ -2148,7 +2150,9 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
             ('info', 'Enrollment: Configuring interface vlan402 with gateway eb22:303::1'),
             ('info', 'Adding route: default via eb22:303::1 dev vlan402'),
             ('info', 'Route to specified network already exists, replacing: default via '
-                     '2620:10a:a001:d41::1 dev vlan401 metric 1024 pref medium')],
+                     '2620:10a:a001:d41::1 dev vlan401 metric 1024 pref medium'),
+            ('info', "Enrollment: Removed '/etc/network/interfaces.d/50-cloud-init' to prevent "
+                     'config conflicts')],
             self._log.get_history())
 
     def test_check_cloud_init_empty(self):
