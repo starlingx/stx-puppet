@@ -43,6 +43,8 @@ class nfv::vim (
   $deploy_start_timeout        = 3600,
   # sw_deploy_rollback uses timeout from sw_deploy_execute
   $deploy_host_execute_timeout = 3600,
+  $deploy_host_retries = 3,
+  $deploy_host_retry_delay = 120,
   $deploy_activate_timeout     = 3600,
   $deploy_activate_retries     = 3,
   $deploy_activate_retry_delay = 30,
@@ -109,6 +111,8 @@ class nfv::vim (
     # SOFTWARE-DEPLOYMENT TIMEOUTS
     'software-deploy/deploy_start_timeout': value => $deploy_start_timeout;
     'software-deploy/deploy_host_execute_timeout': value => $deploy_host_execute_timeout;
+    'software-deploy/deploy_host_retries': value => $deploy_host_retries;
+    'software-deploy/deploy_host_retry_delay': value => $deploy_host_retry_delay;
     'software-deploy/deploy_activate_timeout': value => $deploy_activate_timeout;
     'software-deploy/deploy_activate_retries': value => $deploy_activate_retries;
     'software-deploy/deploy_activate_retry_delay': value => $deploy_activate_retry_delay;
