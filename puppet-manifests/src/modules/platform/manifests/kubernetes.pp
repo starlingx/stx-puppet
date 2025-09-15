@@ -12,7 +12,6 @@ class platform::kubernetes::params (
   $apiserver_cluster_ip = undef,
   $dns_service_ip = undef,
   $host_labels = [],
-  $k8s_cpushares = 10240,
   $k8s_cpuset = undef,
   $k8s_nodeset = undef,
   $k8s_platform_cpuset = undef,
@@ -188,7 +187,6 @@ class platform::kubernetes::cgroup
 
   $k8s_cpuset = $::platform::kubernetes::params::k8s_cpuset
   $k8s_nodeset = $::platform::kubernetes::params::k8s_nodeset
-  $k8s_cpushares = $::platform::kubernetes::params::k8s_cpushares
 
   # Default to float across all cpus and numa nodes
   if !defined('$k8s_cpuset') {
@@ -247,13 +245,6 @@ class platform::kubernetes::cgroup
         owner  => 'root',
         group  => 'root',
         mode   => '0644',
-      }
-    }
-    if $::platform::params::distributed_cloud_role != 'systemcontroller' and $controller == 'cpu' {
-      $cgroup_cpushares = "${cgroup_dir}/cpu.shares"
-      File[ $cgroup_dir ]
-      -> exec { "Create ${cgroup_cpushares}" :
-        command => "/bin/echo ${k8s_cpushares} > ${cgroup_cpushares} || :",
       }
     }
   }
