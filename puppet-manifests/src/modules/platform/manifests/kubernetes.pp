@@ -520,7 +520,8 @@ class platform::kubernetes::haproxy {
   # O = kubeadm:cluster-admins, CN = kubernetes-admin
   $acl_k8s_subject_cn = 'k8s_admin_subject_CN ssl_c_s_dn(CN) -m str kubernetes-admin'
   $acl_k8s_subject_o = 'k8s_admin_subject_O ssl_c_s_dn(O) -m str kubeadm:cluster-admins'
-  $http_req_deny_client = 'deny if { ssl_fc_has_crt } !k8s_admin_subject_CN !k8s_admin_subject_O'
+  $http_req_deny_subject_cn = 'deny if { ssl_fc_has_crt } !k8s_admin_subject_CN'
+  $http_req_deny_subject_o = 'deny if { ssl_fc_has_crt } !k8s_admin_subject_O'
 
   $proto_header = 'X-Forwarded-Proto https'
   $hsts_option = 'Strict-Transport-Security max-age=63072000;\ includeSubDomains'
@@ -528,7 +529,7 @@ class platform::kubernetes::haproxy {
     'use_backend'     => 'k8s-backend-client-crt if { ssl_fc_has_crt }',
     'default_backend' => 'k8s-backend',
     'acl'             => [$acl_k8s_subject_cn,$acl_k8s_subject_o],
-    'http-request'    => ["add-header ${proto_header}",$http_req_deny_client],
+    'http-request'    => ["add-header ${proto_header}",$http_req_deny_subject_cn,$http_req_deny_subject_o],
     'http-response'   => "add-header ${hsts_option}",
   }
 
