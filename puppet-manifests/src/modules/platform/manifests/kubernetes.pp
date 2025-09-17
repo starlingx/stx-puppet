@@ -1432,6 +1432,9 @@ class platform::kubernetes::certsans::runtime
   include ::platform::network::cluster_host::params
   include ::platform::network::cluster_host::ipv4::params
   include ::platform::network::cluster_host::ipv6::params
+  include ::platform::network::admin::params
+  include ::platform::network::admin::ipv4::params
+  include ::platform::network::admin::ipv6::params
 
   $ipv4_val = $::platform::params::ipv4
   $ipv6_val = $::platform::params::ipv6
