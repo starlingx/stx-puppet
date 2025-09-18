@@ -237,6 +237,11 @@ class platform::postgresql::server
     ip_mask_deny_postgres_user => $ip_mask_deny_postgres_user,
     service_ensure             => 'stopped',
   }
+
+  -> exec { 'sm-restart-postgresql-if-running':
+    command => '/usr/bin/sm-restart service postgres',
+    onlyif  => '/usr/bin/sm-query service postgres | grep "enabled-active"',
+  }
 }
 
 
