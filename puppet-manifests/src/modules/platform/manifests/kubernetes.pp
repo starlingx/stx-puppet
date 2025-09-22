@@ -746,6 +746,21 @@ class platform::kubernetes::master::init
       onlyif  => "test '${software_version}' == '22.12'",
     }
 
+    -> exec { 'Pin image kube-apiserver':
+      command   => "/usr/bin/ctr -n k8s.io image label registry.local:9001/registry.k8s.io/kube-apiserver:${version} io.cri-containerd.pinned=pinned || true", # lint:ignore:140chars
+      logoutput => true,
+    }
+
+    -> exec { 'Pin image kube-scheduler':
+      command   => "/usr/bin/ctr -n k8s.io image label registry.local:9001/registry.k8s.io/kube-scheduler:${version} io.cri-containerd.pinned=pinned || true", # lint:ignore:140chars
+      logoutput => true,
+    }
+
+    -> exec { 'Pin image kube-controller-manager':
+      command   => "/usr/bin/ctr -n k8s.io image label registry.local:9001/registry.k8s.io/kube-controller-manager:${version} io.cri-containerd.pinned=pinned || true", # lint:ignore:140chars
+      logoutput => true,
+    }
+
     # Initial kubernetes config done on node
     -> file { '/etc/platform/.initial_k8s_config_complete':
       ensure => present,
