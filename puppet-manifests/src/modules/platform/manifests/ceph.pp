@@ -733,6 +733,13 @@ define platform::ceph::platform_ceph_osd(
     logoutput => true,
     command   => template('platform/ceph.journal.location.erb')
   }
+  -> file { "/var/lib/ceph/osd/ceph-${osd_id}/.osd_configured":
+      ensure  => present,
+      content => '',
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0640',
+  }
 }
 
 
