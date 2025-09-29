@@ -402,6 +402,8 @@ class platform::ptpinstance (
   $monitoring_config = $::platform::ptpinstance::gnss_monitor::monitoring_config
   $monitoring_enabled = $::platform::ptpinstance::gnss_monitor::monitoring_enabled
 
+  require ::platform::ptpinstance::nic_clock
+
   if $monitoring_enabled and $monitoring_config['global_parameters']['devices'] {
     $gpsd_monitored_devices = split($monitoring_config['global_parameters']['devices'], ' ')
   } else {
