@@ -1424,6 +1424,15 @@ class platform::kubernetes::master::change_apiserver_parameters (
       class { 'platform::haproxy::reload':, }
       -> Exec['update configmap and apply changes to control plane components']
     }
+
+    -> exec { 'remove /etc/kubernetes/backup':
+          command => '/usr/bin/rm -rf /etc/kubernetes/backup',
+          onlyif  => '/usr/bin/test -d /etc/kubernetes/backup',
+      }
+
+    -> file { '/var/lib/kubelet/config.yaml.bak':
+      ensure  => absent,
+    }
   }
 }
 
