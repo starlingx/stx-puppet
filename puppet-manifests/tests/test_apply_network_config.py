@@ -531,6 +531,14 @@ class NetworkingMock():  # pylint: disable=too-many-instance-attributes,too-many
         self._add_history("ip_route_show_all", prot)
         return 0, "< 'ip route show all' output placeholder >\n"
 
+    def ip_neigh_show_all(self, not_used):
+        self._add_history("ip_neigh_show_all", not_used)
+        return 0, "< 'ip neigh show all' output placeholder >\n"
+
+    def get_hostname(self, not_used):
+        self._add_history("get_hostname", not_used)
+        return 0, "< 'hostname' output placeholder >\n"
+
     @staticmethod
     def _sort_routes(routes):
         return [routes[k] for k in sorted(routes.keys())]
@@ -763,6 +771,12 @@ class SystemCommandMock():  # pylint: disable=too-few-public-methods
     def _ip_route_show_all(self, args):
         return self._nwmock.ip_route_show_all(args[0])
 
+    def _ip_neigh_show_all(self, args):
+        return self._nwmock.ip_neigh_show_all(args)
+
+    def _hostname(self, args):
+        return self._nwmock.get_hostname(args)
+
     def _ip_route_show(self, args):
         return self._nwmock.ip_route_show(args[0], args[1], args[2], args[3], args[4])
 
@@ -790,6 +804,7 @@ class SystemCommandMock():  # pylint: disable=too-few-public-methods
         (re.compile(R"^/usr/sbin/ip addr flush dev (\S+)$"), _ip_addr_flush),
         (re.compile(R"^/usr/sbin/ip link set down dev (\S+)$"), _ip_link_set_down),
         (re.compile(R"^/usr/sbin/ip (?:(-6) )?route show$"), _ip_route_show_all),
+        (re.compile(R"^/usr/sbin/ip neigh show$"), _ip_neigh_show_all),
         (re.compile(R"^/usr/sbin/ip (?:(-6) )?route show (\S+)(?: via (\S+) "
                     R"dev (\S+))?(?: metric (\S+))?$"), _ip_route_show),
         (re.compile(R"^/usr/sbin/ip route add (\S+) via (\S+) "
@@ -797,7 +812,8 @@ class SystemCommandMock():  # pylint: disable=too-few-public-methods
         (re.compile(R"^/usr/sbin/ip route replace (\S+) via (\S+) "
                     R"dev (\S+)(?: metric (\S+))?$"), _ip_route_replace),
         (re.compile(R"^/usr/sbin/ip route del (\S+) via (\S+) "
-                    R"dev (\S+)(?: metric (\S+))?$"), _ip_route_del),)
+                    R"dev (\S+)(?: metric (\S+))?$"), _ip_route_del),
+        (re.compile(R"^/usr/bin/hostname$"), _hostname),)
 
     def execute_system_cmd(self, cmd):
         for mapping in self._MAPPINGS:
@@ -1579,7 +1595,7 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
         self._add_logger_mock()
 
         def run_function(path_exists: bool):
-            with(mock.patch('src.bin.apply_network_config.path_exists', return_value=path_exists),
+            with (mock.patch('src.bin.apply_network_config.path_exists', return_value=path_exists),
                  mock.patch('os.remove', side_effect=OSError("< OS ERROR >"))):
                 self._mocked_call([self._mock_logger], anc.remove_iface_config_file, "enp0s8")
 
@@ -2236,8 +2252,11 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
         self._add_logger_mock()
         self._nwmock.apply_auto()
 
-        self._mocked_call([self._mock_fs, self._mock_syscmd,
-                           self._mock_sysinv_lock, self._mock_logger], anc.update_interfaces)
+        self._mocked_call([self._mock_fs,
+                           self._mock_syscmd,
+                           self._mock_sysinv_lock,
+                           self._mock_logger],
+                          anc.update_interfaces)
 
         self.assertEqual([
             'enp0s8 UP 169.254.202.131/24',

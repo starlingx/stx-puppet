@@ -238,25 +238,37 @@ def apply_config(routes_only):
             LOG.error("No puppet files? Nothing to do! Aborting...")
             sys.exit(1)
         LOG.info("Process Debian network config")
-        log_network_info()
+        log_network_info("pre configuration")
         updated_ifaces = update_interfaces()
         update_routes(updated_ifaces)
         check_enrollment_config()
-        log_network_info()
+        log_network_info("post configuration")
     LOG.info("Finished")
 
 
-def log_network_info():
+def log_network_info(extra_info=""):
+    LOG.info(f"************ START Network Info {extra_info} ************")
+
     _, links = execute_system_cmd("/usr/sbin/ip addr show")
+    for line in links.splitlines():
+        LOG.info(f"[ADDRESS ] {line}")
+
+    LOG.info("------------")
     _, routes_ipv4 = execute_system_cmd("/usr/sbin/ip route show")
+    for line in routes_ipv4.splitlines():
+        LOG.info(f"[ROUTEv4 ] {line}")
+
+    LOG.info("------------")
     _, routes_ipv6 = execute_system_cmd("/usr/sbin/ip -6 route show")
-    LOG.info("Network info:\n************ Links/addresses ************\n"
-             f"{links}"
-             "************ IPv4 routes ****************\n"
-             f"{routes_ipv4}"
-             "************ IPv6 routes ****************\n"
-             f"{routes_ipv6}"
-             "*****************************************")
+    for line in routes_ipv6.splitlines():
+        LOG.info(f"[ROUTEv6 ] {line}")
+
+    LOG.info("------------")
+    _, neighbor = execute_system_cmd("/usr/sbin/ip neigh show")
+    for line in neighbor.splitlines():
+        LOG.info(f"[NEIGHBOR] {line}")
+
+    LOG.info(f"************ END Network Info {extra_info} **************")
 
 
 def get_new_config():
@@ -817,6 +829,17 @@ def disable_pxeboot_interface():
         LOG.info(f"Turn off pxeboot install config for {iface}, will be turned on later")
         set_iface_down(iface)
 
+        _, hostname = execute_system_cmd("/usr/bin/hostname")
+        pxeboot_lease_file = f"/var/lib/dhcp/dhclient.{iface}.leases"
+        if ("controller" in hostname) and os.path.isfile(pxeboot_lease_file):
+            # controllers will use static addressing after first unlock, remove the kickstart
+            # leases file; mtcClient needs to search address in the static config file
+            LOG.info(f"Remove {pxeboot_lease_file}, left from kickstart install phase")
+            try:
+                os.remove(pxeboot_lease_file)
+            except OSError as e:
+                LOG.error(f"Failed to remove {pxeboot_lease_file}: {e}")
+
     LOG.info("Remove ifcfg-pxeboot, left from kickstart install phase")
     remove_iface_config_file("pxeboot")
 
@@ -1106,7 +1129,7 @@ def audit_config():
 
 
 def main():
-    log_format = ('%(asctime)s: [%(process)s]: %(filename)s(%(lineno)s): '
+    log_format = ('%(asctime)s.%(msecs)03d: [%(process)s]: %(filename)s(%(lineno)s): '
                   '%(levelname)s: %(message)s')
     LOG.basicConfig(filename=LOG_FILE, format=log_format, level=LOG.INFO, datefmt="%FT%T")
 
