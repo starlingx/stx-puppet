@@ -30,7 +30,6 @@ include ::platform::ldap::server
 include ::platform::ldap::client
 include ::platform::sssd
 include ::platform::ntp::server
-include ::platform::strongswan::apparmor
 include ::platform::ptpinstance
 include ::platform::ptpinstance::nic_clock
 include ::platform::ptpinstance::monitoring
