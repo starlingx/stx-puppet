@@ -687,6 +687,26 @@ define platform::ptpinstance::external_ptp_pin (
   }
 }
 
+define platform::ptpinstance::sma_pin (
+  $iface,
+  $pin,
+  $function,
+) {
+  if $function == 0 {
+    # The Netlink set pin API doesn't support disable, only input or output functions.
+    # Converting disable function to input. The input works as disable function to
+    # disengage the 1PPS clock forwarding.
+    $function_overwrite = 1
+  } else {
+    $function_overwrite = $function
+  }
+  exec { "${iface}_${pin}_${function}":
+    command   => "python /usr/share/puppet/modules/platform/files/change_network_card_pins.py ${iface} ${pin} ${function_overwrite}",
+    logoutput => 'on_failure',
+    timeout   => 600,
+  }
+}
+
 define platform::ptpinstance::ptp_pin (
   $iface,
   $pin,
@@ -845,13 +865,13 @@ define platform::ptpinstance::config_param (
       'input'   => { 'iface' => $base_port, 'pin' => 'SDP23', 'function' => 1, 'channel' => 2 },
     },
     'sma1' => {
-      'resource' => 'platform::ptpinstance::external_ptp_pin',
+      'resource' => 'platform::ptpinstance::sma_pin',
       'default' => { 'iface' => $base_port, 'pin' => 'SMA1', 'function' => 0 },
       'input'   => { 'iface' => $base_port, 'pin' => 'SMA1', 'function' => 1 },
       'output'  => { 'iface' => $base_port, 'pin' => 'SMA1', 'function' => 2 },
     },
     'sma2' => {
-      'resource' => 'platform::ptpinstance::external_ptp_pin',
+      'resource' => 'platform::ptpinstance::sma_pin',
       'default' => { 'iface' => $base_port, 'pin' => 'SMA2', 'function' => 0 },
       'input'   => { 'iface' => $base_port, 'pin' => 'SMA2', 'function' => 1 },
       'output'  => { 'iface' => $base_port, 'pin' => 'SMA2', 'function' => 2 },
