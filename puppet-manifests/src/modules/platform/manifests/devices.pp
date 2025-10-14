@@ -170,7 +170,7 @@ class platform::devices::fpga::n3000::reset
     path      => ['/usr/bin/', '/usr/sbin/'],
     tries     => 60,
     try_sleep => 1,
-    require   => Anchor['platform::networking'],
+    require   => [Anchor['platform::networking'], Class['platform::containerd::config']],
     unless    => 'test -e /var/run/.sysinv_n3000_reset'
   }
 }
