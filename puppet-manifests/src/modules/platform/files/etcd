@@ -20,10 +20,6 @@ DESC="ETCD highly-available key value database"
 SERVICE="etcd.service"
 PIDFILE="/var/run/etcd.pid"
 UPGRADE_SWACT_FILE="/opt/etcd/.upgrade_etcd"
-UPGRADE_FLAG_NAME="/opt/etcd/.upgrade"
-ROLLBACK_FLAG_NAME="/opt/etcd/.rollback"
-ETCD_DB_PATH="/opt/etcd/db"
-ETCD_FROM_PATH="/opt/etcd/24.09"
 
 if grep -q "Debian" /etc/os-release; then
     ETCD_CONFIG_FILE="/etc/default/etcd"
@@ -108,27 +104,6 @@ start()
 
     if [ $RETVAL -eq 0 ]; then
         echo "Starting $SERVICE..."
-        # TODO(lbonatti) Remove this block/constants in next release.
-        if [ -e "$UPGRADE_FLAG_NAME" ]; then
-            if [ -L "$ETCD_DB_PATH" ]; then
-                unlink "$ETCD_DB_PATH"
-                echo "Removed $ETCD_DB_PATH symlink"
-            fi
-
-            mv "$ETCD_FROM_PATH" "$ETCD_DB_PATH"
-            echo "Renamed $ETCD_FROM_PATH directory to $ETCD_DB_PATH"
-            rm -f "$UPGRADE_FLAG_NAME"
-            echo "Flag $UPGRADE_FLAG_NAME delete."
-
-        elif [ -e "$ROLLBACK_FLAG_NAME" ]; then
-            if [ -L "$ETCD_DB_PATH" ]; then
-                unlink "$ETCD_DB_PATH"
-                echo "Removed $ETCD_DB_PATH symlink"
-            fi
-            rm -f "$ROLLBACK_FLAG_NAME"
-            echo "Flag $ROLLBACK_FLAG_NAME delete."
-        fi
-
 
         systemctl start $SERVICE
 
