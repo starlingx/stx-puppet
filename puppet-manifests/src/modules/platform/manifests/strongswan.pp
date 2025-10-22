@@ -281,30 +281,6 @@ class platform::strongswan::config
   }
 }
 
-class platform::strongswan::apparmor {
-  file { '/etc/apparmor.d/local/usr.sbin.swanctl':
-    ensure  => present,
-    mode    => '0644',
-    content => template('platform/usr.sbin.swanctl.erb'),
-    notify  => Exec['reload-apparmor-swanctl-profile'],
-  }
-  exec {'reload-apparmor-swanctl-profile':
-    command => '/usr/sbin/apparmor_parser -vTr /etc/apparmor.d/usr.sbin.swanctl',
-    onlyif  => 'cat /sys/module/apparmor/parameters/enabled | grep -q "Y"',
-  }
-
-  file { '/etc/apparmor.d/local/usr.lib.ipsec.charon':
-    ensure  => present,
-    mode    => '0644',
-    content => template('platform/usr.lib.ipsec.charon.erb'),
-    notify  => Exec['reload-apparmor-ipsec-profile'],
-  }
-  exec {'reload-apparmor-ipsec-profile':
-    command => '/usr/sbin/apparmor_parser -vTr /etc/apparmor.d/usr.lib.ipsec.charon',
-    onlyif  => 'cat /sys/module/apparmor/parameters/enabled | grep -q "Y"',
-  }
-}
-
 class platform::strongswan
   inherits ::platform::strongswan::params {
 
