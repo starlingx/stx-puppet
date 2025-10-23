@@ -340,7 +340,7 @@ def parse_etc_dir():
     for file in files:
         file_path = ETC_DIR + "/" + file
         if os.path.isfile(file_path):
-            LOG.info(f"Parsing file {file_path}")
+            LOG.debug(f"Parsing file {file_path}")
             lines = read_file_lines(file_path)
             parser.parse_lines(lines)
     return parser.get_auto_and_ifaces()[1]
@@ -735,24 +735,11 @@ def get_route_description(route, full=True):
 
 
 def add_route_to_kernel(route):
-    prot = "-6 " if ":" in route["nexthop"] else ""
     description = get_route_description(route)
-    LOG.info(f"Adding route: {description}")
-    retcode, stdout = execute_system_cmd(f"/usr/sbin/ip {prot}route show {description}")
-    if retcode == 0 and route["network"] in stdout:
-        LOG.info("Route already exists, skipping")
-    else:
-        short_descr = get_route_description(route, full=False)
-        retcode, stdout = execute_system_cmd(f"/usr/sbin/ip {prot}route show {short_descr}")
-        if retcode == 0 and route["network"] in stdout:
-            LOG.info(f"Route to specified network already exists, replacing: {stdout.strip()}")
-            retcode, stdout = execute_system_cmd(f"/usr/sbin/ip route replace {description}")
-            if retcode != 0:
-                LOG.error(f"Failed replacing route {description}:{format_stdout(stdout)}")
-        else:
-            retcode, stdout = execute_system_cmd(f"/usr/sbin/ip route add {description}")
-            if retcode != 0:
-                LOG.error(f"Failed adding route {description}:{format_stdout(stdout)}")
+    LOG.info(f"Route adding/replacing: {description}")
+    retcode, stdout = execute_system_cmd(f"/usr/sbin/ip route replace {description}")
+    if retcode != 0:
+        LOG.error(f"Failed replacing route {description}:{format_stdout(stdout)}")
 
 
 def acquire_sysinv_agent_lock():
@@ -1028,7 +1015,7 @@ def update_routes(updated_ifaces=None):
 
     for route_entry in new_routes:
         if route_entry not in current_routes_set:
-            LOG.info(f"Route not previously present in {ETC_ROUTES_FILE}, adding")
+            LOG.debug(f"Route not previously present in {ETC_ROUTES_FILE}, adding")
         elif get_route_iface(route_entry) in updated_ifaces:
             LOG.info("Route is associated with and updated interface, adding")
         else:
@@ -1124,8 +1111,10 @@ def audit_dhcp_ifaces(iface_configs):
 
 
 def audit_config():
+    LOG.info("Start config audit")
     current_config = get_current_config()
     audit_dhcp_ifaces(current_config)
+    LOG.info("Finished config audit")
 
 
 def main():
