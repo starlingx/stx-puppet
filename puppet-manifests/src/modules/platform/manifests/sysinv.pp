@@ -5,6 +5,7 @@ class platform::sysinv::params (
   $fm_catalog_info = 'faultmanagement:fm:internalURL',
   $server_timeout = '600s',
   $sysinv_api_workers = undef,
+  $host_unlock_blocking_period = undef,
 ) {
   # Set default values for database connection for AIO systems (except for
   # systemcontroller on DC)
@@ -200,6 +201,13 @@ class platform::sysinv::api
       sysinv_config {
         'DEFAULT/sysinv_api_workers': value => $::platform::params::eng_workers_by_5;
       }
+    }
+  }
+
+  if ($platform::sysinv::params::host_unlock_blocking_period != undef) {
+
+    sysinv_config {
+      'DEFAULT/host_unlock_blocking_period': value => $platform::sysinv::params::host_unlock_blocking_period;
     }
   }
 
