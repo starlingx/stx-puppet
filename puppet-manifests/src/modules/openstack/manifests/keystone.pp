@@ -386,46 +386,12 @@ class openstack::keystone::endpoint::runtime::post {
 }
 
 class openstack::keystone::endpoint::reconfig
-  inherits ::openstack::keystone::params {
+  inherits ::openstack::keystone::endpoint::runtime {
 
-  $region = $::openstack::keystone::params::region_name
-  # platform service keystone endpoint are updated before sysinv's keystone endpoint
-  Keystone_endpoint["${region}/patching::patching"] -> Keystone_endpoint["${region}/sysinv::platform"]
-  Keystone_endpoint["${region}/usm::usm"] -> Keystone_endpoint["${region}/sysinv::platform"]
-  Keystone_endpoint["${region}/vim::nfv"] -> Keystone_endpoint["${region}/sysinv::platform"]
-  Keystone_endpoint["${region}/fm::faultmanagement"] -> Keystone_endpoint["${region}/sysinv::platform"]
-  Keystone_endpoint["${region}/barbican::key-manager"] -> Keystone_endpoint["${region}/sysinv::platform"]
-  Keystone_endpoint["${region}/smapi::smapi"] -> Keystone_endpoint["${region}/sysinv::platform"]
-
-  # sysinv keystone endpoint is updated before keystone's endpoint
-  Keystone_endpoint["${region}/sysinv::platform"] -> Keystone_endpoint["${region}/keystone::identity"]
-  if str2bool($::is_controller_active) {
-    notice('Updating service keystone endpoints')
-    include ::patching::keystone::auth
-    include ::usm::keystone::auth
-    include ::nfv::keystone::auth
-    include ::fm::keystone::auth
-    include ::barbican::keystone::auth
-
-    if $::platform::params::distributed_cloud_role =='systemcontroller' {
-      Keystone_endpoint["${region}/dcmanager::dcmanager"] -> Keystone_endpoint["${region}/sysinv::platform"]
-      Keystone_endpoint["${region}/dcdbsync::dcorch-dbsync"] -> Keystone_endpoint["${region}/sysinv::platform"]
-      include ::dcorch::keystone::auth
-      include ::dcmanager::keystone::auth
-      include ::dcdbsync::keystone::auth
-    }
-
-    if $::platform::params::distributed_cloud_role == 'subcloud' {
-      Keystone_endpoint["${region}/dcdbsync::dcorch-dbsync"] -> Keystone_endpoint["${region}/sysinv::platform"]
-      Keystone_endpoint["${region}/dcagent::dcagent"] -> Keystone_endpoint["${region}/sysinv::platform"]
-      include ::dcdbsync::keystone::auth
-      include ::dcagent::keystone::auth
-    }
-    include ::smapi::keystone::auth
-    include ::sysinv::keystone::auth
-    class { '::keystone::bootstrap':
-      password => lookup('keystone::roles::admin::password'),
-    }
+  Keystone::Resource::Service_identity <| |> {
+    configure_user      => false,
+    configure_user_role => false,
+    configure_endpoint  => true,
   }
 }
 
