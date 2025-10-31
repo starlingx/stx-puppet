@@ -352,6 +352,7 @@ class platform::filesystem::docker
 }
 
 class platform::filesystem::storage {
+  include ::platform::filesystem::scratch
   include ::platform::filesystem::kubelet
 
   class {'platform::filesystem::docker::params' :
@@ -368,6 +369,7 @@ class platform::filesystem::compute {
   if $::personality == 'worker' {
     include ::platform::filesystem::instances
     include ::platform::filesystem::ceph
+    include ::platform::filesystem::scratch
 
     # The default docker size for controller is 20G
     # other than 30G. To prevent the docker size to
