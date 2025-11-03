@@ -21,6 +21,10 @@ class NetworkingMockError(BaseException):
     pass
 
 
+RET_OK = 0
+RET_ERR = 1
+
+
 class NetworkingMock():  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     def __init__(self, fs: FilesystemMock, ifaces: list):
         self._stdout = ''
@@ -1279,12 +1283,12 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
             sorted_contents)
 
         self.assertEqual([
-            ('info', 'Parsing file /etc/network/interfaces.d/auto'),
-            ('info', 'Parsing file /etc/network/interfaces.d/ifcfg-enp0s8'),
-            ('info', 'Parsing file /etc/network/interfaces.d/ifcfg-lo'),
-            ('info', 'Parsing file /etc/network/interfaces.d/ifcfg-pxeboot'),
-            ('info', 'Parsing file /etc/network/interfaces.d/ifcfg-vlan10'),
-            ('info', 'Parsing file /etc/network/interfaces.d/oam-config')],
+            ('debug', 'Parsing file /etc/network/interfaces.d/auto'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-enp0s8'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-lo'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-pxeboot'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-vlan10'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/oam-config')],
             self._log.get_history())
 
     def test_get_current_config_empty(self):
@@ -1848,6 +1852,15 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
         self.assertEqual("default metric 1", anc.get_route_description(route_4, False))
 
     def _test_add_route_entry_to_kernel(self, entry, cmd_responses):
+        """Test call to add_route_entry_to_kernel()
+
+        Args:
+            entry (string): the route entry
+            cmd_responses (tuple): contains 3 elements
+                pos[0] => linux ip command provided by the function under test
+                pos[1] => linux return code
+                pos[2] => linux command stdout
+        """
         position = 0
         self._add_logger_mock()
 
@@ -1864,75 +1877,59 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
     def test_add_route_entry_to_kernel_existing(self):
         self._test_add_route_entry_to_kernel(
             "13.13.3.0 255.255.255.0 12.12.3.113 vlan200 metric 1",
-            (("/usr/sbin/ip route show 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0,
-              "13.13.3.0/24"), ))
+            (("/usr/sbin/ip route replace 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1",
+              RET_OK, "13.13.3.0/24"), None))
         self.assertEqual(
-            [('info', 'Adding route: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1'),
-             ('info', 'Route already exists, skipping')],
+            [('info', 'Route adding/replacing: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1')],
             self._log.get_history())
 
     def test_add_route_entry_to_kernel_show_fail(self):
         self._test_add_route_entry_to_kernel(
             "13.13.3.0 255.255.255.0 12.12.3.113 vlan200 metric 1",
-            (("/usr/sbin/ip route show 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 1,
-              "< ERROR 1 >"),
-             ("/usr/sbin/ip route show 13.13.3.0/24 metric 1", 1, "< ERROR 2 >"),
-             ("/usr/sbin/ip route add 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0, "")))
+            (("/usr/sbin/ip route replace 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1",
+              RET_OK, ""), None))
         self.assertEqual(
-            [('info', 'Adding route: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1')],
+            [('info', 'Route adding/replacing: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1')],
             self._log.get_history())
 
     def test_add_route_entry_to_kernel_add_fail(self):
         self._test_add_route_entry_to_kernel(
             "13.13.3.0 255.255.255.0 12.12.3.113 vlan200 metric 1",
-            (("/usr/sbin/ip route show 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0, ""),
-             ("/usr/sbin/ip route show 13.13.3.0/24 metric 1", 0, ""),
-             ("/usr/sbin/ip route add 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 1,
-              "< ERROR >")))
+            (("/usr/sbin/ip route replace 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1",
+              RET_ERR, "< ERROR >"), None))
         self.assertEqual(
-            [('info', 'Adding route: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1'),
-             ('error', "Failed adding route 13.13.3.0/24 via 12.12.3.113 dev "
+            [('info', 'Route adding/replacing: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1'),
+             ('error', "Failed replacing route 13.13.3.0/24 via 12.12.3.113 dev "
                        "vlan200 metric 1: '< ERROR >'")],
             self._log.get_history())
 
     def test_add_route_entry_to_kernel_replace_fail(self):
         self._test_add_route_entry_to_kernel(
             "13.13.3.0 255.255.255.0 12.12.3.113 vlan200 metric 1",
-            (("/usr/sbin/ip route show 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0, ""),
-             ("/usr/sbin/ip route show 13.13.3.0/24 metric 1", 0,
-              "13.13.3.0/24 via 12.12.3.1 dev vlan200"),
-             ("/usr/sbin/ip route replace 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 1,
-              "< ERROR >")))
+            (("/usr/sbin/ip route replace 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1",
+              RET_ERR, "< ERROR >"), None))
         self.assertEqual(
-            [('info', 'Adding route: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1'),
-             ('info', 'Route to specified network already exists, replacing: 13.13.3.0/24 via '
-                      '12.12.3.1 dev vlan200'),
-             ('error', "Failed replacing route 13.13.3.0/24 via 12.12.3.113 dev "
-                       "vlan200 metric 1: '< ERROR >'")],
+            [('info', 'Route adding/replacing: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1'),
+             ('error', "Failed replacing route 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1: "
+              "'< ERROR >'")],
             self._log.get_history())
 
     def test_add_route_entry_to_kernel_add_succeed(self):
         self._test_add_route_entry_to_kernel(
             "13.13.3.0 255.255.255.0 12.12.3.113 vlan200 metric 1",
-            (("/usr/sbin/ip route show 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0, ""),
-             ("/usr/sbin/ip route show 13.13.3.0/24 metric 1", 0, ""),
-             ("/usr/sbin/ip route add 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0, "")))
+            (("/usr/sbin/ip route replace 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1",
+              RET_OK, ""), None))
         self.assertEqual(
-            [('info', 'Adding route: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1')],
+            [('info', 'Route adding/replacing: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1')],
             self._log.get_history())
 
     def test_add_route_entry_to_kernel_replace_succeed(self):
         self._test_add_route_entry_to_kernel(
             "13.13.3.0 255.255.255.0 12.12.3.113 vlan200 metric 1",
-            (("/usr/sbin/ip route show 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0, ""),
-             ("/usr/sbin/ip route show 13.13.3.0/24 metric 1", 0,
-              "13.13.3.0/24 via 12.12.3.1 dev vlan200"),
-             ("/usr/sbin/ip route replace 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0,
-              "")))
+            (("/usr/sbin/ip route replace 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0,
+              ""), None))
         self.assertEqual(
-            [('info', 'Adding route: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1'),
-             ('info', 'Route to specified network already exists, replacing: 13.13.3.0/24 via '
-                      '12.12.3.1 dev vlan200')],
+            [('info', 'Route adding/replacing: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1')],
             self._log.get_history())
 
     def _test_update_routes(self, etc_routes, puppet_routes, updated_ifaces=None):
@@ -2000,14 +1997,14 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
             ('info', 'Removing route: 10.33.3.0/24 via 10.10.10.101 dev enc10 metric 1'),
             ('info', 'Removing route: fd33:2::/64 via fd12::101 dev enc12 metric 1'),
             ('info', 'Removing route: fd33:3::/64 via fd12::101 dev enc12 metric 1'),
-            ('info', 'Route not previously present in /etc/network/routes, adding'),
-            ('info', 'Adding route: 10.33.2.0/24 via 10.10.10.202 dev enc10 metric 1'),
-            ('info', 'Route not previously present in /etc/network/routes, adding'),
-            ('info', 'Adding route: 10.33.4.0/24 via 10.10.10.101 dev enc10 metric 1'),
-            ('info', 'Route not previously present in /etc/network/routes, adding'),
-            ('info', 'Adding route: fd33:2::/64 via fd12::202 dev enc12 metric 1'),
-            ('info', 'Route not previously present in /etc/network/routes, adding'),
-            ('info', 'Adding route: fd33:4::/64 via fd12::101 dev enc12 metric 1')],
+            ('debug', 'Route not previously present in /etc/network/routes, adding'),
+            ('info', 'Route adding/replacing: 10.33.2.0/24 via 10.10.10.202 dev enc10 metric 1'),
+            ('debug', 'Route not previously present in /etc/network/routes, adding'),
+            ('info', 'Route adding/replacing: 10.33.4.0/24 via 10.10.10.101 dev enc10 metric 1'),
+            ('debug', 'Route not previously present in /etc/network/routes, adding'),
+            ('info', 'Route adding/replacing: fd33:2::/64 via fd12::202 dev enc12 metric 1'),
+            ('debug', 'Route not previously present in /etc/network/routes, adding'),
+            ('info', 'Route adding/replacing: fd33:4::/64 via fd12::101 dev enc12 metric 1')],
             self._log.get_history())
 
         self.assertEqual(
@@ -2047,13 +2044,13 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
             ('info', 'No differences found between /var/run/network-scripts.puppet/routes and '
                      '/etc/network/routes'),
             ('info', 'Route is associated with and updated interface, adding'),
-            ('info', 'Adding route: 10.33.3.0/24 via 10.10.11.101 dev enc11 metric 1'),
+            ('info', 'Route adding/replacing: 10.33.3.0/24 via 10.10.11.101 dev enc11 metric 1'),
             ('info', 'Route is associated with and updated interface, adding'),
-            ('info', 'Adding route: 10.33.4.0/24 via 10.10.11.101 dev enc11 metric 1'),
+            ('info', 'Route adding/replacing: 10.33.4.0/24 via 10.10.11.101 dev enc11 metric 1'),
             ('info', 'Route is associated with and updated interface, adding'),
-            ('info', 'Adding route: fd33:3::/64 via fd13::101 dev enc13 metric 1'),
+            ('info', 'Route adding/replacing: fd33:3::/64 via fd13::101 dev enc13 metric 1'),
             ('info', 'Route is associated with and updated interface, adding'),
-            ('info', 'Adding route: fd33:4::/64 via fd13::101 dev enc13 metric 1')],
+            ('info', 'Route adding/replacing: fd33:4::/64 via fd13::101 dev enc13 metric 1')],
             self._log.get_history())
 
         self.assertEqual(
@@ -2109,9 +2106,7 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
             ('info', "Enrollment: Parsing file '/etc/network/interfaces.d/50-cloud-init'"),
             ('info', 'Enrollment: Configuring interface vlan401 with gateway '
                      '2620:10a:a001:d41::1'),
-            ('info', 'Adding route: default via 2620:10a:a001:d41::1 dev vlan401'),
-            ('info', 'Route to specified network already exists, replacing: default via fd05::111 '
-                     'dev ens1f0 metric 1024 pref medium'),
+            ('info', 'Route adding/replacing: default via 2620:10a:a001:d41::1 dev vlan401'),
             ('info', "Enrollment: Removed '/etc/network/interfaces.d/50-cloud-init' to prevent "
                      'config conflicts')],
             self._log.get_history())
@@ -2160,13 +2155,9 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
                         'vlan402'),
             ('info', 'Enrollment: Configuring interface vlan401 with gateway '
                      '2620:10a:a001:d41::1'),
-            ('info', 'Adding route: default via 2620:10a:a001:d41::1 dev vlan401'),
-            ('info', 'Route to specified network already exists, replacing: default via fd05::111 '
-                     'dev ens1f0 metric 1024 pref medium'),
+            ('info', 'Route adding/replacing: default via 2620:10a:a001:d41::1 dev vlan401'),
             ('info', 'Enrollment: Configuring interface vlan402 with gateway eb22:303::1'),
-            ('info', 'Adding route: default via eb22:303::1 dev vlan402'),
-            ('info', 'Route to specified network already exists, replacing: default via '
-                     '2620:10a:a001:d41::1 dev vlan401 metric 1024 pref medium'),
+            ('info', 'Route adding/replacing: default via eb22:303::1 dev vlan402'),
             ('info', "Enrollment: Removed '/etc/network/interfaces.d/50-cloud-init' to prevent "
                      'config conflicts')],
             self._log.get_history())
@@ -2272,9 +2263,9 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
             ('info', 'Parsing contents of the /etc/network/interfaces.d directory to gather '
                      'current network configuration'),
             ('info', "Auto file not found: '/etc/network/interfaces.d/auto'"),
-            ('info', 'Parsing file /etc/network/interfaces.d/ifcfg-enp0s8'),
-            ('info', 'Parsing file /etc/network/interfaces.d/ifcfg-lo'),
-            ('info', 'Parsing file /etc/network/interfaces.d/ifcfg-vlan10'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-enp0s8'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-lo'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-vlan10'),
             ('info', 'Added interfaces: enp0s8 lo vlan10 vlan10:1-5'),
             ('info', 'Interface enp0s8 not in /etc/network/interfaces.d/auto but currently up, '
                      'adding to DOWN list'),
@@ -2331,8 +2322,8 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
         self.assertEqual([
             ('info', 'Parsing contents of the /etc/network/interfaces.d directory to gather '
                      'current network configuration'),
-            ('info', 'Parsing file /etc/network/interfaces.d/auto'),
-            ('info', 'Parsing file /etc/network/interfaces.d/ifcfg-lo'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/auto'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-lo'),
             ('info', 'Added interfaces: enp0s9 enp0s9:4-17'),
             ('info', 'Interface enp0s9 not in /etc/network/interfaces.d/auto but currently up, '
                      'adding to DOWN list'),
@@ -2381,9 +2372,9 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
         self.assertEqual([
             ('info', 'Parsing contents of the /etc/network/interfaces.d directory to gather '
                      'current network configuration'),
-            ('info', 'Parsing file /etc/network/interfaces.d/auto'),
-            ('info', 'Parsing file /etc/network/interfaces.d/ifcfg-enp0s9'),
-            ('info', 'Parsing file /etc/network/interfaces.d/ifcfg-lo'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/auto'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-enp0s9'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-lo'),
             ('info', 'Added interfaces: enp0s9 enp0s9:4-17'),
             ('info', 'Interface enp0s9 not in /etc/network/interfaces.d/auto but currently up, '
                      'adding to DOWN list'),
@@ -2866,8 +2857,8 @@ class TestEthToVLANMigration(MigrationBaseTestCase):
         self.assertEqual(['default via 10.20.1.1 dev enp0s3',
                           'default via fd00::1 dev enp0s3 metric 1024',
                           '14.14.1.0/24 via 10.20.1.111 dev enp0s3 metric 1',
-                          '14.15.1.0/24 via 169.254.202.111 dev enp0s8 metric 1',
                           'fa01:1::/64 via fd00::111 dev enp0s3 metric 1',
+                          '14.15.1.0/24 via 169.254.202.111 dev enp0s8 metric 1',
                           '14.14.2.0/24 via 192.168.204.111 dev enp0s8 metric 1',
                           '14.14.3.0/24 via 192.168.206.111 dev enp0s8 metric 1',
                           'fa01:2::/64 via fd01::111 dev enp0s8 metric 1',
@@ -3181,12 +3172,10 @@ class TestUpgrade(BaseTestCase):
             ('info', 'Configuring interface enp0s8'),
             ('info', 'Configuring interface enp0s3:1-1'),
             ('info', "Link already has address '10.20.1.2/24', no need to set label up"),
-            ('info', 'Adding route: default via 10.20.1.1 dev enp0s3'),
-            ('info', 'Route already exists, skipping'),
+            ('info', 'Route adding/replacing: default via 10.20.1.1 dev enp0s3'),
             ('info', 'Configuring interface enp0s3:1-2'),
             ('info', "Link already has address 'fd00::1:2/64', no need to set label up"),
-            ('info', 'Adding route: default via fd00::1 dev enp0s3'),
-            ('info', 'Route already exists, skipping'),
+            ('info', 'Route adding/replacing: default via fd00::1 dev enp0s3'),
             ('info', 'Configuring interface enp0s8:2-3'),
             ('info', "Link already has address '192.168.204.2/24', no need to set label up"),
             ('info', 'Configuring interface enp0s8:2-4'),
@@ -3245,12 +3234,10 @@ class TestUpgrade(BaseTestCase):
             ('info', 'Adding IP 169.254.202.2/24 to interface enp0s8'),
             ('info', 'Configuring interface enp0s3:1-1'),
             ('info', "Link already has address '10.20.1.2/24', no need to set label up"),
-            ('info', 'Adding route: default via 10.20.1.1 dev enp0s3'),
-            ('info', 'Route to specified network already exists, replacing: default via '
-                     '10.20.1.111 dev enp0s3 metric 1'),
+            ('info', 'Route adding/replacing: default via 10.20.1.1 dev enp0s3'),
             ('info', 'Configuring interface enp0s3:1-2'),
             ('info', "Link already has address 'fd00::1:2/64', no need to set label up"),
-            ('info', 'Adding route: default via fd00::1 dev enp0s3'),
+            ('info', 'Route adding/replacing: default via fd00::1 dev enp0s3'),
             ('info', 'Configuring interface enp0s8:2-3'),
             ('info', 'Bringing enp0s8:2-3 up'),
             ('info', 'Configuring interface enp0s8:2-4'),

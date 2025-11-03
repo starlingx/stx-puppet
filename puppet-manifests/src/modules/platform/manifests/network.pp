@@ -569,70 +569,28 @@ class platform::network::update_platform_nfs_ip_references (
   }
 }
 
-# Defines a single route resource for an interface.
-# If multiple are required in the future, then this will need to
-# iterate over a hash to create multiple entries per file.
-define platform::network::network_route6 (
-  $prefix,
-  $gateway,
-  $ifname,
-) {
-  case $::osfamily {
-    'RedHat': {
-      file { "/etc/sysconfig/network-scripts/route6-${ifname}":
-        ensure  => present,
-        owner   => root,
-        group   => root,
-        mode    => '0644',
-        content => "${prefix} via ${gateway} dev ${ifname}"
-      }
-    }
-    'Debian': {
-      file { '/var/run/network-scripts.puppet/routes6':
-        ensure => present,
-        owner  => root,
-        group  => root,
-        mode   => '0644'
-      }
-      if $prefix == 'default' {
-        file_line { 'set_ipv6_default_route':
-          ensure             => present,
-          path               => '/var/run/network-scripts.puppet/routes6',
-          line               => "default 0 ${gateway} ${ifname} metric 1024",
-          match              => 'default 0 .*',
-          append_on_no_match => true
-        }
-      }
-    }
-    default : {
-      fail("unsupported osfamily ${::osfamily}, Debian and Redhat are the only supported ones")
-    }
-  } # Case $::osfamily
-}
-
 class platform::network::routes (
   $route_config = {}
 ) {
+
+  $routes_file = '/var/run/network-scripts.puppet/routes'
+  $routes_dir = '/var/run/network-scripts.puppet/'
+  $now = Timestamp()
+  $formatted = $now.strftime('%Y-%m-%d %H:%M:%S %z')
   # Reset file /var/run/network-scripts.puppet/routes so that deleted routes don't persist
   exec { 'Erasing routes from file /var/run/network-scripts.puppet/routes':
-    command => "/bin/sed -i '/# HEADER/!d' /var/run/network-scripts.puppet/routes",
-    onlyif  => 'test -f /var/run/network-scripts.puppet/routes',
+    command => "/bin/sed -i '/# HEADER/!d' ${routes_file}",
+    onlyif  => "test -f ${routes_file}",
   }
-
-  create_resources('network_route', $route_config, {})
-
-  include ::platform::params
-  include ::platform::network::mgmt::params
-
-  # Add static IPv6 default route since DHCPv6 does not support the router option
-  if $::personality != 'controller' {
-    if $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
-      platform::network::network_route6 { 'ipv6 default route':
-        prefix  => 'default',
-        gateway => $::platform::network::mgmt::params::controller_address,
-        ifname  => $::platform::network::mgmt::params::interface_name
-      }
-    }
+  -> file { $routes_dir:
+    ensure => directory,
+  }
+  -> file { $routes_file:
+    ensure  => file,
+    content => template('platform/routes.erb'),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0640',
   }
 }
 
@@ -1122,25 +1080,13 @@ class platform::network::apply {
   Exec['cleanup-interfaces-file']
   -> Network_config <| |>
   -> Exec['apply-network-config']
+  -> Exec['install-ipv4-blackhole-address-rule-simplex']
+  -> Exec['remove-ipv4-blackhole-address-rule-duplex']
+  -> Exec['install-ipv6-blackhole-address-rule-simplex']
+  -> Exec['remove-ipv6-blackhole-address-rule-duplex']
   -> Platform::Network::Network_address <| |>
   -> Exec['wait-for-tentative']
   -> Anchor['platform::networking']
-
-  # Adding Network_route dependency separately, in case it's empty,
-  # as puppet bug will remove dependency altogether if
-  # Network_route is empty. See below.
-  # https://projects.puppetlabs.com/issues/18399
-  Network_config <| |>
-  -> Network_route <| |>
-  -> Exec['apply-network-config']
-  -> Exec['install-ipv4-blackhole-address-rule-simplex']
-  -> Exec['remove-ipv4-blackhole-address-rule-duplex']
-
-  Network_config <| |>
-  -> Platform::Network::Network_route6 <| |>
-  -> Exec['apply-network-config']
-  -> Exec['install-ipv6-blackhole-address-rule-simplex']
-  -> Exec['remove-ipv6-blackhole-address-rule-duplex']
 
   exec {'apply-network-config':
     command => 'apply_network_config.py',
@@ -1230,19 +1176,13 @@ class platform::network::routes::runtime {
   include ::platform::params
   $dc_role = $::platform::params::distributed_cloud_role
 
-  # Adding Network_route dependency separately, in case it's empty,
-  # as puppet bug will remove dependency altogether if
-  # Network_route is empty. See below.
-  # https://projects.puppetlabs.com/issues/18399
-
   # in DC setups the firewall needs to be updated also in the controllers
   if ($dc_role == 'systemcontroller' and $::personality == 'controller') {
 
     # systemcontroller for the management network
     include ::platform::firewall::mgmt::runtime
 
-    Network_route <| |> -> Exec['apply-network-config route setup']
-    Platform::Network::Network_route6 <| |> -> Exec['apply-network-config route setup']
+    Exec['apply-network-config route setup']
     -> Class['::platform::firewall::mgmt::runtime']
 
   } elsif ($dc_role == 'subcloud' and $::personality == 'controller') {
@@ -1251,15 +1191,13 @@ class platform::network::routes::runtime {
     include ::platform::firewall::mgmt::runtime
     include ::platform::firewall::admin::runtime
 
-    Network_route <| |> -> Exec['apply-network-config route setup']
-    Platform::Network::Network_route6 <| |> -> Exec['apply-network-config route setup']
+    Exec['apply-network-config route setup']
     -> Class['::platform::firewall::mgmt::runtime']
     -> Class['::platform::firewall::admin::runtime']
 
   } else {
 
-    Network_route <| |> -> Exec['apply-network-config route setup']
-    Platform::Network::Network_route6 <| |> -> Exec['apply-network-config route setup']
+    Exec['apply-network-config route setup']
 
   }
 
