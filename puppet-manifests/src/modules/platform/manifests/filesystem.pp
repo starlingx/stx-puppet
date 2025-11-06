@@ -356,7 +356,7 @@ class platform::filesystem::storage {
   include ::platform::filesystem::kubelet
 
   class {'platform::filesystem::docker::params' :
-    lv_size => 30
+    lv_size => 40
   }
   -> class {'platform::filesystem::docker' :
   }
@@ -372,12 +372,12 @@ class platform::filesystem::compute {
     include ::platform::filesystem::scratch
 
     # The default docker size for controller is 20G
-    # other than 30G. To prevent the docker size to
-    # be overrided to 30G for AIO, this is scoped to
+    # other than 40G. To prevent the docker size to
+    # be overrided to 40G for AIO, this is scoped to
     # worker node.
     include ::platform::filesystem::kubelet
     class {'platform::filesystem::docker::params' :
-      lv_size => 30
+      lv_size => 40
     }
     -> class {'platform::filesystem::docker' :
     }
