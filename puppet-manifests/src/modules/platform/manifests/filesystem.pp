@@ -354,6 +354,7 @@ class platform::filesystem::docker
 class platform::filesystem::storage {
   include ::platform::filesystem::scratch
   include ::platform::filesystem::kubelet
+  include ::platform::filesystem::kdump
 
   class {'platform::filesystem::docker::params' :
     lv_size => 40
@@ -370,6 +371,7 @@ class platform::filesystem::compute {
     include ::platform::filesystem::instances
     include ::platform::filesystem::ceph
     include ::platform::filesystem::scratch
+    include ::platform::filesystem::kdump
 
     # The default docker size for controller is 20G
     # other than 40G. To prevent the docker size to
@@ -396,6 +398,7 @@ class platform::filesystem::controller {
   include ::platform::filesystem::log_bind
   include ::platform::filesystem::luks
   include ::platform::filesystem::ceph
+  include ::platform::filesystem::kdump
 }
 
 class platform::filesystem::log_bind {
@@ -703,5 +706,54 @@ class platform::filesystem::ceph::runtime {
       command => "umount ${mountpoint}; true",
       onlyif  => "mountpoint -q ${mountpoint}",
     } -> Mount[$lv_name]
+  }
+}
+
+class platform::filesystem::kdump {
+  $pre_hook_sysadmin_owner = str2bool(inline_template(
+    '<%= File.stat("/etc/kdump/pre-hooks.d").uid == Etc.getpwnam("sysadmin").uid rescue false %>'
+  ))
+  $post_hook_sysadmin_owner = str2bool(inline_template(
+    '<%= File.stat("/etc/kdump/post-hooks.d").uid == Etc.getpwnam("sysadmin").uid rescue false %>'
+  ))
+
+  unless ($pre_hook_sysadmin_owner and $post_hook_sysadmin_owner) {
+    file { ['/etc/kdump/pre-hooks.d', '/etc/kdump/post-hooks.d']:
+      ensure => directory,
+      mode   => '0770',
+      owner  => 'sysadmin',
+      group  => 'sys_protected',
+    }
+
+    # README content for pre and post hook directories
+    $readme_content = @(EOT)
+      Script Naming Convention:
+      Use zero-padded numbers for execution order: 001-script-name, 002-script-name, etc.
+      Scripts execute in alphabetical order. Only root or sysadmin users may add the scripts.
+
+      Requirements:
+      - Set executable permissions (chmod ug+x script-name)
+
+      Recommendations:
+      - Crash kernel supports shell, bash, python and perl interpreters.
+      | EOT
+
+    file { '/etc/kdump/pre-hooks.d/README':
+      ensure  => file,
+      content => $readme_content,
+      mode    => '0644',
+      owner   => 'sysadmin',
+      group   => 'sys_protected',
+      require => File['/etc/kdump/pre-hooks.d'],
+    }
+
+    file { '/etc/kdump/post-hooks.d/README':
+      ensure  => file,
+      content => $readme_content,
+      mode    => '0644',
+      owner   => 'sysadmin',
+      group   => 'sys_protected',
+      require => File['/etc/kdump/post-hooks.d'],
+    }
   }
 }
