@@ -1908,16 +1908,19 @@ class platform::kubernetes::duplex_migration::runtime {
 
 class platform::kubernetes::master::rootca::trustbothcas::runtime
   inherits ::platform::kubernetes::params {
-
+  # Fails if the certificate or key is missing, to avoid writing an invalid file
+  if $rootca_cert == undef or $rootca_cert == '' or $rootca_key == undef or $rootca_key == '' {
+    fail('The rootca cert and/or key parameters are empty. Cannot proceed.')
+  }
   # Create the new root CA cert file
   file { $rootca_certfile_new:
     ensure  => file,
-    content => base64('decode', $rootca_cert),
+    content => String(Binary($rootca_cert), '%s'),
   }
   # Create new root CA key file
   -> file { $rootca_keyfile_new:
     ensure  => file,
-    content => base64('decode', $rootca_key),
+    content => String(Binary($rootca_key), '%s'),
   }
   # Append the new cert to the current cert
   -> exec { 'append_ca_cert':
@@ -1945,6 +1948,13 @@ class platform::kubernetes::master::rootca::trustbothcas::runtime
   # Restart scheduler to trust both old and new certs
   -> exec { 'restart_scheduler':
     command => "/usr/bin/kill -s SIGHUP $(pidof kube-scheduler)"
+  }
+  # Wait for a new kube-scheduler pid to be available
+  -> exec { 'wait_for_kube_scheduler':
+    command   => 'pidof kube-scheduler',
+    timeout   => 5,
+    tries     => 60,
+    try_sleep => 2,
   }
   # Update controller-manager.conf with both old and new certs
   -> exec { 'update_controller-manager_conf':
@@ -1986,15 +1996,19 @@ class platform::kubernetes::worker::rootca::trustbothcas::runtime
 
   $cluster = generate('/bin/bash', '-c', "/bin/sed -e '/- cluster/,/name:/!d' /etc/kubernetes/kubelet.conf \
                       | grep 'name:' | awk '{printf \"%s\", \$2}'")
+  # Fails if the certificate or key is missing, to avoid writing an invalid file
+  if $rootca_cert == undef or $rootca_cert == '' or $rootca_key == undef or $rootca_key == '' {
+    fail('The rootca cert and/or key parameters are empty. Cannot proceed.')
+  }
   # Create the new root CA cert file
   file { $rootca_certfile_new:
     ensure  => file,
-    content => base64('decode', $rootca_cert),
+    content => String(Binary($rootca_cert), '%s'),
   }
   # Create new root CA key file
   -> file { $rootca_keyfile_new:
     ensure  => file,
-    content => base64('decode', $rootca_key),
+    content => String(Binary($rootca_key), '%s'),
   }
   # Append the new cert to the current cert
   -> exec { 'append_ca_cert':
@@ -2073,6 +2087,13 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
   # Restart scheduler to trust the new cert
   -> exec { 'restart_scheduler':
     command => "/usr/bin/kill -s SIGHUP $(pidof kube-scheduler)",
+  }
+  # Wait for a new kube-scheduler pid to be available
+  -> exec { 'wait_for_kube_scheduler':
+    command   => 'pidof kube-scheduler',
+    timeout   => 5,
+    tries     => 60,
+    try_sleep => 2,
   }
   # Wait for kube-apiserver to be up before executing next steps
   # Uses a k8s API health endpoint for that: https://kubernetes.io/docs/reference/using-api/health-checks/
@@ -2278,6 +2299,14 @@ class platform::kubernetes::master::rootca::updatecerts::runtime
   # Restart scheduler
   -> exec { 'restart_scheduler':
     command => "/usr/bin/kill -s SIGHUP $(pidof kube-scheduler)"
+  }
+
+  # Wait for a new kube-scheduler pid to be available
+  -> exec { 'wait_for_kube_scheduler':
+    command   => 'pidof kube-scheduler',
+    timeout   => 5,
+    tries     => 60,
+    try_sleep => 2,
   }
 
   # Create the new k8s controller-manager crt file
