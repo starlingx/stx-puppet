@@ -480,6 +480,30 @@ class NetworkingMock():  # pylint: disable=too-many-instance-attributes,too-many
         self._add_history("ip_addr_show_dev", iface)
         return self._run_command(self._do_ip_addr_show_dev, iface)
 
+    def _do_ip_addr_show_addr(self, addr):
+        try:
+            target = IPNetwork(addr)
+        except AddrFormatError:
+            self._print_stdout(f'Error: any valid prefix is expected rather than "{addr}".')
+            return 1
+
+        idx = 1
+        for ifname, link in self._links.items():
+            for link_addr in link["addresses"]:
+                if link_addr == target:
+                    family = "inet6" if target.version == 6 else "inet"
+                    self._print_stdout(f"{idx}: {ifname}    {family} {addr}")
+                    idx += 1
+        return 0
+
+    def ip_addr_show_addr(self, addr):
+        self._add_history("ip_addr_show_addr", addr)
+        return self._run_command(self._do_ip_addr_show_addr, addr)
+
+    def ip_addr_show_ip(self, addr):
+        self._add_history("ip_addr_show_ip", addr)
+        return self.ip_addr_show_addr(addr)
+
     def _do_ip_addr_add(self, addr, iface):
         link, retcode = self._get_link_for_ip_cmd(iface)
         if retcode != 0:
@@ -768,6 +792,9 @@ class SystemCommandMock():  # pylint: disable=too-few-public-methods
     def _ip_link_set_down(self, args):
         return self._nwmock.ip_link_set_down(args[0])
 
+    def _ip_o_addr_show_to(self, args):
+        return self._nwmock.ip_addr_show_addr(args[0])
+
     def _ip_route_show_all(self, args):
         return self._nwmock.ip_route_show_all(args[0])
 
@@ -802,6 +829,7 @@ class SystemCommandMock():  # pylint: disable=too-few-public-methods
         (re.compile(R"^/usr/sbin/ip -br addr show dev (\S+)$"), _ip_br_addr_show_dev),
         (re.compile(R"^/usr/sbin/ip addr add (\S+) dev (\S+)$"), _ip_addr_add),
         (re.compile(R"^/usr/sbin/ip addr flush dev (\S+)$"), _ip_addr_flush),
+        (re.compile(R"^(?:/usr/sbin/)?ip -o addr show to (\S+)$"), _ip_o_addr_show_to),
         (re.compile(R"^/usr/sbin/ip link set down dev (\S+)$"), _ip_link_set_down),
         (re.compile(R"^/usr/sbin/ip (?:(-6) )?route show$"), _ip_route_show_all),
         (re.compile(R"^/usr/sbin/ip neigh show$"), _ip_neigh_show_all),
@@ -3206,19 +3234,31 @@ class TestUpgrade(BaseTestCase):
         self.assertEqual([
             ('info', 'Upgrade bootstrap is in execution'),
             ('info', 'Configuring interface enp0s3'),
-            ('info', "Interface 'enp0s3' is missing or down, flushing IPs and bringing up"),
+            ('info', "Interface 'enp0s3' is missing or down, bringing up"),
             ('info', 'Bringing enp0s3 up'),
+            ('info', "Interface 'enp0s3' is now up/operational"),
             ('info', 'Configuring interface enp0s8'),
-            ('info', "Interface 'enp0s8' is missing or down, flushing IPs and bringing up"),
+            ('info', "Interface 'enp0s8' is missing or down, bringing up"),
             ('info', 'Bringing enp0s8 up'),
+            ('info', "Interface 'enp0s8' is now up/operational"),
             ('info', 'Configuring interface enp0s3:1-1'),
             ('info', 'Bringing enp0s3:1-1 up'),
+            ('info', 'Adding IP 10.20.1.2/24 to interface enp0s3'),
+            ('info', 'Interface enp0s3 already has address 10.20.1.2/24, skipping'),
+            ('info', 'Route adding/replacing: default via 10.20.1.1 dev enp0s3'),
             ('info', 'Configuring interface enp0s3:1-2'),
             ('info', 'Bringing enp0s3:1-2 up'),
+            ('info', 'Adding IP fd00::1:2/64 to interface enp0s3'),
+            ('info', 'Interface enp0s3 already has address fd00::1:2/64, skipping'),
+            ('info', 'Route adding/replacing: default via fd00::1 dev enp0s3'),
             ('info', 'Configuring interface enp0s8:2-3'),
             ('info', 'Bringing enp0s8:2-3 up'),
+            ('info', 'Adding IP 192.168.204.2/24 to interface enp0s8'),
+            ('info', 'Interface enp0s8 already has address 192.168.204.2/24, skipping'),
             ('info', 'Configuring interface enp0s8:2-4'),
-            ('info', 'Bringing enp0s8:2-4 up')],
+            ('info', 'Bringing enp0s8:2-4 up'),
+            ('info', 'Adding IP fd01::2/64 to interface enp0s8'),
+            ('info', 'Interface enp0s8 already has address fd01::2/64, skipping')],
             self._log.get_history())
 
     def test_upgrade_already_configured(self):
@@ -3253,8 +3293,12 @@ class TestUpgrade(BaseTestCase):
             ('info', 'Adding route: default via fd00::1 dev enp0s3'),
             ('info', 'Configuring interface enp0s8:2-3'),
             ('info', 'Bringing enp0s8:2-3 up'),
+            ('info', 'Adding IP 192.168.204.2/24 to interface enp0s8'),
+            ('info', 'Interface enp0s8 already has address 192.168.204.2/24, skipping'),
             ('info', 'Configuring interface enp0s8:2-4'),
-            ('info', 'Bringing enp0s8:2-4 up')],
+            ('info', 'Bringing enp0s8:2-4 up'),
+            ('info', 'Adding IP fd01::2/64 to interface enp0s8'),
+            ('info', 'Interface enp0s8 already has address fd01::2/64, skipping')],
             self._log.get_history())
 
 
