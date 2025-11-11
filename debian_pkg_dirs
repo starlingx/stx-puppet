@@ -6,7 +6,6 @@ modules/puppet-dcorch
 modules/puppet-fm
 modules/puppet-mtce
 modules/puppet-nfv
-modules/puppet-patching
 modules/puppet-smapi
 modules/puppet-sshd
 modules/puppet-sysinv
