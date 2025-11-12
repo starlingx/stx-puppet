@@ -54,9 +54,7 @@ KUBE_APISERVER_VOLUMES_TAG = 'platform::kubernetes::kube_apiserver_volumes::para
 CONTROLLER_MANAGER_VOLUMES_TAG = 'platform::kubernetes::kube_controller_manager_volumes::params::'
 SCHEDULER_VOLUMES_TAG = 'platform::kubernetes::kube_scheduler_volumes::params::'
 
-KUBE_APISERVER_MANIFEST = '/etc/kubernetes/manifests/kube-apiserver.yaml'
-KUBE_APISERVER_INTERNAL_PORT = 16443
-KUBE_APISERVER_EXTERNAL_PORT = 6443
+KUBE_APISERVER_PORT = 16443
 
 SCHEDULER_HEALTHZ_ENDPOINT = "https://127.0.0.1:10259/healthz"
 CONTROLLER_MANAGER_HEALTHZ_ENDPOINT = "https://127.0.0.1:10257/healthz"
@@ -129,17 +127,8 @@ def _search_string_on_file(file_path, word):
     return False
 
 
-# This code is to support upgrades to stx 11, it can be removed in later releases.
-def is_kube_apiserver_port_rollback_in_progress():
-    return os.path.exists('/etc/platform/.upgrade_kube_apiserver_port_rollback')
-
-
-# This code is to support upgrades to stx 11, it can changed in later releases
-# to return only the KUBE_APISERVER_INTERNAL_PORT.
 def get_kubeadm_initconfig_template():
-    if is_kube_apiserver_port_rollback_in_progress():
-        return INITCONFIG_BASE_TEMPLATE % str(KUBE_APISERVER_EXTERNAL_PORT)
-    return INITCONFIG_BASE_TEMPLATE % str(KUBE_APISERVER_INTERNAL_PORT)
+    return INITCONFIG_BASE_TEMPLATE % str(KUBE_APISERVER_PORT)
 
 
 def update_k8s_control_plane_components(config_filename, cluster_host_addr,
@@ -234,21 +223,8 @@ def update_k8s_kubelet(config_filename, error_log_file):
         return 1
 
 
-# This code is to support upgrades to stx 11, it can be removed in later releases.
-def is_kube_apiserver_port_updated():
-    with open(KUBE_APISERVER_MANIFEST, 'r') as file:
-        for line in file.readlines():
-            if '--secure-port' in line:
-                return str(KUBE_APISERVER_INTERNAL_PORT) in line
-    raise Exception('Could not read secure-port from kube-apiserver manifest.')
-
-
-# This code is to support upgrades to stx 11, it can be changed to return only the
-# KUBE_APISERVER_INTERNAL_PORT version in later releases.
 def get_api_server_endpoint():
-    if is_kube_apiserver_port_updated():
-        return 'https://localhost:%s' % str(KUBE_APISERVER_INTERNAL_PORT)
-    return 'https://localhost:%s' % str(KUBE_APISERVER_EXTERNAL_PORT)
+    return 'https://localhost:%s' % str(KUBE_APISERVER_PORT)
 
 
 def get_api_server_readyz_endpoint():
@@ -1448,23 +1424,6 @@ def main():
         if export_volume_configmap(volume_dict, 'kube_apiserver_volumes') != 0:
             LOG.error('Exporting configmap from volume: %s', str(volume_dict))
             return 3
-
-    # controlPlaneEndpoint (upgrade)
-    # This code is to support upgrades to stx 11, it can be removed in later releases.
-    # In stx 11, haproxy will listen in port 6443, and kube-apiserver in port 16443.
-    # In upgrades, the controlPlaneEndpoint field will carry the previous kube-apiserver port,
-    # so we need to replaced it for the new one.
-    controlPlaneEndpoint = cluster_cfg.get('controlPlaneEndpoint', '')
-    external_port_bind = ':' + str(KUBE_APISERVER_EXTERNAL_PORT)
-    internal_port_bind = ':' + str(KUBE_APISERVER_INTERNAL_PORT)
-    if not is_kube_apiserver_port_rollback_in_progress():
-        if external_port_bind in controlPlaneEndpoint:
-            cluster_cfg['controlPlaneEndpoint'] = controlPlaneEndpoint.replace(external_port_bind,
-                                                                               internal_port_bind)
-    else:
-        if internal_port_bind in controlPlaneEndpoint:
-            cluster_cfg['controlPlaneEndpoint'] = controlPlaneEndpoint.replace(internal_port_bind,
-                                                                               external_port_bind)
 
     # controller manager section --------------------------------------------------
     for param, value in service_params['controllerManager'].items():
