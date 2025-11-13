@@ -15,6 +15,9 @@ import yaml
 
 DRIVER_NONE = "NONE"
 DRIVER_VFIO = "vfio-pci"
+SRIOV_NUMVFS_FILE = "sriov_numvfs"
+MAX_UP_RETRIES = 10
+UP_RETRY_INTERVAL = 0.2
 
 
 def execute_command(command_to_run):
@@ -212,6 +215,190 @@ def set_max_tx_rate(port, vfnumber, max_tx_rate):
     return res
 
 
+def _write_int_to_file(path, value):
+    """
+    Write an integer to the specified file.
+    """
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(str(value))
+        return True
+    except OSError as e:
+        print(f"Error writing '{path}': {type(e).__name__}: {e}")
+        return False
+
+
+def _get_pf_netdevs(pci_addr):
+    """
+    Return a list of net device names associated with a PCI function.
+    """
+    net_dir = f"/sys/bus/pci/devices/{pci_addr}/net"
+    if not os.path.isdir(net_dir):
+        return []
+
+    devs = []
+    for entry in os.listdir(net_dir):
+        full = os.path.join(net_dir, entry)
+        if os.path.isdir(full):
+            devs.append(entry)
+    return devs
+
+
+def _iface_is_up(ifname):
+    """
+    Check if interface is UP by inspecting 'ip link show dev <ifname>'.
+
+    The shell version did:
+      ip link show dev "${port_name}" | grep -q "<.*\\bUP\\b.*>"
+    """
+    ok, output = execute_command(["ip", "link", "show", "dev", ifname])
+    if not ok or not output:
+        return False
+
+    text = f" {output} "
+    if " UP " in text or "<UP," in output or ",UP>" in output:
+        return True
+    return False
+
+
+def _ensure_pf_netdevs_up(pci_addr, up_requirement):
+    """
+    Bring up PF netdevs if up_requirement is True.
+    - iterate over /sys/bus/pci/devices/<addr>/net/*
+    - ip link set dev <port> up
+    - retry 10 times with 0.2s sleep
+    """
+    if not up_requirement:
+        return True
+
+    netdevs = _get_pf_netdevs(pci_addr)
+    if not netdevs:
+        return True
+
+    for ifname in netdevs:
+        if _iface_is_up(ifname):
+            continue
+
+        ok, msg = execute_command(["ip", "link", "set", "dev", ifname, "up"])
+        if not ok:
+            print(f"ERROR: Failed to set '{ifname}' up: {msg}")
+            continue
+
+        port_is_up = False
+        for attempt in range(MAX_UP_RETRIES):
+            if _iface_is_up(ifname):
+                port_is_up = True
+                break
+
+            if attempt < MAX_UP_RETRIES - 1:
+                time.sleep(UP_RETRY_INTERVAL)
+
+        if not port_is_up:
+            print("ERROR: Interface "
+                    f"'{ifname}' did not go up in the allotted time")
+
+    return True
+
+
+def _enable_sriov_for_pf(pci_addr, num_vfs, up_requirement, sriov_name=None):
+    """
+    Enable SR-IOV
+
+    Args:
+        pci_addr (str): PCI address, e.g., "0000:18:00.0".
+        num_vfs (int): Desired number of VFs.
+        up_requirement (bool): Whether to ensure the port is up first.
+        sriov_name (str): Optional SR-IOV config name (e.g., 'fh0').
+
+    Returns:
+        bool: True on success, False on error.
+    """
+    if num_vfs is None or num_vfs <= 0:
+        print(f"Skipping PF {pci_addr}: num_vfs={num_vfs} is not > 0")
+        return True
+
+    base_path = f"/sys/bus/pci/devices/{pci_addr}"
+    vf_path = os.path.join(base_path, SRIOV_NUMVFS_FILE)
+
+    if up_requirement:
+        if not _ensure_pf_netdevs_up(pci_addr, up_requirement):
+            print(f"ERROR: failed to ensure PF {pci_addr} netdevs are up")
+
+    if not _write_int_to_file(vf_path, 0):
+        print(f"ERROR: Failed to write 0 to '{vf_path}' for PF {pci_addr}")
+        return False
+
+    if not _write_int_to_file(vf_path, num_vfs):
+        print(f"ERROR: Failed to write {num_vfs} to '{vf_path}' "
+              f"for PF {pci_addr}")
+        return False
+
+    label = pci_addr
+    if sriov_name:
+        label = f"{pci_addr} ({sriov_name})"
+
+    print(f"PF {label}: configured sriov_numvfs={num_vfs}")
+    return True
+
+
+def enable_sriov_from_configs(sriov_configs):
+    """
+    Enable SR-IOV for all PFs described in sriov_configs.
+
+    sriov_configs: same dict used by get_sriov_entries().
+    Expected keys per entry:
+      - addr           (PCI address)
+      - num_vfs        (int)
+      - up_requirement (bool, optional)
+    """
+    result = True
+
+    for name, cfg in sriov_configs.items():
+        if not isinstance(cfg, dict):
+            print("ERROR: sriov_enable: config for "
+                    f"'{name}' must be a dictionary")
+            result = False
+            continue
+
+        pci_addr = cfg.get("addr")
+        num_vfs = cfg.get("num_vfs")
+        up_req = cfg.get("up_requirement", False)
+
+        if not pci_addr:
+            print("ERROR: sriov_enable: missing 'addr' "
+                    f"for '{name}' (PF PCI address required)")
+            result = False
+            continue
+
+        if not _enable_sriov_for_pf(pci_addr, num_vfs, up_req, sriov_name=name):
+            result = False
+
+    return result
+
+
+def enable_sriov_from_data(data):
+    """
+    Loads PF SR-IOV settings from parsed data and applies sriov_numvfs.
+    Empty or missing configurations are valid.
+    """
+    if not data:
+        return True
+
+    if not isinstance(data, dict):
+        print("Error: data is not a dictionary: "
+                f"{type(data).__name__}")
+        return False
+
+    sriov_configs = data.get(
+        "platform::network::interfaces::sriov::sriov_config", {}
+    )
+
+    if not sriov_configs:
+        return True
+
+    return enable_sriov_from_configs(sriov_configs)
+
+
 def get_sriov_entries(sriov_configs):
     """
     Extracts VF addresses and max_tx_rate settings from SR-IOV config.
@@ -286,7 +473,7 @@ def get_sriov_entries(sriov_configs):
 
 def parse_and_process_sriov_config(data):
     """
-    Parses and applies SR-IOV configuration from provided data.
+    Parses and applies SR-IOV VF configuration from provided data.
 
     Args:
         data (dict): Parsed content from a JSON or YAML configuration file.
@@ -334,39 +521,75 @@ def parse_and_process_sriov_config(data):
         return False, []
 
 
+def _load_config_file(config_file):
+    """
+    Load JSON or YAML configuration file.
+    """
+    ext = os.path.splitext(config_file)[1].lower()
+
+    try:
+        with open(config_file, "r", encoding="utf-8") as f:
+            if ext == ".json":
+                data = json.load(f)
+            elif ext == ".yaml":
+                data = yaml.safe_load(f)
+            else:
+                print(
+                    "Error: Unsupported file extension: "
+                    f"{ext}. Use .json or .yaml"
+                )
+                sys.exit(1)
+    except (json.JSONDecodeError, yaml.YAMLError, OSError) as e:
+        print(
+            "Error reading or parsing file: "
+            f"{type(e).__name__}: {e}"
+        )
+        sys.exit(1)
+
+    return data
+
+
 def main():
     """
     Entry point of the script. Loads a configuration file,
     parses its SR-IOV config and applies driver bindings and
-    VF rate settings.
+    VF rate settings, or enables SR-IOV on PFs when running
+    in 'enable' mode.
+
+    Usage:
+      script.py <config-file.json|yaml>          # default: VFs
+      script.py enable <config-file.json|yaml>   # PFs enable
     """
     if os.geteuid() != 0:
         print("Error: This script must be run as root.")
         sys.exit(1)
 
-    if len(sys.argv) != 2:
-        print(f"Usage: {sys.argv[0]} <config-file.json|yaml>")
+    if len(sys.argv) not in (2, 3):
+        print(f"Usage: {sys.argv[0]} "
+                "<config-file.json|yaml>\n"
+                f"   or: {sys.argv[0]} enable <config-file.json|yaml>")
         sys.exit(1)
 
-    config_file = sys.argv[1]
+    if len(sys.argv) == 2:
+        mode = "vfs"
+        config_file = sys.argv[1]
+    else:
+        mode = sys.argv[1]
+        config_file = sys.argv[2]
+
+    if mode not in ("vfs", "enable"):
+        print(f"Error: invalid mode '{mode}'. Use 'vfs' or 'enable'.")
+        sys.exit(1)
+
     if not os.path.isfile(config_file):
         print(f"Error: File not found: {config_file}")
         sys.exit(1)
 
-    ext = os.path.splitext(config_file)[1].lower()
+    data = _load_config_file(config_file)
 
-    try:
-        with open(config_file, 'r') as f:
-            if ext == '.json':
-                data = json.load(f)
-            elif ext == '.yaml':
-                data = yaml.safe_load(f)
-            else:
-                print(f"Error: Unsupported file extension: {ext}. Use .json or .yaml")
-                sys.exit(1)
-    except (json.JSONDecodeError, yaml.YAMLError, OSError) as e:
-        print(f"Error reading or parsing file: {type(e).__name__}: {e}")
-        sys.exit(1)
+    if mode == "enable":
+        ok = enable_sriov_from_data(data)
+        sys.exit(0 if ok else 1)
 
     ret, all_sriov_entries = parse_and_process_sriov_config(data)
 

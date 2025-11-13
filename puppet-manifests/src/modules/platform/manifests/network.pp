@@ -905,26 +905,6 @@ class platform::network::interfaces::rate_limit::runtime {
 }
 
 
-define platform::network::interfaces::sriov_enable (
-  $addr,
-  $device_id,
-  $num_vfs,
-  $port_name,
-  $up_requirement,
-  $vf_config = undef
-) {
-  $vf_file = 'sriov_numvfs'
-  if ($num_vfs != undef) and ($num_vfs > 0) {
-    exec { "sriov-enable-device: ${title}":
-      command   => template('platform/sriov.enable-device.erb'),
-      provider  => shell,
-      onlyif    => "[ $(cat /sys/bus/pci/devices/${addr}/${vf_file}) != ${num_vfs} ]",
-      logoutput => true,
-    }
-  }
-}
-
-
 define platform::network::interfaces::sriov_ratelimit (
   $addr,
   $driver,
@@ -951,7 +931,34 @@ class platform::network::interfaces::sriov (
 
 class platform::network::interfaces::sriov::enable
   inherits platform::network::interfaces::sriov {
-  create_resources('platform::network::interfaces::sriov_enable', $sriov_config, {})
+
+  Anchor['platform::networking'] -> Class[$name]
+
+  $now       = Timestamp()
+  $timestamp = $now.strftime('%Y_%m_%d_%H_%M_%S')
+  $tempfile  = "/tmp/sriov_enable_${timestamp}.json"
+
+  $sriov_cfg = {
+    'platform::network::interfaces::sriov::sriov_config' => $sriov_config,
+  }
+  $json_cfg = $sriov_cfg.to_json
+
+  file { $tempfile:
+    ensure  => file,
+    content => $json_cfg,
+    mode    => '0644',
+  }
+  -> exec { 'Sriov_enable':
+    command   => "parse_sriov.py enable ${tempfile}",
+    path      => ['/usr/local/bin', '/usr/bin', '/bin'],
+    logoutput => true,
+  }
+  ~> exec { "Delete ${tempfile} (enable)":
+    command     => "rm -f ${tempfile}",
+    path        => ['/bin', '/usr/bin'],
+    refreshonly => true,
+    logoutput   => true,
+  }
 }
 
 class platform::network::interfaces::sriov::config
@@ -974,7 +981,7 @@ class platform::network::interfaces::sriov::config
     path      => ['/usr/local/bin', '/usr/bin', '/bin'],
     logoutput => true,
   }
-  -> exec { "Delete ${tempfile}":
+  ~> exec { "Delete ${tempfile}":
     command     => "rm -f ${tempfile}",
     path        => ['/bin', '/usr/bin'],
     refreshonly => true,
