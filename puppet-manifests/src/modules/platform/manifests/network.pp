@@ -925,55 +925,6 @@ define platform::network::interfaces::sriov_enable (
 }
 
 
-define platform::network::interfaces::sriov_bind (
-  $addr,
-  $driver,
-  $vfnumber = undef,
-  $max_tx_rate = undef
-) {
-  if ($driver != undef) {
-    if ($driver == 'vfio-pci') {
-      exec { "Load vfio-pci driver with sriov enabled: ${title}":
-        command   => 'modprobe vfio-pci enable_sriov=1 disable_idle_d3=1',
-        logoutput => true,
-      }
-      -> exec { "Ensure enable_sriov is set: ${title}":
-        command   => 'echo 1 > /sys/module/vfio_pci/parameters/enable_sriov',
-        logoutput => true,
-      }
-      -> exec { "Ensure disable_idle_d3 is set: ${title}":
-        command   => 'echo 1 > /sys/module/vfio_pci/parameters/disable_idle_d3',
-        logoutput => true,
-      }
-      -> exec { "sriov-vf-bind-device: ${title}":
-        command   => template('platform/sriov.bind-device.erb'),
-        logoutput => true,
-      }
-      -> Platform::Network::Interfaces::Sriov_ratelimit <| addr == $addr |>
-    } else {
-      ensure_resource(kmod::load, $driver)
-      exec { "sriov-vf-bind-device: ${title}":
-        command   => template('platform/sriov.bind-device.erb'),
-        logoutput => true,
-        require   => [ Kmod::Load[$driver] ],
-      }
-      -> Platform::Network::Interfaces::Sriov_ratelimit <| addr == $addr |>
-    }
-  }
-}
-
-define platform::network::interfaces::sriov_vf_bind (
-  $addr,
-  $device_id,
-  $num_vfs,
-  $port_name,
-  $up_requirement,
-  $vf_config
-) {
-  create_resources('platform::network::interfaces::sriov_bind', $vf_config, {})
-}
-
-
 define platform::network::interfaces::sriov_ratelimit (
   $addr,
   $driver,
@@ -991,23 +942,12 @@ define platform::network::interfaces::sriov_ratelimit (
   }
 }
 
-define platform::network::interfaces::sriov_vf_ratelimit (
-  $addr,
-  $device_id,
-  $num_vfs,
-  $port_name,
-  $up_requirement,
-  $vf_config
-) {
-  create_resources('platform::network::interfaces::sriov_ratelimit', $vf_config, {
-    port_name => $port_name
-  })
-}
 
 class platform::network::interfaces::sriov (
   $sriov_config = {}
 ) {
 }
+
 
 class platform::network::interfaces::sriov::enable
   inherits platform::network::interfaces::sriov {
@@ -1017,8 +957,29 @@ class platform::network::interfaces::sriov::enable
 class platform::network::interfaces::sriov::config
   inherits platform::network::interfaces::sriov {
   Anchor['platform::networking'] -> Class[$name]
-  create_resources('platform::network::interfaces::sriov_vf_bind', $sriov_config, {})
-  create_resources('platform::network::interfaces::sriov_vf_ratelimit', $sriov_config, {})
+
+  $now = Timestamp()
+  $timestamp = $now.strftime('%Y_%m_%d_%H_%M_%S')
+  $tempfile  = "/tmp/sriov_config_${timestamp}.json"
+  $sriov_cfg = { 'platform::network::interfaces::sriov::sriov_config' => $sriov_config }
+  $json_cfg  = $sriov_cfg.to_json
+
+  file { $tempfile:
+    ensure  => file,
+    content => $json_cfg,
+    mode    => '0644',
+  }
+  -> exec { 'Sriov_vf_bind':
+    command   => "parse_sriov.py ${tempfile}",
+    path      => ['/usr/local/bin', '/usr/bin', '/bin'],
+    logoutput => true,
+  }
+  -> exec { "Delete ${tempfile}":
+    command     => "rm -f ${tempfile}",
+    path        => ['/bin', '/usr/bin'],
+    refreshonly => true,
+    logoutput   => true,
+  }
 }
 
 class platform::network::interfaces::sriov::runtime {
@@ -1038,8 +999,9 @@ define platform::network::interfaces::fpga::n3000 (
     exec { "ifdown/up: ${title}":
       command   => template('platform/interface.ifup.erb'),
       logoutput => true,
+      require   => Class['::platform::devices::fpga::n3000::reset'],
     }
-    -> Platform::Network::Interfaces::Sriov_bind <| |>
+    -> Class['::platform::network::interfaces::sriov::config']
   }
 }
 

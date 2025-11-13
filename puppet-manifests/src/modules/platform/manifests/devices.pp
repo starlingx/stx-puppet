@@ -162,15 +162,24 @@ class platform::devices::fpga::fec::params (
 
 class platform::devices::fpga::n3000::reset
   inherits ::platform::devices::fpga::fec::params {
+
+  # just add container dependency if it is defined in the catalog
+  # ( i.e: enrollment or fresh install )
+  $containerd_class = defined(Class['platform::containerd::config']) ? {
+    true    => Class['platform::containerd::config'],
+    default => undef,
+  }
+
   # To reset N3000 FPGA
   Class[$name] -> Class['::platform::devices::fpga::fec::pf']
   Class[$name] -> Class['::platform::network::interfaces::sriov::enable']
+
   exec { 'Reset n3000 fpgas':
     command   => 'sysinv-reset-n3000-fpgas',
     path      => ['/usr/bin/', '/usr/sbin/'],
     tries     => 60,
     try_sleep => 1,
-    require   => [Anchor['platform::networking'], Class['platform::containerd::config']],
+    require   => delete_undef_values([Anchor['platform::networking'], $containerd_class]),
     unless    => 'test -e /var/run/.sysinv_n3000_reset'
   }
 }
