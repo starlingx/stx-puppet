@@ -37,6 +37,8 @@ CFG_PREFIX = "ifcfg-"
 TERM_WAIT_TIME = 10
 FLOCK_MAX_RETRY = 15
 FLOCK_WAIT_INTERVAL = 5
+MAX_RETRIES = 10
+INTF_WAIT_INTERVAL = 1
 
 # Interface types
 ETH = "eth"
@@ -906,6 +908,30 @@ def get_iface_address(iface, cfg):
     return address
 
 
+def remove_address_from_other_ifaces(address, target_iface):
+    rc, out = execute_system_cmd(f"ip -o addr show to {address}")
+    if rc != 0 or not out:
+        return
+
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+
+        ifname = parts[1]
+        if ifname == target_iface:
+            continue
+
+        LOG.info(f"Removing address '{address}' from interface "
+                    f"'{ifname}' to avoid duplication with interface "
+                    f"'{target_iface}'")
+
+        rc, out = execute_system_cmd(f"ip addr del {address} dev {ifname}")
+        if rc != 0:
+            LOG.warning(f"Failed to remove address '{address}' from '{ifname}': "
+                        f"rc={rc}, output='{out}'")
+
+
 def ensure_iface_configured_label(iface, cfg):
     address = get_iface_address(iface, cfg)
     if not address:
@@ -915,7 +941,8 @@ def ensure_iface_configured_label(iface, cfg):
     if address in existing:
         LOG.info(f"Link already has address '{address}', no need to set label up")
     else:
-        if set_iface_up(iface) == 0:
+
+        if set_iface_up(iface) != 0:
             return
         add_ip_to_iface(base_iface, address)
     if gateway := cfg.get("gateway", None):
@@ -924,10 +951,20 @@ def ensure_iface_configured_label(iface, cfg):
 
 def ensure_iface_configured_non_label(iface, cfg):
     if is_iface_missing_or_down(iface):
-        LOG.info(f"Interface '{iface}' is missing or down, flushing IPs and bringing up")
-        flush_ips(iface)
-        if set_iface_up(iface) == 0:
+        LOG.info(f"Interface '{iface}' is missing or down, "
+                 f"bringing up")
+        if set_iface_up(iface) != 0:
             return
+
+        for _ in range(MAX_RETRIES):
+            if not is_iface_missing_or_down(iface):
+                LOG.info(f"Interface '{iface}' is now up/operational")
+                break
+            time.sleep(INTF_WAIT_INTERVAL)
+        else:
+            LOG.warning(f"Interface '{iface}' did not become operational")
+            return
+
     address = get_iface_address(iface, cfg)
     if not address:
         return
@@ -972,15 +1009,6 @@ def add_default_route(iface, gateway):
              "nexthop": gateway,
              "ifname": iface}
     add_route_to_kernel(route)
-
-
-def flush_ips(iface):
-    path = DEVLINK_BASE_PATH + iface
-    if os.path.islink(path):
-        retcode, stdout = execute_system_cmd(f"/usr/sbin/ip addr flush dev {iface}")
-        if retcode != 0:
-            LOG.error(f"Command 'ip addr flush' failed for interface {iface}:"
-                      f"{format_stdout(stdout)}")
 
 
 def write_routes_file(route_entries):
@@ -1052,6 +1080,9 @@ def check_enrollment_config():
                         f"{', '.join(iface_cfgs.keys())}")
         for iface, cfg in iface_cfgs.items():
             LOG.info(f"Enrollment: Configuring interface {iface} with gateway {cfg['gateway']}")
+            address = get_iface_address(iface, cfg)
+            if address:
+                remove_address_from_other_ifaces(address, iface)
             ensure_iface_configured(iface, cfg)
     try:
         os.remove(CLOUD_INIT_FILE)
