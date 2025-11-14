@@ -2,6 +2,7 @@ define platform::ptpinstance::ptp_config_files(
   $_name,
   $service,
   $global_parameters,
+  $section_parameters,
   $interfaces,
   $ensure,
   $enable,
@@ -107,6 +108,7 @@ define platform::ptpinstance::set_ptp4l_pmc_parameters(
   $_name,
   $service,
   $global_parameters,
+  $section_parameters,
   $interfaces,
   $ensure,
   $enable,
@@ -346,6 +348,7 @@ class platform::ptpinstance::gnss_monitor (
 define platform::ptpinstance::disable_e810_gnss_uart_interfaces (
   $_name,
   $global_parameters,
+  $section_parameters,
   $service,
   $gnss_uart_disable,
   $cmdline_opts = '',

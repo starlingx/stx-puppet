@@ -21,6 +21,25 @@
 <%- end -%>
 <%- end -%>
 
+<%- if @service == 'ptp4l' -%>
+<%- if @section_parameters -%>
+<%- @section_parameters.each do |section,parameters_list| -%>
+<%- if section.start_with?("unicast_master_table") %>
+
+[unicast_master_table]
+##
+## Associated with section: <%= section %>
+##
+<%- parameters_list.each do |parameter_dict| -%>
+<%- parameter_dict.each do |key, value| -%>
+<%= key %> <%= value %>
+<%- end -%>
+<%- end -%>
+<%- end -%>
+<%- end -%>
+<%- end -%>
+<%- end -%>
+
 <%- if @interfaces -%>
 <%- @interfaces.each do |interface| %>
 <%- interface['port_names'].each do |port| -%>
