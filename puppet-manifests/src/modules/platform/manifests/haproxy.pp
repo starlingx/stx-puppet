@@ -249,10 +249,7 @@ class platform::haproxy::reload {
 }
 
 
-class platform::haproxy::runtime (
-  $force_kube_apiserver = false,
-  $reload = true,
-) {
+class platform::haproxy::runtime {
   include ::platform::haproxy::server
 
   include ::platform::patching::haproxy
@@ -276,26 +273,7 @@ class platform::haproxy::runtime (
   include ::openstack::keystone::haproxy
   include ::openstack::barbican::haproxy
   include ::platform::smapi::haproxy
-
-  # TODO(mdecastr): This code is to support upgrades to stx 11,
-  # the condition can be removed in later releases, keeping the include.
-  if $force_kube_apiserver {
-    include ::platform::kubernetes::haproxy
-  } else {
-    if (!str2bool($::usm_upgrade_in_progress) or str2bool($::upgrade_kube_apiserver_port_updated)) {
-      if !str2bool($::upgrade_kube_apiserver_port_rollback) {
-        include ::platform::kubernetes::haproxy
-      }
-    }
-  }
-
-  # TODO(mdecastr): This code is to support upgrades to stx 11,
-  # the condition can be removed in later releases. Manual reload is used in rollback.
-  if $reload {
-    class {'::platform::haproxy::reload':
-      stage => post
-    }
-  }
+  include ::platform::kubernetes::haproxy
 }
 
 class platform::haproxy::restart::runtime {

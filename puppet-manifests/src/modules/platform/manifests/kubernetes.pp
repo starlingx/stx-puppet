@@ -836,6 +836,7 @@ class platform::kubernetes::master
   contain ::platform::kubernetes::firewall
   contain ::platform::kubernetes::configuration
   contain ::platform::haproxy::k8s_client_certificate
+  contain ::platform::kubernetes::haproxy
 
   Class['::platform::sysctl::controller::reserve_ports'] -> Class[$name]
   Class['::platform::k8splatform'] -> Class[$name]
@@ -852,15 +853,7 @@ class platform::kubernetes::master
   -> Class['::platform::kubernetes::coredns']
   -> Class['::platform::kubernetes::firewall']
   -> Class['::platform::haproxy::k8s_client_certificate']
-
-  if (!str2bool($::usm_upgrade_in_progress) or str2bool($::upgrade_kube_apiserver_port_updated)) {
-    # TODO(mdecastr): This code is to support upgrades to stx 11,
-    # the condition can be removed in later releases, keeping the include.
-    if !str2bool($::upgrade_kube_apiserver_port_rollback) {
-      include ::platform::kubernetes::haproxy
-      Class['::platform::kubernetes::firewall'] -> Class['::platform::kubernetes::haproxy']
-    }
-  }
+  -> Class['::platform::kubernetes::haproxy']
 }
 
 class platform::kubernetes::worker::init
@@ -1283,16 +1276,6 @@ class platform::kubernetes::unmask_start_kubelet
   }
 }
 
-# TODO(mdecastr): This code is to support upgrades to stx 11, it can be removed in later releases.
-class platform::kubernetes::master::rollback_flag {
-  file { '/etc/platform/.upgrade_kube_apiserver_port_rollback':
-        ensure => present,
-        owner  => 'root',
-        group  => 'root',
-        mode   => '0640',
-  }
-}
-
 class platform::kubernetes::master::change_apiserver_parameters (
   $etcd_cafile = $platform::kubernetes::params::etcd_cafile,
   $etcd_certfile = $platform::kubernetes::params::etcd_certfile,
@@ -1350,86 +1333,11 @@ class platform::kubernetes::master::change_apiserver_parameters (
   }
 
   if str2bool($::usm_upgrade_in_progress) {
-    # TODO(mdecastr): This code is to support upgrades to stx 11,
-    # it can be removed in later releases.
-    $old_kube_apiserver_port = '6443'
-    $new_kube_apiserver_port = '16443'
-    if !str2bool($::upgrade_kube_apiserver_port_rollback) {
-      exec { 'Replace the kube-apiserver port in system kubeconfig files':
-        command   => "sed -i -e \'s/:${old_kube_apiserver_port}/:${new_kube_apiserver_port}/g\' /etc/kubernetes/*.conf", # lint:ignore:140chars
-        logoutput => false,
-        unless    => "grep -q :${new_kube_apiserver_port} /etc/kubernetes/admin.conf",
-      }
-      file { '/etc/platform/.upgrade_kube_apiserver_port_updated':
-        ensure => present,
-        owner  => 'root',
-        group  => 'root',
-        mode   => '0640',
-      }
-    } else {
-      exec { 'Replace the kube-apiserver port in system kubeconfig files':
-        command   => "sed -i -e \'s/:${new_kube_apiserver_port}/:${old_kube_apiserver_port}/g\' /etc/kubernetes/*.conf", # lint:ignore:140chars
-        logoutput => false,
-        unless    => "grep -q :${old_kube_apiserver_port} /etc/kubernetes/admin.conf",
-      }
-      file { '/etc/platform/.upgrade_kube_apiserver_port_updated':
-        ensure => absent,
-        owner  => 'root',
-        group  => 'root',
-        mode   => '0640',
-      }
-      -> file { '/etc/platform/.upgrade_kube_apiserver_port_rollback':
-        ensure => absent,
-        owner  => 'root',
-        group  => 'root',
-        mode   => '0640',
-      }
-    }
-
-    # Restart services after changing the port in .conf files
     Exec['update configmap and apply changes to control plane components']
-    -> Exec['Replace the kube-apiserver port in system kubeconfig files']
-    -> exec { 'Restart kube-scheduler':
-        command => "/usr/bin/kill -s SIGHUP $(pidof kube-scheduler)",
-        returns => [0,1],
-      }
-    -> exec { 'Restart kube-controller-manager':
-        command => "/usr/bin/kill -s SIGHUP $(pidof kube-controller-manager)",
-        returns => [0,1],
-      }
-    -> exec { 'restart_kubelet':
-        command => '/usr/local/sbin/pmon-restart kubelet',
-      }
-    -> exec { 'restart sysinv_conductor':
-      command => 'sm-restart service sysinv-conductor',
-      }
-    -> exec { 'restart cert_mon':
-      command => 'sm-restart-safe service cert-mon',
-      }
-    -> exec { 'restart dccertmon':
-      command => 'sm-restart-safe service dccertmon',
-      onlyif  => "test '${::platform::params::distributed_cloud_role }' == 'systemcontroller'",
-      }
-    -> exec { 'restart etcd':
-      command => 'sm-restart-safe service etcd',
-      }
-    -> File['/etc/platform/.upgrade_kube_apiserver_port_updated']
-
-    # Restart haproxy for each case (upgrade or rollback)
-    if !str2bool($::upgrade_kube_apiserver_port_rollback) {
-      File['/etc/platform/.upgrade_kube_apiserver_port_updated']
-      -> class { 'platform::haproxy::runtime': force_kube_apiserver => true, }
-    } else {
-      class { 'platform::haproxy::runtime': stage => 'pre', reload => false, }
-      class { 'platform::haproxy::reload':, }
-      -> Exec['update configmap and apply changes to control plane components']
-    }
-
     -> exec { 'remove /etc/kubernetes/backup':
           command => '/usr/bin/rm -rf /etc/kubernetes/backup',
           onlyif  => '/usr/bin/test -d /etc/kubernetes/backup',
       }
-
     -> file { '/var/lib/kubelet/config.yaml.bak':
       ensure  => absent,
     }
