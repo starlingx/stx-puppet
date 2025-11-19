@@ -3,6 +3,7 @@ define platform::ptpinstance::ptp_config_files(
   $service,
   $global_parameters,
   $section_parameters,
+  $monitoring_parameters,
   $interfaces,
   $ensure,
   $enable,
@@ -39,6 +40,22 @@ define platform::ptpinstance::ptp_config_files(
   -> exec { "enable-${_name}":
     command => "/usr/bin/systemctl enable \
     ${service}@${_name}",
+  }
+}
+
+class platform::ptpinstance::monitoring (
+  $ptp_instances = {},
+) {
+  include ::platform::ptpinstance::params
+  $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
+
+  require ::platform::ptpinstance::ptp_directories
+
+  file { 'ptp-monitoring-config':
+    ensure  => file,
+    path    => "${ptp_conf_dir}/ptpinstance/instance-monitoring.conf",
+    mode    => '0644',
+    content => template('platform/monitoring-config.erb'),
   }
 }
 
@@ -109,6 +126,7 @@ define platform::ptpinstance::set_ptp4l_pmc_parameters(
   $service,
   $global_parameters,
   $section_parameters,
+  $monitoring_parameters,
   $interfaces,
   $ensure,
   $enable,
@@ -347,15 +365,21 @@ class platform::ptpinstance::gnss_monitor (
 
 define platform::ptpinstance::disable_e810_gnss_uart_interfaces (
   $_name,
-  $global_parameters,
-  $section_parameters,
   $service,
-  $gnss_uart_disable,
-  $cmdline_opts = '',
-  $device_parameters = '',
-  $id = '',
+  $global_parameters,
   $interfaces = '',
+  $ensure = '',
+  $enable = '',
+  $cmdline_opts = '',
+  $id = '',
+  $ptp_conf_dir = '',
+  $ptp_options_dir = '',
+  $gpsd_monitored_devices = '',
+  $section_parameters = {},
+  $monitoring_parameters = {},
   $pmc_gm_settings = '',
+  $device_parameters = '',
+  $gnss_uart_disable = '',
   $external_source = '',
 ) {
   $gnss_device_ori = $global_parameters['ts2phc.nmea_serialport']
@@ -542,6 +566,11 @@ class platform::ptpinstance (
                       $ptp_state.merge({'gpsd_monitored_devices' => $gpsd_monitored_devices})
     )
     create_resources('platform::ptpinstance::set_ptp4l_pmc_parameters', $config, $ptp_state)
+
+    # Create monitoring configuration
+    class { 'platform::ptpinstance::monitoring':
+      ptp_instances => $config,
+    }
   }
 
   exec { 'set-ice-gnss-thread-niceness':
