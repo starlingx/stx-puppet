@@ -111,13 +111,19 @@ class openstack::keystone (
       setting => 'level',
       value   => 'INFO',
     }
-    # create keystone policy configuration
+
+    # TODO(mdecastr): This removal is only necessary for upgrades to stx 12.
+    # remove old JSON keystone policy configuration
     file { '/etc/keystone/policy.json':
+      ensure  => absent,
+    }
+    # create keystone policy configuration
+    file { '/etc/keystone/policy.yaml':
       ensure  => present,
       owner   => 'keystone',
       group   => 'keystone',
       mode    => '0640',
-      content => template('openstack/keystone-policy.json.erb'),
+      content => template('openstack/keystone-policy.yaml.erb'),
     }
 
     # Keystone users can only be added to the SQL backend (write support for
