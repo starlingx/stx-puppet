@@ -871,6 +871,10 @@ class platform::sm
   }
 
   if $system_mode == 'simplex' {
+    exec { 'Deprovision NFS Management':
+      command => 'sm-deprovision service-group-member controller-services nfs-mgmt',
+    }
+
     exec { 'Configure oam-service redundancy model':
       command => "sm-configure service_group yes controller oam-services N 1 0 \"\" directory-services",
     }
@@ -913,6 +917,10 @@ class platform::sm
         }
     }
   } else {
+    exec { 'Provision NFS Management':
+      command => 'sm-provision service-group-member controller-services nfs-mgmt',
+    }
+
     if $::platform::network::oam::ipv4::params::subnet_version == $::platform::params::ipv4 {
       exec { 'Provision oam-ipv4 service group member':
         command => 'sm-provision service-group-member oam-services oam-ipv4',
