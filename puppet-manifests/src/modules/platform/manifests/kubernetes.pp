@@ -299,14 +299,6 @@ class platform::kubernetes::kubeadm {
   $k8s_memory_mgr_policy = $::platform::kubernetes::params::k8s_memory_mgr_policy
   $k8s_reserved_memory = $::platform::kubernetes::params::k8s_reserved_memory
 
-
-  $iptables_file = @("IPTABLE"/L)
-    net.bridge.bridge-nf-call-ip6tables = 1
-    net.bridge.bridge-nf-call-iptables = 1
-    net.ipv4.ip_forward = 1
-    net.ipv6.conf.all.forwarding = 1
-    | IPTABLE
-
   # Configure kubelet cpumanager options
   $opts_sys_res = join(['--system-reserved=',
                         "memory=${k8s_reserved_mem}Mi"])
@@ -380,19 +372,7 @@ class platform::kubernetes::kubeadm {
     command => 'rm -f /var/lib/kubelet/memory_manager_state || true',
   }
 
-  # Update iptables config. This is required based on:
-  # https://kubernetes.io/docs/tasks/tools/install-kubeadm
-  # This probably belongs somewhere else - initscripts package?
-  file { '/etc/sysctl.d/k8s.conf':
-    ensure  => file,
-    content => $iptables_file,
-    owner   => 'root',
-    group   => 'root',
-    mode    => '0644',
-  }
-  -> exec { 'update kernel parameters for iptables':
-    command => 'sysctl --system',
-  }
+  class { 'platform::sysctl::k8s::config_update': }
 
   # Create manifests directory required by kubelet
   -> file { '/etc/kubernetes/manifests':
