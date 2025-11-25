@@ -623,6 +623,220 @@ class TestMainFunction(unittest.TestCase):
         self.assertIn("Error: File not found:",
                         mock_helper.get_output_str())
 
+    def test_main_with_enable_success(self):
+        data = valid_python_format_config()
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml',
+                                         delete=False) as tf:
+            yaml.dump(data, tf)
+            temp_filename = tf.name
+
+        try:
+            with patch.object(sys, 'argv',
+                              ['parse_sriov', 'enable', temp_filename]), \
+                 patch('src.bin.parse_sriov.enable_sriov_from_data',
+                       return_value=True) as mock_enable, \
+                 MockHelper(stdout="") as mock_helper, \
+                 self.assertRaises(SystemExit) as cm:
+                parse_sriov.main()
+
+            self.assertEqual(cm.exception.code, 0)
+
+            mock_enable.assert_called_once()
+            called_args = mock_enable.call_args[0][0]
+            self.assertIsInstance(called_args, dict)
+            self.assertEqual(mock_helper.get_output(), [])
+
+        finally:
+            os.remove(temp_filename)
+
+    def test_main_with_enable_failure(self):
+        data = valid_python_format_config()
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json',
+                                         delete=False) as tf:
+            json.dump(data, tf, indent=3)
+            temp_filename = tf.name
+
+        try:
+            with patch.object(sys, 'argv',
+                              ['parse_sriov', 'enable', temp_filename]), \
+                 patch('src.bin.parse_sriov.enable_sriov_from_data',
+                       return_value=False), \
+                 MockHelper(stdout="") as mock_helper, \
+                 self.assertRaises(SystemExit) as cm:
+                parse_sriov.main()
+
+            self.assertEqual(cm.exception.code, 1)
+            self.assertEqual(mock_helper.get_output(), [])
+
+        finally:
+            os.remove(temp_filename)
+
+
+#####################################################################
+# Tests for enable_sriov_from_data / enable_sriov_from_configs
+class TestEnableSriovFunctions(unittest.TestCase):
+
+    def test_enable_sriov_from_data_valid(self):
+        data = {
+            'platform::network::interfaces::sriov::sriov_config': {
+                'pf0': {
+                    'addr': '0000:07:00.0',
+                    'num_vfs': 4,
+                    'up_requirement': False,
+                },
+                'pf1': {
+                    'addr': '0000:08:00.0',
+                    'num_vfs': 8,
+                    'up_requirement': True,
+                },
+            }
+        }
+
+        sriov_cfg = data.get(
+            'platform::network::interfaces::sriov::sriov_config', {}
+        )
+
+        with patch('src.bin.parse_sriov.enable_sriov_from_configs',
+                   return_value=True) as mock_enable, \
+             MockHelper(stdout='') as mock_helper:
+
+            result = parse_sriov.enable_sriov_from_data(data)
+
+        self.assertTrue(result)
+        mock_enable.assert_called_once_with(sriov_cfg)
+        self.assertEqual(mock_helper.get_output(), [])
+
+    def test_enable_sriov_from_data_empty_or_missing(self):
+        data = {}
+        with patch('src.bin.parse_sriov.enable_sriov_from_configs') \
+                as mock_enable, \
+             MockHelper(stdout='') as mock_helper:
+            result = parse_sriov.enable_sriov_from_data(data)
+
+        self.assertTrue(result)
+        mock_enable.assert_not_called()
+        self.assertEqual(mock_helper.get_output(), [])
+
+        data = {
+            'platform::network::interfaces::sriov::sriov_config': {}
+        }
+        with patch('src.bin.parse_sriov.enable_sriov_from_configs') \
+                as mock_enable, \
+             MockHelper(stdout='') as mock_helper:
+            result = parse_sriov.enable_sriov_from_data(data)
+
+        self.assertTrue(result)
+        mock_enable.assert_not_called()
+        self.assertEqual(mock_helper.get_output(), [])
+
+    def test_enable_sriov_from_data_invalid_type(self):
+        data = 'not-a-dict'
+
+        with MockHelper(stdout='') as mock_helper:
+            result = parse_sriov.enable_sriov_from_data(data)
+
+        self.assertFalse(result)
+        self.assertIn('Error: data is not a dictionary: str',
+                      mock_helper.get_output_str())
+
+    def test_enable_sriov_from_configs_success(self):
+        sriov_configs = {
+            'pf0': {
+                'addr': '0000:07:00.0',
+                'num_vfs': 4,
+                'up_requirement': False,
+            },
+            'pf1': {
+                'addr': '0000:08:00.0',
+                'num_vfs': 8,
+                'up_requirement': True,
+            },
+        }
+
+        with patch('src.bin.parse_sriov._enable_sriov_for_pf',
+                   return_value=True) as mock_pf, \
+             MockHelper(stdout='') as mock_helper:
+
+            result = parse_sriov.enable_sriov_from_configs(sriov_configs)
+
+        self.assertTrue(result)
+        # Deve chamar uma vez por PF
+        self.assertEqual(mock_pf.call_count, 2)
+        mock_pf.assert_any_call('0000:07:00.0', 4, False, sriov_name='pf0')
+        mock_pf.assert_any_call('0000:08:00.0', 8, True, sriov_name='pf1')
+        self.assertEqual(mock_helper.get_output(), [])
+
+    def test_enable_sriov_from_configs_missing_addr(self):
+        sriov_configs = {
+            'pf0': {
+                'num_vfs': 4,
+                'up_requirement': False,
+            }
+        }
+
+        with patch('src.bin.parse_sriov._enable_sriov_for_pf') as mock_pf, \
+             MockHelper(stdout='') as mock_helper:
+
+            result = parse_sriov.enable_sriov_from_configs(sriov_configs)
+
+        self.assertFalse(result)
+        mock_pf.assert_not_called()
+        self.assertIn(
+            "ERROR: sriov_enable: missing 'addr' for 'pf0' "
+            '(PF PCI address required)',
+            mock_helper.get_output_str()
+        )
+
+    def test_enable_sriov_from_configs_invalid_entry_type(self):
+        sriov_configs = {
+            'pf0': 'invalid'
+        }
+
+        with patch('src.bin.parse_sriov._enable_sriov_for_pf') as mock_pf, \
+             MockHelper(stdout='') as mock_helper:
+
+            result = parse_sriov.enable_sriov_from_configs(sriov_configs)
+
+        self.assertFalse(result)
+        mock_pf.assert_not_called()
+        self.assertIn(
+            "ERROR: sriov_enable: config for 'pf0' must be a dictionary",
+            mock_helper.get_output_str()
+        )
+
+    def test_enable_sriov_from_configs_partial_failure(self):
+        sriov_configs = {
+            'pf0': {
+                'addr': '0000:07:00.0',
+                'num_vfs': 4,
+                'up_requirement': False,
+            },
+            'pf1': {
+                'addr': '0000:08:00.0',
+                'num_vfs': 8,
+                'up_requirement': True,
+            },
+        }
+
+        side_effect = [
+            True,
+            False,
+        ]
+
+        with patch('src.bin.parse_sriov._enable_sriov_for_pf',
+                   side_effect=side_effect) as mock_pf, \
+             MockHelper(stdout='') as mock_helper:
+
+            result = parse_sriov.enable_sriov_from_configs(sriov_configs)
+
+        self.assertFalse(result)
+        self.assertEqual(mock_pf.call_count, 2)
+        mock_pf.assert_any_call('0000:07:00.0', 4, False, sriov_name='pf0')
+        mock_pf.assert_any_call('0000:08:00.0', 8, True, sriov_name='pf1')
+        self.assertEqual(mock_helper.get_output(), [])
+
 
 if __name__ == '__main__':
     unittest.main()
