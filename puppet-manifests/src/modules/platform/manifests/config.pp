@@ -431,6 +431,20 @@ class platform::config::mgmt_network_reconfig_update_runtime {
 class platform::config::hosts
   inherits ::platform::config::params {
 
+  $mgmt_reconfig_ongoing = str2bool(inline_template(
+    "<%= File.exist?('/etc/platform/.mgmt_network_reconfiguration_ongoing') %>"
+  ))
+
+  $mgmt_reconfig_unlock = str2bool(inline_template(
+    "<%= File.exist?('/etc/platform/.mgmt_network_reconfiguration_unlock') %>"
+  ))
+
+  # If mgmt reconfig ongoing AND unlock file missing: stop execution
+  if $mgmt_reconfig_ongoing and !$mgmt_reconfig_unlock {
+    notice('Skipping platform::config::hosts because management network reconfiguration is ongoing.')
+    return()
+  }
+
   # The localhost should resolve to the IPv4 loopback address only, therefore
   # ensure the IPv6 address is removed from configured hosts
   if str2bool(inline_template("<%= File.exist?('/etc/platform/.unlock_ready') %>")) {
