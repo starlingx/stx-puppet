@@ -127,7 +127,7 @@ class platform::dcmanager
     # We do not want to affect software API performance.
     # We also remove the settings for services: pmon, sysinv-agent,
     # collectd, fm-api, sm-api, software-controller-daemon,
-    # software, sw-patch-controller-daemon.
+    # sw-patch-controller-daemon.
     # There is no reason to limit their CPUShares on systemcontroller.
     $service_names = [
       'cron',
@@ -139,7 +139,6 @@ class platform::dcmanager
       'rsync',
       'sm-api',
       'software-controller-daemon',
-      'software',
       'systemd-udevd',
       'sw-patch-controller-daemon'
     ]
