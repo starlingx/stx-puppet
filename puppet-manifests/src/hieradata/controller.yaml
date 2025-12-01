@@ -190,6 +190,8 @@ keystone::endpoint::admin_url: 'http://127.0.0.1:5000'
 keystone::ldap::identity_driver: 'sql'
 keystone::ldap::assignment_driver: 'sql'
 
+keystone::policy::policy_path: '/etc/keystone/policy.yaml'
+
 keystone::security_compliance::unique_last_password_count: 5
 keystone::security_compliance::password_regex: '^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*()<>{}+=_\\\[\]\-?|~`,.;:]).{12,}$'
 keystone::security_compliance::password_regex_description: 'Password must have a minimum length of 12 characters, and must contain at least 1 upper case, 1 lower case, 1 digit, and 1 special character'
@@ -245,4 +247,5 @@ barbican::db::sync::user: 'root'
 barbican::db::database_idle_timeout: 60
 barbican::db::database_max_pool_size: 1
 barbican::keystone-listener::enabled: false
+barbican::policy::policy_path: '/etc/barbican/policy.yaml'
 barbican::worker::enabled: false
