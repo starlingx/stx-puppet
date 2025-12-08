@@ -750,10 +750,33 @@ class platform::config::post
   # When applying manifests to upgrade controller-1, we do not want SM or the
   # sysinv-agent or anything else that depends on these flags to start.
   if ! $::platform::params::controller_upgrade {
+    notice("Config UUID ${config_uuid}")
     file { '/etc/platform/.config_applied':
       ensure  => present,
       mode    => '0640',
       content => "CONFIG_UUID=${config_uuid}"
+    }
+  }
+}
+
+class platform::config::reboot_completion::post
+  inherits ::platform::config::params {
+
+  if $config_uuid {
+    $val = strip($config_uuid)
+    # Normalize UUID and remove hyphens
+    $hex = regsubst($val, '-', '', 'G')
+    # Check valid UUID with reboot bit set (first hex char 8-F)
+    # First hex digit determines if reboot bit is set
+    if $hex =~ /^[89a-fA-F][0-9a-fA-F]{31}$/ {
+      $timestamp = strftime('%Y-%m-%d %H:%M:%S')
+      notice("Reboot completion detected for UUID ${config_uuid}")
+
+      file { '/etc/platform/.config_applied_reboot':
+        ensure  => present,
+        mode    => '0640',
+        content => "CONFIG_UUID=${config_uuid}\nTIMESTAMP=${timestamp}\n",
+      }
     }
   }
 }
@@ -780,6 +803,7 @@ class platform::config::controller::post
     ensure => present,
   }
 
+  include ::platform::config::reboot_completion::post
   # In standard mode, the active controller will update grub parameters via
   # platform::compute::grub::runtime. But to update a standby controller,
   # platform::compute::grub::audit needs to be called from here like it's being
@@ -812,6 +836,7 @@ class platform::config::worker::post
     ensure => present,
   }
 
+  include ::platform::config::reboot_completion::post
   include ::platform::compute::grub::audit
 }
 
@@ -836,6 +861,8 @@ class platform::config::storage::post
   file { '/etc/platform/.bootstrap_completed':
     ensure => present,
   }
+
+  include ::platform::config::reboot_completion::post
 }
 
 class platform::config::aio::post
