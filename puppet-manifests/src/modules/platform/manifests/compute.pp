@@ -51,7 +51,6 @@ class platform::compute::grub::params (
   $g_audit = '',
   $g_audit_backlog_limit = 'audit_backlog_limit=8192',
   $g_intel_pstate = '',
-  $g_out_of_tree_drivers = '',
   $ignore_recovery = false,
   $g_kthread_prio = '21',
   $keys = [
@@ -67,7 +66,6 @@ class platform::compute::grub::params (
     'audit',
     'audit_backlog_limit',
     'intel_pstate',
-    'out-of-tree-drivers',
   ],
 ) {
   include platform::sysctl::params
@@ -91,12 +89,6 @@ class platform::compute::grub::params (
 
   $updated_audit = "audit=${g_audit}"
 
-  if ! empty($g_out_of_tree_drivers) {
-    $oot_drivers_switch = "out-of-tree-drivers=${g_out_of_tree_drivers}"
-  } else {
-    $oot_drivers_switch = ''
-  }
-
   if ! empty($g_intel_pstate) {
     $intel_pstate = "intel_pstate=${g_intel_pstate}"
   } else {
@@ -111,7 +103,7 @@ class platform::compute::grub::params (
 
   $grub_updates = strip(
     # lint:ignore:140chars
-    "${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit} ${intel_pstate} ${nmi_watchdog} ${skew_tick} ${oot_drivers_switch} ${kthread_prio}"
+    "${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit} ${intel_pstate} ${nmi_watchdog} ${skew_tick} ${kthread_prio}"
     # lint:endignore:140chars
     )
 }
