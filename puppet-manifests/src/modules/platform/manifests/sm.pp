@@ -259,16 +259,10 @@ class platform::sm
       exec { 'Deprovision oam-ipv4 service group member':
         command => 'sm-deprovision service-group-member oam-services oam-ipv4',
       }
-      -> exec { 'Deprovision oam-ipv4 service':
-        command => 'sm-deprovision service oam-ipv4',
-      }
     }
     if $::platform::network::oam::ipv6::params::subnet_version == $::platform::params::ipv6 {
       exec { 'Deprovision oam-ipv6 service group member':
         command => 'sm-deprovision service-group-member oam-services oam-ipv6',
-      }
-      -> exec { 'Deprovision oam-ipv6 service':
-        command => 'sm-deprovision service oam-ipv6',
       }
     }
 
@@ -288,14 +282,8 @@ class platform::sm
       exec { 'Deprovision admin-ipv4 service group member':
         command => 'sm-deprovision service-group-member controller-services admin-ipv4',
       }
-      -> exec { 'Deprovision admin-ipv4 service':
-        command => 'sm-deprovision service admin-ipv4',
-      }
       exec { 'Deprovision admin-ipv6 service group member':
         command => 'sm-deprovision service-group-member controller-services admin-ipv6',
-      }
-      -> exec { 'Deprovision admin-ipv6 service':
-        command => 'sm-deprovision service admin-ipv6',
       }
       -> exec { 'Provision Admin Interface':
         command => 'sm-provision service-domain-interface controller admin-interface',
@@ -379,30 +367,18 @@ class platform::sm
     exec { 'Provision management-ipv4 service group member':
       command => 'sm-provision service-group-member controller-services management-ipv4',
     }
-    -> exec { 'Provision management-ipv4 service':
-      command => 'sm-provision service management-ipv4',
-    }
   } elsif $::platform::network::mgmt::ipv4::params::subnet_version == undef {
       exec { 'Deprovision management-ipv4 service group member':
         command => 'sm-deprovision service-group-member controller-services management-ipv4',
-      }
-      -> exec { 'Deprovision management-ipv4 service':
-        command => 'sm-deprovision service management-ipv4',
       }
   }
   if $::platform::network::mgmt::ipv6::params::subnet_version == $::platform::params::ipv6 {
     exec { 'Provision management-ipv6 service group member':
       command => 'sm-provision service-group-member controller-services management-ipv6',
     }
-    -> exec { 'Provision management-ipv6 service':
-      command => 'sm-provision service management-ipv6',
-    }
   } elsif $::platform::network::mgmt::ipv6::params::subnet_version == undef {
       exec { 'Deprovision management-ipv6 service group member':
         command => 'sm-deprovision service-group-member controller-services management-ipv6',
-      }
-      -> exec { 'Deprovision management-ipv6 service':
-        command => 'sm-deprovision service management-ipv6',
       }
   }
 
@@ -452,30 +428,18 @@ class platform::sm
     exec { 'Provision cluster-host-ipv4 service group member':
       command => 'sm-provision service-group-member controller-services cluster-host-ipv4',
     }
-    -> exec { 'Provision cluster-host-ipv4 service':
-      command => 'sm-provision service cluster-host-ipv4',
-    }
   } elsif $::platform::network::cluster_host::ipv4::params::subnet_version == undef {
       exec { 'Deprovision cluster-host-ipv4 service group member':
         command => 'sm-deprovision service-group-member controller-services cluster-host-ipv4',
-      }
-      -> exec { 'Deprovision cluster-host-ipv4 service':
-        command => 'sm-deprovision service cluster-host-ipv4',
       }
   }
   if $::platform::network::cluster_host::ipv6::params::subnet_version == $::platform::params::ipv6 {
     exec { 'Provision cluster-host-ipv6 service group member':
       command => 'sm-provision service-group-member controller-services cluster-host-ipv6',
     }
-    -> exec { 'Provision cluster-host-ipv6 service':
-      command => 'sm-provision service cluster-host-ipv6',
-    }
   } elsif $::platform::network::cluster_host::ipv6::params::subnet_version == undef {
       exec { 'Deprovision cluster-host-ipv6 service group member':
         command => 'sm-deprovision service-group-member controller-services cluster-host-ipv6',
-      }
-      -> exec { 'Deprovision cluster-host-ipv6 service':
-        command => 'sm-deprovision service cluster-host-ipv6',
       }
   }
 
@@ -488,9 +452,6 @@ class platform::sm
   # PXEBoot only supports IPv4 config
   exec { 'Configure PXEBoot IPv4 service in SM (service-group-member pxeboot-ipv4)':
       command => 'sm-provision service-group-member controller-services pxeboot-ipv4',
-  }
-  -> exec { 'Configure PXEBoot IPv4 service in SM (service pxeboot-ipv4)':
-      command => 'sm-provision service pxeboot-ipv4',
   }
 
   if $system_mode == 'duplex-direct' or $system_mode == 'simplex' {
@@ -521,18 +482,12 @@ class platform::sm
       exec { 'Configure Ironic IPv4 service in SM (service-group-member ironic-ipv4)':
           command => 'sm-provision service-group-member controller-services ironic-ipv4',
       }
-      -> exec { 'Configure Ironic IPv4 service in SM (service ironic-ipv4)':
-          command => 'sm-provision service ironic-ipv4',
-      }
       -> exec { 'Configure Ironic IPv4 service instance':
           command => "sm-configure service_instance ironic-ipv4 ironic-ipv4 \"ip=${ironic_ipv4_param_ip},cidr_netmask=${ironic_ipv4_param_mask},nic=${ironic_ip_interface},arp_count=7\"",
       }
     } elsif $::platform::network::ironic::ipv4::params::subnet_version == undef {
       exec { 'Deprovision ironic-ipv4 service group member':
         command => 'sm-deprovision service-group-member controller-services ironic-ipv4',
-      }
-      -> exec { 'Deprovision ironic-ipv4 service':
-        command => 'sm-deprovision service ironic-ipv4',
       }
     }
     if $::platform::network::ironic::ipv6::params::subnet_version == $::platform::params::ipv6 {
@@ -541,18 +496,12 @@ class platform::sm
       exec { 'Configure Ironic IPv6 service in SM (service-group-member ironic-ipv6)':
           command => 'sm-provision service-group-member controller-services ironic-ipv6',
       }
-      -> exec { 'Configure Ironic IPv6 service in SM (service ironic-ipv6)':
-          command => 'sm-provision service ironic-ipv6',
-      }
       -> exec { 'Configure Ironic IPv6 service instance':
           command => "sm-configure service_instance ironic-ipv6 ironic-ipv6 \"ip=${ironic_ipv6_param_ip},cidr_netmask=${ironic_ipv6_param_mask},nic=${ironic_ip_interface},arp_count=7\"",
       }
     } elsif $::platform::network::ironic::ipv6::params::subnet_version == undef {
       exec { 'Deprovision ironic-ipv6 service group member':
         command => 'sm-deprovision service-group-member controller-services ironic-ipv6',
-      }
-      -> exec { 'Deprovision ironic-ipv6 service':
-        command => 'sm-deprovision service ironic-ipv6',
       }
     }
   }
@@ -567,18 +516,12 @@ class platform::sm
       exec { 'Configure Admin IPv4 service in SM (service-group-member admin-ipv4)':
         command => 'sm-provision service-group-member controller-services admin-ipv4',
       }
-      -> exec { 'Configure Admin IPv4 service in SM (service admin-ipv4)':
-        command => 'sm-provision service admin-ipv4',
-      }
       -> exec { 'Configure Admin IPv4':
         command => "sm-configure service_instance admin-ipv4 admin-ipv4 \"ip=${admin_ipv4_param_ip},cidr_netmask=${admin_ipv4_param_mask},nic=${admin_ip_interface},arp_count=7\"",
       }
     } elsif $::platform::network::admin::ipv4::params::subnet_version == undef {
       exec { 'Deprovision unused admin-ipv4 service group member':
         command => 'sm-deprovision service-group-member controller-services admin-ipv4',
-      }
-      -> exec { 'Deprovision unused admin-ipv4 service':
-        command => 'sm-deprovision service admin-ipv4',
       }
     }
     if $::platform::network::admin::ipv6::params::subnet_version == $::platform::params::ipv6 {
@@ -587,18 +530,12 @@ class platform::sm
       exec { 'Configure Admin IPv6 service in SM (service-group-member admin-ipv6)':
         command => 'sm-provision service-group-member controller-services admin-ipv6',
       }
-      -> exec { 'Configure Admin IPv6 service in SM (service admin-ipv6)':
-        command => 'sm-provision service admin-ipv6',
-      }
       -> exec { 'Configure Admin IPv6 service instance':
         command => "sm-configure service_instance admin-ipv6 admin-ipv6 \"ip=${admin_ipv6_param_ip},cidr_netmask=${admin_ipv6_param_mask},nic=${admin_ip_interface},arp_count=7\"",
       }
     } elsif $::platform::network::admin::ipv6::params::subnet_version == undef {
       exec { 'Deprovision unused admin-ipv6 service group member':
         command => 'sm-deprovision service-group-member controller-services admin-ipv6',
-      }
-      -> exec { 'Deprovision unused admin-ipv6 service':
-        command => 'sm-deprovision service admin-ipv6',
       }
     }
   }
@@ -630,14 +567,8 @@ class platform::sm
   exec { 'Provision Docker Distribution FS in SM (service-group-member dockerdistribution-fs)':
     command => 'sm-provision service-group-member controller-services dockerdistribution-fs',
   }
-  -> exec { 'Provision Docker Distribution FS in SM (service dockerdistribution-fs)':
-    command => 'sm-provision service dockerdistribution-fs',
-  }
   -> exec { 'Provision Docker Distribution DRBD in SM (service-group-member drbd-dockerdistribution)':
     command => 'sm-provision service-group-member controller-services drbd-dockerdistribution',
-  }
-  -> exec { 'Provision Docker Distribution DRBD in SM (service drbd-dockerdistribution)':
-    command => 'sm-provision service drbd-dockerdistribution',
   }
   -> exec { 'Configure Docker Distribution DRBD':
     command => "sm-configure service_instance drbd-dockerdistribution drbd-dockerdistribution:${hostunit} \"drbd_resource=${dockerdistribution_drbd_resource}\"",
@@ -672,9 +603,6 @@ class platform::sm
   exec { 'Provision Helm Chart Repository FS in SM (service-group-member helmrepository-fs)':
     command => 'sm-provision service-group-member controller-services helmrepository-fs',
   }
-  -> exec { 'Provision Helm Chart Repository FS in SM (service helmrepository-fs)':
-    command => 'sm-provision service helmrepository-fs',
-  }
   -> exec { 'Configure Helm Chart Repository FileSystem':
     command => "sm-configure service_instance helmrepository-fs helmrepository-fs \"device=${helmrepo_fs_source_dir},directory=${helmrepo_fs_target_dir},options=bind,noatime,nodiratime,fstype=ext4,check_level=20\"",
   }
@@ -690,9 +618,6 @@ class platform::sm
   # Configure device image repository
   exec { 'Provision device-image-fs (service-group-member)':
     command => 'sm-provision service-group-member controller-services device-image-fs',
-  }
-  -> exec { 'Provision device-image-fs (service)':
-    command => 'sm-provision service device-image-fs',
   }
   -> exec { 'Configure Device Image Repository FileSystem':
     command => "sm-configure service_instance device-image-fs device-image-fs \"device=${deviceimage_fs_source_dir},directory=${deviceimage_fs_target_dir},options=bind,noatime,nodiratime,fstype=ext4,check_level=20\"",
@@ -718,9 +643,6 @@ class platform::sm
       -> exec { 'Provision DCDBsync-RestApi (service-group-member dcdbsync-api)':
         command => 'sm-provision service-group-member distributed-cloud-services dcdbsync-api',
       }
-      -> exec { 'Provision DCDBsync-RestApi in SM (service dcdbsync-api)':
-        command => 'sm-provision service dcdbsync-api',
-      }
       -> exec { 'Configure OpenStack - DCDBsync-API':
         command => "sm-configure service_instance dcdbsync-api dcdbsync-api \"\"",
       }
@@ -737,16 +659,10 @@ class platform::sm
       exec { 'Deprovision OpenStack - Horizon (service-group-member)':
         command => 'sm-deprovision service-group-member web-services horizon',
       }
-      -> exec { 'Deprovision OpenStack - Horizon (service)':
-        command => 'sm-deprovision service horizon',
-      }
 
     } else {
       exec { 'Deprovision OpenStack - Keystone (service-group-member)':
         command => 'sm-deprovision service-group-member cloud-services keystone',
-      }
-      -> exec { 'Deprovision OpenStack - Keystone (service)':
-        command => 'sm-deprovision service keystone',
       }
       $configure_keystone = false
     }
@@ -812,9 +728,6 @@ class platform::sm
     exec { 'Configure old platform-nfs-ip service in SM (service-group-member platform-nfs-ip)':
         command => 'sm-provision service-group-member controller-services platform-nfs-ip',
     }
-    -> exec { 'Configure old Platform-NFS IP service in SM (service platform-nfs-ip)':
-        command => 'sm-provision service platform-nfs-ip',
-    }
 
     if $system_mode == 'duplex-direct' {
       exec { 'Configure Platform NFS':
@@ -833,9 +746,6 @@ class platform::sm
   }  else {
     exec {'Deprovision old platform-nfs-ip (service-group-member platform-nfs-ip)':
       command => 'sm-deprovision service-group-member controller-services platform-nfs-ip'
-    }
-    -> exec { 'Deprovision old Platform-NFS IP service in SM (service platform-nfs-ip)':
-      command => 'sm-deprovision service platform-nfs-ip',
     }
   }
 
@@ -917,30 +827,18 @@ class platform::sm
       exec { 'Provision oam-ipv4 service group member':
         command => 'sm-provision service-group-member oam-services oam-ipv4',
       }
-      -> exec { 'Provision oam-ipv4 service':
-        command => 'sm-provision service oam-ipv4',
-      }
     } elsif $::platform::network::oam::ipv4::params::subnet_version == undef {
       exec { 'Deprovision oam-ipv4 service group member':
         command => 'sm-deprovision service-group-member oam-services oam-ipv4',
-      }
-      -> exec { 'Deprovision oam-ipv4 service':
-        command => 'sm-deprovision service oam-ipv4',
       }
     }
     if $::platform::network::oam::ipv6::params::subnet_version == $::platform::params::ipv6 {
       exec { 'Provision oam-ipv6 service group member':
         command => 'sm-provision service-group-member oam-services oam-ipv6',
       }
-      -> exec { 'Provision oam-ipv6 service':
-        command => 'sm-provision service oam-ipv6',
-      }
     } elsif $::platform::network::oam::ipv6::params::subnet_version == undef {
       exec { 'Deprovision oam-ipv6 service group member':
         command => 'sm-deprovision service-group-member oam-services oam-ipv6',
-      }
-      -> exec { 'Deprovision oam-ipv6 service':
-        command => 'sm-deprovision service oam-ipv6',
       }
     }
 
@@ -953,30 +851,18 @@ class platform::sm
         exec { 'Provision admin-ipv4 service group member':
           command => 'sm-provision service-group-member controller-services admin-ipv4',
         }
-        -> exec { 'Provision admin-ipv4 service':
-          command => 'sm-provision service admin-ipv4',
-        }
       } elsif $::platform::network::admin::ipv4::params::subnet_version == undef {
         exec { 'Deprovision unused non-SX admin-ipv4 service group member':
           command => 'sm-deprovision service-group-member controller-services admin-ipv4',
-        }
-        -> exec { 'Deprovision unused non-SX admin-ipv4 service':
-          command => 'sm-deprovision service admin-ipv4',
         }
       }
       if $::platform::network::admin::ipv6::params::subnet_version == $::platform::params::ipv6 {
         exec { 'Provision admin-ipv6 service group member':
           command => 'sm-provision service-group-member controller-services admin-ipv6',
         }
-        -> exec { 'Provision admin-ipv6 service':
-          command => 'sm-provision service admin-ipv6',
-        }
       } elsif $::platform::network::admin::ipv6::params::subnet_version == undef {
         exec { 'Deprovision unused non-SX admin-ipv6 service group member':
           command => 'sm-deprovision service-group-member controller-services admin-ipv6',
-        }
-        -> exec { 'Deprovision unused non-SX admin-ipv6 service':
-          command => 'sm-deprovision service admin-ipv6',
         }
       }
     }
@@ -1029,34 +915,19 @@ class platform::sm
   exec { 'Provision extension-fs (service-group-member)':
     command => 'sm-provision service-group-member controller-services  extension-fs',
   }
-  -> exec { 'Provision extension-fs (service)':
-    command => 'sm-provision service extension-fs',
-  }
   -> exec { 'Provision drbd-extension (service-group-member)':
     command => 'sm-provision service-group-member controller-services drbd-extension',
   }
-  -> exec { 'Provision drbd-extension (service)':
-    command => 'sm-provision service drbd-extension',
-  }
   -> exec { 'Provision extension-export-fs  (service-group-member)':
     command => 'sm-provision service-group-member controller-services extension-export-fs',
-  }
-  -> exec { 'Provision extension-export-fs (service)':
-    command => 'sm-provision service extension-export-fs',
   }
 
   if $drbd_patch_enabled {
     exec { 'Provision dc-vault-fs (service-group-member)':
       command => 'sm-provision service-group-member controller-services  dc-vault-fs',
     }
-    -> exec { 'Provision dc-vault-fs (service)':
-      command => 'sm-provision service dc-vault-fs',
-    }
     -> exec { 'Provision drbd-dc-vault (service-group-member)':
       command => 'sm-provision service-group-member controller-services drbd-dc-vault',
-    }
-    -> exec { 'Provision drbd-dc-vault (service)':
-      command => 'sm-provision service drbd-dc-vault',
     }
   }
 
@@ -1064,20 +935,11 @@ class platform::sm
   exec { 'Provision etcd-fs (service-group-member)':
     command => 'sm-provision service-group-member controller-services etcd-fs',
   }
-  -> exec { 'Provision etcd-fs (service)':
-    command => 'sm-provision service etcd-fs',
-  }
   -> exec { 'Provision drbd-etcd (service-group-member)':
     command => 'sm-provision service-group-member controller-services drbd-etcd',
   }
-  -> exec { 'Provision drbd-etcd (service)':
-    command => 'sm-provision service drbd-etcd',
-  }
   -> exec { 'Provision ETCD (service-group-member)':
       command => 'sm-provision service-group-member controller-services etcd',
-  }
-  -> exec { 'Provision ETCD (service)':
-    command => 'sm-provision service etcd',
   }
 
   if $stx_openstack_applied {
@@ -1100,25 +962,15 @@ class platform::sm
       command => 'sm-deprovision service-group-member controller-services guest-agent --apply',
       onlyif  => 'sm-query service guest-agent | grep -v disabled',
   }
-  -> exec { 'deprovision guest-agent service':
-    command => 'sm-deprovision service guest-agent',
-  }
-
 
   # Configure Docker Distribution
   exec { 'Provision Docker Distribution (service-group-member)':
       command => 'sm-provision service-group-member controller-services docker-distribution',
   }
-  -> exec { 'Provision Docker Distribution (service)':
-    command => 'sm-provision service docker-distribution',
-  }
 
   # Configure Docker Registry Token Server
   exec { 'Provision Docker Registry Token Server (service-group-member)':
       command => 'sm-provision service-group-member controller-services registry-token-server',
-  }
-  -> exec { 'Provision Docker Registry Token Server (service)':
-    command => 'sm-provision service registry-token-server',
   }
 
   # Even when ceph is not configured, service domain members must be present
@@ -1185,20 +1037,11 @@ class platform::sm
   exec { 'Provision OpenStack - Barbican API (service-group-member)':
     command => 'sm-provision service-group-member cloud-services barbican-api',
       }
-  -> exec { 'Provision OpenStack - Barbican API (service)':
-    command => 'sm-provision service barbican-api',
-  }
   -> exec { 'Provision OpenStack - Barbican Keystone Listener (service-group-member)':
     command => 'sm-provision service-group-member cloud-services barbican-keystone-listener',
   }
-  -> exec { 'Provision OpenStack - Barbican Keystone Listener (service)':
-    command => 'sm-provision service barbican-keystone-listener',
-      }
   -> exec { 'Provision OpenStack - Barbican Worker (service-group-member)':
     command => 'sm-provision service-group-member cloud-services barbican-worker',
-      }
-  -> exec { 'Provision OpenStack - Barbican Worker (service)':
-    command => 'sm-provision service barbican-worker',
   }
 
   if $ceph_configured {
@@ -1225,16 +1068,10 @@ class platform::sm
     exec { 'Provision mgr-restful-plugin (service-group-member mgr-restful-plugin)':
       command => 'sm-provision service-group-member storage-services mgr-restful-plugin',
     }
-    -> exec { 'Provision mgr-restful-plugin (service mgr-restful-plugin)':
-      command => 'sm-provision service mgr-restful-plugin',
-    }
 
     # Ceph-Manager
     -> exec { 'Provision Ceph-Manager (service-group-member ceph-manager)':
       command => 'sm-provision service-group-member storage-monitoring-services ceph-manager',
-    }
-    -> exec { 'Provision Ceph-Manager in SM (service ceph-manager)':
-      command => 'sm-provision service ceph-manager',
     }
   }
 
@@ -1243,15 +1080,9 @@ class platform::sm
     exec {'Provision Ceph-Rados-Gateway (service-group-member ceph-radosgw)':
       command => 'sm-provision service-group-member storage-monitoring-services ceph-radosgw'
     }
-    -> exec { 'Provision Ceph-Rados-Gateway (service ceph-radosgw)':
-      command => 'sm-provision service ceph-radosgw',
-    }
   } else {
     exec {'Deprovision Ceph-Rados-Gateway (service-group-member ceph-radosgw)':
       command => 'sm-deprovision service-group-member storage-monitoring-services ceph-radosgw'
-    }
-    -> exec { 'Deprovision Ceph-Rados-Gateway (service ceph-radosgw)':
-      command => 'sm-deprovision service ceph-radosgw',
     }
   }
 
@@ -1285,9 +1116,6 @@ class platform::sm
     exec { 'Deprovision open-ldap service group member':
       command => '/usr/bin/sm-deprovision service-group-member directory-services open-ldap',
     }
-    -> exec { 'Deprovision open-ldap service':
-      command => '/usr/bin/sm-deprovision service open-ldap',
-    }
   }
 
   if $::platform::params::distributed_cloud_role == 'systemcontroller' {
@@ -1304,92 +1132,47 @@ class platform::sm
     -> exec { 'Provision DCManager-Manager (service-group-member dcmanager-manager)':
       command => 'sm-provision service-group-member distributed-cloud-services dcmanager-manager',
     }
-    -> exec { 'Provision DCManager-Manager in SM (service dcmanager-manager)':
-      command => 'sm-provision service dcmanager-manager',
-    }
     -> exec { 'Provision DCManager-State (service-group-member dcmanager-state)':
       command => 'sm-provision service-group-member distributed-cloud-services dcmanager-state',
-    }
-    -> exec { 'Provision DCManager-State in SM (service dcmanager-state)':
-      command => 'sm-provision service dcmanager-state',
     }
     -> exec { 'Provision DCCertmon (service-group-member dccertmon)':
       command => 'sm-provision service-group-member distributed-cloud-services dccertmon',
     }
-    -> exec { 'Provision DCCertmon in SM (service dccertmon)':
-      command => 'sm-provision service dccertmon',
-    }
     -> exec { 'Provision DCManager-Audit (service-group-member dcmanager-audit)':
       command => 'sm-provision service-group-member distributed-cloud-services dcmanager-audit',
-    }
-    -> exec { 'Provision DCManager-Audit in SM (service dcmanager-audit)':
-      command => 'sm-provision service dcmanager-audit',
     }
     -> exec { 'Provision DCManager-Audit-Worker (service-group-member dcmanager-audit-worker)':
       command => 'sm-provision service-group-member distributed-cloud-services dcmanager-audit-worker',
     }
-    -> exec { 'Provision DCManager-Audit-Worker in SM (service dcmanager-audit-worker)':
-      command => 'sm-provision service dcmanager-audit-worker',
-    }
     -> exec { 'Provision DCManager-Orchestrator (service-group-member dcmanager-orchestrator)':
       command => 'sm-provision service-group-member distributed-cloud-services dcmanager-orchestrator',
-    }
-    -> exec { 'Provision DCManager-Orchestrator in SM (service dcmanager-orchestrator)':
-      command => 'sm-provision service dcmanager-orchestrator',
     }
     -> exec { 'Provision DCManager-Orchestrator-Worker (service-group-member dcmanager-orchestrator-worker)':
       command => 'sm-provision service-group-member distributed-cloud-services dcmanager-orchestrator-worker',
     }
-    -> exec { 'Provision DCManager-Orchestrator-Worker in SM (service dcmanager-orchestrator-worker)':
-      command => 'sm-provision service dcmanager-orchestrator-worker',
-    }
     -> exec { 'Provision DCManager-RestApi (service-group-member dcmanager-api)':
       command => 'sm-provision service-group-member distributed-cloud-services dcmanager-api',
-    }
-    -> exec { 'Provision DCManager-RestApi in SM (service dcmanager-api)':
-      command => 'sm-provision service dcmanager-api',
     }
     -> exec { 'Provision DCOrch-Engine (service-group-member dcorch-engine)':
       command => 'sm-provision service-group-member distributed-cloud-services dcorch-engine',
     }
-    -> exec { 'Provision DCOrch-Engine in SM (service dcorch-engine)':
-      command => 'sm-provision service dcorch-engine',
-    }
     -> exec { 'Provision DCOrch-Engine-Worker (service-group-member dcorch-engine-worker)':
       command => 'sm-provision service-group-member distributed-cloud-services dcorch-engine-worker',
-    }
-    -> exec { 'Provision DCOrch-Engine-Worker in SM (service dcorch-engine-worker)':
-      command => 'sm-provision service dcorch-engine-worker',
     }
     -> exec { 'Provision DCOrch-Identity-Api-Proxy (service-group-member dcorch-identity-api-proxy)':
       command => 'sm-provision service-group-member distributed-cloud-services dcorch-identity-api-proxy',
     }
-    -> exec { 'Provision DCOrch-Identity-Api-Proxy in SM (service dcorch-identity-api-proxy)':
-      command => 'sm-provision service dcorch-identity-api-proxy',
-    }
     -> exec { 'Provision DCOrch-Sysinv-Api-Proxy (service-group-member dcorch-sysinv-api-proxy)':
       command => 'sm-provision service-group-member distributed-cloud-services dcorch-sysinv-api-proxy',
-    }
-    -> exec { 'Provision DCOrch-Sysinv-Api-Proxy in SM (service dcorch-sysinv-api-proxy)':
-      command => 'sm-provision service dcorch-sysinv-api-proxy',
     }
     -> exec { 'Provision DCOrch-USM-Api-Proxy (service-group-member dcorch-usm-api-proxy)':
       command => 'sm-provision service-group-member distributed-cloud-services dcorch-usm-api-proxy',
     }
-    -> exec { 'Provision DCOrch-USM-Api-Proxy in SM (service dcorch-usm-api-proxy)':
-      command => 'sm-provision service dcorch-usm-api-proxy',
-    }
     -> exec { 'Provision DCDBsync-RestApi (service-group-member dcdbsync-api)':
       command => 'sm-provision service-group-member distributed-cloud-services dcdbsync-api',
     }
-    -> exec { 'Provision DCDBsync-RestApi in SM (service dcdbsync-api)':
-      command => 'sm-provision service dcdbsync-api',
-    }
     -> exec { 'Provision DC ISO image FS (service-group-member dc-iso-fs)':
       command => 'sm-provision service-group-member distributed-cloud-services dc-iso-fs',
-    }
-    -> exec { 'Provision DC ISO image FS in SM (service dc-iso-fs)':
-      command => 'sm-provision service dc-iso-fs',
     }
     -> exec { 'Configure Platform - DCManager-Manager':
       command => "sm-configure service_instance dcmanager-manager dcmanager-manager \"\"",
