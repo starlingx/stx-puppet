@@ -23,6 +23,9 @@ puppet-mtce
 #puppet-nfv
 puppet-nfv
 
+#puppet-patching
+puppet-patching
+
 #puppet-smapi
 puppet-smapi
 

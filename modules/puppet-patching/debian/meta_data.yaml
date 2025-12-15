@@ -1,0 +1,9 @@
+---
+debname: puppet-patching
+debver: 1.0.0-1
+src_path: src
+revision:
+    dist: $STX_DIST
+    PKG_GITREVCOUNT: true
+    SRC_GITREVCOUNT:
+        SRC_BASE_SRCREV: 595c007ac24c646547ff389c4f102b4647f05820

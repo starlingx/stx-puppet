@@ -533,6 +533,17 @@ class openstack::keystone::barbican::password::runtime {
   platform::sm::restart {'barbican-keystone-listener': }
 }
 
+class openstack::keystone::patching::password::runtime {
+  include ::patching::api
+
+  if $::personality == 'controller' {
+    Patching_config<||> ~> service { 'sw-patch-controller-daemon.service':
+      ensure => 'running',
+      enable => true,
+    }
+  }
+}
+
 class openstack::keystone::usm::password::runtime {
   include ::usm::api
 
