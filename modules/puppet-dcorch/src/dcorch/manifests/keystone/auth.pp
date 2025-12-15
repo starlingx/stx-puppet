@@ -33,7 +33,6 @@ class dcorch::keystone::auth (
   $sysinv_proxy_internal_url     = 'http://127.0.0.1:26385/v1',
   $cinder_proxy_internal_url_v2  = 'http://127.0.0.1:28776/v2/%(tenant_id)s',
   $cinder_proxy_internal_url_v3  = 'http://127.0.0.1:28776/v3/%(tenant_id)s',
-  $patching_proxy_internal_url   = 'http://127.0.0.1:25491',
   $usm_proxy_internal_url        = 'http://127.0.0.1:25497',
   $identity_proxy_internal_url   = 'http://127.0.0.1:25000/v3',
 
@@ -42,13 +41,11 @@ class dcorch::keystone::auth (
   $sysinv_proxy_public_url       = 'http://127.0.0.1:26385/v1',
   $cinder_proxy_public_url_v2    = 'http://127.0.0.1:28776/v2/%(tenant_id)s',
   $cinder_proxy_public_url_v3    = 'http://127.0.0.1:28776/v3/%(tenant_id)s',
-  $patching_proxy_public_url     = 'http://127.0.0.1:25491',
   $usm_proxy_public_url          = 'http://127.0.0.1:25497',
   $identity_proxy_public_url     = 'http://127.0.0.1:25000/v3',
 
   $identity_proxy_admin_url      = 'http://127.0.0.1:25000/v3',
   $sysinv_proxy_admin_url        = 'http://127.0.0.1:26385/v1',
-  $patching_proxy_admin_url      = 'http://127.0.0.1:25491',
   $usm_proxy_admin_url           = 'http://127.0.0.1:25497',
 
   $nfv_proxy_public_url          = 'http://127.0.0.1:4545',
@@ -83,15 +80,6 @@ class dcorch::keystone::auth (
       internal_url =>  $sysinv_proxy_internal_url
     }
 
-    keystone_endpoint { "${region}/patching::patching" :
-      ensure       =>  'present',
-      name         =>  'patching',
-      type         =>  'patching',
-      region       =>  $region,
-      public_url   =>  $patching_proxy_public_url,
-      admin_url    =>  $patching_proxy_admin_url,
-      internal_url =>  $patching_proxy_internal_url
-    }
     keystone_endpoint { "${region}/usm::usm" :
       ensure       =>  'present',
       name         =>  'usm',

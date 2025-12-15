@@ -252,7 +252,6 @@ class platform::haproxy::reload {
 class platform::haproxy::runtime {
   include ::platform::haproxy::server
 
-  include ::platform::patching::haproxy
   include ::platform::usm::haproxy
   include ::platform::sysinv::haproxy
   include ::platform::nfv::haproxy

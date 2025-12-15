@@ -319,7 +319,6 @@ class openstack::keystone::endpoint::runtime {
     }
 
     include ::sysinv::keystone::auth
-    include ::patching::keystone::auth
     include ::usm::keystone::auth
     include ::nfv::keystone::auth
     include ::fm::keystone::auth
@@ -531,17 +530,6 @@ class openstack::keystone::barbican::password::runtime {
   platform::sm::restart {'barbican-api': }
   platform::sm::restart {'barbican-worker': }
   platform::sm::restart {'barbican-keystone-listener': }
-}
-
-class openstack::keystone::patching::password::runtime {
-  include ::patching::api
-
-  if $::personality == 'controller' {
-    Patching_config<||> ~> service { 'sw-patch-controller-daemon.service':
-      ensure => 'running',
-      enable => true,
-    }
-  }
 }
 
 class openstack::keystone::usm::password::runtime {

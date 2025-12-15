@@ -32,7 +32,6 @@ include ::platform::ptpinstance
 include ::platform::ptpinstance::nic_clock
 include ::platform::ptpinstance::gnss_monitor
 include ::platform::lldp
-include ::platform::patching
 include ::platform::usm
 include ::platform::remotelogging
 include ::platform::mtce

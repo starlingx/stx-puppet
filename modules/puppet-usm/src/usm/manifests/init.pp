@@ -28,13 +28,13 @@ class usm (
     'runtime/agent_port':            value => $agent_port;
   }
 
-  Patching_config<||> ~> service { 'software-agent.service':
+  Usm_config<||> ~> service { 'software-agent.service':
     ensure => 'running',
     enable => true,
   }
 
   if $::personality == 'controller' {
-    Patching_config<||> ~> service { 'software-controller-daemon.service':
+    Usm_config<||> ~> service { 'software-controller-daemon.service':
       ensure => 'running',
       enable => true,
     }
