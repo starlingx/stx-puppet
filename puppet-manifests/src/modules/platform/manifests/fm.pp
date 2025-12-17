@@ -130,24 +130,6 @@ class platform::fm::api
     $assigned_workers = $::platform::params::eng_workers
   }
 
-  # override the configuration of fm-api.service
-  $fmapi_override_dir = '/etc/systemd/system/fm-api.service.d'
-
-  file { $fmapi_override_dir:
-    ensure => 'directory',
-    owner  => 'root',
-    group  => 'root',
-    mode   => '0755',
-  }
-
-  -> file { "${fmapi_override_dir}/fm-api-stx-override.conf":
-    ensure  => 'present',
-    owner   => 'root',
-    group   => 'root',
-    mode    => '0644',
-    content => template('platform/fm-api-stx-override.conf.erb'),
-  }
-
   if $service_enabled {
     if ($::platform::fm::service_create and
         $::platform::params::init_keystone) {
