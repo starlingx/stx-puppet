@@ -87,7 +87,6 @@ class platform::sysinv
   # Setup app framework behavior
   sysinv_config {
     'app_framework/missing_auto_update': value => true;
-    'app_framework/skip_k8s_application_audit': value => false;
   }
 
   # On AIO systems, restrict the connection pool size
