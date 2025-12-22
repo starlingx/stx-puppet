@@ -240,6 +240,7 @@ class platform::ptpinstance::ptp_directories {
 class platform::ptpinstance::nic_clock (
   $nic_clock_config = {},
   $nic_clock_enabled = false,
+  $nic_clock_config_extended = {},
 ) {
   include ::platform::ptpinstance::params
   $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
@@ -430,6 +431,7 @@ class platform::ptpinstance (
   $monitoring_enabled = $::platform::ptpinstance::gnss_monitor::monitoring_enabled
 
   require ::platform::ptpinstance::nic_clock
+  $nic_clock_config_extended = $platform::ptpinstance::nic_clock::nic_clock_config_extended
 
   if $monitoring_enabled and $monitoring_config['global_parameters']['devices'] {
     $gpsd_monitored_devices = split($monitoring_config['global_parameters']['devices'], ' ')
@@ -569,7 +571,7 @@ class platform::ptpinstance (
 
     # Create monitoring configuration
     class { 'platform::ptpinstance::monitoring':
-      ptp_instances => $config,
+      ptp_instances => $config + $nic_clock_config_extended,
     }
   }
 
