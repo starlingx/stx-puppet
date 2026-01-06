@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024 Wind River Systems, Inc.
+# Copyright (c) 2021-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -36,6 +36,7 @@ fullname = os.path.join(root_logs, 'k8s_update.log')
 fileHandler = logging.FileHandler(fullname)
 fileHandler.setFormatter(log_format)
 LOG.addHandler(fileHandler)
+os.chmod(fullname, 0o640)
 LOG.debug('Starting k8s update process.')
 
 post_k8s_tasks = []
@@ -53,8 +54,8 @@ KUBE_APISERVER_VOLUMES_TAG = 'platform::kubernetes::kube_apiserver_volumes::para
 CONTROLLER_MANAGER_VOLUMES_TAG = 'platform::kubernetes::kube_controller_manager_volumes::params::'
 SCHEDULER_VOLUMES_TAG = 'platform::kubernetes::kube_scheduler_volumes::params::'
 
-APISERVER_API_ENDPOINT = 'https://localhost:6443'
-APISERVER_READYZ_ENDPOINT = 'https://localhost:6443/readyz'
+KUBE_APISERVER_PORT = 16443
+
 SCHEDULER_HEALTHZ_ENDPOINT = "https://127.0.0.1:10259/healthz"
 CONTROLLER_MANAGER_HEALTHZ_ENDPOINT = "https://127.0.0.1:10257/healthz"
 KUBELET_HEALTHZ_ENDPOINT = "http://localhost:10248/healthz"
@@ -63,14 +64,12 @@ RECOVERY_TIMEOUT = 5
 RECOVERY_TRIES = 30
 RECOVERY_TRY_SLEEP = 5
 
-kube_operator = kubernetes.KubeOperator(host=APISERVER_API_ENDPOINT)
-
-
-INITCONFIG_TEMPLATE = '''---
+INITCONFIG_BASE_TEMPLATE = '''---
 apiVersion: kubeadm.k8s.io/v1beta3
 kind: InitConfiguration
 localAPIEndpoint:
-  advertiseAddress: {}'''
+  advertiseAddress: {}
+  bindPort: %s'''
 
 
 class TimeoutException(Exception):
@@ -128,6 +127,10 @@ def _search_string_on_file(file_path, word):
     return False
 
 
+def get_kubeadm_initconfig_template():
+    return INITCONFIG_BASE_TEMPLATE % str(KUBE_APISERVER_PORT)
+
+
 def update_k8s_control_plane_components(config_filename, cluster_host_addr,
                                         target_component='apiserver'):
     """The function updates a k8s control-plane component."""
@@ -144,7 +147,7 @@ def update_k8s_control_plane_components(config_filename, cluster_host_addr,
     # Append the InitConfiguration to specify the local API endpoint
     try:
         with open(tmp_config_filename, 'a') as file:
-            file.write(INITCONFIG_TEMPLATE.format(cluster_host_addr))
+            file.write(get_kubeadm_initconfig_template().format(cluster_host_addr))
     except Exception as e:
         LOG.error('Problem initializing kubeadm config file with '
                   'InitConfiguration: %s', e)
@@ -220,6 +223,18 @@ def update_k8s_kubelet(config_filename, error_log_file):
         return 1
 
 
+def get_api_server_endpoint():
+    return 'https://localhost:%s' % str(KUBE_APISERVER_PORT)
+
+
+def get_api_server_readyz_endpoint():
+    return get_api_server_endpoint() + '/readyz'
+
+
+def get_kube_operator():
+    return kubernetes.KubeOperator(host=get_api_server_endpoint())
+
+
 def patch_kubeadmin_configmap(new_data, is_controller_active):
     """The function patch the kubeadm-config configmap on the active controller.
     Return:
@@ -236,7 +251,9 @@ def patch_kubeadmin_configmap(new_data, is_controller_active):
         newyaml.dump(new_data, outstream)
         configmap_data = {'data': {'ClusterConfiguration': outstream.getvalue()}}
 
-        kube_operator.kube_patch_config_map(configmap_name, 'kube-system', configmap_data)
+        get_kube_operator().kube_patch_config_map(configmap_name,
+                                                  'kube-system',
+                                                  configmap_data)
         LOG.debug('Successfully patched kubeadm configmap.')
     except Exception as e:
         LOG.error("Unable to patch kubeadm config_map: %s", e)
@@ -367,7 +384,7 @@ def k8s_health_check(timeout, tries, try_sleep, healthz_endpoint):
     _tries = tries
 
     valid_endpoints = {
-        APISERVER_READYZ_ENDPOINT: 'apiserver',
+        get_api_server_readyz_endpoint(): 'apiserver',
         SCHEDULER_HEALTHZ_ENDPOINT: 'scheduler',
         CONTROLLER_MANAGER_HEALTHZ_ENDPOINT: 'controller_manager',
         KUBELET_HEALTHZ_ENDPOINT: 'kubelet'}
@@ -469,7 +486,7 @@ def restore_k8s_control_plane_config(cluster_config_bak_file,
     # Wait for kube-apiserver to be up before executing next steps
     k8s_apiserver_healthy = k8s_health_check(
         timeout=timeout, try_sleep=try_sleep, tries=tries,
-        healthz_endpoint=APISERVER_READYZ_ENDPOINT)
+        healthz_endpoint=get_api_server_readyz_endpoint())
     if not k8s_apiserver_healthy:
         return 2
 
@@ -773,7 +790,7 @@ def get_k8s_version(timeout=None, tries=None, try_sleep=None):
     tries = RECOVERY_TRIES if tries is None else tries
     try_sleep = RECOVERY_TRY_SLEEP if try_sleep is None else try_sleep
     try:
-        return kube_operator.kube_get_kubernetes_version()
+        return get_kube_operator().kube_get_kubernetes_version()
     except Exception:
         _tries = tries
         LOG.debug('Retrying to get k8s version ...')
@@ -782,7 +799,7 @@ def get_k8s_version(timeout=None, tries=None, try_sleep=None):
             try:
                 with time_limit(timeout):
                     try:
-                        return kube_operator.kube_get_kubernetes_version()
+                        return get_kube_operator().kube_get_kubernetes_version()
                     except Exception:
                         pass
             except TimeoutException:
@@ -805,7 +822,7 @@ def get_k8s_configmap(configmap, namespace='kube-system',
     tries = RECOVERY_TRIES if tries is None else tries
     try_sleep = RECOVERY_TRY_SLEEP if try_sleep is None else try_sleep
     try:
-        return kube_operator.kube_read_config_map(
+        return get_kube_operator().kube_read_config_map(
             name=configmap, namespace=namespace)
     except Exception:
         _tries = tries
@@ -815,8 +832,9 @@ def get_k8s_configmap(configmap, namespace='kube-system',
             try:
                 with time_limit(timeout):
                     try:
-                        k8s_configmap = kube_operator.kube_read_config_map(
-                            name=configmap, namespace=namespace)
+                        k8s_configmap = \
+                            get_kube_operator().kube_read_config_map(
+                                name=configmap, namespace=namespace)
                         return k8s_configmap
                     except Exception:
                         pass
@@ -857,7 +875,7 @@ def update_kubelet_configmap(latest_config, is_controller_active):
         current_kubelet_configmap = get_k8s_configmap(
             configmap_name, namespace=namespace)
         if current_kubelet_configmap:
-            kube_operator.kube_delete_config_map(
+            get_kube_operator().kube_delete_config_map(
                 name=configmap_name, namespace=namespace)
     except Exception as e:
         LOG.error('Deleting current kubelet confimap: %s', e)
@@ -865,7 +883,7 @@ def update_kubelet_configmap(latest_config, is_controller_active):
 
     # create new kubelet configmap from latest applied config
     try:
-        kube_operator.kube_create_config_map_from_file(
+        get_kube_operator().kube_create_config_map_from_file(
             namespace, configmap_name, latest_config,
             data_section_name='kubelet')
     except Exception as e:
@@ -1022,6 +1040,72 @@ def initialize_k8s_configmaps(
     except Exception as exc:
         LOG.error('Creating k8s configmaps initialization flag: %s' % (exc))
         raise
+
+
+def update_extra_args(config, name, value, list_of_dict=False):
+    """Update ConfigMap extraArgs data structure 'name' and 'value'
+     for a given key value pair. This takes into account different data
+     structure format of dictionary vs list of dictionary format.
+
+    The original dictionary format:
+    config['extraArgs] = {k: v foreach k, v}
+
+    The new list of dictionary format:
+    config['extraArgs] = [{'name': k, 'value': v} foreach k, v]
+
+    Args:
+        config: is a dictionary containing the configurations for either the
+        apiserver, or controller manager, or scheduler.
+        name: is a string used to identify an existing value to update, or
+        to append in case of a new value in 'extraArgs'
+        value: is a string that will be updated or appended in 'extraArgs'
+        list_of_dict: is a boolean indicating whether the data structure has
+        changed in version v1beta4
+    """
+    if list_of_dict:
+        for item in config['extraArgs']:
+            if item.get('name') == name:
+                item['value'] = value
+                break
+        else:
+            config['extraArgs'].append({'name': name, 'value': value})
+    else:
+        config['extraArgs'][name] = value
+
+
+def filter_extra_args(config, service_param, list_of_dict=False):
+    """This routine removes all parameters in 'extraArgs' not present in
+    service-parameter. This updates ConfigMap extraArgs data structure with
+    a filtered list of key-value pairs contained in service_parameter
+    dictionary. This takes into account different data structure format of
+    dictionary vs list of dictionary format.
+
+    The original dictionary format:
+    config['extraArgs] = {k: v foreach k, v}
+
+    The new list of dictionary format:
+    config['extraArgs] = [{'name': k, 'value': v}, foreach k, v]
+
+    Args:
+        config: is a dictionary containing the configurations for either the
+        apiserver, or controller manager, or scheduler.
+        service_param: is a dictionary contains the service-parameters of
+        either the apiserver, or controller manager, or scheduler.
+        list_of_dict: is a boolean indicating whether the data structure has
+        changed in version v1beta4
+    """
+    extra_args = config.get('extraArgs')
+    if not extra_args:
+        return
+    service_param_set = set(service_param)
+    if list_of_dict:
+        config['extraArgs'] = list(filter(
+            lambda item: item.get('name') in service_param_set, extra_args
+        ))
+    else:
+        config['extraArgs'] = {
+            k: v for k, v in extra_args.items() if k in service_param_set
+        }
 
 
 def main():
@@ -1211,7 +1295,7 @@ def main():
     # and kube-apiserver is down.
     is_k8s_apiserver_up = k8s_health_check(
         timeout=timeout, try_sleep=try_sleep, tries=tries,
-        healthz_endpoint=APISERVER_READYZ_ENDPOINT)
+        healthz_endpoint=get_api_server_readyz_endpoint())
 
     # K8s control-plane backup config files
     if not os.path.isfile(kubeadm_cm_bak_file) or\
@@ -1300,6 +1384,19 @@ def main():
     if 'try_sleep' in service_params['config'].keys():
         try_sleep = int(service_params['config']['try_sleep'])
 
+    # In K8S 1.31, kubeadm introduces the new v1beta4 version of its configuration
+    # file format. As a result, the format of extraArgs changes from a dictionary to
+    # a list of dictionaries. We need to support both formats in the ConfigMap to
+    # ensure compatibility with K8S versions both below and above 1.31.
+    k8s_version = get_k8s_version()
+    if not k8s_version:
+        LOG.error('Error in getting K8S version.')
+        return 3
+    k8s_version = '.'.join(k8s_version.replace('v', '').split('.')[:2])
+    list_of_dict = False
+    if LooseVersion(k8s_version) >= LooseVersion("1.31"):
+        list_of_dict = True
+
     # kube-apiserver section ------------------------------------------------------
     for param, value in service_params['apiServer'].items():
         if param in apiserver_schema['root'].keys():
@@ -1308,18 +1405,13 @@ def main():
             # By default all not known params will be placed in
             # section 'extraArgs'
             if 'extraArgs' not in cluster_cfg['apiServer'].keys():
-                cluster_cfg['apiServer']['extraArgs'] = {}
+                cluster_cfg['apiServer']['extraArgs'] = [] if list_of_dict else {}
             if param == 'enable-admission-plugins':
                 value = _validate_admission_plugins(value)
-                cluster_cfg['apiServer']['extraArgs'][param] = value
-            else:
-                cluster_cfg['apiServer']['extraArgs'][param] = value
-
-    # remove all parameters in 'extraArgs' not present in service-parameter.
-    if 'extraArgs' in cluster_cfg['apiServer'].keys():
-        for param in list(cluster_cfg['apiServer']['extraArgs'].keys()):
-            if param not in service_params['apiServer']:
-                cluster_cfg['apiServer']['extraArgs'].pop(param)
+            update_extra_args(cluster_cfg['apiServer'], param, value, list_of_dict)
+    # Remove all parameters in 'extraArgs' not present in service-parameter, accounting
+    # for ConfigMap data structure change with v1beta4.
+    filter_extra_args(cluster_cfg['apiServer'], service_params['apiServer'], list_of_dict)
 
     # apiserver_volumes section
     if cluster_cfg['apiServer'] and 'extraVolumes' in cluster_cfg['apiServer']:
@@ -1341,14 +1433,15 @@ def main():
             # By default all not known params will be place in
             # section 'extraArgs'
             if 'extraArgs' not in cluster_cfg['controllerManager'].keys():
-                cluster_cfg['controllerManager']['extraArgs'] = {}
-            cluster_cfg['controllerManager']['extraArgs'][param] = value
-
-    # remove all parameters in 'extraArgs' not present in service-parameter.
-    if 'extraArgs' in cluster_cfg['controllerManager'].keys():
-        for param in list(cluster_cfg['controllerManager']['extraArgs'].keys()):
-            if param not in service_params['controllerManager']:
-                cluster_cfg['controllerManager']['extraArgs'].pop(param)
+                cluster_cfg['controllerManager']['extraArgs'] = [] if list_of_dict else {}
+            update_extra_args(cluster_cfg['controllerManager'], param, value, list_of_dict)
+    # Remove all parameters in 'extraArgs' not present in service-parameter, accounting
+    # for ConfigMap data structure change with v1beta4
+    filter_extra_args(
+        cluster_cfg['controllerManager'],
+        service_params['controllerManager'],
+        list_of_dict
+    )
 
     # controller_manager_volumes section
     if cluster_cfg['controllerManager'] and 'extraVolumes' in cluster_cfg['controllerManager']:
@@ -1370,14 +1463,11 @@ def main():
             # By default all not known params will be place in
             # section 'extraArgs'
             if 'extraArgs' not in cluster_cfg['scheduler'].keys():
-                cluster_cfg['scheduler']['extraArgs'] = {}
-            cluster_cfg['scheduler']['extraArgs'][param] = value
-
-    # remove all parameters not present in service-parameter.
-    if 'extraArgs' in cluster_cfg['scheduler'].keys():
-        for param in list(cluster_cfg['scheduler']['extraArgs'].keys()):
-            if param not in service_params['scheduler']:
-                cluster_cfg['scheduler']['extraArgs'].pop(param)
+                cluster_cfg['scheduler']['extraArgs'] = [] if list_of_dict else {}
+            update_extra_args(cluster_cfg['scheduler'], param, value, list_of_dict)
+    # Remove all parameters in 'extraArgs' not present in service-parameter, accounting
+    # for ConfigMap data structure change with v1beta4
+    filter_extra_args(cluster_cfg['scheduler'], service_params['scheduler'], list_of_dict)
 
     # scheduler_volumes section
     if cluster_cfg['scheduler'] and 'extraVolumes' in cluster_cfg['scheduler']:
@@ -1424,7 +1514,7 @@ def main():
     # Wait for kube-apiserver to be up before executing next steps
     is_k8s_apiserver_healthy = k8s_health_check(
         timeout=timeout, try_sleep=try_sleep, tries=tries,
-        healthz_endpoint=APISERVER_READYZ_ENDPOINT)
+        healthz_endpoint=get_api_server_readyz_endpoint())
 
     # Check kube-apiserver health, then backup and restore
     if automatic_recovery:
@@ -1540,7 +1630,7 @@ def main():
     LOG.debug("Check all k8s control-plane components are up and running.")
     is_k8s_apiserver_healthy = k8s_health_check(
         timeout=timeout, try_sleep=try_sleep, tries=tries,
-        healthz_endpoint=APISERVER_READYZ_ENDPOINT)
+        healthz_endpoint=get_api_server_readyz_endpoint())
     is_k8s_controller_manager_healthy = k8s_health_check(
         timeout=timeout, try_sleep=try_sleep, tries=tries,
         healthz_endpoint=CONTROLLER_MANAGER_HEALTHZ_ENDPOINT)

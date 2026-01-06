@@ -12,6 +12,23 @@ class platform::lldp
   $hostname = $::platform::params::hostname
   $system = $::platform::params::system_name
   $version = $::platform::params::software_version
+  $lldpd_override_dir = '/etc/systemd/system/lldpd.service.d'
+
+
+  # override the configuration of
+  file { $lldpd_override_dir:
+    ensure => 'directory',
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0755',
+  }
+  -> file { "${lldpd_override_dir}/lldp-override.conf":
+    ensure  => 'present',
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+    content => template('platform/lldp-override.conf.erb'),
+  }
 
   file { '/etc/lldpd.conf':
       ensure  => 'present',

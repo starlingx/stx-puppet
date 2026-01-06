@@ -1,7 +1,7 @@
 #
 # Files in this package are licensed under Apache; see LICENSE file.
 #
-# Copyright (c) 2013-2022 Wind River Systems, Inc.
+# Copyright (c) 2013-2022, 2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -47,6 +47,7 @@ class dcmanager (
   $log_levels                  = 'keystoneauth=ERROR,eventlet.wsgi.server=WARN',
   $workers                     = 1,
   $orch_workers                = 1,
+  $orch_worker_workers         = 2,
   $state_workers               = 4,
   $audit_workers               = 1,
   $audit_worker_workers        = 4,
@@ -113,6 +114,7 @@ class dcmanager (
   dcmanager_config {
     'DEFAULT/workers':                   value => $workers;
     'DEFAULT/orch_workers':              value => $orch_workers;
+    'DEFAULT/orch_worker_workers':       value => $orch_worker_workers;
     'DEFAULT/state_workers':             value => $state_workers;
     'DEFAULT/audit_workers':             value => $audit_workers;
     'DEFAULT/audit_worker_workers':      value => $audit_worker_workers;

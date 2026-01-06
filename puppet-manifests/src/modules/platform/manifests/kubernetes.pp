@@ -299,14 +299,6 @@ class platform::kubernetes::kubeadm {
   $k8s_memory_mgr_policy = $::platform::kubernetes::params::k8s_memory_mgr_policy
   $k8s_reserved_memory = $::platform::kubernetes::params::k8s_reserved_memory
 
-
-  $iptables_file = @("IPTABLE"/L)
-    net.bridge.bridge-nf-call-ip6tables = 1
-    net.bridge.bridge-nf-call-iptables = 1
-    net.ipv4.ip_forward = 1
-    net.ipv6.conf.all.forwarding = 1
-    | IPTABLE
-
   # Configure kubelet cpumanager options
   $opts_sys_res = join(['--system-reserved=',
                         "memory=${k8s_reserved_mem}Mi"])
@@ -380,19 +372,7 @@ class platform::kubernetes::kubeadm {
     command => 'rm -f /var/lib/kubelet/memory_manager_state || true',
   }
 
-  # Update iptables config. This is required based on:
-  # https://kubernetes.io/docs/tasks/tools/install-kubeadm
-  # This probably belongs somewhere else - initscripts package?
-  file { '/etc/sysctl.d/k8s.conf':
-    ensure  => file,
-    content => $iptables_file,
-    owner   => 'root',
-    group   => 'root',
-    mode    => '0644',
-  }
-  -> exec { 'update kernel parameters for iptables':
-    command => 'sysctl --system',
-  }
+  class { 'platform::sysctl::k8s::config_update': }
 
   # Create manifests directory required by kubelet
   -> file { '/etc/kubernetes/manifests':
@@ -433,6 +413,187 @@ class platform::kubernetes::set_crt_permissions {
     command => 'find /etc/kubernetes/pki -type f -name "*.crt" -exec chmod 600 {} +',
     onlyif  => 'find /etc/kubernetes/pki -type f -name "*.crt" ! -perm 600 | grep .',
     path    => ['/bin', '/usr/bin'],
+  }
+}
+
+class platform::kubernetes::haproxy {
+  include ::platform::params
+  include ::platform::network::oam::params
+  include ::platform::network::oam::ipv4::params
+  include ::platform::network::oam::ipv6::params
+  include ::platform::network::mgmt::params
+  include ::platform::network::mgmt::ipv4::params
+  include ::platform::network::mgmt::ipv6::params
+  include ::platform::network::admin::params
+  include ::platform::network::admin::ipv4::params
+  include ::platform::network::admin::ipv6::params
+  include ::platform::network::cluster_host::params
+  include ::platform::network::cluster_host::ipv4::params
+  include ::platform::network::cluster_host::ipv6::params
+
+  # FLOATING
+  $ipv4_oam_floating_ip = $::platform::network::oam::ipv4::params::controller_address
+  $ipv6_oam_floating_ip = $::platform::network::oam::ipv6::params::controller_address
+  $ipv4_mgmt_floating_ip = $::platform::network::mgmt::ipv4::params::controller_address
+  $ipv6_mgmt_floating_ip = $::platform::network::mgmt::ipv6::params::controller_address
+  $ipv4_admin_floating_ip = $::platform::network::admin::ipv4::params::controller_address
+  $ipv6_admin_floating_ip = $::platform::network::admin::ipv6::params::controller_address
+  $ipv4_cluster_floating_ip = $::platform::network::cluster_host::ipv4::params::controller_address
+  $ipv6_cluster_floating_ip = $::platform::network::cluster_host::ipv6::params::controller_address
+  $primary_cluster_floating_ip = $::platform::network::cluster_host::params::controller_address
+
+  # HOST
+  $controller_0_hostname = $::platform::params::controller_0_hostname
+  $controller_1_hostname = $::platform::params::controller_1_hostname
+
+  case $::hostname {
+    $controller_0_hostname: {
+      $ipv4_oam_host_ip = $::platform::network::oam::ipv4::params::controller0_address
+      $ipv6_oam_host_ip = $::platform::network::oam::ipv6::params::controller0_address
+      $ipv4_mgmt_host_ip = $::platform::network::mgmt::ipv4::params::controller0_address
+      $ipv6_mgmt_host_ip = $::platform::network::mgmt::ipv6::params::controller0_address
+      $ipv4_admin_host_ip = $::platform::network::admin::ipv4::params::controller0_address
+      $ipv6_admin_host_ip = $::platform::network::admin::ipv6::params::controller0_address
+      $ipv4_cluster_host_ip = $::platform::network::cluster_host::ipv4::params::controller0_address
+      $ipv6_cluster_host_ip = $::platform::network::cluster_host::ipv6::params::controller0_address
+      if $::platform::params::system_mode == 'simplex' {
+        $primary_cluster_host_ip = $::platform::network::cluster_host::params::controller_address
+      } else {
+        $primary_cluster_host_ip = $::platform::network::cluster_host::params::controller0_address
+      }
+    }
+    $controller_1_hostname: {
+      $ipv4_oam_host_ip = $::platform::network::oam::ipv4::params::controller1_address
+      $ipv6_oam_host_ip = $::platform::network::oam::ipv6::params::controller1_address
+      $ipv4_mgmt_host_ip = $::platform::network::mgmt::ipv4::params::controller1_address
+      $ipv6_mgmt_host_ip = $::platform::network::mgmt::ipv6::params::controller1_address
+      $ipv4_admin_host_ip = $::platform::network::admin::ipv4::params::controller1_address
+      $ipv6_admin_host_ip = $::platform::network::admin::ipv6::params::controller1_address
+      $ipv4_cluster_host_ip = $::platform::network::cluster_host::ipv4::params::controller1_address
+      $ipv6_cluster_host_ip = $::platform::network::cluster_host::ipv6::params::controller1_address
+      $primary_cluster_host_ip = $::platform::network::cluster_host::params::controller1_address
+    }
+    default: {
+      fail("Hostname must be either ${controller_0_hostname} or ${controller_1_hostname}")
+    }
+  }
+
+  $ca_crt = '/etc/kubernetes/pki/ca.crt'
+  $client_crt = '/etc/kubernetes/pki/haproxy_client.pem'
+  $server_crt = '/etc/ssl/private/server-cert.pem'
+
+  # SSL Bridge (OAM -> HAproxy)
+  # For clients from OAM, we would have one frontend and two backends. The default way
+  # to authenticate is tokens, but client certificates are set as optional and verified
+  # in the frontend.
+  # The request is then:
+  # - Sent to the default backend (tokens)
+  # - Sent to the alternative backend (client certificates with expected subject)
+  # - Denied (invalid client certificate or invalid subject fields)
+
+  $haproxy_port = '6443'
+  $ssl_server_option = "ssl crt ${server_crt} verify optional ca-file ${ca_crt}"
+  $ssl_client_option_auth_token = "check-ssl ssl verify required ca-file ${ca_crt}"
+  $ssl_client_option_auth_crt = "check-ssl ssl verify required crt ${client_crt} ca-file ${ca_crt}"
+
+  # Option to deny client certificates without the expected subject:
+  # O = kubeadm:cluster-admins, CN = kubernetes-admin
+  $acl_k8s_subject_cn = 'k8s_admin_subject_CN ssl_c_s_dn(CN) -m str kubernetes-admin'
+  $acl_k8s_subject_o = 'k8s_admin_subject_O ssl_c_s_dn(O) -m str kubeadm:cluster-admins'
+  $http_req_deny_subject_cn = 'deny if { ssl_fc_has_crt } !k8s_admin_subject_CN'
+  $http_req_deny_subject_o = 'deny if { ssl_fc_has_crt } !k8s_admin_subject_O'
+
+  $proto_header = 'X-Forwarded-Proto https'
+  $hsts_option = 'Strict-Transport-Security max-age=63072000;\ includeSubDomains'
+  $http_frontend_options = {
+    'use_backend'     => 'k8s-backend-client-crt if { ssl_fc_has_crt }',
+    'default_backend' => 'k8s-backend',
+    'acl'             => [$acl_k8s_subject_cn,$acl_k8s_subject_o],
+    'http-request'    => ["add-header ${proto_header}",$http_req_deny_subject_cn,$http_req_deny_subject_o],
+    'http-response'   => "add-header ${hsts_option}",
+  }
+
+  $oam_ips = [
+    $ipv4_oam_floating_ip,
+    $ipv6_oam_floating_ip,
+    $ipv4_oam_host_ip,
+    $ipv6_oam_host_ip,
+  ].filter |$value| { $value != undef }.unique
+
+  $oam_ips_serving_rest_api_certificate = $oam_ips.reduce( {} ) |Hash $memo, $item| {
+    $memo + {"${item}:${haproxy_port}" => $ssl_server_option}
+  }
+
+  haproxy::frontend { 'k8s-frontend':
+    collect_exported => false,
+    name             => 'k8s-frontend',
+    bind             => $oam_ips_serving_rest_api_certificate,
+    options          => $http_frontend_options,
+  }
+
+  # In OAM, we need two backends: one for requests with tokens (default) and one for
+  # requests with client certificates (only admin credentials)
+  haproxy::backend { 'k8s-backend':
+    collect_exported => false,
+    name             => 'k8s-backend',
+    options          => {
+      'server' => "s-k8s ${primary_cluster_floating_ip}:${haproxy_port} ${ssl_client_option_auth_token}",
+    },
+  }
+
+  haproxy::backend { 'k8s-backend-client-crt':
+    collect_exported => false,
+    name             => 'k8s-backend-client-crt',
+    options          => {
+      'server' => "s-k8s ${primary_cluster_floating_ip}:${haproxy_port} ${ssl_client_option_auth_crt}",
+    },
+  }
+
+  # SSL Passtrough (Cluster Host/Management -> kube-apiserver)
+  $kube_apiserver_port = '16443'
+
+  $tcp_ssl_hello = 'content accept if { req_ssl_hello_type 1 }'
+  $tcp_req_delay = 'inspect-delay 5s'
+  $tcp_frontend_options = {
+    'mode'            => 'tcp',
+    'option'          => 'tcplog',
+    'default_backend' => 'k8s-backend-internal',
+    'tcp-request'     => [$tcp_ssl_hello,$tcp_req_delay],
+  }
+
+  $internal_ips = [
+    $ipv4_cluster_floating_ip,
+    $ipv6_cluster_floating_ip,
+    $ipv4_cluster_host_ip,
+    $ipv6_cluster_host_ip,
+    $ipv4_mgmt_floating_ip,
+    $ipv6_mgmt_floating_ip,
+    $ipv4_mgmt_host_ip,
+    $ipv6_mgmt_host_ip,
+    $ipv4_admin_floating_ip,
+    $ipv6_admin_floating_ip,
+    $ipv4_admin_host_ip,
+    $ipv6_admin_host_ip,
+  ].filter |$value| { $value != undef }.unique
+
+  $internal_ips_ssl_passtrough = $internal_ips.reduce( {} ) |Hash $memo, $item| {
+    $memo + {"${item}:${haproxy_port}" => ' '}
+  }
+
+  haproxy::frontend { 'k8s-frontend-internal':
+    collect_exported => false,
+    name             => 'k8s-frontend-internal',
+    bind             => $internal_ips_ssl_passtrough,
+    options          => $tcp_frontend_options,
+  }
+
+  haproxy::backend { 'k8s-backend-internal':
+    collect_exported => false,
+    name             => 'k8s-backend-internal',
+    options          => {
+      'mode'   => 'tcp',
+      'server' => "s-k8s-internal ${primary_cluster_host_ip}:${kube_apiserver_port} check",
+    },
   }
 }
 
@@ -565,6 +726,21 @@ class platform::kubernetes::master::init
       onlyif  => "test '${software_version}' == '22.12'",
     }
 
+    -> exec { 'Pin image kube-apiserver':
+      command   => "/usr/bin/ctr -n k8s.io image label registry.local:9001/registry.k8s.io/kube-apiserver:${version} io.cri-containerd.pinned=pinned || true", # lint:ignore:140chars
+      logoutput => true,
+    }
+
+    -> exec { 'Pin image kube-scheduler':
+      command   => "/usr/bin/ctr -n k8s.io image label registry.local:9001/registry.k8s.io/kube-scheduler:${version} io.cri-containerd.pinned=pinned || true", # lint:ignore:140chars
+      logoutput => true,
+    }
+
+    -> exec { 'Pin image kube-controller-manager':
+      command   => "/usr/bin/ctr -n k8s.io image label registry.local:9001/registry.k8s.io/kube-controller-manager:${version} io.cri-containerd.pinned=pinned || true", # lint:ignore:140chars
+      logoutput => true,
+    }
+
     # Initial kubernetes config done on node
     -> file { '/etc/platform/.initial_k8s_config_complete':
       ensure => present,
@@ -639,6 +815,8 @@ class platform::kubernetes::master
   contain ::platform::kubernetes::coredns
   contain ::platform::kubernetes::firewall
   contain ::platform::kubernetes::configuration
+  contain ::platform::haproxy::k8s_client_certificate
+  contain ::platform::kubernetes::haproxy
 
   Class['::platform::sysctl::controller::reserve_ports'] -> Class[$name]
   Class['::platform::k8splatform'] -> Class[$name]
@@ -654,6 +832,8 @@ class platform::kubernetes::master
   -> Class['::platform::kubernetes::master::init']
   -> Class['::platform::kubernetes::coredns']
   -> Class['::platform::kubernetes::firewall']
+  -> Class['::platform::haproxy::k8s_client_certificate']
+  -> Class['::platform::kubernetes::haproxy']
 }
 
 class platform::kubernetes::worker::init
@@ -893,7 +1073,11 @@ class platform::kubernetes::firewall
 
   include ::platform::params
   include ::platform::network::oam::params
+  include ::platform::network::oam::ipv4::params
+  include ::platform::network::oam::ipv6::params
   include ::platform::network::mgmt::params
+  include ::platform::network::mgmt::ipv4::params
+  include ::platform::network::mgmt::ipv6::params
   include ::platform::docker::params
 
   # add http_proxy and https_proxy port to k8s firewall
@@ -925,146 +1109,59 @@ class platform::kubernetes::firewall
   }
 
   $system_mode = $::platform::params::system_mode
-  $oam_float_ip = $::platform::network::oam::params::controller_address
-  $oam_interface = $::platform::network::oam::params::interface_name
-  $mgmt_subnet = $::platform::network::mgmt::params::subnet_network
-  $mgmt_prefixlen = $::platform::network::mgmt::params::subnet_prefixlen
-
-  $s_mgmt_subnet = "${mgmt_subnet}/${mgmt_prefixlen}"
-  $d_mgmt_subnet = "! ${s_mgmt_subnet}"
 
   if $system_mode != 'simplex' {
-    platform::firewall::rule { 'kubernetes-nat':
-      service_name => 'kubernetes',
-      table        => $table,
-      chain        => $chain,
-      proto        => $transport,
-      jump         => $jump,
-      host         => $s_mgmt_subnet,
-      destination  => $d_mgmt_subnet,
-      outiface     => $oam_interface,
-      tosource     => $oam_float_ip,
+
+    $oam_interface = $::platform::network::oam::params::interface_name
+
+    if ($::platform::network::oam::ipv4::params::subnet_version == $::platform::params::ipv4)
+      and ($::platform::network::mgmt::ipv4::params::subnet_version == $::platform::params::ipv4) {
+
+      $oam_float_ip4 = $::platform::network::oam::ipv4::params::controller_address
+      $mgmt_subnet4 = $::platform::network::mgmt::ipv4::params::subnet_network
+      $mgmt_prefixlen4 = $::platform::network::mgmt::ipv4::params::subnet_prefixlen
+
+      $s_mgmt_subnet4 = "${mgmt_subnet4}/${mgmt_prefixlen4}"
+      $d_mgmt_subnet4 = "! ${s_mgmt_subnet4}"
+
+      platform::firewall::rule { 'kubernetes-nat4':
+        service_name => 'kubernetes',
+        table        => $table,
+        chain        => $chain,
+        proto        => $transport,
+        jump         => $jump,
+        host         => $s_mgmt_subnet4,
+        destination  => $d_mgmt_subnet4,
+        outiface     => $oam_interface,
+        tosource     => $oam_float_ip4,
+        l3proto      => $::platform::params::ipv4
+      }
+    }
+
+    if ($::platform::network::oam::ipv6::params::subnet_version == $::platform::params::ipv6)
+      and ($::platform::network::mgmt::ipv6::params::subnet_version == $::platform::params::ipv6) {
+
+      $oam_float_ip6 = $::platform::network::oam::ipv6::params::controller_address
+      $mgmt_subnet6 = $::platform::network::mgmt::ipv6::params::subnet_network
+      $mgmt_prefixlen6 = $::platform::network::mgmt::ipv6::params::subnet_prefixlen
+
+      $s_mgmt_subnet6 = "${mgmt_subnet6}/${mgmt_prefixlen6}"
+      $d_mgmt_subnet6 = "! ${s_mgmt_subnet6}"
+
+      platform::firewall::rule { 'kubernetes-nat6':
+        service_name => 'kubernetes',
+        table        => $table,
+        chain        => $chain,
+        proto        => $transport,
+        jump         => $jump,
+        host         => $s_mgmt_subnet6,
+        destination  => $d_mgmt_subnet6,
+        outiface     => $oam_interface,
+        tosource     => $oam_float_ip6,
+        l3proto      => $::platform::params::ipv6
+      }
     }
   }
-}
-
-class platform::kubernetes::pre_pull_control_plane_images
-  inherits ::platform::kubernetes::params {
-  include ::platform::dockerdistribution::params
-
-  $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
-  $creds_command = '$(cat /tmp/puppet/registry_credentials)'
-
-  $resource_title = 'pre pull images'
-  $command = "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${kubeadm_version} | xargs -i crictl pull --creds ${creds_command} registry.local:9001/{}" # lint:ignore:140chars
-
-  # Disable garbage collection so that we don't accidentally lose any of the images we're about to download.
-  exec { 'disable image garbage collection':
-    command   => 'bash /usr/share/puppet/modules/platform/files/disable_image_gc.sh',
-  }
-
-  -> platform::kubernetes::pull_images_from_registry { 'pull images from private registry':
-    resource_title      => $resource_title,
-    command             => $command,
-    before_exec         => undef,
-    local_registry_auth => $local_registry_auth,
-  }
-}
-
-class platform::kubernetes::upgrade_first_control_plane
-  inherits ::platform::kubernetes::params {
-
-  include ::platform::params
-
-  # Update kubeadm symlink if needed.
-  require platform::kubernetes::symlinks
-
-  # The kubeadm command below doesn't have the credentials to download the
-  # images from local registry when they are not present in the cache, so we
-  # assure here that the images are downloaded.
-  require platform::kubernetes::pre_pull_control_plane_images
-
-  # The --allow-*-upgrades options allow us to upgrade to any k8s release if necessary
-  # The -v6 gives verbose debug output includes health, GET response, delay.
-  # Since we hit default 300 second timeout under load (i.e., upgrade 250 subclouds
-  # in parallel), specify larger timeout.
-  platform::kubernetes::kube_command { 'upgrade first control plane':
-    command     => "kubeadm -v6 upgrade apply ${version} \
-                    --allow-experimental-upgrades --allow-release-candidate-upgrades -y",
-    logname     => 'kubeadm-upgrade-apply.log',
-    environment => 'KUBECONFIG=/etc/kubernetes/admin.conf',
-    timeout     => 210,
-  }
-  -> exec { 'purge all kubelet-config except most recent':
-      environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
-      command     => 'kubectl -n kube-system get configmaps -oname --sort-by=.metadata.creationTimestamp | grep -e kubelet-config | head -n -1 | xargs -r -i kubectl -n kube-system delete {}', # lint:ignore:140chars
-      logoutput   => true,
-  }
-  # Control plane upgrade from 1.28 to 1.29 changed the ownership and permission
-  # of kube config file. Setting the ownership & permission to the old state.
-  # This issue not present in the fresh install with K8s 1.29.
-  -> file { '/etc/kubernetes/admin.conf':
-    owner => 'root',
-    group => 'sys_protected',
-    mode  => '0640',
-  }
-
-  if $::platform::params::system_mode != 'simplex' {
-    # For duplex and multi-node system, restrict the coredns pod to control-plane nodes
-    exec { 'restrict coredns to control-plane nodes':
-      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch deployment coredns -p \'{"spec":{"template":{"spec":{"nodeSelector":{"node-role.kubernetes.io/control-plane":""}}}}}\'', # lint:ignore:140chars
-      logoutput => true,
-      require   => Exec['upgrade first control plane']
-    }
-    -> exec { 'Use anti-affinity for coredns pods':
-      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system patch deployment coredns -p \'{"spec":{"template":{"spec":{"affinity":{"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":{"matchExpressions":[{"key":"k8s-app","operator":"In","values":["kube-dns"]}]},"topologyKey":"kubernetes.io/hostname"}]}}}}}}\'', # lint:ignore:140chars
-      logoutput => true,
-    }
-  } else {
-    # For simplex system, 1 coredns is enough
-    exec { '1 coredns for simplex mode':
-      command   => 'kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system scale --replicas=1 deployment coredns',
-      logoutput => true,
-      require   => Exec['upgrade first control plane']
-    }
-  }
-}
-
-class platform::kubernetes::upgrade_control_plane
-  inherits ::platform::kubernetes::params {
-
-  # Update kubeadm symlink if needed.
-  require platform::kubernetes::symlinks
-
-  # The kubeadm command below doesn't have the credentials to download the
-  # images from local registry when they are not present in the cache, so we
-  # assure here that the images are downloaded.
-  require platform::kubernetes::pre_pull_control_plane_images
-
-  if versioncmp(regsubst($version, '^v', ''), '1.29.0') >= 0 {
-    $generate_conf = true
-  } else {
-    $generate_conf = false
-  }
-
-  # control plane is only upgraded on a controller
-  # The -v6 gives verbose debug output includes health, GET response, delay.
-  platform::kubernetes::kube_command { 'upgrade_control_plane':
-    command     => 'kubeadm -v6 upgrade node',
-    logname     => 'kubeadm-upgrade-node.log',
-    environment => 'KUBECONFIG=/etc/kubernetes/admin.conf:/etc/kubernetes/kubelet.conf',
-    timeout     => 210,
-  }
-
-  # K8s control plane upgrade from 1.28 to 1.29 generates the super-admin.conf
-  # only on the active controller, not on the standby controller. The following
-  # command creates the super-admin.conf on the standby controller.
-  -> exec { 'generate super-admin.conf during kubernetes upgrade':
-    command   => 'kubeadm init phase kubeconfig super-admin',
-    onlyif    => "test ${generate_conf} = true && test ! -f /etc/kubernetes/super-admin.conf",
-    logoutput => true,
-  }
-
 }
 
 # Define for unmasking and starting a service
@@ -1115,16 +1212,6 @@ class platform::kubernetes::mask_stop_kubelet {
   }
 }
 
-class platform::kubernetes::containerd_pause_image (
-  String $kubeadm_version = $::platform::kubernetes::params::kubeadm_version
-) {
-
-  exec { 'set containerd sandbox pause image':
-    command   => "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm config images list --kubernetes-version ${kubeadm_version} 2>/dev/null | grep pause: | xargs -I '{}' sed -i -e '/sandbox_image =/ s|= .*|= \"registry.local:9001/{}\"|' /etc/containerd/config.toml", # lint:ignore:140chars
-    logoutput => true
-  }
-}
-
 class platform::kubernetes::unmask_start_kubelet
   inherits ::platform::kubernetes::params {
 
@@ -1167,58 +1254,6 @@ class platform::kubernetes::unmask_start_kubelet
     service_name => 'isolcpu_plugin',
     onlyif       => 'systemctl is-enabled isolcpu_plugin | grep -wq masked',
   }
-}
-
-class platform::kubernetes::master::upgrade_kubelet
-  inherits ::platform::kubernetes::params {
-    include platform::kubernetes::containerd_pause_image
-    include platform::kubernetes::mask_stop_kubelet
-    include platform::kubernetes::unmask_start_kubelet
-
-
-
-    Class['platform::kubernetes::mask_stop_kubelet']
-    -> Class['platform::kubernetes::containerd_pause_image']
-    -> Class['platform::kubernetes::unmask_start_kubelet']
-}
-
-class platform::kubernetes::worker::upgrade_kubelet
-  inherits ::platform::kubernetes::params {
-  include ::platform::dockerdistribution::params
-  include platform::kubernetes::containerd_pause_image
-  include platform::kubernetes::mask_stop_kubelet
-  include platform::kubernetes::unmask_start_kubelet
-
-  # workers use kubelet.conf rather than admin.conf
-  $kubelet_version = $::platform::kubernetes::params::kubelet_version
-  $kubeadm_version = $::platform::kubernetes::params::kubeadm_version # lint:ignore:140chars
-  $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
-  $creds_command = '$(cat /tmp/puppet/registry_credentials)'
-
-  $resource_title = 'pull pause image'
-  # Use the upgrade version of kubeadm and kubelet to ensure we get the proper image versions.
-  $command = "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm --kubeconfig=/etc/kubernetes/kubelet.conf config images list --kubernetes-version ${kubelet_version} 2>/dev/null | grep pause: | xargs -i crictl pull --creds ${creds_command} registry.local:9001/{}" # lint:ignore:140chars
-  $before_exec = 'upgrade kubelet for worker'
-
-  platform::kubernetes::pull_images_from_registry { 'pull images from private registry':
-    resource_title      => $resource_title,
-    command             => $command,
-    before_exec         => $before_exec,
-    local_registry_auth => $local_registry_auth,
-  }
-
-  platform::kubernetes::kube_command { 'upgrade kubelet for worker':
-    # Use the upgrade version of kubeadm in case the kubeadm configmap format has changed.
-    # The -v6 gives verbose debug output includes health, GET response, delay.
-    command     => "/usr/local/kubernetes/${kubeadm_version}/stage1/usr/bin/kubeadm -v6 upgrade node",
-    logname     => 'kubeadm-upgrade-node.log',
-    environment => 'KUBECONFIG=/etc/kubernetes/kubelet.conf',
-    timeout     => 300,
-  }
-  -> Class['platform::kubernetes::mask_stop_kubelet']
-  -> Class['platform::kubernetes::containerd_pause_image']
-  -> Class['platform::kubernetes::unmask_start_kubelet']
-
 }
 
 class platform::kubernetes::master::change_apiserver_parameters (
@@ -1276,6 +1311,17 @@ class platform::kubernetes::master::change_apiserver_parameters (
       command => "python /usr/share/puppet/modules/platform/files/change_k8s_control_plane_params.py ${cluster_host_addr} ${::is_controller_active}",  # lint:ignore:140chars
       timeout => 600}
   }
+
+  if str2bool($::usm_upgrade_in_progress) {
+    Exec['update configmap and apply changes to control plane components']
+    -> exec { 'remove /etc/kubernetes/backup':
+          command => '/usr/bin/rm -rf /etc/kubernetes/backup',
+          onlyif  => '/usr/bin/test -d /etc/kubernetes/backup',
+      }
+    -> file { '/var/lib/kubelet/config.yaml.bak':
+      ensure  => absent,
+    }
+  }
 }
 
 class platform::kubernetes::certsans::runtime
@@ -1290,6 +1336,9 @@ class platform::kubernetes::certsans::runtime
   include ::platform::network::cluster_host::params
   include ::platform::network::cluster_host::ipv4::params
   include ::platform::network::cluster_host::ipv6::params
+  include ::platform::network::admin::params
+  include ::platform::network::admin::ipv4::params
+  include ::platform::network::admin::ipv6::params
 
   $ipv4_val = $::platform::params::ipv4
   $ipv6_val = $::platform::params::ipv6
@@ -1303,6 +1352,17 @@ class platform::kubernetes::certsans::runtime
     $sec_mgmt_subnet_ver = $ipv6_mgmt_subnet_ver
   } else {
     $sec_mgmt_subnet_ver = undef
+  }
+
+  $prim_admin_subnet_ver = $::platform::network::admin::params::subnet_version
+  $ipv4_admin_subnet_ver = $::platform::network::admin::ipv4::params::subnet_version
+  $ipv6_admin_subnet_ver = $::platform::network::admin::ipv6::params::subnet_version
+  if $prim_admin_subnet_ver == $ipv6_val and $ipv4_admin_subnet_ver != undef {
+    $sec_admin_subnet_ver = $ipv4_admin_subnet_ver
+  } elsif $prim_admin_subnet_ver == $ipv4_val and $ipv6_admin_subnet_ver != undef {
+    $sec_admin_subnet_ver = $ipv6_admin_subnet_ver
+  } else {
+    $sec_admin_subnet_ver = undef
   }
 
   $prim_cluster_host_subnet_ver = $::platform::network::cluster_host::params::subnet_version
@@ -1347,6 +1407,8 @@ class platform::kubernetes::certsans::runtime
 
     # primary addresses
     $primary_floating_array = [$::platform::network::cluster_host::params::controller_address,
+                                $::platform::network::mgmt::params::controller_address,
+                                $::platform::network::admin::params::controller_address,
                                 $::platform::network::oam::params::controller_address,
                                 $localhost_address]
     if ($::platform::network::cluster_host::params::controller0_address != undef) {
@@ -1354,7 +1416,21 @@ class platform::kubernetes::certsans::runtime
     } else {
       $primary_unit_cluster_array = []
     }
-    $certsans_prim_array = $primary_floating_array + $primary_unit_cluster_array
+
+    if ($::platform::network::mgmt::params::controller0_address != undef) {
+      $primary_unit_mgmt_array = [$::platform::network::mgmt::params::controller0_address]
+    } else {
+      $primary_unit_mgmt_array = []
+    }
+
+    if ($::platform::network::admin::params::controller0_address != undef) {
+      $primary_unit_admin_array = [$::platform::network::admin::params::controller0_address]
+    } else {
+      $primary_unit_admin_array = []
+    }
+
+    $certsans_prim_array = ($primary_floating_array + $primary_unit_cluster_array +
+                              $primary_unit_mgmt_array + $primary_unit_admin_array)
 
     # secondary addresses: OAM
     if $sec_oam_subnet_ver == $ipv4_val {
@@ -1388,10 +1464,63 @@ class platform::kubernetes::certsans::runtime
     } else {
       $certsans_cluster_sec_array = []
     }
-    $certsans_sec_hosts_array = $certsans_oam_sec_array + $certsans_cluster_sec_array + $certsans_sec_localhost_array
+
+    if $sec_mgmt_subnet_ver == $ipv4_val {
+
+      $sec_mgmt_float_array = [$::platform::network::mgmt::ipv4::params::controller_address]
+      if ($::platform::network::mgmt::ipv4::params::controller0_address != undef) {
+        $sec_mgmt_unit_array = [$::platform::network::mgmt::ipv4::params::controller0_address]
+      } else {
+        $sec_mgmt_unit_array = []
+      }
+      $certsans_mgmt_sec_array = $sec_mgmt_float_array + $sec_mgmt_unit_array
+
+    } elsif $sec_mgmt_subnet_ver == $ipv6_val {
+
+      $sec_mgmt_float_array = [$::platform::network::mgmt::ipv6::params::controller_address]
+      if ($::platform::network::mgmt::ipv6::params::controller0_address != undef) {
+        $sec_mgmt_unit_array = [$::platform::network::mgmt::ipv6::params::controller0_address]
+      } else {
+        $sec_mgmt_unit_array = []
+      }
+      $certsans_mgmt_sec_array = $sec_mgmt_float_array + $sec_mgmt_unit_array
+
+    } else {
+      $certsans_mgmt_sec_array = []
+    }
+
+    if $sec_admin_subnet_ver == $ipv4_val {
+
+      $sec_admin_float_array = [$::platform::network::admin::ipv4::params::controller_address]
+      if ($::platform::network::admin::ipv4::params::controller0_address != undef) {
+        $sec_admin_unit_array = [$::platform::network::admin::ipv4::params::controller0_address]
+      } else {
+        $sec_admin_unit_array = []
+      }
+      $certsans_admin_sec_array = $sec_admin_float_array + $sec_admin_unit_array
+
+    } elsif $sec_admin_subnet_ver == $ipv6_val {
+
+      $sec_admin_float_array = [$::platform::network::admin::ipv6::params::controller_address]
+      if ($::platform::network::admin::ipv6::params::controller0_address != undef) {
+        $sec_admin_unit_array = [$::platform::network::admin::ipv6::params::controller0_address]
+      } else {
+        $sec_admin_unit_array = []
+      }
+      $certsans_admin_sec_array = $sec_admin_float_array + $sec_admin_unit_array
+
+    } else {
+      $certsans_admin_sec_array = []
+    }
+
+    $certsans_sec_hosts_array = ($certsans_oam_sec_array + $certsans_cluster_sec_array +
+                                  $certsans_mgmt_sec_array + $certsans_admin_sec_array +
+                                  $certsans_sec_localhost_array)
 
   } else {
     $primary_floating_array = [$::platform::network::cluster_host::params::controller_address,
+                                $::platform::network::mgmt::params::controller_address,
+                                $::platform::network::admin::params::controller_address,
                                 $::platform::network::oam::params::controller_address,
                                 $localhost_address]
 
@@ -1412,7 +1541,7 @@ class platform::kubernetes::certsans::runtime
 
     # primary Cluster-host unit addresses
     if ($::platform::network::cluster_host::params::controller0_address != undef) and
-        ($::platform::network::cluster_host::params::controller0_address != undef) {
+        ($::platform::network::cluster_host::params::controller1_address != undef) {
       $primary_unit_cluster_array = [$::platform::network::cluster_host::params::controller0_address,
                                       $::platform::network::cluster_host::params::controller1_address]
     } elsif ($::platform::network::cluster_host::params::controller0_address != undef) and
@@ -1425,7 +1554,39 @@ class platform::kubernetes::certsans::runtime
       $primary_unit_cluster_array = []
     }
 
-    $certsans_prim_array = $primary_floating_array + $primary_unit_oam_array + $primary_unit_cluster_array
+    # primary management unit addresses
+    if ($::platform::network::mgmt::params::controller0_address != undef) and
+        ($::platform::network::mgmt::params::controller1_address != undef) {
+      $primary_unit_mgmt_array = [$::platform::network::mgmt::params::controller0_address,
+                                      $::platform::network::mgmt::params::controller1_address]
+    } elsif ($::platform::network::mgmt::params::controller0_address != undef) and
+            ($::platform::network::mgmt::params::controller1_address == undef) {
+      $primary_unit_mgmt_array = [$::platform::network::mgmt::params::controller0_address]
+    } elsif ($::platform::network::mgmt::params::controller0_address == undef) and
+            ($::platform::network::mgmt::params::controller1_address != undef) {
+      $primary_unit_mgmt_array = [$::platform::network::mgmt::params::controller1_address]
+    } else {
+      $primary_unit_mgmt_array = []
+    }
+
+    # primary admin unit addresses
+    if ($::platform::network::admin::params::controller0_address != undef) and
+        ($::platform::network::admin::params::controller1_address != undef) {
+      $primary_unit_admin_array = [$::platform::network::admin::params::controller0_address,
+                                      $::platform::network::admin::params::controller1_address]
+    } elsif ($::platform::network::admin::params::controller0_address != undef) and
+            ($::platform::network::admin::params::controller1_address == undef) {
+      $primary_unit_admin_array = [$::platform::network::admin::params::controller0_address]
+    } elsif ($::platform::network::admin::params::controller0_address == undef) and
+            ($::platform::network::admin::params::controller1_address != undef) {
+      $primary_unit_admin_array = [$::platform::network::admin::params::controller1_address]
+    } else {
+      $primary_unit_admin_array = []
+    }
+
+    $certsans_prim_array = ($primary_floating_array + $primary_unit_oam_array +
+                              $primary_unit_cluster_array + $primary_unit_mgmt_array +
+                              $primary_unit_admin_array)
 
     # secondary OAM addresses
     if $sec_oam_subnet_ver == $ipv4_val {
@@ -1511,10 +1672,98 @@ class platform::kubernetes::certsans::runtime
       $certsans_cluster_host_sec_array = []
     }
 
-    $certsans_sec_hosts_array = $certsans_oam_sec_array + $certsans_cluster_host_sec_array + $certsans_sec_localhost_array
-  }
-  $certsans_array = $certsans_prim_array + $certsans_sec_hosts_array
+    # secondary management addresses
+    if $sec_mgmt_subnet_ver == $ipv4_val {
 
+      $sec_mgmt_floating_array = [$::platform::network::mgmt::ipv4::params::controller_address]
+
+      if ($::platform::network::mgmt::ipv4::params::controller0_address != undef) and
+          ($::platform::network::mgmt::ipv4::params::controller1_address != undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv4::params::controller0_address,
+                                        $::platform::network::mgmt::ipv4::params::controller1_address]
+      } elsif ($::platform::network::mgmt::ipv4::params::controller0_address != undef) and
+              ($::platform::network::mgmt::ipv4::params::controller1_address == undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv4::params::controller0_address]
+      } elsif ($::platform::network::mgmt::ipv4::params::controller0_address == undef) and
+              ($::platform::network::mgmt::ipv4::params::controller1_address != undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv4::params::controller1_address]
+      } else {
+        $sec_unit_mgmt_array = []
+      }
+      $certsans_mgmt_sec_array = $sec_mgmt_floating_array + $sec_unit_mgmt_array
+
+    } elsif $sec_mgmt_subnet_ver == $ipv6_val {
+
+      $sec_mgmt_floating_array = [$::platform::network::mgmt::ipv6::params::controller_address]
+
+      if ($::platform::network::mgmt::ipv6::params::controller0_address != undef) and
+          ($::platform::network::mgmt::ipv6::params::controller1_address != undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv6::params::controller0_address,
+                                        $::platform::network::mgmt::ipv6::params::controller1_address]
+      } elsif ($::platform::network::mgmt::ipv6::params::controller0_address != undef) and
+              ($::platform::network::mgmt::ipv6::params::controller1_address == undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv6::params::controller0_address]
+      } elsif ($::platform::network::mgmt::ipv6::params::controller0_address == undef) and
+              ($::platform::network::mgmt::ipv6::params::controller1_address != undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv6::params::controller1_address]
+      } else {
+        $sec_unit_mgmt_array = []
+      }
+      $certsans_mgmt_sec_array = $sec_mgmt_floating_array + $sec_unit_mgmt_array
+
+    } else {
+      $certsans_mgmt_sec_array = []
+    }
+
+    # secondary admin addresses
+    if $sec_admin_subnet_ver == $ipv4_val {
+
+      $sec_admin_floating_array = [$::platform::network::admin::ipv4::params::controller_address]
+
+      if ($::platform::network::admin::ipv4::params::controller0_address != undef) and
+          ($::platform::network::admin::ipv4::params::controller1_address != undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv4::params::controller0_address,
+                                        $::platform::network::admin::ipv4::params::controller1_address]
+      } elsif ($::platform::network::admin::ipv4::params::controller0_address != undef) and
+              ($::platform::network::admin::ipv4::params::controller1_address == undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv4::params::controller0_address]
+      } elsif ($::platform::network::admin::ipv4::params::controller0_address == undef) and
+              ($::platform::network::admin::ipv4::params::controller1_address != undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv4::params::controller1_address]
+      } else {
+        $sec_unit_admin_array = []
+      }
+      $certsans_admin_sec_array = $sec_admin_floating_array + $sec_unit_admin_array
+
+    } elsif $sec_admin_subnet_ver == $ipv6_val {
+
+      $sec_admin_floating_array = [$::platform::network::admin::ipv6::params::controller_address]
+
+      if ($::platform::network::admin::ipv6::params::controller0_address != undef) and
+          ($::platform::network::admin::ipv6::params::controller1_address != undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv6::params::controller0_address,
+                                        $::platform::network::admin::ipv6::params::controller1_address]
+      } elsif ($::platform::network::admin::ipv6::params::controller0_address != undef) and
+              ($::platform::network::admin::ipv6::params::controller1_address == undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv6::params::controller0_address]
+      } elsif ($::platform::network::admin::ipv6::params::controller0_address == undef) and
+              ($::platform::network::admin::ipv6::params::controller1_address != undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv6::params::controller1_address]
+      } else {
+        $sec_unit_admin_array = []
+      }
+      $certsans_admin_sec_array = $sec_admin_floating_array + $sec_unit_admin_array
+
+    } else {
+      $certsans_admin_sec_array = []
+    }
+
+    $certsans_sec_hosts_array = ($certsans_oam_sec_array + $certsans_cluster_host_sec_array +
+                                  $certsans_mgmt_sec_array + $certsans_admin_sec_array +
+                                  $certsans_sec_localhost_array)
+    }
+
+  $certsans_array = ($certsans_prim_array + $certsans_sec_hosts_array).filter |$value| { $value != undef }
   $certsans = join($certsans_array,',')
 
   exec { 'update kube-apiserver certSANs':
@@ -1547,16 +1796,19 @@ class platform::kubernetes::duplex_migration::runtime {
 
 class platform::kubernetes::master::rootca::trustbothcas::runtime
   inherits ::platform::kubernetes::params {
-
+  # Fails if the certificate or key is missing, to avoid writing an invalid file
+  if $rootca_cert == undef or $rootca_cert == '' or $rootca_key == undef or $rootca_key == '' {
+    fail('The rootca cert and/or key parameters are empty. Cannot proceed.')
+  }
   # Create the new root CA cert file
   file { $rootca_certfile_new:
     ensure  => file,
-    content => base64('decode', $rootca_cert),
+    content => String(Binary($rootca_cert), '%s'),
   }
   # Create new root CA key file
   -> file { $rootca_keyfile_new:
     ensure  => file,
-    content => base64('decode', $rootca_key),
+    content => String(Binary($rootca_key), '%s'),
   }
   # Append the new cert to the current cert
   -> exec { 'append_ca_cert':
@@ -1585,6 +1837,13 @@ class platform::kubernetes::master::rootca::trustbothcas::runtime
   -> exec { 'restart_scheduler':
     command => "/usr/bin/kill -s SIGHUP $(pidof kube-scheduler)"
   }
+  # Wait for a new kube-scheduler pid to be available
+  -> exec { 'wait_for_kube_scheduler':
+    command   => 'pidof kube-scheduler',
+    timeout   => 5,
+    tries     => 60,
+    try_sleep => 2,
+  }
   # Update controller-manager.conf with both old and new certs
   -> exec { 'update_controller-manager_conf':
     environment => [ 'KUBECONFIG=/etc/kubernetes/controller-manager.conf' ],
@@ -1600,7 +1859,7 @@ class platform::kubernetes::master::rootca::trustbothcas::runtime
   # Wait for kube-apiserver to be up before executing next steps
   # Uses a k8s API health endpoint for that: https://kubernetes.io/docs/reference/using-api/health-checks/
   -> exec { 'wait_for_kube_apiserver':
-    command   => '/usr/bin/curl -k -f -m 15 https://localhost:6443/readyz',
+    command   => '/usr/bin/curl -k -f -m 15 https://localhost:16443/readyz',
     timeout   => 30,
     tries     => 18,
     try_sleep => 5,
@@ -1625,15 +1884,19 @@ class platform::kubernetes::worker::rootca::trustbothcas::runtime
 
   $cluster = generate('/bin/bash', '-c', "/bin/sed -e '/- cluster/,/name:/!d' /etc/kubernetes/kubelet.conf \
                       | grep 'name:' | awk '{printf \"%s\", \$2}'")
+  # Fails if the certificate or key is missing, to avoid writing an invalid file
+  if $rootca_cert == undef or $rootca_cert == '' or $rootca_key == undef or $rootca_key == '' {
+    fail('The rootca cert and/or key parameters are empty. Cannot proceed.')
+  }
   # Create the new root CA cert file
   file { $rootca_certfile_new:
     ensure  => file,
-    content => base64('decode', $rootca_cert),
+    content => String(Binary($rootca_cert), '%s'),
   }
   # Create new root CA key file
   -> file { $rootca_keyfile_new:
     ensure  => file,
-    content => base64('decode', $rootca_key),
+    content => String(Binary($rootca_key), '%s'),
   }
   # Append the new cert to the current cert
   -> exec { 'append_ca_cert':
@@ -1653,6 +1916,8 @@ class platform::kubernetes::worker::rootca::trustbothcas::runtime
 
 class platform::kubernetes::master::rootca::trustnewca::runtime
   inherits ::platform::kubernetes::params {
+  include ::platform::params
+
   # Copy the new root CA cert in place
   exec { 'put_new_ca_cert_in_place':
     command => "/bin/cp ${rootca_certfile_new} ${rootca_certfile}",
@@ -1680,6 +1945,11 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
   -> exec { 'restart_cert_mon':
     command => 'sm-restart-safe service cert-mon',
   }
+  # Restart dccertmon since it uses admin.conf
+  -> exec { 'restart_dccertmon':
+    command => 'sm-restart-safe service dccertmon',
+    onlyif  => "test '${::platform::params::distributed_cloud_role }' == 'systemcontroller'",
+  }
   # Restart kube-apiserver to pick up the new cert
   -> exec { 'restart_apiserver':
     command => "/usr/bin/kill -s SIGHUP $(pidof kube-apiserver)",
@@ -1706,10 +1976,17 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
   -> exec { 'restart_scheduler':
     command => "/usr/bin/kill -s SIGHUP $(pidof kube-scheduler)",
   }
+  # Wait for a new kube-scheduler pid to be available
+  -> exec { 'wait_for_kube_scheduler':
+    command   => 'pidof kube-scheduler',
+    timeout   => 5,
+    tries     => 60,
+    try_sleep => 2,
+  }
   # Wait for kube-apiserver to be up before executing next steps
   # Uses a k8s API health endpoint for that: https://kubernetes.io/docs/reference/using-api/health-checks/
   -> exec { 'wait_for_kube_apiserver':
-    command   => '/usr/bin/curl -k -f -m 15 https://localhost:6443/readyz',
+    command   => '/usr/bin/curl -k -f -m 15 https://localhost:16443/readyz',
     timeout   => 30,
     tries     => 18,
     try_sleep => 5,
@@ -1788,6 +2065,8 @@ class platform::kubernetes::master::rootca::pods::trustnewca::runtime
 
 class platform::kubernetes::master::rootca::updatecerts::runtime
   inherits ::platform::kubernetes::params {
+  include ::platform::haproxy::k8s_client_certificate
+  include ::platform::haproxy::reload
 
   # Create directory to use crt and key from secret in kubernetes components configuration
   file { '/tmp/kube_rootca_update':
@@ -1839,6 +2118,11 @@ class platform::kubernetes::master::rootca::updatecerts::runtime
     command     => "kubectl config set-credentials kubernetes-admin --client-key /tmp/kube_rootca_update/kubernetes-admin.key \
                     --client-certificate /tmp/kube_rootca_update/kubernetes-admin.crt --embed-certs",
   }
+
+  # Refresh haproxy client certificate and reload haproxy to pick the new
+  # client certificate/key pair
+  -> Class['::platform::haproxy::k8s_client_certificate']
+  -> Class['::platform::haproxy::reload']
 
   # Update super-admin.conf with new cert/key
   -> exec { 'update_super_admin_conf_credentials':
@@ -1903,6 +2187,14 @@ class platform::kubernetes::master::rootca::updatecerts::runtime
   # Restart scheduler
   -> exec { 'restart_scheduler':
     command => "/usr/bin/kill -s SIGHUP $(pidof kube-scheduler)"
+  }
+
+  # Wait for a new kube-scheduler pid to be available
+  -> exec { 'wait_for_kube_scheduler':
+    command   => 'pidof kube-scheduler',
+    timeout   => 5,
+    tries     => 60,
+    try_sleep => 2,
   }
 
   # Create the new k8s controller-manager crt file
@@ -2154,131 +2446,6 @@ class platform::kubernetes::unmask_start_services
   -> Class['platform::kubernetes::unmask_start_kubelet']
   -> exec { 'wait for kubernetes endpoints health check':
       command => '/usr/bin/sysinv-k8s-health check',
-  }
-}
-
-class platform::kubernetes::refresh_admin_config {
-  # Remove and regenerate the kube config file /etc/kubernetes/admin.conf
-  exec { 'remove the /etc/kubernetes/admin.conf':
-    command => 'rm -f /etc/kubernetes/admin.conf',
-  }
-  -> exec { 'remove the /etc/kubernetes/super-admin.conf':
-    command => 'rm -f /etc/kubernetes/super-admin.conf',
-    onlyif  => 'test -f /etc/kubernetes/super-admin.conf',
-  }
-  # K8s version upgrade abort of 1.28 to 1.29 removes some of the permission & priviledge
-  # of kubernetes-admin user. Following command will regenerate admin.conf file and
-  # ensure the required permissions & priviledges.
-  -> exec { 'regenerate the /etc/kubernetes/admin.conf':
-    command => 'kubeadm init phase kubeconfig admin',
-  }
-  -> file { '/etc/kubernetes/admin.conf':
-    owner => 'root',
-    group => 'sys_protected',
-    mode  => '0640',
-  }
-}
-
-class platform::kubernetes::upgrade_abort
-  inherits ::platform::kubernetes::params {
-  $software_version = $::platform::params::software_version
-  include platform::kubernetes::cordon_node
-  include platform::kubernetes::mask_stop_kubelet
-  include platform::kubernetes::unmask_start_services
-  include platform::kubernetes::refresh_admin_config
-
-  # Keep a backup of the current Kubernetes config files so that if abort fails,
-  # we can restore to that state with upgrade_abort_recovery.
-  exec { 'backup the kubernetes admin and super-admin config':
-    command => "mkdir -p ${kube_config_backup_path} && cp -p /etc/kubernetes/*admin.conf ${kube_config_backup_path}/.",
-    onlyif  => ['test -f /etc/kubernetes/admin.conf'],
-  }
-  # Take latest static manifest files backup for recovery if upgrade_abort fail
-  exec { 'remove the control-plane pods':
-      command => "mkdir -p ${static_pod_manifests_abort} && mv -f  /etc/kubernetes/manifests/*.yaml ${static_pod_manifests_abort}/.",
-      require => Class['platform::kubernetes::cordon_node'],
-      onlyif  => ["test -d ${static_pod_manifests_initial}",
-                  "kubectl --kubeconfig=/etc/kubernetes/admin.conf get node ${::platform::params::hostname}" ] # lint:ignore:140chars
-  }
-  -> exec { 'wait for control plane terminated':
-      command => '/usr/local/bin/kube-wait-control-plane-terminated.sh',
-      onlyif  => "test -d ${static_pod_manifests_initial}",
-  }
-  -> Class['platform::kubernetes::mask_stop_kubelet']
-  -> exec { 'stop all containers':
-      command   => '/usr/sbin/k8s-container-cleanup.sh  force-clean',
-      logoutput => true,
-  }
-  -> exec { 'mask containerd service':
-      command => '/usr/bin/systemctl mask --runtime --now containerd',
-  }
-  -> exec { 'stop containerd service':
-      command => '/usr/local/sbin/pmon-stop containerd',
-  }
-  -> exec { 'mask docker service':
-      command => '/usr/bin/systemctl mask --runtime --now docker',
-  }
-  -> exec { 'stop docker service':
-      command => '/usr/local/sbin/pmon-stop docker',
-  }
-  -> exec { 'mask etcd service':
-      command => '/usr/bin/systemctl mask --runtime --now etcd',
-  }
-  -> exec { 'stop etcd service':
-      command => '/usr/local/sbin/pmon-stop etcd',
-  }
-  # Take latest etcd data dir backup for recovery if snapshot restore fails
-  -> exec{ 'move etcd data dir to backup':
-      command => "mv -f /opt/etcd/${software_version}/controller.etcd /opt/etcd/${software_version}/controller.etcd.bck",
-      onlyif  => ["test -f ${etcd_snapshot_file}",
-                  "test ! -d /opt/etcd/${software_version}/controller.etcd.bck"]
-  }
-  -> exec { 'restore etcd snapshot':
-      command     => "etcdctl --cert ${etcd_cert_file} --key ${etcd_key_file} --cacert ${etcd_ca_cert} --endpoints ${etcd_endpoints} snapshot restore ${etcd_snapshot_file} --data-dir /opt/etcd/${software_version}/controller.etcd --name ${etcd_name} --initial-cluster ${etcd_initial_cluster} ", # lint:ignore:140chars
-      environment => [ 'ETCDCTL_API=3' ],
-      onlyif      => "test -f ${etcd_snapshot_file}"
-  }
-  -> exec { 'restore static manifest files':
-      command => "/usr/bin/cp -f  ${static_pod_manifests_initial}/*.yaml /etc/kubernetes/manifests",
-      onlyif  => "test -d ${static_pod_manifests_initial}",
-  }
-  -> Class['platform::kubernetes::unmask_start_services']
-  -> Class['platform::kubernetes::refresh_admin_config']
-  # Remove recover static manifest files backup if snapshot restore succeeded
-  -> exec { 'remove recover static manifest files':
-      command => "rm -rf ${static_pod_manifests_abort}",
-      onlyif  => "test -d ${static_pod_manifests_abort}",
-  }
-  # Remove latest etcd data dir backup if snapshot restore succeeded
-  -> exec { 'remove recover etcd data dir':
-      command => "rm -rf /opt/etcd/${software_version}/controller.etcd.bck",
-      onlyif  => "test -d /opt/etcd/${software_version}/controller.etcd.bck",
-  }
-  # Remove kube config files backup after the abort
-  -> exec { 'remove kube config files backup':
-      command => "rm -rf ${kube_config_backup_path}",
-      onlyif  => "test -d ${kube_config_backup_path}",
-  }
-}
-
-class platform::kubernetes::upgrade_abort_recovery
-  inherits ::platform::kubernetes::params {
-  include platform::kubernetes::unmask_start_services
-  $software_version = $::platform::params::software_version
-
-  exec{ 'restore recover etcd data dir':
-    command => "mv -f /opt/etcd/${software_version}/controller.etcd.bck /opt/etcd/${software_version}/controller.etcd",
-    onlyif  => "test -d /opt/etcd/${software_version}/controller.etcd.bck",
-  }
-  -> exec { 'restore recover static manifest files':
-      command => "mv -f  ${static_pod_manifests_abort}/*.yaml /etc/kubernetes/manifests/",
-  }
-  -> exec { 'restore the admin and super-admin config files':
-    command => "mv -f ${kube_config_backup_path}/*admin.conf /etc/kubernetes/",
-  }
-  -> Class['platform::kubernetes::unmask_start_services']
-  -> exec { 'uncordon the node':
-      command   => "kubectl --kubeconfig=/etc/kubernetes/admin.conf uncordon ${::platform::params::hostname}",
   }
 }
 

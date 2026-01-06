@@ -13,7 +13,7 @@ class platform::mtce::params (
   $heartbeat_degrade_threshold = 6,
   $heartbeat_failure_threshold = 10,
   $heartbeat_failure_action = 'fail',
-  $heartbeat_period = 100,
+  $heartbeat_period = 1000,
   $mtce_multicast = undef,
   $mnfa_threshold = 2,
   $mnfa_timeout = 0,

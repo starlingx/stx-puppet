@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ################################################################################
-# Copyright (c) 2023-2024 Wind River Systems, Inc.
+# Copyright (c) 2023-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -16,33 +16,52 @@ function log_it {
     logger "${BASH_SOURCE[1]} ${1}"
 }
 
+function _is_kubeapi_server_avail {
+    local config=${1}
+    api_status=$(KUBECONFIG=${config} kubectl get --raw "/readyz"  2> /dev/null)
+    if [[ ${api_status} == "ok" ]]; then
+        return 0
+    else
+        log_it "Kubernetes API isn't available, status=${api_status}"
+        return 1
+    fi
+}
 
 gnp_name=${1}
 file_name_gnp=${2}
 kubeconfig=${3}
 
+# Ensure all required arguments are provided
+if [[ -z "${gnp_name}" || -z "${file_name_gnp}" || -z "${kubeconfig}" ]]; then
+    log_it "Error: Missing required arguments. Usage: $0 <gnp_name> <file_name_gnp> <kubeconfig_path>"
+    exit 1
+fi
+
+if ! _is_kubeapi_server_avail "${kubeconfig}"; then
+    log_it "Kubernetes API isn't available, mark for sysinv to reapply"
+    touch /etc/platform/.platform_firewall_config_required
+    exit 0
+fi
+
 resource_name='globalnetworkpolicies.crd.projectcalico.org';
 
-resource_exist=$(kubectl --kubeconfig=${kubeconfig} get --no-headers customresourcedefinitions.apiextensions.k8s.io ${resource_name} | awk '{print $1}');
+resource_exist=$(kubectl --kubeconfig="${kubeconfig}" get --no-headers customresourcedefinitions.apiextensions.k8s.io ${resource_name} | awk '{print $1}');
 if [[ ${resource_exist} == "${resource_name}" ]]; then
-    gnp_exist=$(kubectl --kubeconfig=${kubeconfig} get --no-headers ${resource_name} ${gnp_name} 2> /dev/null | awk '{print $1}');
+    gnp_exist=$(kubectl --kubeconfig="${kubeconfig}" get --no-headers ${resource_name} "${gnp_name}" 2> /dev/null | awk '{print $1}');
     if [[ ${gnp_exist} == "${gnp_name}" ]]; then
         # Remove annotation as it contains last-applied-configuration with
         # resourceVersion in it, which will require the gnp re-apply to
         # provide a matching resourceVersion in the yaml file.
-        kubectl --kubeconfig=${kubeconfig} annotate ${resource_name} ${gnp_name} kubectl.kubernetes.io/last-applied-configuration-;
-        if [ "$?" -ne 0 ]; then
+        if ! kubectl --kubeconfig="${kubeconfig}" annotate ${resource_name} "${gnp_name}" kubectl.kubernetes.io/last-applied-configuration-; then
             log_it "Failed to remove last-applied-configuration annotation from ${gnp_name}"
             exit 1
         fi
-        kubectl --kubeconfig=${kubeconfig} replace -f ${file_name_gnp};
-        if [ "$?" -ne 0 ]; then
+        if ! kubectl --kubeconfig="${kubeconfig}" replace -f "${file_name_gnp}"; then
             log_it "Failed to replace ${gnp_name} with ${file_name_gnp}"
             exit 1
         fi
     else
-        kubectl --kubeconfig=${kubeconfig} create -f ${file_name_gnp};
-        if [ "$?" -ne 0 ]; then
+        if ! kubectl --kubeconfig="${kubeconfig}" create -f "${file_name_gnp}"; then
             log_it "Failed to create ${gnp_name} with ${file_name_gnp}"
             exit 1
         fi

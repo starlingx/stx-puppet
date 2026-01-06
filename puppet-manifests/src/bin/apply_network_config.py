@@ -35,6 +35,10 @@ IFSTATE_BASE_PATH = "/run/network/ifstate."
 DEVLINK_BASE_PATH = "/sys/class/net/"
 CFG_PREFIX = "ifcfg-"
 TERM_WAIT_TIME = 10
+FLOCK_MAX_RETRY = 15
+FLOCK_WAIT_INTERVAL = 5
+MAX_RETRIES = 10
+INTF_WAIT_INTERVAL = 1
 
 # Interface types
 ETH = "eth"
@@ -236,25 +240,37 @@ def apply_config(routes_only):
             LOG.error("No puppet files? Nothing to do! Aborting...")
             sys.exit(1)
         LOG.info("Process Debian network config")
-        log_network_info()
+        log_network_info("pre configuration")
         updated_ifaces = update_interfaces()
         update_routes(updated_ifaces)
         check_enrollment_config()
-        log_network_info()
+        log_network_info("post configuration")
     LOG.info("Finished")
 
 
-def log_network_info():
+def log_network_info(extra_info=""):
+    LOG.info(f"************ START Network Info {extra_info} ************")
+
     _, links = execute_system_cmd("/usr/sbin/ip addr show")
+    for line in links.splitlines():
+        LOG.info(f"[ADDRESS ] {line}")
+
+    LOG.info("------------")
     _, routes_ipv4 = execute_system_cmd("/usr/sbin/ip route show")
+    for line in routes_ipv4.splitlines():
+        LOG.info(f"[ROUTEv4 ] {line}")
+
+    LOG.info("------------")
     _, routes_ipv6 = execute_system_cmd("/usr/sbin/ip -6 route show")
-    LOG.info("Network info:\n************ Links/addresses ************\n"
-             f"{links}"
-             "************ IPv4 routes ****************\n"
-             f"{routes_ipv4}"
-             "************ IPv6 routes ****************\n"
-             f"{routes_ipv6}"
-             "*****************************************")
+    for line in routes_ipv6.splitlines():
+        LOG.info(f"[ROUTEv6 ] {line}")
+
+    LOG.info("------------")
+    _, neighbor = execute_system_cmd("/usr/sbin/ip neigh show")
+    for line in neighbor.splitlines():
+        LOG.info(f"[NEIGHBOR] {line}")
+
+    LOG.info(f"************ END Network Info {extra_info} **************")
 
 
 def get_new_config():
@@ -270,8 +286,11 @@ def parse_interface_stanzas():
 
 def get_current_config():
     '''Gets current network config in etc directory'''
+    LOG.info(f"Parsing contents of the {ETC_DIR} directory to gather current network configuration")
     auto = parse_auto_file()
-    ifaces = parse_ifcfg_files(auto)
+    ifaces = parse_etc_dir()
+    if len(ifaces) == 0:
+        LOG.warning(f"No interface config found in {ETC_DIR}")
     return build_config(auto, ifaces, is_from_puppet=False)
 
 
@@ -317,31 +336,16 @@ def get_ifcfg_path(iface):
     return os.path.join(ETC_DIR, CFG_PREFIX + iface)
 
 
-def parse_ifcfg_files(ifaces):
-    iface_configs = dict()
-    for iface in ifaces:
-        iface_configs[iface] = parse_ifcfg_file(iface)
-    return iface_configs
-
-
-def parse_ifcfg_file(iface):
-    path = get_ifcfg_path(iface)
-    if not os.path.isfile(path):
-        LOG.warning(f"Interface config file not found: '{path}'")
-        return dict()
-    lines = read_file_lines(path)
-    _, ifaces = StanzaParser.ParseLines(lines)
-    if len(ifaces) == 0:
-        LOG.warning(f"No interface config found in '{path}'")
-        return dict()
-    if (ifconfig := ifaces.get(iface, None)) is None:
-        LOG.warning(f"Config for interface '{iface}' not found in '{path}'. Instead, file has "
-                    f"config(s) for the following interface(s): {' '.join(sorted(ifaces.keys()))}")
-        return dict()
-    if len(ifaces) > 1:
-        LOG.warning(f"Multiple interface configs found in '{path}': "
-                    f"{' '.join(sorted(ifaces.keys()))}")
-    return ifconfig
+def parse_etc_dir():
+    parser = StanzaParser()
+    files = os.listdir(ETC_DIR)
+    for file in files:
+        file_path = ETC_DIR + "/" + file
+        if os.path.isfile(file_path):
+            LOG.debug(f"Parsing file {file_path}")
+            lines = read_file_lines(file_path)
+            parser.parse_lines(lines)
+    return parser.get_auto_and_ifaces()[1]
 
 
 def get_types_and_dependencies(iface_configs):
@@ -412,7 +416,10 @@ def get_modified_ifaces(new_config, current_config):
     modified = set()
     new_ifaces = new_config["ifaces"]
     current_ifaces = current_config["ifaces"]
-    for iface, new_if_config in new_ifaces.items():
+    for iface in new_config["auto"]:
+        if iface not in current_config["auto"]:
+            continue
+        new_if_config = new_ifaces[iface]
         current_if_config = current_ifaces.get(iface, None)
         if not current_if_config:
             continue
@@ -468,10 +475,18 @@ def get_dependent_list(config, ifaces):
     return covered
 
 
-def get_down_list(current_config, comparison):
+def get_down_list(current_config, new_config, comparison):
     base_set = comparison["modified"].union(comparison["removed"])
+    for iface in sorted(comparison["added"]):
+        if iface not in base_set and is_iface_up(iface):
+            LOG.info(f"Interface {iface} not in {ETC_DIR}/auto but currently up, "
+                     "adding to DOWN list")
+            base_set.add(iface)
+            if iface not in current_config["ifaces_types"]:
+                current_config["ifaces_types"][iface] = new_config["ifaces_types"][iface]
     dependents = get_dependent_list(current_config, base_set)
-    return base_set.union(dependents)
+    down_list = base_set.union(dependents)
+    return down_list
 
 
 def get_up_list(new_config, comparison):
@@ -722,30 +737,18 @@ def get_route_description(route, full=True):
 
 
 def add_route_to_kernel(route):
-    prot = "-6 " if ":" in route["nexthop"] else ""
     description = get_route_description(route)
-    LOG.info(f"Adding route: {description}")
-    retcode, stdout = execute_system_cmd(f"/usr/sbin/ip {prot}route show {description}")
-    if retcode == 0 and route["network"] in stdout:
-        LOG.info("Route already exists, skipping")
-    else:
-        short_descr = get_route_description(route, full=False)
-        retcode, stdout = execute_system_cmd(f"/usr/sbin/ip {prot}route show {short_descr}")
-        if retcode == 0 and route["network"] in stdout:
-            LOG.info(f"Route to specified network already exists, replacing: {stdout.strip()}")
-            retcode, stdout = execute_system_cmd(f"/usr/sbin/ip route replace {description}")
-            if retcode != 0:
-                LOG.error(f"Failed replacing route {description}:{format_stdout(stdout)}")
-        else:
-            retcode, stdout = execute_system_cmd(f"/usr/sbin/ip route add {description}")
-            if retcode != 0:
-                LOG.error(f"Failed adding route {description}:{format_stdout(stdout)}")
+    LOG.info(f"Route adding/replacing: {description}")
+    retcode, stdout = execute_system_cmd(f"/usr/sbin/ip route replace {description}")
+    if retcode != 0:
+        LOG.error(f"Failed replacing route {description}:{format_stdout(stdout)}")
 
 
 def acquire_sysinv_agent_lock():
     LOG.info("Acquiring lock to synchronize with sysinv-agent audit")
     lock_file_fd = os.open(SYSINV_LOCK_FILE, os.O_CREAT | os.O_RDONLY)
-    return acquire_file_lock(lock_file_fd, fcntl.LOCK_EX | fcntl.LOCK_NB, 5, 5)
+    return acquire_file_lock(lock_file_fd, fcntl.LOCK_EX | fcntl.LOCK_NB,
+                             FLOCK_MAX_RETRY, FLOCK_WAIT_INTERVAL)
 
 
 def release_sysinv_agent_lock(lockfd):
@@ -814,10 +817,17 @@ def disable_pxeboot_interface():
     for iface in ifaces.keys():
         LOG.info(f"Turn off pxeboot install config for {iface}, will be turned on later")
         set_iface_down(iface)
-        if is_label(iface):
-            base_iface = get_base_iface(iface)
-            LOG.info(f"Turn off pxeboot for base interface {base_iface}")
-            set_iface_down(base_iface)
+
+        _, hostname = execute_system_cmd("/usr/bin/hostname")
+        pxeboot_lease_file = f"/var/lib/dhcp/dhclient.{iface}.leases"
+        if ("controller" in hostname) and os.path.isfile(pxeboot_lease_file):
+            # controllers will use static addressing after first unlock, remove the kickstart
+            # leases file; mtcClient needs to search address in the static config file
+            LOG.info(f"Remove {pxeboot_lease_file}, left from kickstart install phase")
+            try:
+                os.remove(pxeboot_lease_file)
+            except OSError as e:
+                LOG.error(f"Failed to remove {pxeboot_lease_file}: {e}")
 
     LOG.info("Remove ifcfg-pxeboot, left from kickstart install phase")
     remove_iface_config_file("pxeboot")
@@ -826,8 +836,8 @@ def disable_pxeboot_interface():
 def update_ifaces_ifupdown(new_config):
     current_config = get_current_config()
     comparison = compare_configs(new_config, current_config)
-    down_list = get_down_list(current_config, comparison)
     up_list = get_up_list(new_config, comparison)
+    down_list = get_down_list(current_config, new_config, comparison)
 
     lock = acquire_sysinv_agent_lock() if down_list or up_list else None
     try:
@@ -852,11 +862,25 @@ def update_ifaces_online(config):
     return get_updated_ifaces(config, sorted_ifaces)
 
 
+def is_iface_up(iface):
+    ifstate_path = IFSTATE_BASE_PATH + iface
+    if os.path.isfile(ifstate_path) and read_file_text(ifstate_path).strip() == iface:
+        return True
+    if is_label(iface):
+        return False
+    operstate_path = f"{DEVLINK_BASE_PATH}{iface}/operstate"
+    if os.path.isfile(operstate_path):
+        state = read_file_text(operstate_path)
+        if state.strip() == "up":
+            return True
+    return False
+
+
 def is_iface_missing_or_down(iface):
     path = f"{DEVLINK_BASE_PATH}{iface}/operstate"
     if os.path.isfile(path):
         state = read_file_text(path)
-        if state != "down":
+        if state.strip() != "down":
             return False
     return True
 
@@ -884,6 +908,30 @@ def get_iface_address(iface, cfg):
     return address
 
 
+def remove_address_from_other_ifaces(address, target_iface):
+    rc, out = execute_system_cmd(f"ip -o addr show to {address}")
+    if rc != 0 or not out:
+        return
+
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+
+        ifname = parts[1]
+        if ifname == target_iface:
+            continue
+
+        LOG.info(f"Removing address '{address}' from interface "
+                    f"'{ifname}' to avoid duplication with interface "
+                    f"'{target_iface}'")
+
+        rc, out = execute_system_cmd(f"ip addr del {address} dev {ifname}")
+        if rc != 0:
+            LOG.warning(f"Failed to remove address '{address}' from '{ifname}': "
+                        f"rc={rc}, output='{out}'")
+
+
 def ensure_iface_configured_label(iface, cfg):
     address = get_iface_address(iface, cfg)
     if not address:
@@ -893,7 +941,8 @@ def ensure_iface_configured_label(iface, cfg):
     if address in existing:
         LOG.info(f"Link already has address '{address}', no need to set label up")
     else:
-        if set_iface_up(iface) == 0:
+
+        if set_iface_up(iface) != 0:
             return
         add_ip_to_iface(base_iface, address)
     if gateway := cfg.get("gateway", None):
@@ -902,10 +951,20 @@ def ensure_iface_configured_label(iface, cfg):
 
 def ensure_iface_configured_non_label(iface, cfg):
     if is_iface_missing_or_down(iface):
-        LOG.info(f"Interface '{iface}' is missing or down, flushing IPs and bringing up")
-        flush_ips(iface)
-        if set_iface_up(iface) == 0:
+        LOG.info(f"Interface '{iface}' is missing or down, "
+                 f"bringing up")
+        if set_iface_up(iface) != 0:
             return
+
+        for _ in range(MAX_RETRIES):
+            if not is_iface_missing_or_down(iface):
+                LOG.info(f"Interface '{iface}' is now up/operational")
+                break
+            time.sleep(INTF_WAIT_INTERVAL)
+        else:
+            LOG.warning(f"Interface '{iface}' did not become operational")
+            return
+
     address = get_iface_address(iface, cfg)
     if not address:
         return
@@ -952,15 +1011,6 @@ def add_default_route(iface, gateway):
     add_route_to_kernel(route)
 
 
-def flush_ips(iface):
-    path = DEVLINK_BASE_PATH + iface
-    if os.path.islink(path):
-        retcode, stdout = execute_system_cmd(f"/usr/sbin/ip addr flush dev {iface}")
-        if retcode != 0:
-            LOG.error(f"Command 'ip addr flush' failed for interface {iface}:"
-                      f"{format_stdout(stdout)}")
-
-
 def write_routes_file(route_entries):
     lines = [get_header()] + route_entries
     with open(ETC_ROUTES_FILE, "w") as f:
@@ -993,7 +1043,7 @@ def update_routes(updated_ifaces=None):
 
     for route_entry in new_routes:
         if route_entry not in current_routes_set:
-            LOG.info(f"Route not previously present in {ETC_ROUTES_FILE}, adding")
+            LOG.debug(f"Route not previously present in {ETC_ROUTES_FILE}, adding")
         elif get_route_iface(route_entry) in updated_ifaces:
             LOG.info("Route is associated with and updated interface, adding")
         else:
@@ -1030,11 +1080,76 @@ def check_enrollment_config():
                         f"{', '.join(iface_cfgs.keys())}")
         for iface, cfg in iface_cfgs.items():
             LOG.info(f"Enrollment: Configuring interface {iface} with gateway {cfg['gateway']}")
+            address = get_iface_address(iface, cfg)
+            if address:
+                remove_address_from_other_ifaces(address, iface)
             ensure_iface_configured(iface, cfg)
+    try:
+        os.remove(CLOUD_INIT_FILE)
+        LOG.info(f"Enrollment: Removed '{CLOUD_INIT_FILE}' to prevent config conflicts")
+    except OSError as e:
+        LOG.error(f"Enrollment: OS error while removing '{CLOUD_INIT_FILE}': {e}")
+
+
+def get_ifaces_with_dhcp(iface_configs):
+    dhcp_ifaces = []
+    ifaces_dict = iface_configs.get("ifaces", {})
+
+    for iface, config in ifaces_dict.items():
+        iface_str = config.get("iface", "").lower()
+        if "dhcp" in iface_str:
+            dhcp_ifaces.append(iface)
+
+    return dhcp_ifaces
+
+
+def start_dhcp_iface(iface):
+    ifstate_file = f"/run/network/ifstate.{iface}"
+    try:
+        if os.path.exists(ifstate_file):
+            os.remove(ifstate_file)
+    except (FileNotFoundError, PermissionError, OSError) as e:
+        LOG.error(f"Failed to remove ifstate file for {iface}: {e}")
+    try:
+        if set_iface_up(iface) == 0 and is_dhclient_running(iface):
+            LOG.info(f"Successfully ifup for interface {iface}")
+        else:
+            LOG.error(f"Failed DHCP for interface {iface}")
+    except subprocess.CalledProcessError as e:
+        LOG.error(f"Failed to bring up interface {iface} with ifup: {e}")
+
+
+def is_dhclient_running(iface):
+    pid_file = f"/run/dhclient.{iface}.pid"
+    if not os.path.isfile(pid_file):
+        return False
+    try:
+        with open(pid_file, 'r') as f:
+            pid = int(f.read().strip())
+        os.kill(pid, 0)
+        return True
+    except (OSError, ValueError):
+        LOG.info(f"dhclient is not running for interface {iface}")
+        return False
+
+
+def audit_dhcp_ifaces(iface_configs):
+    dhcp_ifaces = get_ifaces_with_dhcp(iface_configs)
+    for iface in dhcp_ifaces:
+        LOG.info(f"Running DHCP audit for {iface}")
+        if not is_dhclient_running(iface):
+            start_dhcp_iface(iface)
+
+
+def audit_config():
+    LOG.info("Start config audit")
+    current_config = get_current_config()
+    audit_dhcp_ifaces(current_config)
+    LOG.info("Finished config audit")
 
 
 def main():
-    log_format = ('%(asctime)s: [%(process)s]: %(filename)s(%(lineno)s): '
+    log_format = ('%(asctime)s.%(msecs)03d: [%(process)s]: %(filename)s(%(lineno)s): '
                   '%(levelname)s: %(message)s')
     LOG.basicConfig(filename=LOG_FILE, format=log_format, level=LOG.INFO, datefmt="%FT%T")
 
@@ -1046,6 +1161,7 @@ def main():
     args = parser.parse_args()
 
     apply_config(args.routes)
+    audit_config()
     return 0
 
 

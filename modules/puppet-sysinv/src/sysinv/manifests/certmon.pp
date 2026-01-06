@@ -1,14 +1,13 @@
 #
 # Files in this package are licensed under Apache; see LICENSE file.
 #
-# Copyright (c) 2020 Wind River Systems, Inc.
+# Copyright (c) 2020, 2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 #
 class sysinv::certmon (
   $local_keystone_password,
-  $dc_keystone_password,
   $local_keystone_auth_uri     = false,
   $local_keystone_identity_uri = false,
   $local_keystone_project_domain = 'Default',
@@ -16,13 +15,6 @@ class sysinv::certmon (
   $local_keystone_user         = 'sysinv',
   $local_keystone_user_domain  = 'Default',
   $local_region_name           = 'RegionOne',
-
-  $dc_keystone_auth_uri        = false,
-  $dc_keystone_identity_uri    = false,
-  $dc_keystone_project_domain  = 'Default',
-  $dc_keystone_tenant          = 'services',
-  $dc_keystone_user            = 'dcmanager',
-  $dc_keystone_user_domain     = 'Default',
 
   $use_syslog                 = false,
   $log_facility               = 'LOG_USER',
@@ -81,13 +73,6 @@ class sysinv::certmon (
   certmon_config {
     'certmon/retry_interval': value => 600;
     'certmon/max_retry': value => 14;
-    'certmon/audit_interval': value => 86400;
-    'certmon/startup_audit_all': value => false;
-    'certmon/network_retry_interval': value => 180;
-    'certmon/network_max_retry': value => 30;
-    'certmon/audit_batch_size': value => 40;
-    'certmon/audit_greenpool_size': value => 20;
-    'certmon/certificate_timeout_secs': value => 5;
   }
 
   if $keystone_enabled {
@@ -104,25 +89,6 @@ class sysinv::certmon (
       'keystone_authtoken/interface':  value => $keystone_interface;
       'keystone_authtoken/region_name':  value => $local_region_name;
     }
-
-    if $::platform::params::distributed_cloud_role == 'systemcontroller' {
-        certmon_config {
-          'DEFAULT/transport_url':    value => $::platform::amqp::params::transport_url;
-
-          'endpoint_cache/auth_plugin':    value => $auth_type;
-          'endpoint_cache/username':     value => $dc_keystone_user;
-          'endpoint_cache/password':     value => $dc_keystone_password, secret=> true;
-          'endpoint_cache/project_name': value => $dc_keystone_tenant;
-          'endpoint_cache/user_domain_name':     value => $dc_keystone_user_domain;
-          'endpoint_cache/project_domain_name':  value => $dc_keystone_project_domain;
-          'endpoint_cache/http_connect_timeout': value => $keystone_http_connect_timeout;
-        }
-    }
-
-    if $dc_keystone_identity_uri {
-      certmon_config { 'endpoint_cache/auth_uri': value => "${dc_keystone_identity_uri}/v3"; }
-    }
-
   }
   else
   {
@@ -139,12 +105,6 @@ class sysinv::certmon::keystone::password (
   if $keystone_enabled {
     certmon_config {
       'keystone_authtoken/password': value => lookup('sysinv::certmon::local_keystone_password'), secret => true;
-    }
-
-    if $::platform::params::distributed_cloud_role == 'systemcontroller' {
-      certmon_config {
-        'endpoint_cache/password': value => lookup('sysinv::certmon::dc_keystone_password'), secret => true;
-      }
     }
   }
 }

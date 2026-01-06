@@ -8,18 +8,62 @@ class platform::fm::params (
   $sysinv_catalog_info = 'platform:sysinv:internalURL',
   $snmp_enabled = 0,
   $snmp_trap_server_port = 162,
-) { }
+) {
+  # Set default values for database connection for AIO systems (except for
+  # systemcontroller on DC)
+  if ($::platform::params::system_type == 'All-in-one' and
+      $::platform::params::distributed_cloud_role != 'systemcontroller') {
+    $db_idle_timeout = 60
+    $db_pool_size = 1
+    $db_over_size = 5
+  } else {
+    $db_idle_timeout = undef
+    $db_pool_size = undef
+    $db_over_size = undef
+  }
+}
 
+class platform::fm::custom::params (
+  $db_idle_timeout = undef,
+  $db_pool_size    = undef,
+  $db_over_size    = undef,
+) {}
 
 class platform::fm::config
   inherits ::platform::fm::params {
+  include ::platform::fm::custom::params
+
+  # Decides between -in order- (1) custom: defined by system parameters,
+  # (2) AIO values defined on params class, or (3) the default values defined
+  # on personality yaml
+  if $::platform::fm::custom::params::db_idle_timeout {
+    $db_idle_timeout = $::platform::fm::custom::params::db_idle_timeout
+  } else {
+    $db_idle_timeout = $::platform::fm::params::db_idle_timeout
+  }
+
+  if $::platform::fm::custom::params::db_pool_size {
+    $db_pool_size = $::platform::fm::custom::params::db_pool_size
+  } else {
+    $db_pool_size = $::platform::fm::params::db_pool_size
+  }
+
+  if $::platform::fm::custom::params::db_over_size {
+    $db_over_size = $::platform::fm::custom::params::db_over_size
+  } else {
+    $db_over_size = $::platform::fm::params::db_over_size
+  }
 
   class { '::fm':
-    region_name           => $region_name,
-    system_name           => $system_name,
-    sysinv_catalog_info   => $sysinv_catalog_info,
-    snmp_enabled          => $snmp_enabled,
-    snmp_trap_server_port => $snmp_trap_server_port,
+    region_name            => $region_name,
+    system_name            => $system_name,
+    sysinv_catalog_info    => $sysinv_catalog_info,
+    snmp_enabled           => $snmp_enabled,
+    snmp_trap_server_port  => $snmp_trap_server_port,
+    database_idle_timeout  => $db_idle_timeout,
+    database_max_pool_size => $db_pool_size,
+    database_min_pool_size => $db_pool_size,
+    database_max_overflow  => $db_over_size,
   }
 }
 
@@ -42,13 +86,17 @@ class platform::fm::haproxy
   include ::platform::params
   include ::platform::haproxy::params
 
-  platform::haproxy::proxy { 'fm-api-internal':
-    server_name        => 's-fm-api-internal',
-    public_ip_address  => $::platform::haproxy::params::private_ip_address,
-    public_port        => $api_port,
-    private_ip_address => $api_host,
-    private_port       => $api_port,
-    public_api         => false,
+  $system_mode = $::platform::params::system_mode
+
+  if $system_mode != 'simplex' {
+    platform::haproxy::proxy { 'fm-api-internal':
+      server_name        => 's-fm-api-internal',
+      public_ip_address  => $::platform::haproxy::params::private_ip_address,
+      public_port        => $api_port,
+      private_ip_address => $api_host,
+      private_port       => $api_port,
+      public_api         => false,
+    }
   }
 
   platform::haproxy::proxy { 'fm-api-public':

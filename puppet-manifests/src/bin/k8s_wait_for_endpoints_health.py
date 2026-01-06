@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-# Copyright (c) 2021-2023 Wind River Systems, Inc.
+# Copyright (c) 2021-2023,2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -21,7 +21,8 @@ kube_operator = kubernetes.KubeOperator()
 
 
 # Kubernetes component endpoints on the localhost
-APISERVER_READYZ_ENDPOINT = 'https://localhost:6443/readyz'
+KUBE_APISERVER_INTERNAL_PORT = 16443
+APISERVER_READYZ_ENDPOINT = 'https://localhost:%s/readyz' % str(KUBE_APISERVER_INTERNAL_PORT)
 SCHEDULER_HEALTHZ_ENDPOINT = "https://127.0.0.1:10259/healthz"
 CONTROLLER_MANAGER_HEALTHZ_ENDPOINT = "https://127.0.0.1:10257/healthz"
 KUBELET_HEALTHZ_ENDPOINT = "http://localhost:10248/healthz"

@@ -1,3 +1,2 @@
 [Manager]
-CPUAffinity=<%= @platform_cpu_list %>
-
+CPUAffinity=<%= @platform_cpu_list.tr('"\'', '') %>

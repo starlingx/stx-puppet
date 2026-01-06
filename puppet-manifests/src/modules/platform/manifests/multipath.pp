@@ -7,18 +7,12 @@ class platform::multipath::params (
 class platform::multipath
   inherits platform::multipath::params {
   if $enabled {
-    file { '/etc/multipath.conf':
-      ensure  => 'present',
-      mode    => '0644',
-      content => template('platform/multipath.conf.erb')
-    }
-    -> service { 'start-multipathd':
+    service { 'start-multipathd':
       ensure     => 'running',
       enable     => true,
       name       => 'multipathd',
       hasstatus  => true,
       hasrestart => true,
-      subscribe  => File['/etc/multipath.conf'],
     }
     -> exec { 'systemctl-enable-multipathd':
       command => '/usr/bin/systemctl enable multipathd.service',
@@ -33,9 +27,6 @@ class platform::multipath
     }
     -> exec { 'systemctl-disable-multipathd':
       command => '/usr/bin/systemctl disable multipathd.service',
-    }
-    -> file { '/etc/multipath.conf':
-      ensure  => 'absent',
     }
   }
 }

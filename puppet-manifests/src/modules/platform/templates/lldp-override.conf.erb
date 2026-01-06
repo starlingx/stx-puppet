@@ -1,0 +1,8 @@
+[Service]
+# syscall filtering
+SystemCallFilter=@system-service
+SystemCallFilter=mount
+SystemCallFilter=umount
+SystemCallFilter=chroot
+SystemCallErrorNumber=EPERM
+

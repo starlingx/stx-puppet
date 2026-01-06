@@ -33,6 +33,11 @@ class platform::usm
     group  => 'usm',
     mode   => '0755',
   }
+    # TODO(lbonatti) Remove this in stx12 release.
+    usm_config {
+    'DEFAULT/logging_default_format_string': value =>
+      '%(asctime)s.%(msecs)03d USM - %(exec)s [%(process)s:%(thread)d]: %(filename)s(%(lineno)s): %(levelname)s: %(message)s';
+  }
   -> class { '::usm': }
 }
 

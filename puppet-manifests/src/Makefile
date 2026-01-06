@@ -1,7 +1,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-# Copyright (C) 2019-2024 Intel Corporation
+# Copyright (C) 2019-2025 Intel Corporation
 #
 
 BINDIR ?= /usr/local/bin
@@ -15,16 +15,15 @@ else
 	install -m 755 -D bin/puppet-manifest-apply.sh $(BINDIR)/puppet-manifest-apply.sh
 endif
 	install -m 755 -D bin/apply_network_config.py $(BINDIR)/apply_network_config.py
-	install -m 755 -D bin/apply_network_config.sh $(BINDIR)/apply_network_config.sh
 	install -m 755 -D bin/k8s_wait_for_endpoints_health.py $(BINDIR)/k8s_wait_for_endpoints_health.py
 	install -m 755 -D bin/kube-wait-control-plane-terminated.sh $(BINDIR)/kube-wait-control-plane-terminated.sh
-	install -m 755 -D bin/network_ifupdown.sh $(BINDIR)/network_ifupdown.sh
-	install -m 755 -D bin/network_sysconfig.sh $(BINDIR)/network_sysconfig.sh
 	install -m 755 -D bin/puppet-update-default-grub.sh $(BINDIR)/puppet-update-default-grub.sh
 	install -m 755 -D bin/puppet-update-grub-env.py $(BINDIR)/puppet-update-grub-env.py
 	install -m 755 -D bin/remove_unused_calico_hostendpoints.sh $(BINDIR)/remove_unused_calico_hostendpoints.sh
+	install -m 755 -D bin/remove_unused_calico_networksets.sh $(BINDIR)/remove_unused_calico_networksets.sh
 	install -m 755 -D bin/calico_firewall_apply_hostendp.sh $(BINDIR)/calico_firewall_apply_hostendp.sh
 	install -m 755 -D bin/calico_firewall_apply_policy.sh $(BINDIR)/calico_firewall_apply_policy.sh
+	install -m 755 -D bin/calico_firewall_apply_networkset.sh $(BINDIR)/calico_firewall_apply_networkset.sh
 	install -m 755 -D bin/kubelet-cleanup-orphaned-volumes.sh $(BINDIR)/kubelet-cleanup-orphaned-volumes.sh
 	install -m 755 -D bin/check_ipv6_tentative_addresses.py $(BINDIR)/check_ipv6_tentative_addresses.py
 	install -m 755 -D bin/manage_partitions_pre_script.sh $(BINDIR)/manage_partitions_pre_script.sh
@@ -34,6 +33,7 @@ endif
 	install -m 755 -D bin/dual-stack-calico.py $(BINDIR)/dual-stack-calico.py
 	install -m 755 -D bin/dual-stack-multus.py $(BINDIR)/dual-stack-multus.py
 	install -m 755 -D bin/verify-systemd-running.sh $(BINDIR)/verify-systemd-running.sh
+	install -m 755 -D bin/parse_sriov.py $(BINDIR)/parse_sriov.py
 
 	install -d -m 0755 $(CONFIGDIR)
 ifdef hiera_v5

@@ -21,6 +21,7 @@ class platform::strongswan::params (
   $swanctl_active = {},
   $authorities = {},
   $connections = {},
+  $includes = 'include conf.d/*.conf',
   $secrets = {},
   $pools = {},
   $strongswan_include = 'strongswan.d/*.conf',
@@ -28,19 +29,43 @@ class platform::strongswan::params (
   $strongswan = {},
   $is_active_controller = false,
 ) {
+  $swanctl_dir          = '/etc/swanctl'
+  $swanctl_current_conf = "${swanctl_dir}/swanctl.conf"
+  $swanctl_active_conf  = "${swanctl_dir}/swanctl_active.conf"
+  $swanctl_standby_conf = "${swanctl_dir}/swanctl_standby.conf"
+}
+
+define platform::strongswan::generate_swanctl_conf(
+  $includes = undef,
+  $connections = {},
+  $filepath = undef,
+) {
+  $_connections = strongswan::hash_to_strongswan_config({
+    connections => $connections,
+  })
+
+  $_swanctl_conf = @("EOT"/L)
+    ${_connections}
+    ${includes}
+    | EOT
+
+  file { $filepath:
+    owner   => 'root',
+    mode    => '0600',
+    content => $_swanctl_conf,
+  }
 }
 
 class platform::strongswan::swanctl_config (
+  $includes = undef,
   $connections = {},
   $connections_active = {},
   $is_active_controller = undef,
-) {
-  file { '/etc/swanctl/swanctl.conf':
-    owner   => 'root',
-    mode    => '0600',
-    content => strongswan::hash_to_strongswan_config({
-        connections => $connections,
-    }),
+) inherits ::platform::strongswan::params {
+  platform::strongswan::generate_swanctl_conf { 'Generate swanctl.conf':
+    includes    => $includes,
+    connections => $connections,
+    filepath    => '/etc/swanctl/swanctl.conf',
   }
 
   # If connections_active is not empty, the node is a controller.
@@ -49,17 +74,15 @@ class platform::strongswan::swanctl_config (
   # on their role (active or standby) at the time it is configed.
   # During swact, the symlink will be updated accordingly.
   if !empty($connections_active) {
-    $swanctl_dir='/etc/swanctl'
-    $swanctl_current_conf="${swanctl_dir}/swanctl.conf"
-    $swanctl_active_conf="${swanctl_dir}/swanctl_active.conf"
-    $swanctl_standby_conf="${swanctl_dir}/swanctl_standby.conf"
+    $swanctl_dir          = $::platform::strongswan::params::swanctl_dir
+    $swanctl_current_conf = $::platform::strongswan::params::swanctl_current_conf
+    $swanctl_active_conf  = $::platform::strongswan::params::swanctl_active_conf
+    $swanctl_standby_conf = $::platform::strongswan::params::swanctl_standby_conf
 
-    file { $swanctl_active_conf:
-      owner   => 'root',
-      mode    => '0600',
-      content => strongswan::hash_to_strongswan_config({
-          connections => $connections_active,
-      }),
+    platform::strongswan::generate_swanctl_conf{ 'Generate swanctl_active.conf':
+      includes    => $includes,
+      connections => $connections_active,
+      filepath    => $swanctl_active_conf,
     }
 
     # Symlink swanctl.conf based on the role of the controller
@@ -144,6 +167,7 @@ class platform::strongswan::config
 
   # Update swanctl configuration
   -> class { '::platform::strongswan::swanctl_config':
+    includes             => $::platform::strongswan::params::includes,
     connections          => $::platform::strongswan::params::swanctl,
     connections_active   => $::platform::strongswan::params::swanctl_active,
     is_active_controller => $::platform::strongswan::params::is_active_controller,
@@ -179,30 +203,6 @@ class platform::strongswan::config
     minute      => '20',
     hour        => '*/24',
     user        => 'root',
-  }
-}
-
-class platform::strongswan::apparmor {
-  file { '/etc/apparmor.d/local/usr.sbin.swanctl':
-    ensure  => present,
-    mode    => '0644',
-    content => template('platform/usr.sbin.swanctl.erb'),
-    notify  => Exec['reload-apparmor-swanctl-profile'],
-  }
-  exec {'reload-apparmor-swanctl-profile':
-    command => '/usr/sbin/apparmor_parser -vTr /etc/apparmor.d/usr.sbin.swanctl',
-    onlyif  => 'cat /sys/module/apparmor/parameters/enabled | grep -q "Y"',
-  }
-
-  file { '/etc/apparmor.d/local/usr.lib.ipsec.charon':
-    ensure  => present,
-    mode    => '0644',
-    content => template('platform/usr.lib.ipsec.charon.erb'),
-    notify  => Exec['reload-apparmor-ipsec-profile'],
-  }
-  exec {'reload-apparmor-ipsec-profile':
-    command => '/usr/sbin/apparmor_parser -vTr /etc/apparmor.d/usr.lib.ipsec.charon',
-    onlyif  => 'cat /sys/module/apparmor/parameters/enabled | grep -q "Y"',
   }
 }
 

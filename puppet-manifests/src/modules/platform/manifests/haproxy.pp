@@ -236,6 +236,14 @@ class platform::haproxy::server {
 }
 
 
+class platform::haproxy::k8s_client_certificate {
+  $client_pem_file = '/etc/kubernetes/pki/haproxy_client.pem'
+  exec { 'Create k8s client certificate bundle':
+    command => "python /usr/share/puppet/modules/platform/files/parse_k8s_admin_client_credentials.py --output_file ${client_pem_file}",  # lint:ignore:140chars
+    }
+}
+
+
 class platform::haproxy::reload {
   platform::sm::restart {'haproxy': }
 }
@@ -265,10 +273,7 @@ class platform::haproxy::runtime {
   include ::openstack::keystone::haproxy
   include ::openstack::barbican::haproxy
   include ::platform::smapi::haproxy
-
-  class {'::platform::haproxy::reload':
-    stage => post
-  }
+  include ::platform::kubernetes::haproxy
 }
 
 class platform::haproxy::restart::runtime {
@@ -276,4 +281,3 @@ class platform::haproxy::restart::runtime {
     stage => post
   }
 }
-

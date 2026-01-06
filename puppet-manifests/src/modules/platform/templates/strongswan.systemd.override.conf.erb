@@ -4,5 +4,10 @@ After=luks-fs-mgr.service
 
 [Service]
 ExecStartPre=/usr/bin/check-ipsec-luks-dir.sh
+
+# syscall filtering
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
 # pmond monitors strongswan-starter service
 Restart=no

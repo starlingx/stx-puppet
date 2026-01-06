@@ -38,13 +38,8 @@ define platform::helm::repository (
 
   # Helm versions above 3.3.1 have a breaking change, where 'helm repo add' now returns an
   # error if the repo already exists (reference: https://github.com/helm/helm/issues/8771).
-  # The 'force-update' flag is enough to overcome this, but it isn't backward compatible.
-  # TODO(mdecastr): Cleanup once upgrade from 22.12 isn't possible (keep 'force-update')
-  if $sw_version == '22.12'{
-    $base_cmd = 'helm repo add'
-  } else {
-    $base_cmd = 'helm repo add --force-update'
-  }
+  # The 'force-update' flag is enough to overcome this
+  $base_cmd = 'helm repo add --force-update'
 
   exec { "Adding StarlingX helm repo: ${name}":
     before      => $before_relationship,

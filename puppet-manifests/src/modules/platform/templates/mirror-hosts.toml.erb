@@ -3,9 +3,9 @@ version = 2
 
 # Begin of insecure registries
 <%- @insecure_registries.each do |insecure_registry| -%>
-  server = "<%= insecure_registry %>"
+  server = "http://<%= insecure_registry %>"
 
-  [host."<%= insecure_registry %>"]
+  [host."http://<%= insecure_registry %>"]
     capabilities = ["pull", "resolve", "push"]
 <%- end -%>
 # End of insecure registries

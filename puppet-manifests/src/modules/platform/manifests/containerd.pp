@@ -169,13 +169,18 @@ class platform::containerd::config
   }
   if $insecure_registries {
 
-    file { '/etc/containerd/certs.d/default':
+    exec { 'remove old containerd_default_dir':
+      command => '/usr/bin/rm -rf /etc/containerd/certs.d/default',
+      onlyif  => '/usr/bin/test -d /etc/containerd/certs.d/default',
+    }
+
+    -> file { '/etc/containerd/certs.d/_default':
       ensure => 'directory',
       owner  => 'root',
       group  => 'root',
       mode   => '0700',
     }
-    -> file { '/etc/containerd/certs.d/default/hosts.toml':
+    -> file { '/etc/containerd/certs.d/_default/hosts.toml':
       ensure  => present,
       owner   => 'root',
       group   => 'root',

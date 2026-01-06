@@ -32,6 +32,9 @@ class platform::params (
   $virtual_system = false,
   $apparmor = 'disabled',
   $sctp_autoload = 'enabled',
+  $ksoftirqd_priority = undef,
+  $irq_work_priority = undef,
+  $oidc_role_binding = '',
 ) {
   $ipv4 = 4
   $ipv6 = 6
@@ -108,4 +111,17 @@ class platform::params (
 
   $init_database = $controller_upgrade
   $init_keystone = $controller_upgrade
+}
+
+class platform::params::config_oidc_role_binding::runtime
+{
+  include ::platform::params
+  $oidc_role_binding = $::platform::params::oidc_role_binding
+  file { '/etc/platform/.rolebindings.conf':
+    ensure  => present,
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+    content => template('platform/oidc_rolebinding.conf.erb'),
+  }
 }

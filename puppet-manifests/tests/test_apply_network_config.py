@@ -21,7 +21,11 @@ class NetworkingMockError(BaseException):
     pass
 
 
-class NetworkingMock():  # pylint: disable=too-many-instance-attributes
+RET_OK = 0
+RET_ERR = 1
+
+
+class NetworkingMock():  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     def __init__(self, fs: FilesystemMock, ifaces: list):
         self._stdout = ''
         self._history = []
@@ -32,6 +36,7 @@ class NetworkingMock():  # pylint: disable=too-many-instance-attributes
         self._routes = dict()
         self._next_route_id = 0
         self._allow_multiple_default_gateways = False
+        self._dhcp = dict()
         self._add_eth_ifaces(ifaces)
         self._fs.add_listener(anc.ETC_DIR, self._etc_dir_changed)
 
@@ -50,13 +55,13 @@ class NetworkingMock():  # pylint: disable=too-many-instance-attributes
 
     def _add_eth_iface(self, iface):
         phys_path = self._get_device_path(iface)
-        self._fs.set_file_contents(phys_path + "/operstate", "down")
+        self._fs.set_file_contents(phys_path + "/operstate", "down\n")
         self._fs.set_link_contents(anc.DEVLINK_BASE_PATH + iface, phys_path)
         self._links[iface] = {"adm_state": False, "virtual": False,
                               "addresses": set(), "routes": set()}
 
     def _parse_etc_interfaces(self):
-        file_list = self._fs.get_file_list(anc.ETC_DIR)
+        file_list = self._fs.listdir(anc.ETC_DIR)
         parser = anc.StanzaParser()
         for file in file_list:
             file_contents = self._fs.get_file_contents(anc.ETC_DIR + "/" + file)
@@ -149,6 +154,9 @@ class NetworkingMock():  # pylint: disable=too-many-instance-attributes
     def get_history(self):
         return self._history
 
+    def enable_dhcp(self, iface_addresses):
+        self._dhcp = iface_addresses
+
     def _add_history(self, command, *args):
         self._history.append((command, *args))
 
@@ -170,7 +178,7 @@ class NetworkingMock():  # pylint: disable=too-many-instance-attributes
             return
         link["adm_state"] = state
         operstate_path = self._get_device_path(iface, link["virtual"]) + "/operstate"
-        value = "up" if state else "down"
+        value = "up\n" if state else "down\n"
         self._fs.set_file_contents(operstate_path, value)
 
     def _create_virtual_link(self, name):
@@ -178,7 +186,7 @@ class NetworkingMock():  # pylint: disable=too-many-instance-attributes
             self._print_stdout("RTNETLINK answers: File exists")
             return link, 1
         phys_path = self._get_device_path(name, True)
-        self._fs.set_file_contents(phys_path + "/operstate", "down")
+        self._fs.set_file_contents(phys_path + "/operstate", "down\n")
         self._fs.set_link_contents(anc.DEVLINK_BASE_PATH + name, phys_path)
         link = {"adm_state": False, "virtual": True, "addresses": set(), "routes": set()}
         self._links[name] = link
@@ -238,6 +246,12 @@ class NetworkingMock():  # pylint: disable=too-many-instance-attributes
             link["addresses"].add(address)
             if gateway := config.get("gateway", None):
                 self._add_default_gateway(iface, link, gateway)
+        elif mode == "dhcp":
+            if address := self._dhcp.get(iface, None):
+                if address in link["addresses"]:
+                    raise NetworkingMockError("DHCP lease address already assigned to link "
+                                              f"{iface}: {address}")
+                link["addresses"].add(address)
         return 0
 
     def _remove_routes_associated_to_address(self, link, address):
@@ -250,10 +264,14 @@ class NetworkingMock():  # pylint: disable=too-many-instance-attributes
             self._routes.pop(route_id)
             link["routes"].remove(route_id)
 
-    def _remove_address(self, config, link):
+    def _remove_address(self, iface, config, link):
         mode = config["mode"]
+        address = None
         if mode == "static":
             address = config["address"]
+        elif mode == "dhcp":
+            address = self._dhcp.get(iface, None)
+        if address:
             if address not in link["addresses"]:
                 self._print_stdout(f"Error: ipv{address.version}: Address not found.")
                 return 1
@@ -296,7 +314,7 @@ class NetworkingMock():  # pylint: disable=too-many-instance-attributes
         if retcode != 0:
             return 0
         self._set_link_state(iface, link, False)
-        self._remove_address(config, link)
+        self._remove_address(iface, config, link)
         return 0
 
     def _set_slave_up(self, iface, config):  # pylint: disable=no-self-use,unused-argument
@@ -324,7 +342,7 @@ class NetworkingMock():  # pylint: disable=too-many-instance-attributes
         link, retcode = self._get_link(iface)
         if retcode != 0:
             return 0
-        self._remove_address(config, link)
+        self._remove_address(iface, config, link)
         self._set_link_state(iface, link, False)
         for slave in config["slaves"]:
             self._unenslave_iface(slave)
@@ -359,7 +377,7 @@ class NetworkingMock():  # pylint: disable=too-many-instance-attributes
         link, retcode = self._get_link(iface)
         if retcode != 0:
             return 0
-        self._remove_address(config, link)
+        self._remove_address(iface, config, link)
         self._set_link_state(iface, link, False)
         self._remove_virtual_link(iface)
         return 0
@@ -375,7 +393,7 @@ class NetworkingMock():  # pylint: disable=too-many-instance-attributes
         parent = config["parent"]
         link, retcode = self._get_link(parent)
         if retcode == 0:
-            self._remove_address(config, link)
+            self._remove_address(parent, config, link)
         return 0
 
     def _set_ifstate(self, iface, state):
@@ -466,6 +484,30 @@ class NetworkingMock():  # pylint: disable=too-many-instance-attributes
         self._add_history("ip_addr_show_dev", iface)
         return self._run_command(self._do_ip_addr_show_dev, iface)
 
+    def _do_ip_addr_show_addr(self, addr):
+        try:
+            target = IPNetwork(addr)
+        except AddrFormatError:
+            self._print_stdout(f'Error: any valid prefix is expected rather than "{addr}".')
+            return 1
+
+        idx = 1
+        for ifname, link in self._links.items():
+            for link_addr in link["addresses"]:
+                if link_addr == target:
+                    family = "inet6" if target.version == 6 else "inet"
+                    self._print_stdout(f"{idx}: {ifname}    {family} {addr}")
+                    idx += 1
+        return 0
+
+    def ip_addr_show_addr(self, addr):
+        self._add_history("ip_addr_show_addr", addr)
+        return self._run_command(self._do_ip_addr_show_addr, addr)
+
+    def ip_addr_show_ip(self, addr):
+        self._add_history("ip_addr_show_ip", addr)
+        return self.ip_addr_show_addr(addr)
+
     def _do_ip_addr_add(self, addr, iface):
         link, retcode = self._get_link_for_ip_cmd(iface)
         if retcode != 0:
@@ -516,6 +558,14 @@ class NetworkingMock():  # pylint: disable=too-many-instance-attributes
     def ip_route_show_all(self, prot):
         self._add_history("ip_route_show_all", prot)
         return 0, "< 'ip route show all' output placeholder >\n"
+
+    def ip_neigh_show_all(self, not_used):
+        self._add_history("ip_neigh_show_all", not_used)
+        return 0, "< 'ip neigh show all' output placeholder >\n"
+
+    def get_hostname(self, not_used):
+        self._add_history("get_hostname", not_used)
+        return 0, "< 'hostname' output placeholder >\n"
 
     @staticmethod
     def _sort_routes(routes):
@@ -746,8 +796,17 @@ class SystemCommandMock():  # pylint: disable=too-few-public-methods
     def _ip_link_set_down(self, args):
         return self._nwmock.ip_link_set_down(args[0])
 
+    def _ip_o_addr_show_to(self, args):
+        return self._nwmock.ip_addr_show_addr(args[0])
+
     def _ip_route_show_all(self, args):
         return self._nwmock.ip_route_show_all(args[0])
+
+    def _ip_neigh_show_all(self, args):
+        return self._nwmock.ip_neigh_show_all(args)
+
+    def _hostname(self, args):
+        return self._nwmock.get_hostname(args)
 
     def _ip_route_show(self, args):
         return self._nwmock.ip_route_show(args[0], args[1], args[2], args[3], args[4])
@@ -774,8 +833,10 @@ class SystemCommandMock():  # pylint: disable=too-few-public-methods
         (re.compile(R"^/usr/sbin/ip -br addr show dev (\S+)$"), _ip_br_addr_show_dev),
         (re.compile(R"^/usr/sbin/ip addr add (\S+) dev (\S+)$"), _ip_addr_add),
         (re.compile(R"^/usr/sbin/ip addr flush dev (\S+)$"), _ip_addr_flush),
+        (re.compile(R"^(?:/usr/sbin/)?ip -o addr show to (\S+)$"), _ip_o_addr_show_to),
         (re.compile(R"^/usr/sbin/ip link set down dev (\S+)$"), _ip_link_set_down),
         (re.compile(R"^/usr/sbin/ip (?:(-6) )?route show$"), _ip_route_show_all),
+        (re.compile(R"^/usr/sbin/ip neigh show$"), _ip_neigh_show_all),
         (re.compile(R"^/usr/sbin/ip (?:(-6) )?route show (\S+)(?: via (\S+) "
                     R"dev (\S+))?(?: metric (\S+))?$"), _ip_route_show),
         (re.compile(R"^/usr/sbin/ip route add (\S+) via (\S+) "
@@ -783,7 +844,8 @@ class SystemCommandMock():  # pylint: disable=too-few-public-methods
         (re.compile(R"^/usr/sbin/ip route replace (\S+) via (\S+) "
                     R"dev (\S+)(?: metric (\S+))?$"), _ip_route_replace),
         (re.compile(R"^/usr/sbin/ip route del (\S+) via (\S+) "
-                    R"dev (\S+)(?: metric (\S+))?$"), _ip_route_del),)
+                    R"dev (\S+)(?: metric (\S+))?$"), _ip_route_del),
+        (re.compile(R"^/usr/bin/hostname$"), _hostname),)
 
     def execute_system_cmd(self, cmd):
         for mapping in self._MAPPINGS:
@@ -1038,8 +1100,10 @@ class BaseTestCase(testtools.TestCase):
     def _add_logger_mock(self):
         self._log = LoggerMock()
 
-    def _add_nw_mock(self, static_links):
+    def _add_nw_mock(self, static_links, dhcp_config=None):
         self._nwmock = NetworkingMock(self._fs, static_links)
+        if dhcp_config:
+            self._nwmock.enable_dhcp(dhcp_config)
 
     def _add_scmd_mock(self):
         self._scmdmock = SystemCommandMock(self._nwmock)
@@ -1048,6 +1112,7 @@ class BaseTestCase(testtools.TestCase):
         with (
             mock.patch("src.bin.apply_network_config.path_exists", self._fs.exists),
             mock.patch("os.remove", self._fs.delete),
+            mock.patch("os.listdir", self._fs.listdir),
             mock.patch("builtins.open", self._fs.open),
             mock.patch.multiple("os.path",
                                 isfile=self._fs.isfile,
@@ -1174,70 +1239,6 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
                     "post-up echo # > /proc/sys/net/ipv6/conf/enp0s8/autoconf\n"
                     "stx-description ifname:etc0,net:None\n")
 
-    def test_parse_valid_ifcfg_file(self):
-        self._add_fs_mock({anc.ETC_DIR + "/ifcfg-enp0s8": self._IFACE_FILE})
-        config = self._mocked_call([self._mock_fs], anc.parse_ifcfg_file, "enp0s8")
-        self.assertEqual(6, len(config))
-        self.assertEqual("enp0s8 inet static", config["iface"])
-        self.assertEqual("12.12.1.55", config["address"])
-        self.assertEqual("255.255.255.0", config["netmask"])
-        self.assertEqual("9000", config["mtu"])
-        self.assertEqual("echo # > /proc/sys/net/ipv6/conf/enp0s8/autoconf", config["post-up"])
-        self.assertEqual("ifname:etc0,net:None", config["stx-description"])
-
-    def test_parse_missing_ifcfg_file(self):
-        self._add_fs_mock()
-        self._add_logger_mock()
-        config = self._mocked_call([self._mock_fs, self._mock_logger],
-                                   anc.parse_ifcfg_file, "enp0s8")
-        self.assertEqual(0, len(config))
-        self.assertEqual(LoggerMock.WARNING, self._log.get_history()[-1][0])
-        self.assertEqual(f"Interface config file not found: '{anc.ETC_DIR + '/ifcfg-enp0s8'}'",
-                         self._log.get_history()[-1][1])
-
-    def test_parse_ifcfg_file_with_multiple_config(self):
-        path = anc.ETC_DIR + "/ifcfg-enp0s8"
-        self._add_fs_mock({path: self._IFACE_FILE +
-                           "iface enp0s9 inet static\n"
-                           "mtu 9000\n"
-                           "stx-description ifname:etc1,net:None\n"})
-        self._add_logger_mock()
-        config = self._mocked_call([self._mock_fs, self._mock_logger],
-                                   anc.parse_ifcfg_file, "enp0s8")
-        self.assertEqual(6, len(config))
-        self.assertEqual(LoggerMock.WARNING, self._log.get_history()[-1][0])
-        self.assertEqual(f"Multiple interface configs found in '{path}': enp0s8 enp0s9",
-                         self._log.get_history()[-1][1])
-
-    def test_parse_invalid_ifcfg_file(self):
-        path = anc.ETC_DIR + "/ifcfg-enp0s8"
-        self._add_fs_mock({path: "invalid content line 1\n"
-                                 "invalid content line 2\n"
-                                 "invalid content line 3\n"})
-        self._add_logger_mock()
-        config = self._mocked_call([self._mock_fs, self._mock_logger],
-                                   anc.parse_ifcfg_file, "enp0s8")
-        self.assertEqual(0, len(config))
-        self.assertEqual(LoggerMock.WARNING, self._log.get_history()[-1][0])
-        self.assertEqual(f"No interface config found in '{path}'", self._log.get_history()[-1][1])
-
-    def test_parse_ifcfg_file_with_unrelated_ifaces(self):
-        path = anc.ETC_DIR + "/ifcfg-enp0s8"
-        self._add_fs_mock({path: "iface enp0s9 inet static\n"
-                                 "mtu 9000\n"
-                                 "stx-description ifname:etc1,net:None\n"
-                                 "iface enp0s10 inet static\n"
-                                 "mtu 9000\n"
-                                 "stx-description ifname:etc2,net:None\n"})
-        self._add_logger_mock()
-        config = self._mocked_call([self._mock_fs, self._mock_logger],
-                                   anc.parse_ifcfg_file, "enp0s8")
-        self.assertEqual(0, len(config))
-        self.assertEqual(LoggerMock.WARNING, self._log.get_history()[-1][0])
-        self.assertEqual(f"Config for interface 'enp0s8' not found in '{path}'. Instead, "
-                         f"file has config(s) for the following interface(s): enp0s10 enp0s9",
-                         self._log.get_history()[-1][1])
-
     def test_parse_auto_file(self):
         self._add_fs_mock({anc.ETC_DIR + "/auto":
                            "auto  lo   enp0s3\tenp0s3:1-17 enp0s8 vlan100"})
@@ -1252,6 +1253,87 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
         self.assertEqual(LoggerMock.INFO, self._log.get_history()[-1][0])
         self.assertEqual(f"Auto file not found: '{anc.ETC_DIR + '/auto'}'",
                          self._log.get_history()[-1][1])
+
+    def test_parse_etc_dir(self):
+        contents = dict()
+        contents[anc.ETC_DIR + "/auto"] = (
+            "auto lo enp0s3 vlan20\n")
+        contents[anc.ETC_DIR + "/oam-config"] = (
+            "iface enp0s3 inet manual\n"
+            "iface vlan20 inet static\n"
+            "address 177.122.10.34\n"
+            "netmask 255.255.255.0\n"
+            "gateway 177.122.10.1\n"
+            "vlan-raw-device enp0s3\n")
+        contents[anc.ETC_DIR + "/ifcfg-lo"] = (
+            "auto lo\n"
+            "iface lo inet loopback\n")
+        contents[anc.ETC_DIR + "/ifcfg-enp0s8"] = (
+            "auto enp0s8\n"
+            "iface enp0s8 inet manual\n"
+            "post-up  echo 0 > /proc/sys/net/ipv6/conf/enp0s8/autoconf; "
+                     "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/accept_ra; "  # noqa: E131
+                     "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/accept_redirects\n")
+        contents[anc.ETC_DIR + "/ifcfg-pxeboot"] = (
+            "auto enp0s8:2\n"
+            "iface enp0s8:2 inet dhcp\n")
+        contents[anc.ETC_DIR + "/ifcfg-vlan10"] = (
+            "auto vlan10\n"
+            "iface vlan10 inet static\n"
+            "address 192.168.204.75\n"
+            "netmask 255.255.255.0\n"
+            "vlan-raw-device enp0s8\n")
+
+        self._add_fs_mock(contents)
+        self._add_logger_mock()
+
+        iface_configs = self._mocked_call([self._mock_fs, self._mock_logger], anc.parse_etc_dir)
+
+        sorted_contents = [(ifname, sorted(iface_configs[ifname].items()))
+                           for ifname in sorted(iface_configs.keys())]
+        self.assertEqual([
+            ('enp0s3', [('iface', 'enp0s3 inet manual')]),
+            ('enp0s8', [('iface', 'enp0s8 inet manual'),
+                        ('post-up', 'echo 0 > /proc/sys/net/ipv6/conf/enp0s8/autoconf; echo 0 > '
+                                    '/proc/sys/net/ipv6/conf/enp0s8/accept_ra; echo 0 > '
+                                    '/proc/sys/net/ipv6/conf/enp0s8/accept_redirects')]),
+            ('enp0s8:2', [('iface', 'enp0s8:2 inet dhcp')]),
+            ('lo', [('iface', 'lo inet loopback')]),
+            ('vlan10', [('address', '192.168.204.75'),
+                        ('iface', 'vlan10 inet static'),
+                        ('netmask', '255.255.255.0'),
+                        ('vlan-raw-device', 'enp0s8')]),
+            ('vlan20', [('address', '177.122.10.34'),
+                        ('gateway', '177.122.10.1'),
+                        ('iface', 'vlan20 inet static'),
+                        ('netmask', '255.255.255.0'),
+                        ('vlan-raw-device', 'enp0s3')])],
+            sorted_contents)
+
+        self.assertEqual([
+            ('debug', 'Parsing file /etc/network/interfaces.d/auto'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-enp0s8'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-lo'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-pxeboot'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-vlan10'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/oam-config')],
+            self._log.get_history())
+
+    def test_get_current_config_empty(self):
+        self._add_fs_mock({anc.ETC_DIR: None})
+        self._add_logger_mock()
+
+        config = self._mocked_call([self._mock_fs, self._mock_logger], anc.get_current_config)
+
+        self.assertEqual({"auto": set(), "dependencies": {}, "ifaces": {}, "ifaces_types": {}},
+                         config)
+
+        self.assertEqual([
+            ('info', 'Parsing contents of the /etc/network/interfaces.d directory to gather '
+                     'current network configuration'),
+            ('info', "Auto file not found: '/etc/network/interfaces.d/auto'"),
+            ('warning', 'No interface config found in /etc/network/interfaces.d')],
+            self._log.get_history())
 
     def test_get_vlan_attributes_vlanNNN(self):
         dev, vlan_id = anc.get_vlan_attributes("vlan123", {"vlan-raw-device": "enp0s8"})
@@ -1407,7 +1489,7 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
 
     def test_is_iface_missing_or_down(self):
         dev_path = "/sys/devices/pci0000:00/net/enp0s8"
-        self._add_fs_mock({dev_path + "/operstate": "up",
+        self._add_fs_mock({dev_path + "/operstate": "up\n",
                            anc.DEVLINK_BASE_PATH + "enp0s8": (dev_path, )})
 
         def check_result(value):
@@ -1416,7 +1498,7 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
 
         check_result(False)
 
-        self._fs.set_file_contents(anc.DEVLINK_BASE_PATH + "enp0s8/operstate", "down")
+        self._fs.set_file_contents(anc.DEVLINK_BASE_PATH + "enp0s8/operstate", "down\n")
         check_result(True)
 
         self._fs.delete(anc.DEVLINK_BASE_PATH + "enp0s8")
@@ -1523,7 +1605,7 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
             raise Exception(f"Unexpected system command: '{cmd}'")
 
         dev_path = "/sys/devices/pci0000:00/net/enp0s8"
-        self._add_fs_mock({dev_path + "/operstate": "up",
+        self._add_fs_mock({dev_path + "/operstate": "up\n",
                            anc.DEVLINK_BASE_PATH + "enp0s8": (dev_path, ),
                            anc.IFSTATE_BASE_PATH + "enp0s8": "enp0s8"})
         self._add_logger_mock()
@@ -1545,7 +1627,7 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
         self._add_logger_mock()
 
         def run_function(path_exists: bool):
-            with(mock.patch('src.bin.apply_network_config.path_exists', return_value=path_exists),
+            with (mock.patch('src.bin.apply_network_config.path_exists', return_value=path_exists),
                  mock.patch('os.remove', side_effect=OSError("< OS ERROR >"))):
                 self._mocked_call([self._mock_logger], anc.remove_iface_config_file, "enp0s8")
 
@@ -1798,6 +1880,15 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
         self.assertEqual("default metric 1", anc.get_route_description(route_4, False))
 
     def _test_add_route_entry_to_kernel(self, entry, cmd_responses):
+        """Test call to add_route_entry_to_kernel()
+
+        Args:
+            entry (string): the route entry
+            cmd_responses (tuple): contains 3 elements
+                pos[0] => linux ip command provided by the function under test
+                pos[1] => linux return code
+                pos[2] => linux command stdout
+        """
         position = 0
         self._add_logger_mock()
 
@@ -1814,75 +1905,59 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
     def test_add_route_entry_to_kernel_existing(self):
         self._test_add_route_entry_to_kernel(
             "13.13.3.0 255.255.255.0 12.12.3.113 vlan200 metric 1",
-            (("/usr/sbin/ip route show 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0,
-              "13.13.3.0/24"), ))
+            (("/usr/sbin/ip route replace 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1",
+              RET_OK, "13.13.3.0/24"), None))
         self.assertEqual(
-            [('info', 'Adding route: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1'),
-             ('info', 'Route already exists, skipping')],
+            [('info', 'Route adding/replacing: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1')],
             self._log.get_history())
 
     def test_add_route_entry_to_kernel_show_fail(self):
         self._test_add_route_entry_to_kernel(
             "13.13.3.0 255.255.255.0 12.12.3.113 vlan200 metric 1",
-            (("/usr/sbin/ip route show 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 1,
-              "< ERROR 1 >"),
-             ("/usr/sbin/ip route show 13.13.3.0/24 metric 1", 1, "< ERROR 2 >"),
-             ("/usr/sbin/ip route add 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0, "")))
+            (("/usr/sbin/ip route replace 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1",
+              RET_OK, ""), None))
         self.assertEqual(
-            [('info', 'Adding route: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1')],
+            [('info', 'Route adding/replacing: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1')],
             self._log.get_history())
 
     def test_add_route_entry_to_kernel_add_fail(self):
         self._test_add_route_entry_to_kernel(
             "13.13.3.0 255.255.255.0 12.12.3.113 vlan200 metric 1",
-            (("/usr/sbin/ip route show 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0, ""),
-             ("/usr/sbin/ip route show 13.13.3.0/24 metric 1", 0, ""),
-             ("/usr/sbin/ip route add 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 1,
-              "< ERROR >")))
+            (("/usr/sbin/ip route replace 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1",
+              RET_ERR, "< ERROR >"), None))
         self.assertEqual(
-            [('info', 'Adding route: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1'),
-             ('error', "Failed adding route 13.13.3.0/24 via 12.12.3.113 dev "
+            [('info', 'Route adding/replacing: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1'),
+             ('error', "Failed replacing route 13.13.3.0/24 via 12.12.3.113 dev "
                        "vlan200 metric 1: '< ERROR >'")],
             self._log.get_history())
 
     def test_add_route_entry_to_kernel_replace_fail(self):
         self._test_add_route_entry_to_kernel(
             "13.13.3.0 255.255.255.0 12.12.3.113 vlan200 metric 1",
-            (("/usr/sbin/ip route show 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0, ""),
-             ("/usr/sbin/ip route show 13.13.3.0/24 metric 1", 0,
-              "13.13.3.0/24 via 12.12.3.1 dev vlan200"),
-             ("/usr/sbin/ip route replace 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 1,
-              "< ERROR >")))
+            (("/usr/sbin/ip route replace 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1",
+              RET_ERR, "< ERROR >"), None))
         self.assertEqual(
-            [('info', 'Adding route: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1'),
-             ('info', 'Route to specified network already exists, replacing: 13.13.3.0/24 via '
-                      '12.12.3.1 dev vlan200'),
-             ('error', "Failed replacing route 13.13.3.0/24 via 12.12.3.113 dev "
-                       "vlan200 metric 1: '< ERROR >'")],
+            [('info', 'Route adding/replacing: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1'),
+             ('error', "Failed replacing route 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1: "
+              "'< ERROR >'")],
             self._log.get_history())
 
     def test_add_route_entry_to_kernel_add_succeed(self):
         self._test_add_route_entry_to_kernel(
             "13.13.3.0 255.255.255.0 12.12.3.113 vlan200 metric 1",
-            (("/usr/sbin/ip route show 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0, ""),
-             ("/usr/sbin/ip route show 13.13.3.0/24 metric 1", 0, ""),
-             ("/usr/sbin/ip route add 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0, "")))
+            (("/usr/sbin/ip route replace 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1",
+              RET_OK, ""), None))
         self.assertEqual(
-            [('info', 'Adding route: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1')],
+            [('info', 'Route adding/replacing: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1')],
             self._log.get_history())
 
     def test_add_route_entry_to_kernel_replace_succeed(self):
         self._test_add_route_entry_to_kernel(
             "13.13.3.0 255.255.255.0 12.12.3.113 vlan200 metric 1",
-            (("/usr/sbin/ip route show 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0, ""),
-             ("/usr/sbin/ip route show 13.13.3.0/24 metric 1", 0,
-              "13.13.3.0/24 via 12.12.3.1 dev vlan200"),
-             ("/usr/sbin/ip route replace 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0,
-              "")))
+            (("/usr/sbin/ip route replace 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1", 0,
+              ""), None))
         self.assertEqual(
-            [('info', 'Adding route: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1'),
-             ('info', 'Route to specified network already exists, replacing: 13.13.3.0/24 via '
-                      '12.12.3.1 dev vlan200')],
+            [('info', 'Route adding/replacing: 13.13.3.0/24 via 12.12.3.113 dev vlan200 metric 1')],
             self._log.get_history())
 
     def _test_update_routes(self, etc_routes, puppet_routes, updated_ifaces=None):
@@ -1950,14 +2025,14 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
             ('info', 'Removing route: 10.33.3.0/24 via 10.10.10.101 dev enc10 metric 1'),
             ('info', 'Removing route: fd33:2::/64 via fd12::101 dev enc12 metric 1'),
             ('info', 'Removing route: fd33:3::/64 via fd12::101 dev enc12 metric 1'),
-            ('info', 'Route not previously present in /etc/network/routes, adding'),
-            ('info', 'Adding route: 10.33.2.0/24 via 10.10.10.202 dev enc10 metric 1'),
-            ('info', 'Route not previously present in /etc/network/routes, adding'),
-            ('info', 'Adding route: 10.33.4.0/24 via 10.10.10.101 dev enc10 metric 1'),
-            ('info', 'Route not previously present in /etc/network/routes, adding'),
-            ('info', 'Adding route: fd33:2::/64 via fd12::202 dev enc12 metric 1'),
-            ('info', 'Route not previously present in /etc/network/routes, adding'),
-            ('info', 'Adding route: fd33:4::/64 via fd12::101 dev enc12 metric 1')],
+            ('debug', 'Route not previously present in /etc/network/routes, adding'),
+            ('info', 'Route adding/replacing: 10.33.2.0/24 via 10.10.10.202 dev enc10 metric 1'),
+            ('debug', 'Route not previously present in /etc/network/routes, adding'),
+            ('info', 'Route adding/replacing: 10.33.4.0/24 via 10.10.10.101 dev enc10 metric 1'),
+            ('debug', 'Route not previously present in /etc/network/routes, adding'),
+            ('info', 'Route adding/replacing: fd33:2::/64 via fd12::202 dev enc12 metric 1'),
+            ('debug', 'Route not previously present in /etc/network/routes, adding'),
+            ('info', 'Route adding/replacing: fd33:4::/64 via fd12::101 dev enc12 metric 1')],
             self._log.get_history())
 
         self.assertEqual(
@@ -1997,13 +2072,13 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
             ('info', 'No differences found between /var/run/network-scripts.puppet/routes and '
                      '/etc/network/routes'),
             ('info', 'Route is associated with and updated interface, adding'),
-            ('info', 'Adding route: 10.33.3.0/24 via 10.10.11.101 dev enc11 metric 1'),
+            ('info', 'Route adding/replacing: 10.33.3.0/24 via 10.10.11.101 dev enc11 metric 1'),
             ('info', 'Route is associated with and updated interface, adding'),
-            ('info', 'Adding route: 10.33.4.0/24 via 10.10.11.101 dev enc11 metric 1'),
+            ('info', 'Route adding/replacing: 10.33.4.0/24 via 10.10.11.101 dev enc11 metric 1'),
             ('info', 'Route is associated with and updated interface, adding'),
-            ('info', 'Adding route: fd33:3::/64 via fd13::101 dev enc13 metric 1'),
+            ('info', 'Route adding/replacing: fd33:3::/64 via fd13::101 dev enc13 metric 1'),
             ('info', 'Route is associated with and updated interface, adding'),
-            ('info', 'Adding route: fd33:4::/64 via fd13::101 dev enc13 metric 1')],
+            ('info', 'Route adding/replacing: fd33:4::/64 via fd13::101 dev enc13 metric 1')],
             self._log.get_history())
 
         self.assertEqual(
@@ -2059,9 +2134,9 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
             ('info', "Enrollment: Parsing file '/etc/network/interfaces.d/50-cloud-init'"),
             ('info', 'Enrollment: Configuring interface vlan401 with gateway '
                      '2620:10a:a001:d41::1'),
-            ('info', 'Adding route: default via 2620:10a:a001:d41::1 dev vlan401'),
-            ('info', 'Route to specified network already exists, replacing: default via fd05::111 '
-                     'dev ens1f0 metric 1024 pref medium')],
+            ('info', 'Route adding/replacing: default via 2620:10a:a001:d41::1 dev vlan401'),
+            ('info', "Enrollment: Removed '/etc/network/interfaces.d/50-cloud-init' to prevent "
+                     'config conflicts')],
             self._log.get_history())
 
     def test_check_cloud_init_multiple_ifaces(self):
@@ -2108,13 +2183,11 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
                         'vlan402'),
             ('info', 'Enrollment: Configuring interface vlan401 with gateway '
                      '2620:10a:a001:d41::1'),
-            ('info', 'Adding route: default via 2620:10a:a001:d41::1 dev vlan401'),
-            ('info', 'Route to specified network already exists, replacing: default via fd05::111 '
-                     'dev ens1f0 metric 1024 pref medium'),
+            ('info', 'Route adding/replacing: default via 2620:10a:a001:d41::1 dev vlan401'),
             ('info', 'Enrollment: Configuring interface vlan402 with gateway eb22:303::1'),
-            ('info', 'Adding route: default via eb22:303::1 dev vlan402'),
-            ('info', 'Route to specified network already exists, replacing: default via '
-                     '2620:10a:a001:d41::1 dev vlan401 metric 1024 pref medium')],
+            ('info', 'Route adding/replacing: default via eb22:303::1 dev vlan402'),
+            ('info', "Enrollment: Removed '/etc/network/interfaces.d/50-cloud-init' to prevent "
+                     'config conflicts')],
             self._log.get_history())
 
     def test_check_cloud_init_empty(self):
@@ -2155,47 +2228,188 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
             self._log.get_history())
 
     def test_disable_kickstart_pxeboot(self):
+        puppet_cfg = {
+            "interfaces": {
+                "auto": ["lo", "enp0s8", "vlan10", "vlan10:1-5"],
+                "lo": {},
+                "enp0s8": {"mode": "dhcp"},
+                "vlan10": {"raw_dev": "enp0s8"},
+                "vlan10:1-5": {"raw_dev": "enp0s8", "address": "192.168.204.75/24",
+                               "gateway": "192.168.204.2"}},
+        }
+
+        contents = FILE_GEN.generate_file_tree(puppet_files=puppet_cfg)
+        contents[anc.ETC_DIR + "/ifcfg-lo"] = (
+            "auto lo\n"
+            "iface lo inet loopback\n")
+        contents[anc.ETC_DIR + "/ifcfg-enp0s8"] = (
+            "auto enp0s8\n"
+            "iface enp0s8 inet manual\n"
+            "post-up  echo 0 > /proc/sys/net/ipv6/conf/enp0s8/autoconf; "
+                     "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/accept_ra; "  # noqa: E131
+                     "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/accept_redirects\n")
+        contents[anc.ETC_DIR + "/ifcfg-pxeboot"] = (
+            "auto enp0s8:2\n"
+            "iface enp0s8:2 inet dhcp\n"
+            "post-up  echo 0 > /proc/sys/net/ipv6/conf/enp0s8/autoconf; "
+                     "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/accept_ra; "  # noqa: E131
+                     "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/accept_redirects\n")
+        contents[anc.ETC_DIR + "/ifcfg-vlan10"] = (
+            "auto vlan10\n"
+            "iface vlan10 inet static\n"
+            "address 192.168.204.75\n"
+            "netmask 255.255.255.0\n"
+            "gateway 192.168.204.2\n"
+            "vlan-raw-device enp0s8\n"
+            "post-up  echo 0 > /proc/sys/net/ipv6/conf/vlan10/autoconf; "
+                     "echo 0 > /proc/sys/net/ipv6/conf/vlan10/accept_ra; "  # noqa: E131
+                     "echo 0 > /proc/sys/net/ipv6/conf/vlan10/accept_redirects\n")
+
+        self._add_fs_mock(contents)
+        self._add_nw_mock(["lo", "enp0s8"], {"enp0s8": IPNetwork("169.254.202.131/24")})
+        self._add_scmd_mock()
+        self._add_logger_mock()
+        self._nwmock.apply_auto()
+
+        self._mocked_call([self._mock_fs,
+                           self._mock_syscmd,
+                           self._mock_sysinv_lock,
+                           self._mock_logger],
+                          anc.update_interfaces)
+
+        self.assertEqual([
+            'enp0s8 UP 169.254.202.131/24',
+            'lo UP',
+            'vlan10 UP VLAN(enp0s8,10) 192.168.204.75/24'],
+            self._nwmock.get_links_status())
+
+        self.assertEqual([
+            ('info', 'Turn off pxeboot install config for enp0s8:2, will be turned on later'),
+            ('info', 'Bringing enp0s8:2 down'),
+            ('info', 'Remove ifcfg-pxeboot, left from kickstart install phase'),
+            ('info', 'Removing /etc/network/interfaces.d/ifcfg-pxeboot'),
+            ('info', 'Parsing contents of the /etc/network/interfaces.d directory to gather '
+                     'current network configuration'),
+            ('info', "Auto file not found: '/etc/network/interfaces.d/auto'"),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-enp0s8'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-lo'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-vlan10'),
+            ('info', 'Added interfaces: enp0s8 lo vlan10 vlan10:1-5'),
+            ('info', 'Interface enp0s8 not in /etc/network/interfaces.d/auto but currently up, '
+                     'adding to DOWN list'),
+            ('info', 'Interface lo not in /etc/network/interfaces.d/auto but currently up, '
+                     'adding to DOWN list'),
+            ('info', 'Interface vlan10 not in /etc/network/interfaces.d/auto but currently up, '
+                     'adding to DOWN list'),
+            ('info', 'Bringing vlan10 down'),
+            ('info', 'Bringing enp0s8 down'),
+            ('info', 'Bringing lo down'),
+            ('info', 'Bringing lo up'),
+            ('info', 'Bringing enp0s8 up'),
+            ('info', 'Bringing vlan10 up'),
+            ('info', 'Bringing vlan10:1-5 up')],
+            self._log.get_history())
+
+    def test_add_interface_link_up(self):
         etc_cfg = {
             "interfaces": {
-                "auto": ["lo", "enp0s8"],
-                "lo": {},
-                "enp0s8": {}, },
+                "auto": ["lo"],
+                "lo": {}},
         }
 
         puppet_cfg = {
             "interfaces": {
-                "auto": ["lo", "enp0s8", "enp0s8:2-3", "enp0s8:2-4"],
+                "auto": ["lo", "enp0s9", "enp0s9:4-17"],
                 "lo": {},
-                "enp0s8": {"address": "169.254.202.2/24"},
-                "enp0s8:2-3": {"address": "192.168.204.2/24"},
-                "enp0s8:2-4": {"address": "fd01::2/64"}},
+                "enp0s9": {},
+                "enp0s9:4-17": {"address": "188.177.12.44/24"}},
         }
 
         contents = FILE_GEN.generate_file_tree(puppet_files=puppet_cfg, etc_files=etc_cfg)
-        contents[anc.ETC_DIR + "/ifcfg-pxeboot"] = (
-            "auto enp0s8:2\n"
-            "iface enp0s8:2 inet dhcp\n"
-            "    post-up  echo 0 > /proc/sys/net/ipv6/conf/enp0s8/autoconf; "
-                         "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/accept_ra; "  # noqa: E131
-                         "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/accept_redirects\n")
-
         self._add_fs_mock(contents)
-        self._add_nw_mock(["lo", "enp0s8"])
+        self._add_nw_mock(["lo", "enp0s9"])
         self._add_scmd_mock()
         self._add_logger_mock()
         self._nwmock.apply_auto()
+        self._nwmock.ip_link_set_up("enp0s9")
+        self._nwmock.ip_addr_add("12.12.12.77/24", "enp0s9")
+
+        self.assertEqual([
+            'enp0s9 UP 12.12.12.77/24',
+            'lo UP'],
+            self._nwmock.get_links_status())
 
         self._mocked_call([self._mock_fs, self._mock_syscmd,
                            self._mock_sysinv_lock, self._mock_logger], anc.update_interfaces)
 
         self.assertEqual([
-            ('info', 'Turn off pxeboot install config for enp0s8:2, will be turned on later'),
-            ('info', 'Bringing enp0s8:2 down'),
-            ('info', 'Turn off pxeboot for base interface enp0s8'),
-            ('info', 'Bringing enp0s8 down'),
-            ('info', 'Remove ifcfg-pxeboot, left from kickstart install phase'),
-            ('info', 'Removing /etc/network/interfaces.d/ifcfg-pxeboot')],
-            self._log.get_history()[:6])
+            'enp0s9 UP 188.177.12.44/24',
+            'lo UP'],
+            self._nwmock.get_links_status())
+
+        self.assertEqual([
+            ('info', 'Parsing contents of the /etc/network/interfaces.d directory to gather '
+                     'current network configuration'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/auto'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-lo'),
+            ('info', 'Added interfaces: enp0s9 enp0s9:4-17'),
+            ('info', 'Interface enp0s9 not in /etc/network/interfaces.d/auto but currently up, '
+                     'adding to DOWN list'),
+            ('info', 'Bringing enp0s9 down'),
+            ('info', 'Bringing enp0s9 up'),
+            ('info', 'Bringing enp0s9:4-17 up')],
+            self._log.get_history())
+
+    def test_add_interface_currently_up(self):
+        etc_cfg = {
+            "interfaces": {
+                "auto": ["lo"],
+                "lo": {},
+                "enp0s9": {"address": "192.168.12.45/24"}},
+        }
+
+        puppet_cfg = {
+            "interfaces": {
+                "auto": ["lo", "enp0s9", "enp0s9:4-17"],
+                "lo": {},
+                "enp0s9": {},
+                "enp0s9:4-17": {"address": "188.177.12.44/24"}},
+        }
+
+        contents = FILE_GEN.generate_file_tree(puppet_files=puppet_cfg, etc_files=etc_cfg)
+        self._add_fs_mock(contents)
+        self._add_nw_mock(["lo", "enp0s9"])
+        self._add_scmd_mock()
+        self._add_logger_mock()
+        self._nwmock.apply_auto()
+        self._nwmock.ifup("enp0s9")
+
+        self.assertEqual([
+            'enp0s9 UP 192.168.12.45/24',
+            'lo UP'],
+            self._nwmock.get_links_status())
+
+        self._mocked_call([self._mock_fs, self._mock_syscmd,
+                           self._mock_sysinv_lock, self._mock_logger], anc.update_interfaces)
+
+        self.assertEqual([
+            'enp0s9 UP 188.177.12.44/24',
+            'lo UP'],
+            self._nwmock.get_links_status())
+
+        self.assertEqual([
+            ('info', 'Parsing contents of the /etc/network/interfaces.d directory to gather '
+                     'current network configuration'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/auto'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-enp0s9'),
+            ('debug', 'Parsing file /etc/network/interfaces.d/ifcfg-lo'),
+            ('info', 'Added interfaces: enp0s9 enp0s9:4-17'),
+            ('info', 'Interface enp0s9 not in /etc/network/interfaces.d/auto but currently up, '
+                     'adding to DOWN list'),
+            ('info', 'Bringing enp0s9 down'),
+            ('info', 'Bringing enp0s9 up'),
+            ('info', 'Bringing enp0s9:4-17 up')],
+            self._log.get_history())
 
     def test_execute_system_cmd(self):
         retcode, stdout = anc.execute_system_cmd('echo "test_execute_system_cmd"')
@@ -2451,7 +2665,7 @@ class MigrationBaseTestCase(BaseTestCase):
                            self._mock_sysinv_lock, self._mock_logger], anc.apply_config, False)
 
     def _check_etc_file_list(self, to_cfg):
-        files = self._fs.get_file_list(anc.ETC_DIR)
+        files = self._fs.listdir(anc.ETC_DIR)
         etc_ifaces = []
         has_auto = False
         for file in files:
@@ -2671,8 +2885,8 @@ class TestEthToVLANMigration(MigrationBaseTestCase):
         self.assertEqual(['default via 10.20.1.1 dev enp0s3',
                           'default via fd00::1 dev enp0s3 metric 1024',
                           '14.14.1.0/24 via 10.20.1.111 dev enp0s3 metric 1',
-                          '14.15.1.0/24 via 169.254.202.111 dev enp0s8 metric 1',
                           'fa01:1::/64 via fd00::111 dev enp0s3 metric 1',
+                          '14.15.1.0/24 via 169.254.202.111 dev enp0s8 metric 1',
                           '14.14.2.0/24 via 192.168.204.111 dev enp0s8 metric 1',
                           '14.14.3.0/24 via 192.168.206.111 dev enp0s8 metric 1',
                           'fa01:2::/64 via fd01::111 dev enp0s8 metric 1',
@@ -2986,12 +3200,10 @@ class TestUpgrade(BaseTestCase):
             ('info', 'Configuring interface enp0s8'),
             ('info', 'Configuring interface enp0s3:1-1'),
             ('info', "Link already has address '10.20.1.2/24', no need to set label up"),
-            ('info', 'Adding route: default via 10.20.1.1 dev enp0s3'),
-            ('info', 'Route already exists, skipping'),
+            ('info', 'Route adding/replacing: default via 10.20.1.1 dev enp0s3'),
             ('info', 'Configuring interface enp0s3:1-2'),
             ('info', "Link already has address 'fd00::1:2/64', no need to set label up"),
-            ('info', 'Adding route: default via fd00::1 dev enp0s3'),
-            ('info', 'Route already exists, skipping'),
+            ('info', 'Route adding/replacing: default via fd00::1 dev enp0s3'),
             ('info', 'Configuring interface enp0s8:2-3'),
             ('info', "Link already has address '192.168.204.2/24', no need to set label up"),
             ('info', 'Configuring interface enp0s8:2-4'),
@@ -3011,19 +3223,31 @@ class TestUpgrade(BaseTestCase):
         self.assertEqual([
             ('info', 'Upgrade bootstrap is in execution'),
             ('info', 'Configuring interface enp0s3'),
-            ('info', "Interface 'enp0s3' is missing or down, flushing IPs and bringing up"),
+            ('info', "Interface 'enp0s3' is missing or down, bringing up"),
             ('info', 'Bringing enp0s3 up'),
+            ('info', "Interface 'enp0s3' is now up/operational"),
             ('info', 'Configuring interface enp0s8'),
-            ('info', "Interface 'enp0s8' is missing or down, flushing IPs and bringing up"),
+            ('info', "Interface 'enp0s8' is missing or down, bringing up"),
             ('info', 'Bringing enp0s8 up'),
+            ('info', "Interface 'enp0s8' is now up/operational"),
             ('info', 'Configuring interface enp0s3:1-1'),
             ('info', 'Bringing enp0s3:1-1 up'),
+            ('info', 'Adding IP 10.20.1.2/24 to interface enp0s3'),
+            ('info', 'Interface enp0s3 already has address 10.20.1.2/24, skipping'),
+            ('info', 'Route adding/replacing: default via 10.20.1.1 dev enp0s3'),
             ('info', 'Configuring interface enp0s3:1-2'),
             ('info', 'Bringing enp0s3:1-2 up'),
+            ('info', 'Adding IP fd00::1:2/64 to interface enp0s3'),
+            ('info', 'Interface enp0s3 already has address fd00::1:2/64, skipping'),
+            ('info', 'Route adding/replacing: default via fd00::1 dev enp0s3'),
             ('info', 'Configuring interface enp0s8:2-3'),
             ('info', 'Bringing enp0s8:2-3 up'),
+            ('info', 'Adding IP 192.168.204.2/24 to interface enp0s8'),
+            ('info', 'Interface enp0s8 already has address 192.168.204.2/24, skipping'),
             ('info', 'Configuring interface enp0s8:2-4'),
-            ('info', 'Bringing enp0s8:2-4 up')],
+            ('info', 'Bringing enp0s8:2-4 up'),
+            ('info', 'Adding IP fd01::2/64 to interface enp0s8'),
+            ('info', 'Interface enp0s8 already has address fd01::2/64, skipping')],
             self._log.get_history())
 
     def test_upgrade_already_configured(self):
@@ -3050,14 +3274,166 @@ class TestUpgrade(BaseTestCase):
             ('info', 'Adding IP 169.254.202.2/24 to interface enp0s8'),
             ('info', 'Configuring interface enp0s3:1-1'),
             ('info', "Link already has address '10.20.1.2/24', no need to set label up"),
-            ('info', 'Adding route: default via 10.20.1.1 dev enp0s3'),
-            ('info', 'Route to specified network already exists, replacing: default via '
-                     '10.20.1.111 dev enp0s3 metric 1'),
+            ('info', 'Route adding/replacing: default via 10.20.1.1 dev enp0s3'),
             ('info', 'Configuring interface enp0s3:1-2'),
             ('info', "Link already has address 'fd00::1:2/64', no need to set label up"),
-            ('info', 'Adding route: default via fd00::1 dev enp0s3'),
+            ('info', 'Route adding/replacing: default via fd00::1 dev enp0s3'),
             ('info', 'Configuring interface enp0s8:2-3'),
             ('info', 'Bringing enp0s8:2-3 up'),
+            ('info', 'Adding IP 192.168.204.2/24 to interface enp0s8'),
+            ('info', 'Interface enp0s8 already has address 192.168.204.2/24, skipping'),
             ('info', 'Configuring interface enp0s8:2-4'),
-            ('info', 'Bringing enp0s8:2-4 up')],
+            ('info', 'Bringing enp0s8:2-4 up'),
+            ('info', 'Adding IP fd01::2/64 to interface enp0s8'),
+            ('info', 'Interface enp0s8 already has address fd01::2/64, skipping')],
             self._log.get_history())
+
+
+class AuditDhcpTests(BaseTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self._os_kill_call_count = 0
+
+    def os_kill_side_effect(self, _pid, _sig):
+        if self._os_kill_call_count == 0:
+            self._os_kill_call_count += 1
+            raise OSError("No such process")
+        self._os_kill_call_count += 1
+
+    def test_start_dhclient_for_bonding_interface(self):
+        bond_iface = {
+            "ifaces": {
+                "bond0": {
+                    "iface": "bond0 inet dhcp",
+                    "bond-slave": "enp0s8 enp0s9",
+                    "bond-mode": "active-backup",
+                    "bond-primary": "enp0s8",
+                    "bond-miimon": "100",
+                }
+            }
+        }
+
+        dhclient_started = {}
+
+        def mock_popen(cmd, **_kwargs):
+            if any("/sbin/ifup" in part for part in cmd):
+                dhclient_started["started"] = True
+
+            proc_mock = mock.Mock()
+            proc_mock.communicate.return_value = (b"", None)
+            proc_mock.returncode = 0
+            return proc_mock
+
+        with mock.patch("subprocess.Popen", side_effect=mock_popen), \
+            mock.patch("os.path.isfile", return_value=True), \
+            mock.patch("builtins.open", mock.mock_open(read_data="9999")), \
+            mock.patch("os.kill", side_effect=self.os_kill_side_effect):
+
+            anc.audit_dhcp_ifaces(bond_iface)
+
+        self.assertTrue(dhclient_started.get("started", False),
+                        "Expected dhclient to be started for interface bond0")
+
+    def test_dhclient_running_for_bonding_interface(self):
+        bond_iface = {
+            "ifaces": {
+                "bond0": {
+                    "iface": "bond0 inet dhcp",
+                    "bond-slave": "enp0s8 enp0s9",
+                    "bond-mode": "active-backup",
+                    "bond-primary": "enp0s8",
+                    "bond-miimon": "100",
+                }
+            }
+        }
+
+        dhclient_started = {}
+
+        self._os_kill_call_count = 1
+
+        with mock.patch("os.path.isfile", return_value=True), \
+            mock.patch("builtins.open", mock.mock_open(read_data="1234")), \
+            mock.patch("os.kill", side_effect=self.os_kill_side_effect):
+
+            anc.audit_dhcp_ifaces(bond_iface)
+
+        self.assertFalse(dhclient_started.get("started", False),
+                         "dhclient should not be restarted if already running")
+
+    def test_ethernet_iface_without_dhclient_pid_file(self):
+        contents = dict()
+        contents[anc.ETC_DIR + "/ifcfg-enp0s8"] = (
+            "iface enp0s8 inet dhcp\n"
+            "mtu 9216\n"
+            "post-up echo 0 > /proc/sys/net/ipv6/conf/enp0s8/autoconf; "
+            "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/accept_ra; "
+            "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/accept_redirects; "
+            "echo 1 > /proc/sys/net/ipv6/conf/bond0/keep_addr_on_down\n"
+            "stx-description ifname:pxeboot0,net:pxeboot")
+
+        self._add_fs_mock(contents)
+
+        eth_iface = "enp0s8"
+        ifstate_path = f"/run/network/ifstate.{eth_iface}"
+        self._fs.set_file_contents(ifstate_path, eth_iface)
+
+        dhclient_started = {}
+
+        def mock_popen(cmd, **_kwargs):
+            if any("/sbin/ifup" in part for part in cmd):
+                dhclient_started["started"] = True
+            proc_mock = mock.Mock()
+            proc_mock.communicate.return_value = (b"", None)
+            proc_mock.returncode = 0
+            return proc_mock
+
+        self._os_kill_call_count = 1
+
+        with mock.patch("subprocess.Popen", side_effect=mock_popen), \
+            mock.patch("os.path.isfile", side_effect=[False, True]), \
+            mock.patch("builtins.open", mock.mock_open(read_data="9999")), \
+            mock.patch("os.kill", side_effect=self.os_kill_side_effect):
+
+            self._mocked_call([self._mock_fs], anc.audit_config)
+
+        self.assertTrue(dhclient_started.get("started", False),
+                        "Expected dhclient to be started for interface enp0s8")
+
+    def test_start_dhclient_eth_iface_process_not_running(self):
+        contents = dict()
+        contents[anc.ETC_DIR + "/ifcfg-enp0s8"] = (
+            "iface enp0s8 inet dhcp\n"
+            "mtu 9216\n"
+            "post-up echo 0 > /proc/sys/net/ipv6/conf/enp0s8/autoconf; "
+            "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/accept_ra; "
+            "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/accept_redirects; "
+            "echo 1 > /proc/sys/net/ipv6/conf/bond0/keep_addr_on_down\n"
+            "stx-description ifname:pxeboot0,net:pxeboot")
+
+        self._add_fs_mock(contents)
+
+        eth_iface = "enp0s8"
+        ifstate_path = f"/run/network/ifstate.{eth_iface}"
+        self._fs.set_file_contents(ifstate_path, eth_iface)
+
+        dhclient_started = {}
+
+        def mock_popen(cmd, **_kwargs):
+            if any("/sbin/ifup" in part for part in cmd):
+                dhclient_started["started"] = True
+
+            proc_mock = mock.Mock()
+            proc_mock.communicate.return_value = (b"", None)
+            proc_mock.returncode = 0
+            return proc_mock
+
+        with mock.patch("subprocess.Popen", side_effect=mock_popen), \
+             mock.patch("os.path.isfile", return_value=True), \
+             mock.patch("builtins.open", mock.mock_open(read_data="9999")), \
+             mock.patch("os.kill", side_effect=self.os_kill_side_effect):
+
+            self._mocked_call([self._mock_fs], anc.audit_config)
+
+        self.assertTrue(dhclient_started.get("started", False),
+                        f"Expected dhclient to be started for interface {eth_iface}")

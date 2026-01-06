@@ -2,6 +2,21 @@ class platform::logpermission {
 
   include ::platform::params
 
+  exec { 'backup_log_permissions':
+    command => '/bin/bash -c "if [ ! -f /var/log/.permission.txt ]; then \
+      find /var/log -type f \\( -perm -004 -o -perm -020 \\) -exec stat --format \'%a %n\' {} \\; > /var/log/.permission.txt; \
+      if [ -s /var/log/.permission.txt ]; then \
+        echo \'Permissions backed up to /var/log/.permission.txt\'; \
+      else \
+        echo \'No files found to backup. Removing empty backup file.\'; \
+        rm -f /var/log/.permission.txt; \
+      fi; \
+    else \
+      echo \'Backup already exists at /var/log/.permission.txt. Skipping backup.\'; \
+    fi"',
+    path    => ['/bin', '/usr/bin'],
+  }
+
   # Set permissions to 640 only for files with less restrictive permissions
   exec { 'set_log_permissions':
     command => 'find /var/log -type f \( -perm -004 -o -perm -020 \) -exec chmod 640 {} \;',

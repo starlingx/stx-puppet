@@ -30,9 +30,9 @@ include ::platform::ldap::server
 include ::platform::ldap::client
 include ::platform::sssd
 include ::platform::ntp::server
-include ::platform::strongswan::apparmor
 include ::platform::ptpinstance
 include ::platform::ptpinstance::nic_clock
+include ::platform::ptpinstance::gnss_monitor
 include ::platform::lldp
 include ::platform::amqp::rabbitmq
 include ::platform::postgresql::server
@@ -120,6 +120,7 @@ include ::platform::network::interfaces::fpga::config
 include ::platform::worker::storage
 include ::platform::kubernetes::aio
 include ::platform::logpermission
+include ::platform::stalld
 
 class { '::platform::config::aio::post':
   stage => post,

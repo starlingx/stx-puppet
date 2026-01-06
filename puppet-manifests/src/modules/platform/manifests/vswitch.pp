@@ -95,7 +95,11 @@ class platform::vswitch::ovs(
   $flows = {},
 ) inherits ::platform::vswitch::params {
   if $enabled {
-    include ::vswitch::dpdk
+    class { '::vswitch::dpdk':
+      package_name => 'openvswitch-switch-dpdk',
+      service_name => 'openvswitch-switch',
+    }
+
     $pmon_ensure = link
     # Since OVS socket memory is configurable, it is required to start the
     # ovsdb server and disable DPDK initialization before the openvswitch
@@ -124,8 +128,13 @@ class platform::vswitch::ovs(
 
     Mount[$hugepage_dir] -> Service['openvswitch']
 
+    $hugepage_mountpoint = $::osfamily ? {
+      'Debian' => "/var/rootdirs${hugepage_dir}",
+      default => $hugepage_dir,
+    }
+
     $dpdk_configs = {
-      'other_config:dpdk-hugepage-dir' => { value => $hugepage_dir },
+      'other_config:dpdk-hugepage-dir' => { value => $hugepage_mountpoint },
     }
 
     $dpdk_dependencies = {

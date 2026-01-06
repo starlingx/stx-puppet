@@ -209,6 +209,8 @@ class platform::config::file {
       match => '^ceph_network=',
     }
   }
+
+  include platform::config::file::irq
 }
 
 # update the subfunctions in /etc/platform/platform.conf
@@ -247,6 +249,51 @@ class platform::config::file::subfunctions::lowlatency {
 # in /etc/platform/platform.conf to match low latency config setting
 class platform::config::file::subfunctions::lowlatency::runtime {
   include platform::config::file::subfunctions::lowlatency
+}
+
+class platform::config::file::irq {
+  include platform::params
+  $platform_conf = '/etc/platform/platform.conf'
+
+  if $::platform::params::ksoftirqd_priority {
+    file_line { "${platform_conf} ksoftirqd_priority":
+      path  => $platform_conf,
+      line  => "ksoftirqd_priority=${::platform::params::ksoftirqd_priority}",
+      match => '^ksoftirqd_priority=',
+    }
+  } else {
+    file_line { "${platform_conf} ksoftirqd_priority":
+      ensure            => absent,
+      path              => $platform_conf,
+      match             => '^ksoftirqd_priority=',
+      match_for_absence => true,
+    }
+  }
+
+  if $::platform::params::irq_work_priority {
+    file_line { "${platform_conf} irq_work_priority":
+      path  => $platform_conf,
+      line  => "irq_work_priority=${::platform::params::irq_work_priority}",
+      match => '^irq_work_priority=',
+    }
+  } else {
+    file_line { "${platform_conf} irq_work_priority":
+      ensure            => absent,
+      path              => $platform_conf,
+      match             => '^irq_work_priority=',
+      match_for_absence => true,
+    }
+  }
+}
+
+# Runtime manifest updates /etc/platform/platform.conf to add or remove kernel
+# threads parameters
+class platform::config::file::irq::runtime {
+  include platform::config::file::irq
+
+  exec { 'systemctl restart affine-platform.service':
+    command => '/usr/bin/systemctl restart affine-platform.service',
+  }
 }
 
 class platform::config::hostname {
@@ -384,9 +431,25 @@ class platform::config::mgmt_network_reconfig_update_runtime {
 class platform::config::hosts
   inherits ::platform::config::params {
 
+  $mgmt_reconfig_ongoing = str2bool(inline_template(
+    "<%= File.exist?('/etc/platform/.mgmt_network_reconfiguration_ongoing') %>"
+  ))
+
+  $mgmt_reconfig_unlock = str2bool(inline_template(
+    "<%= File.exist?('/etc/platform/.mgmt_network_reconfiguration_unlock') %>"
+  ))
+
+  # If mgmt reconfig ongoing AND unlock file missing: stop execution
+  if $mgmt_reconfig_ongoing and !$mgmt_reconfig_unlock {
+    notice('Skipping platform::config::hosts because management network reconfiguration is ongoing.')
+    return()
+  }
+
   # The localhost should resolve to the IPv4 loopback address only, therefore
   # ensure the IPv6 address is removed from configured hosts
-  resources { 'host': purge => true }
+  if str2bool(inline_template("<%= File.exist?('/etc/platform/.unlock_ready') %>")) {
+    resources { 'host': purge => true }
+  }
 
   $localhost = {
     'localhost' => {
@@ -687,10 +750,33 @@ class platform::config::post
   # When applying manifests to upgrade controller-1, we do not want SM or the
   # sysinv-agent or anything else that depends on these flags to start.
   if ! $::platform::params::controller_upgrade {
+    notice("Config UUID ${config_uuid}")
     file { '/etc/platform/.config_applied':
       ensure  => present,
       mode    => '0640',
       content => "CONFIG_UUID=${config_uuid}"
+    }
+  }
+}
+
+class platform::config::reboot_completion::post
+  inherits ::platform::config::params {
+
+  if $config_uuid {
+    $val = strip($config_uuid)
+    # Normalize UUID and remove hyphens
+    $hex = regsubst($val, '-', '', 'G')
+    # Check valid UUID with reboot bit set (first hex char 8-F)
+    # First hex digit determines if reboot bit is set
+    if $hex =~ /^[89a-fA-F][0-9a-fA-F]{31}$/ {
+      $timestamp = strftime('%Y-%m-%d %H:%M:%S')
+      notice("Reboot completion detected for UUID ${config_uuid}")
+
+      file { '/etc/platform/.config_applied_reboot':
+        ensure  => present,
+        mode    => '0640',
+        content => "CONFIG_UUID=${config_uuid}\nTIMESTAMP=${timestamp}\n",
+      }
     }
   }
 }
@@ -717,6 +803,7 @@ class platform::config::controller::post
     ensure => present,
   }
 
+  include ::platform::config::reboot_completion::post
   # In standard mode, the active controller will update grub parameters via
   # platform::compute::grub::runtime. But to update a standby controller,
   # platform::compute::grub::audit needs to be called from here like it's being
@@ -749,6 +836,7 @@ class platform::config::worker::post
     ensure => present,
   }
 
+  include ::platform::config::reboot_completion::post
   include ::platform::compute::grub::audit
 }
 
@@ -773,6 +861,8 @@ class platform::config::storage::post
   file { '/etc/platform/.bootstrap_completed':
     ensure => present,
   }
+
+  include ::platform::config::reboot_completion::post
 }
 
 class platform::config::aio::post

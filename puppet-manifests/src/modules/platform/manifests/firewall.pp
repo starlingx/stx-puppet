@@ -10,12 +10,20 @@ define platform::firewall::rule (
   $proto = 'tcp',
   $table = undef,
   $tosource = undef,
+  $l3proto = undef,
 ) {
 
   include ::platform::params
   include ::platform::network::oam::params
 
-  $ip_version = $::platform::network::oam::params::subnet_version
+  if $l3proto == undef {
+    # if not provided use the primary OAM address subnet_version
+    $ip_version = $::platform::network::oam::params::subnet_version
+  } elsif $l3proto == $::platform::params::ipv4 {
+    $ip_version = $::platform::params::ipv4
+  } elsif $l3proto == $::platform::params::ipv6 {
+    $ip_version = $::platform::params::ipv6
+  }
 
   $provider = $ip_version ? {
     6 => 'ip6tables',
@@ -89,6 +97,8 @@ class platform::firewall::calico::controller {
   contain ::platform::firewall::dc::nat::ldap
   contain ::platform::firewall::extra
   contain ::platform::firewall::rbac::worker
+  contain ::platform::firewall::calico::gnset::admin
+  contain ::platform::firewall::calico::gnset::mgmt
 
   Class['::platform::kubernetes::gate'] -> Class[$name]
 
@@ -103,6 +113,8 @@ class platform::firewall::calico::controller {
   -> Class['::platform::firewall::dc::nat::ldap']
   -> Class['::platform::firewall::extra']
   -> Class['::platform::firewall::rbac::worker']
+  -> Class['::platform::firewall::calico::gnset::admin']
+  -> Class['::platform::firewall::calico::gnset::mgmt']
 }
 
 class platform::firewall::calico::worker {
@@ -136,6 +148,8 @@ class platform::firewall::runtime {
   include ::platform::firewall::dc::nat::ldap
   include ::platform::firewall::extra
   include ::platform::firewall::rbac::worker
+  contain ::platform::firewall::calico::gnset::admin
+  contain ::platform::firewall::calico::gnset::mgmt
 
   Class['::platform::firewall::calico::oam']
   -> Class['::platform::firewall::calico::mgmt']
@@ -147,16 +161,20 @@ class platform::firewall::runtime {
   -> Class['::platform::firewall::dc::nat::ldap']
   -> Class['::platform::firewall::extra']
   -> Class['::platform::firewall::rbac::worker']
+  -> Class['::platform::firewall::calico::gnset::admin']
+  -> Class['::platform::firewall::calico::gnset::mgmt']
 }
 
 class platform::firewall::mgmt::runtime {
   include ::platform::firewall::calico::mgmt
   include ::platform::firewall::dc::nat::ldap
+  include ::platform::firewall::calico::gnset::mgmt
 }
 
 class platform::firewall::admin::runtime {
   include ::platform::firewall::calico::admin
   include ::platform::firewall::dc::nat::ldap
+  include ::platform::firewall::calico::gnset::admin
 }
 
 class platform::firewall::calico::oam (
@@ -371,6 +389,67 @@ class platform::firewall::calico::hostendpoint (
       command => "${remove_script} ${::hostname} ${file_hep_active} ${cfgf}",
       onlyif  => "test -f ${file_hep_active} && test ! -f /etc/platform/.platform_firewall_config_required"
     }
+  }
+}
+
+define platform::firewall::calico::gnset (
+  String $gns_name,
+  Hash   $config = {}
+) {
+  if $::personality == 'worker' {
+    $cfgf = '/etc/kubernetes/kubelet.conf'
+  } elsif $::personality == 'controller' {
+    $cfgf = '/etc/kubernetes/admin.conf'
+  } else {
+    $cfgf = undef
+  }
+
+  if $config != {} {
+    $apply_script = 'calico_firewall_apply_networkset.sh'
+    $yaml_config = hash2yaml($config)
+
+    $file_name_gns = "/tmp/gns_${gns_name}.yaml"
+
+    file { $file_name_gns:
+      ensure  => file,
+      content => template('platform/calico_platform_network_gnset.yaml.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0640',
+    }
+    -> exec { "apply globalnetworkset ${gns_name} with ${file_name_gns}":
+      path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+      command   => "${apply_script} ${gns_name} ${file_name_gns} ${cfgf}",
+      logoutput => true,
+      onlyif    => "test -f ${cfgf}",
+    }
+  } else {
+    $remove_script = 'remove_unused_calico_networksets.sh'
+
+    exec { "globalnetworkset ${gns_name} is empty":
+      path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+      command   => "${remove_script} ${gns_name} ${cfgf}",
+      logoutput => true,
+      onlyif    => "test -f ${cfgf}",
+    }
+  }
+}
+
+class platform::firewall::calico::gnset::admin (
+  $config = {}
+) {
+  platform::firewall::calico::gnset { 'stx-trusted-admin-subnets-gns':
+    gns_name => 'stx-trusted-admin-subnets-gns',
+    config   => $config,
+  }
+}
+
+class platform::firewall::calico::gnset::mgmt (
+  $config = {}
+) {
+  platform::firewall::calico::gnset { 'stx-trusted-mgmt-subnets-gns':
+    gns_name => 'stx-trusted-mgmt-subnets-gns',
+    config   => $config,
   }
 }
 

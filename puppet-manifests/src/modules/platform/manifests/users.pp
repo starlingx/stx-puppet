@@ -1,5 +1,6 @@
 class platform::users::params (
   $sysadmin_password = undef,
+  $sysadmin_password_last_changed = undef,
   $sysadmin_password_max_age = undef,
   $sysadmin_password_min_age = undef,
 ) {}
@@ -32,6 +33,12 @@ class platform::users
   -> exec { 'set inactive password lock for sysadmin':
     command => 'chage --inactive 45 sysadmin',
     unless  => 'sudo awk -F: \'/^sysadmin:/ {if ($7 < 0 || $7 > 45) exit 1}\' /etc/shadow'
+  }
+
+  # Set last password change date to ensure expiration date is consistent
+  -> exec { 'set last password change date':
+    command => "chage --lastday ${sysadmin_password_last_changed} sysadmin",
+    onlyif  => "test -n '${sysadmin_password_last_changed}'",
   }
 
   # Create a 'denyssh' group for ldap users
@@ -105,6 +112,12 @@ class platform::users::bootstrap
   -> exec { 'set inactive password lock for sysadmin':
     command => 'chage --inactive 45 sysadmin',
     unless  => 'sudo awk -F: \'/^sysadmin:/ {if ($7 < 0 || $7 > 45) exit 1}\' /etc/shadow'
+  }
+
+  # Set last password change date to ensure expiration date is consistent
+  -> exec { 'set last password change date':
+    command => "chage --lastday ${sysadmin_password_last_changed} sysadmin",
+    onlyif  => "test -n '${sysadmin_password_last_changed}'",
   }
 
   # Create a 'denyssh' group for ldap users

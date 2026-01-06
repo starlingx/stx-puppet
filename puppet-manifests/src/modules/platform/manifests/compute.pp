@@ -51,9 +51,8 @@ class platform::compute::grub::params (
   $g_audit = '',
   $g_audit_backlog_limit = 'audit_backlog_limit=8192',
   $g_intel_pstate = '',
-  $g_out_of_tree_drivers = '',
-  $bios_cstate = false,
   $ignore_recovery = false,
+  $g_kthread_prio = '21',
   $keys = [
     'kvm-intel.eptad',
     'default_hugepagesz',
@@ -67,8 +66,6 @@ class platform::compute::grub::params (
     'audit',
     'audit_backlog_limit',
     'intel_pstate',
-    'out-of-tree-drivers',
-    'intel_idle.max_cstate',
   ],
 ) {
   include platform::sysctl::params
@@ -90,20 +87,7 @@ class platform::compute::grub::params (
     $eptad = ''
   }
 
-  $power_management = 'power-management=enabled' in $::platform::kubernetes::params::host_labels
-
-  if (!$power_management and $bios_cstate) {
-    $intel_idle_cstate = 'intel_idle.max_cstate=0'
-  } else {
-    $intel_idle_cstate = ''
-  }
   $updated_audit = "audit=${g_audit}"
-
-  if ! empty($g_out_of_tree_drivers) {
-    $oot_drivers_switch = "out-of-tree-drivers=${g_out_of_tree_drivers}"
-  } else {
-    $oot_drivers_switch = ''
-  }
 
   if ! empty($g_intel_pstate) {
     $intel_pstate = "intel_pstate=${g_intel_pstate}"
@@ -111,9 +95,15 @@ class platform::compute::grub::params (
     $intel_pstate = ''
   }
 
+  if str2bool($platform::sysctl::params::low_latency) {
+    $kthread_prio = "rcutree.kthread_prio=${g_kthread_prio}"
+  } else {
+    $kthread_prio = ''
+  }
+
   $grub_updates = strip(
     # lint:ignore:140chars
-    "${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit} ${intel_idle_cstate} ${intel_pstate} ${nmi_watchdog} ${skew_tick} ${oot_drivers_switch}"
+    "${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit} ${intel_pstate} ${nmi_watchdog} ${skew_tick} ${kthread_prio}"
     # lint:endignore:140chars
     )
 }

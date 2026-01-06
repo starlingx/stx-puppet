@@ -1,3 +1,7 @@
 [Service]
 # pmond monitors sssd service
 Restart=no
+
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
