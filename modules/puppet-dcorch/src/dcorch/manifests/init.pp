@@ -1,7 +1,7 @@
 #
 # Files in this package are licensed under Apache; see LICENSE file.
 #
-# Copyright (c) 2013-2024 Wind River Systems, Inc.
+# Copyright (c) 2013-2024, 2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -169,7 +169,7 @@ class dcorch (
     'filter:parser/paste.filter_factory': value => 'dcorch.api.proxy.apps.parser:ParseError.factory';
     'filter:filter/paste.filter_factory': value => 'dcorch.api.proxy.apps.filter:ApiFiller.factory';
     'filter:version/paste.filter_factory': value => 'dcorch.api.proxy.apps.acceptor:VersionAcceptor.factory';
-    'filter:authtoken/paste.filter_factory': value =>  'keystonemiddleware.auth_token:filter_factory';
+    'filter:authtoken/paste.filter_factory': value =>  'dcorch.api.proxy.apps.authtoken:AuthWrapper.factory';
     'filter:acceptor/paste.filter_factory': value => 'dcorch.api.proxy.apps.acceptor:Acceptor.factory';
     'app:proxyapp/paste.app_factory': value => 'dcorch.api.proxy.apps.proxy:Proxy.factory';
   }
