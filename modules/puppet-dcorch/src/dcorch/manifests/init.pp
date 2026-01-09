@@ -53,8 +53,6 @@ class dcorch (
   $volumev2_remote_port        = 8776,
   $network_bind_port           = 29696,
   $network_remote_port         = 9696,
-  $patching_bind_port          = 25491,
-  $patching_remote_port        = 5491,
   $usm_bind_port               = 25497,
   $usm_remote_port             = 5497,
   $identity_bind_port          = 25000,
@@ -154,11 +152,6 @@ class dcorch (
     'network/bind_port' : value => $network_bind_port;
     'network/remote_host' : value => $proxy_remote_host;
     'network/remote_port' : value => $network_remote_port;
-
-    'patching/bind_host' : value => $proxy_bind_host;
-    'patching/bind_port' : value => $patching_bind_port;
-    'patching/remote_host' : value => '0.0.0.0';
-    'patching/remote_port' : value => $patching_remote_port;
 
     'usm/bind_host' : value => $proxy_bind_host;
     'usm/bind_port' : value => $usm_bind_port;

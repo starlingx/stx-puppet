@@ -57,10 +57,6 @@ class nfv::nfvi (
   $heat_region_name              = 'RegionOne',
   $mtc_endpoint_override         = 'http://localhost:2112',
   $guest_endpoint_override       = 'http://localhost:2410',
-  $patching_region_name          = 'RegionOne',
-  $patching_service_name         = 'patching',
-  $patching_service_type         = 'patching',
-  $patching_endpoint_type        = 'admin',
   $usm_region_name               = 'RegionOne',
   $usm_service_name              = 'usm',
   $usm_service_type              = 'usm',
@@ -94,7 +90,6 @@ class nfv::nfvi (
   $glance_upload_image_data_by_url_timeout  = 180,
   $sysinv_timeout                           = 60,
   $sysinv_unlock_host_timeout               = 120,
-  $patching_apply_patch_timeout             = 180,
   $usm_timeout                              = 60,
   $usm_sw_deploy_execute_timeout            = 3600,
   $usm_sw_deploy_rollback_timeout           = 3600,
@@ -170,11 +165,6 @@ class nfv::nfvi (
 
     'guest/endpoint_override': value => $guest_endpoint_override;
 
-    'patching/region_name': value => $patching_region_name;
-    'patching/service_name': value => $patching_service_name;
-    'patching/service_type': value => $patching_service_type;
-    'patching/endpoint_type': value => $patching_endpoint_type;
-
     'usm/region_name': value => $usm_region_name;
     'usm/service_name': value => $usm_service_name;
     'usm/service_type': value => $usm_service_type;
@@ -219,7 +209,6 @@ class nfv::nfvi (
     'nfvi-timeouts/glance.upload_image_data_by_url': value => $glance_upload_image_data_by_url_timeout;
     'nfvi-timeouts/sysinv': value => $sysinv_timeout;
     'nfvi-timeouts/sysinv.unlock_host': value => $sysinv_unlock_host_timeout;
-    'nfvi-timeouts/patching.apply_patch': value => $patching_apply_patch_timeout;
     'nfvi-timeouts/usm': value => $usm_timeout;
     'nfvi-timeouts/usm.sw_deploy_execute': value => $usm_sw_deploy_execute_timeout;
     'nfvi-timeouts/usm.sw_deploy_rollback': value => $usm_sw_deploy_rollback_timeout;
