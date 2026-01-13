@@ -597,6 +597,14 @@ class platform::kubernetes::haproxy {
   }
 }
 
+class platform::kubernetes::cleanup_kubeadm_stale {
+    exec { 'cleanup stale kubeadm files and wait until node reset':
+      command   => 'kubeadm reset -f && sleep 30',
+      logoutput => true,
+      onlyif    => 'test -f /etc/kubernetes/kubelet.conf || test -f /etc/kubernetes/bootstrap-kubelet.conf || test -e /etc/kubernetes/manifests/*.yaml', # lint:ignore:140chars
+    }
+}
+
 class platform::kubernetes::master::init
   inherits ::platform::kubernetes::params {
 
@@ -634,6 +642,10 @@ class platform::kubernetes::master::init
       before_exec         => undef,
       local_registry_auth => $local_registry_auth,
     }
+
+    # Cleanup stale kubeadm files leftover from previous incomplete
+    # kubeadm join and unexpected reboot
+    class { 'platform::kubernetes::cleanup_kubeadm_stale': }
 
     -> exec { 'configure master node':
       command   => $join_cmd,
@@ -847,6 +859,7 @@ class platform::kubernetes::worker::init
   Class['::platform::filesystem::kubelet'] -> Class[$name]
 
   if str2bool($::is_initial_config) {
+    contain platform::kubernetes::cleanup_kubeadm_stale
     # Pull pause image tag from kubeadm required images list for this version
     # kubeadm config images list does not use the --kubeconfig argument
     # and admin.conf will not exist on a pure worker, and kubelet.conf will not
@@ -864,6 +877,8 @@ class platform::kubernetes::worker::init
       before_exec         => $before_exec,
       local_registry_auth => $local_registry_auth,
     }
+    Class['platform::kubernetes::cleanup_kubeadm_stale']
+    -> Exec['configure worker node']
 
   }
 
