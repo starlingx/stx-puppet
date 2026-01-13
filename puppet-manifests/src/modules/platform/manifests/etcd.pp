@@ -11,11 +11,15 @@ class platform::etcd::params (
   $etcd_basedir = '/opt/etcd'
   $etcd_dir = "${etcd_basedir}/db"
 
+  # The client_url contains IP addresses consistent with
+  # /etc/etcd/etcd-server.crt. The CRT contains x509 certificate
+  # subjectAltName with: cluster_floating_address (either IPv4 or IPv6),
+  # and IPv4 loopback.
   if $bind_address_version == $::platform::params::ipv6 {
-    $client_url = "https://[${bind_address}]:${port},https://[127.0.0.1]:${port}"
+    $client_url = "https://[${bind_address}]:${port},https://127.0.0.1:${port}"
   }
   else {
-    $client_url = "https://${bind_address}:${port},https://[127.0.0.1]:${port}"
+    $client_url = "https://${bind_address}:${port},https://127.0.0.1:${port}"
   }
 }
 
