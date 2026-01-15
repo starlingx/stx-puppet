@@ -260,60 +260,66 @@ class platform::sysctl::k8s::config_update inherits platform::sysctl::params {
 # The default sysctl config file is used to persist original settings
 # that are restored when the user deletes their override.
 # Sysctl config files:
-# /etc/sysctl.d/100-custom-user.conf    -> /var/run/100-custom-user.conf
+# /etc/sysctl.d/zzz-custom-user.conf    -> /var/run/zzz-custom-user.conf
 # /etc/sysctl.d/05-default-sysctl.conf  -> /var/run/05-default-sysctl.conf
 class platform::sysctl::config_update inherits platform::sysctl::params {
   $default_sysctl         = "${volatile_dir}/05-default-sysctl.conf"
   $default_sysctl_linked  = "${config_dir}/05-default-sysctl.conf"
-  $config_file            = "${volatile_dir}/100-custom-user.conf"
-  $config_file_linked     = "${config_dir}/100-custom-user.conf"
+  $config_file            = "${volatile_dir}/zzz-custom-user.conf"
+  $config_file_linked     = "${config_dir}/zzz-custom-user.conf"
 
   $config_settings = parsejson($json_string)
-  if $config_settings =~ Hash {
-    $config_settings.each |$param, $value| {
-      $check_cmd  = "grep -q '^${param}' ${volatile_dir}/*.conf --exclude=${config_file}"
-      $append_cmd = "sysctl ${param} >> ${default_sysctl}"
-      # Check if the original parameter value is already saved; if not, append it
-      exec { "check_and_append_${param}":
-        command => "${check_cmd} || ${append_cmd}",
-        unless  => $check_cmd,
-      }
+  unless $config_settings =~ Hash {
+    notice("Could not parse 'platform::sysctl::params::json_string': ${json_string} as JSON hash")
+    return()
+  }
+
+  $config_settings.each |$param, $value| {
+    $is_valid_parameter = "sysctl -n ${param} >/dev/null 2>&1"
+    $already_saved = "grep -q '^${param}' ${config_dir}/*.conf --exclude=${config_file_linked}"
+    $save_existing_value = "sysctl ${param} >> ${default_sysctl}"
+
+    exec { "save_parameter_${param}":
+      command => $save_existing_value,
+      onlyif  => $is_valid_parameter,
+      unless  => $already_saved,
     }
-    $exec_deps = keys($config_settings).map |$param| { "check_and_append_${param}" }
-    file { $default_sysctl:
-      ensure  => file,
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0644',
-      require => Exec[$exec_deps],
-    }
-    file { $config_file:
-      ensure  => file,
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0644',
-      content => template('platform/config.conf.erb'),
-      require => Exec[$exec_deps],
-    }
-    # Create symlinks in /etc/sysctl.d to the files in /var/run
-    -> file { $default_sysctl_linked:
-      ensure  => link,
-      target  => $default_sysctl,
-      require => File[$default_sysctl],
-      force   => true,
-    }
-    -> file { $config_file_linked:
-      ensure  => link,
-      target  => $config_file,
-      require => File[$config_file],
-      force   => true,
-    }
-    # Apply the updated sysctl settings
-    -> exec { 'update user sysctl kernel parameters':
-      command     => 'sysctl --system',
-      refreshonly => true,
-      subscribe   => File[$config_file],
-    }
+  }
+
+  $exec_deps = keys($config_settings).map |$param| { "save_parameter_${param}" }
+  file { $default_sysctl:
+    ensure  => file,
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+    require => Exec[$exec_deps],
+  }
+  file { $config_file:
+    ensure  => file,
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+    content => template('platform/config.conf.erb'),
+    require => Exec[$exec_deps],
+  }
+  # Create symlinks in /etc/sysctl.d to the files in /var/run
+  -> file { $default_sysctl_linked:
+    ensure  => link,
+    target  => $default_sysctl,
+    require => File[$default_sysctl],
+    force   => true,
+  }
+  -> file { $config_file_linked:
+    ensure  => link,
+    target  => $config_file,
+    require => File[$config_file],
+    force   => true,
+  }
+  # Apply the updated sysctl settings
+  -> exec { 'update user sysctl kernel parameters':
+    command     => 'sysctl --system',
+    refreshonly => true,
+    subscribe   => File[$config_file],
   }
 }
 
