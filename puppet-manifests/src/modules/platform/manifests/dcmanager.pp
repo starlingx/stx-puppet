@@ -134,14 +134,13 @@ class platform::dcmanager
       'ssh',
       'sysinv-agent',
       'collectd',
-      'fm-api',
       'rsync',
       'sm-api',
       'software-controller-daemon',
       'systemd-udevd'
     ]
     $services = $service_names.map |$var| { "${var}.service" }
-    $services_string = join($services, ' ')
+    $services_string = join($services + ['fm-api.service'], ' ')
     $dirs = $service_names.map |$var| { "/etc/systemd/system/${var}.service.d" }
     $files = $service_names.map |$var| { "/etc/systemd/system/${var}.service.d/${var}-cpu-shares.conf" }
 
@@ -157,6 +156,23 @@ class platform::dcmanager
       owner   => 'root',
       group   => 'root',
       mode    => '0644',
+    }
+
+    # fm-api directory may be managed by fm.pp, ensure it exists for CPU shares config
+    ensure_resource('file', '/etc/systemd/system/fm-api.service.d', {
+      'ensure' => 'directory',
+      'owner'  => 'root',
+      'group'  => 'root',
+      'mode'   => '0755',
+    })
+
+    file { '/etc/systemd/system/fm-api.service.d/fm-api-cpu-shares.conf':
+      ensure  => file,
+      content => inline_template($disable_cpu),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0644',
+      require => File['/etc/systemd/system/fm-api.service.d'],
     }
 
     # Define systemd DropIn override to set default CPUShares for init.scope
