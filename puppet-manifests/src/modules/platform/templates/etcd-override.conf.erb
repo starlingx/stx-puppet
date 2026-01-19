@@ -14,6 +14,10 @@ ExecStartPost=/bin/bash -c 'echo $MAINPID >/var/run/etcd.pid'
 ExecStop=
 ExecStopPost=/bin/bash -c 'rm -f /var/run/etcd.pid'
 
+# syscall filtering
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
 # cgroup performance engineering
 # - etcdserver has critical latency requirements for CPU and disk IO
 Slice=<%= scope['platform::k8splatform::params::slice'] %>
