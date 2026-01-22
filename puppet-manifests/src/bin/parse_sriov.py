@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-# Copyright (c) 2025 Wind River Systems, Inc.
+# Copyright (c) 2025-2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -215,6 +215,15 @@ def set_max_tx_rate(port, vfnumber, max_tx_rate):
     return res
 
 
+def _read_int_from_file(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return int(f.read().strip())
+    except (OSError, ValueError) as e:
+        print(f"ERROR: failed to read '{path}': {e}")
+        return None
+
+
 def _write_int_to_file(path, value):
     """
     Write an integer to the specified file.
@@ -319,6 +328,11 @@ def _enable_sriov_for_pf(pci_addr, num_vfs, up_requirement, sriov_name=None):
 
     base_path = f"/sys/bus/pci/devices/{pci_addr}"
     vf_path = os.path.join(base_path, SRIOV_NUMVFS_FILE)
+
+    current_vfs = _read_int_from_file(vf_path)
+    if current_vfs == num_vfs:
+        print(f"PF {pci_addr}: sriov_numvfs already set to {num_vfs}, skipping")
+        return True
 
     if up_requirement:
         if not _ensure_pf_netdevs_up(pci_addr, up_requirement):
@@ -549,6 +563,28 @@ def _load_config_file(config_file):
     return data
 
 
+def print_dpdk_status(context):
+    """
+    Print dpdk-devbind status for network devices.
+
+    Args:
+        context (str): Context label (e.g. 'enable', 'vfs')
+    """
+    command = [
+        "/usr/share/starlingx/scripts/dpdk-devbind.py",
+        "--status-dev", "net"
+    ]
+
+    ret, message = execute_command(command)
+
+    print(f"\n=== sriov_vf_bind {context}: dpdk status ===")
+    if ret:
+        print(message)
+    else:
+        print(f"ERROR: Failed to get dpdk status:\n{message}")
+    print(f"=== sriov_vf_bind {context}: end dpdk status ===\n")
+
+
 def main():
     """
     Entry point of the script. Loads a configuration file,
@@ -589,6 +625,7 @@ def main():
 
     if mode == "enable":
         ok = enable_sriov_from_data(data)
+        print_dpdk_status("enable")
         sys.exit(0 if ok else 1)
 
     ret, all_sriov_entries = parse_and_process_sriov_config(data)
@@ -599,6 +636,7 @@ def main():
     if not all_sriov_entries:
         print("No SRIOV entries found.")
 
+    print_dpdk_status("vfs")
     sys.exit(0)
 
 
