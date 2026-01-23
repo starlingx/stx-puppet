@@ -645,7 +645,7 @@ class platform::kubernetes::master::init
 
     # Cleanup stale kubeadm files leftover from previous incomplete
     # kubeadm join and unexpected reboot
-    class { 'platform::kubernetes::cleanup_kubeadm_stale': }
+    -> class { 'platform::kubernetes::cleanup_kubeadm_stale': }
 
     -> exec { 'configure master node':
       command   => $join_cmd,
