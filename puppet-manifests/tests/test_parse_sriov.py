@@ -501,8 +501,8 @@ class TestMainFunction(unittest.TestCase):
             # entries were already validated in test_valid_sriov_vf_config
             output_lines = mock_helper.get_output()
             commands = mock_helper.get_called_commands()
-            self.assertEqual(len(output_lines), 15)
-            self.assertEqual(len(commands), 15)
+            self.assertEqual(len(output_lines), 20)
+            self.assertEqual(len(commands), 16)
 
             self.assertEqual(cm.exception.code, 0)
 
@@ -527,8 +527,8 @@ class TestMainFunction(unittest.TestCase):
             # entries were already validated in test_valid_sriov_vf_config
             output_lines = mock_helper.get_output()
             commands = mock_helper.get_called_commands()
-            self.assertEqual(len(output_lines), 15)
-            self.assertEqual(len(commands), 15)
+            self.assertEqual(len(output_lines), 20)
+            self.assertEqual(len(commands), 16)
         finally:
             os.remove(temp_filename)
 
@@ -645,7 +645,11 @@ class TestMainFunction(unittest.TestCase):
             mock_enable.assert_called_once()
             called_args = mock_enable.call_args[0][0]
             self.assertIsInstance(called_args, dict)
-            self.assertEqual(mock_helper.get_output(), [])
+
+            output = mock_helper.get_output_str()
+
+            self.assertIn("=== sriov_vf_bind enable: dpdk status ===", output)
+            self.assertIn("=== sriov_vf_bind enable: end dpdk status ===", output)
 
         finally:
             os.remove(temp_filename)
@@ -668,7 +672,10 @@ class TestMainFunction(unittest.TestCase):
                 parse_sriov.main()
 
             self.assertEqual(cm.exception.code, 1)
-            self.assertEqual(mock_helper.get_output(), [])
+            output = mock_helper.get_output_str()
+
+            self.assertIn("=== sriov_vf_bind enable: dpdk status ===", output)
+            self.assertIn("=== sriov_vf_bind enable: end dpdk status ===", output)
 
         finally:
             os.remove(temp_filename)
@@ -836,6 +843,38 @@ class TestEnableSriovFunctions(unittest.TestCase):
         mock_pf.assert_any_call('0000:07:00.0', 4, False, sriov_name='pf0')
         mock_pf.assert_any_call('0000:08:00.0', 8, True, sriov_name='pf1')
         self.assertEqual(mock_helper.get_output(), [])
+
+
+class TestEnableSriovSkipWhenAlreadyConfigured(unittest.TestCase):
+
+    def test_enable_sriov_skips_when_num_vfs_already_set(self):
+        pci_addr = '0000:07:00.0'
+        num_vfs = 4
+
+        with patch('src.bin.parse_sriov._read_int_from_file',
+                   return_value=num_vfs) as mock_read, \
+             patch('src.bin.parse_sriov._write_int_to_file') as mock_write, \
+             patch('src.bin.parse_sriov._ensure_pf_netdevs_up') as mock_up, \
+             MockHelper(stdout='') as mock_helper:
+
+            result = parse_sriov._enable_sriov_for_pf(  # pylint: disable=protected-access
+                pci_addr=pci_addr,
+                num_vfs=num_vfs,
+                up_requirement=True,
+                sriov_name='pf0'
+            )
+
+        self.assertTrue(result)
+        mock_read.assert_called_once_with(
+            f"/sys/bus/pci/devices/{pci_addr}/sriov_numvfs")
+
+        mock_up.assert_not_called()
+        mock_write.assert_not_called()
+
+        self.assertIn(
+            f"PF {pci_addr}: sriov_numvfs already set to {num_vfs}, skipping",
+            mock_helper.get_output_str()
+        )
 
 
 if __name__ == '__main__':
