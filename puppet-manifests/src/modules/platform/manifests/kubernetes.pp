@@ -602,6 +602,13 @@ class platform::kubernetes::cleanup_kubeadm_stale {
       command   => 'kubeadm reset -f && sleep 30',
       logoutput => true,
       onlyif    => 'test -f /etc/kubernetes/kubelet.conf || test -f /etc/kubernetes/bootstrap-kubelet.conf || test -e /etc/kubernetes/manifests/*.yaml', # lint:ignore:140chars
+      # During USM upgrade, this class removes kubeadm-related files,
+      # including /etc/kubernetes/kubelet.conf. The missing kubelet configuration
+      # triggers an unintended kubeadm join, causing the kubelet service to hang
+      # during startup and eventually time out.
+      # The .usm_upgrade_in_progress flag indicates an active USM upgrade and
+      # prevents this class from executing during that time.
+      unless    => 'test -f /etc/platform/.usm_upgrade_in_progress',
     }
 }
 
