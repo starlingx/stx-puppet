@@ -1,8 +1,9 @@
 class platform::etcd::params (
   $bind_address = '0.0.0.0',
   $bind_address_version = 4,
-  $port    = 2379,
-  $node   = 'controller',
+  $port = 2379,
+  $node = 'controller',
+  $etcd_version = undef,
 )
 {
   include ::platform::params
@@ -23,12 +24,45 @@ class platform::etcd::params (
   }
 }
 
+class platform::etcd::symlinks {
+  include ::platform::etcd::params
+
+  # List etcd binary versions in natural sort order, get minimum value.
+  # Getting this fall-back for paranoia reasons.
+  $etcd_version = $::platform::etcd::params::etcd_version
+  $etcd_min_version = strip(
+    generate('/bin/bash', '-c', '/bin/ls -v /usr/local/etcd | /bin/head -1')
+  )
+
+  if $etcd_version == undef {
+    notice("Falling back to etcd_version ${etcd_min_version} min installed version")
+    $version = $etcd_min_version.strip
+  } else {
+    $version = $etcd_version
+  }
+
+  notice("setting stage0 symlink, etcd_version is ${version}")
+  file { '/var/lib/etcd':
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => '0755',
+  }
+  -> file { '/var/lib/etcd/stage0':
+    ensure => link,
+    target => "/usr/local/etcd/${version}/stage0",
+  }
+}
+
 # Modify the systemd service file for etcd and
 # create an init.d script for SM to manage the service
 class platform::etcd::setup {
 
   include ::platform::params
   include ::platform::k8splatform::params
+
+  # Update etcd symlink if needed.
+  require platform::etcd::symlinks
 
   if $::platform::params::system_type == 'All-in-one' and
     $::platform::params::distributed_cloud_role != 'systemcontroller' {
