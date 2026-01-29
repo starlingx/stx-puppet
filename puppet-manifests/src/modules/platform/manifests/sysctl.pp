@@ -145,6 +145,11 @@ class platform::sysctl::controller inherits platform::sysctl::params {
   include platform::sysctl::vm_min_free_kbytes
   include platform::sysctl::config_update
 
+  # Apply sysctl settings in order to ensure user settings are applied last.
+  Class['platform::sysctl']
+  -> Class['platform::sysctl::controller::reserve_ports']
+  -> Class['platform::sysctl::vm_min_free_kbytes']
+
   # Engineer VM page cache tunables to prevent significant IO delays that may
   # occur if we flush a buildup of dirty pages.  Engineer VM settings to make
   # writebacks more regular. Note that Linux default proportion of page cache that
@@ -156,41 +161,42 @@ class platform::sysctl::controller inherits platform::sysctl::params {
 
   # dirty_background_bytes limits magnitude of pending IO, so
   # choose setting of 3 seconds dirty holding x 200 MB/s write speed (SSD)
-  sysctl::value { 'vm.dirty_background_bytes':
+  -> sysctl::value { 'vm.dirty_background_bytes':
     value  => '600000000',
     target => $default_config,
   }
 
   # dirty_ratio should be larger than dirty_background_bytes, set 1.3x larger
-  sysctl::value { 'vm.dirty_bytes':
+  -> sysctl::value { 'vm.dirty_bytes':
     value  => '800000000',
     target => $default_config,
   }
 
   # prefer reclaim of dentries and inodes, set larger than default of 100
-  sysctl::value { 'vm.vfs_cache_pressure':
+  -> sysctl::value { 'vm.vfs_cache_pressure':
     value  => '500',
     target => $default_config,
   }
 
   # reduce dirty expiry to 10s from default 30s
-  sysctl::value { 'vm.dirty_expire_centisecs':
+  -> sysctl::value { 'vm.dirty_expire_centisecs':
     value  => '1000',
     target => $default_config,
   }
 
   # reduce dirty writeback to 1s from default 5s
-  sysctl::value { 'vm.dirty_writeback_centisecs':
+  -> sysctl::value { 'vm.dirty_writeback_centisecs':
     value  => '100',
     target => $default_config,
   }
 
   # Setting max to 160 MB to support more connections
   # When increasing postgres connections, add 7.5 MB for every 100 connections
-  sysctl::value { 'kernel.shmmax':
+  -> sysctl::value { 'kernel.shmmax':
     value  => '167772160',
     target => $default_config,
   }
+  -> Class['platform::sysctl::config_update']
 }
 
 class platform::sysctl::compute {
@@ -198,6 +204,12 @@ class platform::sysctl::compute {
   include platform::sysctl::compute::reserve_ports
   include platform::sysctl::vm_min_free_kbytes
   include platform::sysctl::config_update
+
+  # Apply sysctl settings in order to ensure user settings are applied last.
+  Class['platform::sysctl']
+  -> Class['platform::sysctl::compute::reserve_ports']
+  -> Class['platform::sysctl::vm_min_free_kbytes']
+  -> Class['platform::sysctl::config_update']
 }
 
 class platform::sysctl::compute::reserve_ports inherits platform::sysctl::params {
@@ -217,11 +229,14 @@ class platform::sysctl::storage {
   include platform::sysctl
   include platform::sysctl::config_update
 
-  class { 'platform::sysctl::vm_min_free_kbytes':
+  # Apply sysctl settings in order to ensure user settings are applied last.
+  Class['platform::sysctl']
+  -> class { 'platform::sysctl::vm_min_free_kbytes':
     minimum_kb   => 262144,
     per_every_gb => 16,
     reserve_mb   => 256,
   }
+  -> Class['platform::sysctl::config_update']
 }
 
 class platform::sysctl::controller::runtime {
@@ -252,7 +267,7 @@ class platform::sysctl::k8s::config_update inherits platform::sysctl::params {
     content => template('platform/config.conf.erb'),
   }
   -> exec { 'update kubernetes sysctl kernel parameters':
-    command => 'sysctl --system',
+    command => "sysctl -p ${config_file}",
   }
 }
 
