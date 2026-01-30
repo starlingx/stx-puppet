@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2016-2025 Wind River Systems, Inc.
+# Copyright (c) 2016-2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -91,6 +91,7 @@ class nfv::nfvi (
   $sysinv_timeout                           = 60,
   $sysinv_unlock_host_timeout               = 120,
   $usm_timeout                              = 60,
+  $usm_sw_deploy_start_timeout              = 120,
   $usm_sw_deploy_execute_timeout            = 3600,
   $usm_sw_deploy_rollback_timeout           = 3600,
   $usm_sw_deploy_delete_timeout             = 300,
@@ -210,6 +211,7 @@ class nfv::nfvi (
     'nfvi-timeouts/sysinv': value => $sysinv_timeout;
     'nfvi-timeouts/sysinv.unlock_host': value => $sysinv_unlock_host_timeout;
     'nfvi-timeouts/usm': value => $usm_timeout;
+    'nfvi-timeouts/usm.sw_deploy_start': value => $usm_sw_deploy_start_timeout;
     'nfvi-timeouts/usm.sw_deploy_execute': value => $usm_sw_deploy_execute_timeout;
     'nfvi-timeouts/usm.sw_deploy_rollback': value => $usm_sw_deploy_rollback_timeout;
     'nfvi-timeouts/usm.sw_deploy_delete': value => $usm_sw_deploy_delete_timeout;
