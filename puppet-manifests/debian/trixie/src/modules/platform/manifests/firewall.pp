@@ -25,9 +25,10 @@ define platform::firewall::rule (
     $ip_version = $platform::params::ipv6
   }
 
-  $provider = $ip_version ? {
-    6 => 'ip6tables',
-    default => 'iptables',
+  $protocol_family = $ip_version ? {
+    '6'     => 'IPv6',
+    6       => 'IPv6',
+    default => 'IPv4',
   }
 
   $source = $host ? {
@@ -56,7 +57,7 @@ define platform::firewall::rule (
       tosource    => $tosource,
       destination => $destination,
       source      => $source,
-      provider    => $provider,
+      protocol    => $protocol_family,
       chain       => $chain,
     }
   }
@@ -65,9 +66,9 @@ define platform::firewall::rule (
       firewall { "500 ${service_name} ${heading} ${title}":
         ensure   => $ensure,
         proto    => $proto,
-        action   => 'accept',
+        jump     => 'accept',
         source   => $source,
-        provider => $provider,
+        protocol => $protocol_family,
         chain    => $chain,
       }
     }
@@ -76,9 +77,9 @@ define platform::firewall::rule (
         ensure   => $ensure,
         proto    => $proto,
         dport    => $ports,
-        action   => 'accept',
+        jump     => 'accept',
         source   => $source,
-        provider => $provider,
+        protocol => $protocol_family,
         chain    => $chain,
       }
     }
