@@ -7,7 +7,7 @@
 import io
 import json
 import os
-import src.bin.parse_sriov as parse_sriov
+import debian.bullseye.src.bin.parse_sriov as parse_sriov
 import sys
 import tempfile
 import unittest
@@ -127,7 +127,7 @@ class MockHelper:
         sys.stdout = self._stringio
 
         # For subprocess.run
-        self.subprocess_patcher = patch('src.bin.parse_sriov.subprocess.run',
+        self.subprocess_patcher = patch('debian.bullseye.src.bin.parse_sriov.subprocess.run',
                                          side_effect=self._side_effect)
         self.mock_run = self.subprocess_patcher.start()
 
@@ -432,9 +432,9 @@ class TestSetMaxTxRate(unittest.TestCase):
     def test_set_max_tx_rate_failure(self):
         """Test set_max_tx_rate when execute_command always fails."""
 
-        with patch('src.bin.parse_sriov.execute_command',
+        with patch('debian.bullseye.src.bin.parse_sriov.execute_command',
                    return_value=(False, "mock error")) as mock_exec, \
-             patch('src.bin.parse_sriov.time.sleep', return_value=None), \
+             patch('debian.bullseye.src.bin.parse_sriov.time.sleep', return_value=None), \
              MockHelper(stdout="") as mock_helper:
 
             result = parse_sriov.set_max_tx_rate("eth0", 3, 1500)
@@ -454,9 +454,9 @@ class TestSetMaxTxRate(unittest.TestCase):
         """Test set_max_tx_rate succeeds after retries."""
 
         # Simulate first call fails, second call succeeds
-        with patch('src.bin.parse_sriov.execute_command',
+        with patch('debian.bullseye.src.bin.parse_sriov.execute_command',
                    side_effect=[(False, "err1"), (True, "ok")]) as mock_exec, \
-             patch('src.bin.parse_sriov.time.sleep', return_value=None), \
+             patch('debian.bullseye.src.bin.parse_sriov.time.sleep', return_value=None), \
              MockHelper(stdout="") as mock_helper:
 
             result = parse_sriov.set_max_tx_rate("eth1", 1, 2000)
@@ -478,7 +478,10 @@ class TestMainFunction(unittest.TestCase):
 
     def setUp(self):
         # Patch os.geteuid so main() thinks we are running as root
-        self.geteuid_patcher = patch('src.bin.parse_sriov.os.geteuid', return_value=0)
+        self.geteuid_patcher = patch(
+            'debian.bullseye.src.bin.parse_sriov.os.geteuid',
+            return_value=0
+        )
         self.mock_geteuid = self.geteuid_patcher.start()
 
     def tearDown(self):
@@ -634,7 +637,7 @@ class TestMainFunction(unittest.TestCase):
         try:
             with patch.object(sys, 'argv',
                               ['parse_sriov', 'enable', temp_filename]), \
-                 patch('src.bin.parse_sriov.enable_sriov_from_data',
+                 patch('debian.bullseye.src.bin.parse_sriov.enable_sriov_from_data',
                        return_value=True) as mock_enable, \
                  MockHelper(stdout="") as mock_helper, \
                  self.assertRaises(SystemExit) as cm:
@@ -665,7 +668,7 @@ class TestMainFunction(unittest.TestCase):
         try:
             with patch.object(sys, 'argv',
                               ['parse_sriov', 'enable', temp_filename]), \
-                 patch('src.bin.parse_sriov.enable_sriov_from_data',
+                 patch('debian.bullseye.src.bin.parse_sriov.enable_sriov_from_data',
                        return_value=False), \
                  MockHelper(stdout="") as mock_helper, \
                  self.assertRaises(SystemExit) as cm:
@@ -705,7 +708,7 @@ class TestEnableSriovFunctions(unittest.TestCase):
             'platform::network::interfaces::sriov::sriov_config', {}
         )
 
-        with patch('src.bin.parse_sriov.enable_sriov_from_configs',
+        with patch('debian.bullseye.src.bin.parse_sriov.enable_sriov_from_configs',
                    return_value=True) as mock_enable, \
              MockHelper(stdout='') as mock_helper:
 
@@ -717,7 +720,7 @@ class TestEnableSriovFunctions(unittest.TestCase):
 
     def test_enable_sriov_from_data_empty_or_missing(self):
         data = {}
-        with patch('src.bin.parse_sriov.enable_sriov_from_configs') \
+        with patch('debian.bullseye.src.bin.parse_sriov.enable_sriov_from_configs') \
                 as mock_enable, \
              MockHelper(stdout='') as mock_helper:
             result = parse_sriov.enable_sriov_from_data(data)
@@ -729,7 +732,7 @@ class TestEnableSriovFunctions(unittest.TestCase):
         data = {
             'platform::network::interfaces::sriov::sriov_config': {}
         }
-        with patch('src.bin.parse_sriov.enable_sriov_from_configs') \
+        with patch('debian.bullseye.src.bin.parse_sriov.enable_sriov_from_configs') \
                 as mock_enable, \
              MockHelper(stdout='') as mock_helper:
             result = parse_sriov.enable_sriov_from_data(data)
@@ -762,7 +765,7 @@ class TestEnableSriovFunctions(unittest.TestCase):
             },
         }
 
-        with patch('src.bin.parse_sriov._enable_sriov_for_pf',
+        with patch('debian.bullseye.src.bin.parse_sriov._enable_sriov_for_pf',
                    return_value=True) as mock_pf, \
              MockHelper(stdout='') as mock_helper:
 
@@ -783,7 +786,7 @@ class TestEnableSriovFunctions(unittest.TestCase):
             }
         }
 
-        with patch('src.bin.parse_sriov._enable_sriov_for_pf') as mock_pf, \
+        with patch('debian.bullseye.src.bin.parse_sriov._enable_sriov_for_pf') as mock_pf, \
              MockHelper(stdout='') as mock_helper:
 
             result = parse_sriov.enable_sriov_from_configs(sriov_configs)
@@ -801,7 +804,7 @@ class TestEnableSriovFunctions(unittest.TestCase):
             'pf0': 'invalid'
         }
 
-        with patch('src.bin.parse_sriov._enable_sriov_for_pf') as mock_pf, \
+        with patch('debian.bullseye.src.bin.parse_sriov._enable_sriov_for_pf') as mock_pf, \
              MockHelper(stdout='') as mock_helper:
 
             result = parse_sriov.enable_sriov_from_configs(sriov_configs)
@@ -832,7 +835,7 @@ class TestEnableSriovFunctions(unittest.TestCase):
             False,
         ]
 
-        with patch('src.bin.parse_sriov._enable_sriov_for_pf',
+        with patch('debian.bullseye.src.bin.parse_sriov._enable_sriov_for_pf',
                    side_effect=side_effect) as mock_pf, \
              MockHelper(stdout='') as mock_helper:
 
@@ -851,10 +854,10 @@ class TestEnableSriovSkipWhenAlreadyConfigured(unittest.TestCase):
         pci_addr = '0000:07:00.0'
         num_vfs = 4
 
-        with patch('src.bin.parse_sriov._read_int_from_file',
+        with patch('debian.bullseye.src.bin.parse_sriov._read_int_from_file',
                    return_value=num_vfs) as mock_read, \
-             patch('src.bin.parse_sriov._write_int_to_file') as mock_write, \
-             patch('src.bin.parse_sriov._ensure_pf_netdevs_up') as mock_up, \
+             patch('debian.bullseye.src.bin.parse_sriov._write_int_to_file') as mock_write, \
+             patch('debian.bullseye.src.bin.parse_sriov._ensure_pf_netdevs_up') as mock_up, \
              MockHelper(stdout='') as mock_helper:
 
             result = parse_sriov._enable_sriov_for_pf(  # pylint: disable=protected-access

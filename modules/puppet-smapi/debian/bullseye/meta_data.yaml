@@ -1,7 +1,7 @@
 ---
-name: puppet-smapi
+debname: puppet-smapi
 debver: 1.0.0-1
-src_path: src
+src_path: debian/bullseye/src
 revision:
     dist: $STX_DIST
     PKG_GITREVCOUNT: true

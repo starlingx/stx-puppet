@@ -14,7 +14,7 @@ from netaddr import AddrFormatError
 
 from tests.filesystem_mock import FilesystemMock
 from tests.filesystem_mock import ReadOnlyFileContainer
-import src.bin.apply_network_config as anc
+import debian.bullseye.src.bin.apply_network_config as anc
 
 
 class NetworkingMockError(BaseException):
@@ -1110,7 +1110,7 @@ class BaseTestCase(testtools.TestCase):
 
     def _mock_fs(self, mocks, fxn, *args, **kwargs):
         with (
-            mock.patch("src.bin.apply_network_config.path_exists", self._fs.exists),
+            mock.patch("debian.bullseye.src.bin.apply_network_config.path_exists", self._fs.exists),
             mock.patch("os.remove", self._fs.delete),
             mock.patch("os.listdir", self._fs.listdir),
             mock.patch("builtins.open", self._fs.open),
@@ -1132,12 +1132,12 @@ class BaseTestCase(testtools.TestCase):
             return self._mocked_call(mocks, fxn, *args, **kwargs)
 
     def _mock_syscmd(self, mocks, fxn, *args, **kwargs):
-        with mock.patch("src.bin.apply_network_config.execute_system_cmd",
+        with mock.patch("debian.bullseye.src.bin.apply_network_config.execute_system_cmd",
                         self._scmdmock.execute_system_cmd):
             return self._mocked_call(mocks, fxn, *args, **kwargs)
 
     def _mock_sysinv_lock(self, mocks, fxn, *args, **kwargs):
-        with mock.patch.multiple("src.bin.apply_network_config",
+        with mock.patch.multiple("debian.bullseye.src.bin.apply_network_config",
                                  acquire_sysinv_agent_lock=mock.DEFAULT,
                                  release_sysinv_agent_lock=mock.DEFAULT):
             return self._mocked_call(mocks, fxn, *args, **kwargs)
@@ -1610,7 +1610,8 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
                            anc.IFSTATE_BASE_PATH + "enp0s8": "enp0s8"})
         self._add_logger_mock()
 
-        with mock.patch('src.bin.apply_network_config.execute_system_cmd', exec_sys_cmd):
+        with mock.patch('debian.bullseye.src.bin.apply_network_config.execute_system_cmd',
+                         exec_sys_cmd):
             self._mocked_call([self._mock_fs, self._mock_logger], anc.set_iface_down, "enp0s8")
 
         self.assertEqual([
@@ -1627,7 +1628,8 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
         self._add_logger_mock()
 
         def run_function(path_exists: bool):
-            with (mock.patch('src.bin.apply_network_config.path_exists', return_value=path_exists),
+            with (mock.patch('debian.bullseye.src.bin.apply_network_config.path_exists',
+                  return_value=path_exists),
                  mock.patch('os.remove', side_effect=OSError("< OS ERROR >"))):
                 self._mocked_call([self._mock_logger], anc.remove_iface_config_file, "enp0s8")
 
@@ -1646,7 +1648,8 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
         path = anc.ETC_DIR + "/ifcfg-enp0s8"
         contents = {path: "EXISTING CONTENTS\n"} if has_existing_file else None
         self._add_fs_mock(contents)
-        with mock.patch('src.bin.apply_network_config.get_header', return_value=self._HEADER):
+        with mock.patch('debian.bullseye.src.bin.apply_network_config.get_header',
+             return_value=self._HEADER):
             self._mocked_call([self._mock_fs],
                               anc.write_iface_config_file, "enp0s8", self._IFACE_CONFIG)
         contents = self._fs.get_file_contents(path)
@@ -1683,7 +1686,8 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
         path = anc.ETC_DIR + "/auto"
         contents = {path: "EXISTING CONTENTS\n"} if has_existing_file else None
         self._add_fs_mock(contents)
-        with mock.patch('src.bin.apply_network_config.get_header', return_value=self._HEADER):
+        with mock.patch('debian.bullseye.src.bin.apply_network_config.get_header',
+             return_value=self._HEADER):
             self._mocked_call([self._mock_fs], anc.write_auto_file, self._AUTO_SAMPLE_CFG)
         contents = self._fs.get_file_contents(path)
         self.assertEqual(self._AUTO_FILE, contents)
@@ -1807,7 +1811,8 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
             received_cmd = cmd
             return return_code, stdout
 
-        with mock.patch('src.bin.apply_network_config.execute_system_cmd', exec_sys_cmd):
+        with mock.patch('debian.bullseye.src.bin.apply_network_config.execute_system_cmd',
+             exec_sys_cmd):
             self._mocked_call([self._mock_logger], anc.remove_route_entry_from_kernel, entry)
 
         return received_cmd
@@ -1899,7 +1904,8 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
             self.assertEqual(cmd_responses[pos][0], cmd)
             return cmd_responses[pos][1], cmd_responses[pos][2]
 
-        with mock.patch('src.bin.apply_network_config.execute_system_cmd', exec_sys_cmd):
+        with mock.patch('debian.bullseye.src.bin.apply_network_config.execute_system_cmd',
+             exec_sys_cmd):
             self._mocked_call([self._mock_logger], anc.add_route_entry_to_kernel, entry)
 
     def test_add_route_entry_to_kernel_existing(self):
@@ -1988,7 +1994,8 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
                 self._nwmock.ifdown(iface)
                 self._nwmock.ifup(iface)
 
-        with mock.patch('src.bin.apply_network_config.get_header', return_value=self._HEADER):
+        with mock.patch('debian.bullseye.src.bin.apply_network_config.get_header',
+             return_value=self._HEADER):
             self._mocked_call([self._mock_fs, self._mock_syscmd, self._mock_sysinv_lock,
                                self._mock_logger], anc.update_routes, updated_ifaces)
 
@@ -2487,7 +2494,7 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
         self._add_logger_mock()
 
         with (mock.patch("os.getpgid", getpgid),
-              mock.patch("src.bin.apply_network_config.TERM_WAIT_TIME", 1)):
+              mock.patch("debian.bullseye.src.bin.apply_network_config.TERM_WAIT_TIME", 1)):
             retcode, stdout = self._mocked_call([self._mock_logger], anc.execute_system_cmd,
                                                 "tests/system_cmd_test_script.sh 0 -e", 1)
 
