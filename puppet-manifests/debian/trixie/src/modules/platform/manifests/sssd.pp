@@ -59,6 +59,11 @@ class platform::sssd
   }
 
   include ::platform::sssd::config
+
+  service { 'sssd':
+    ensure => running,
+    enable => true,
+  }
 }
 
 class platform::sssd::domain::runtime
@@ -66,10 +71,8 @@ class platform::sssd::domain::runtime
 
   include ::platform::sssd::config
 
-  if $facts['os']['family'] == 'Debian' {
-    Class['::platform::sssd::config']
-      -> exec { 'restart sssd service':
-        command => '/usr/local/sbin/pmon-restart sssd',
-      }
+  Class['::platform::sssd::config']
+  -> exec { 'restart sssd service':
+    command => '/usr/local/sbin/pmon-restart sssd',
   }
 }
