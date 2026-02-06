@@ -18,7 +18,7 @@ class platform::ntp (
 {
   include platform::ntp::apparmor
   # Setting ntp service name
-  $ntp_service_name = 'ntp'
+  $ntp_service_name = 'ntpsec'
   $ntp_pmon_conf_template = 'platform/ntp_debian.pmon.conf.erb'
 
   if $enabled {
