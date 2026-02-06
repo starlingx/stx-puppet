@@ -118,7 +118,7 @@ describe 'sysinv::api' do
       end
 
       it { expect { should contain_sysinv_api_paste_ini('filter:authtoken/auth_admin_prefix') }.to \
-        raise_error(Puppet::Error, /validate_re\(\): "#{keystone_auth_admin_prefix}" does not match/) }
+        raise_error(Puppet::Error, /Invalid.*keystone_auth_admin_prefix.*#{keystone_auth_admin_prefix}/) }
     end
   end
 

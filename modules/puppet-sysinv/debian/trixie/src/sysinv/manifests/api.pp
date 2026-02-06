@@ -285,7 +285,9 @@ class sysinv::api (
     }
 
     if $keystone_auth_admin_prefix {
-      validate_re($keystone_auth_admin_prefix, '^(/.+[^/])?$')
+      unless $keystone_auth_admin_prefix =~ /^(\/.*[^\/])?$/ {
+        fail("Invalid keystone_auth_admin_prefix: ${$keystone_auth_admin_prefix}")
+      }
       sysinv_config {
         'keystone_authtoken/auth_admin_prefix': value => $keystone_auth_admin_prefix;
       }
@@ -302,7 +304,9 @@ class sysinv::api (
     }
 
     if $openstack_keystone_auth_admin_prefix {
-      validate_re($openstack_keystone_auth_admin_prefix, '^(/.+[^/])?$')
+      unless $openstack_keystone_auth_admin_prefix =~ /^(\/.*[^\/])?$/ {
+        fail("Invalid openstack_keystone_auth_admin_prefix: ${$openstack_keystone_auth_admin_prefix}")
+      }
       sysinv_config {
         'openstack_keystone_authtoken/auth_admin_prefix': value => $openstack_keystone_auth_admin_prefix;
       }

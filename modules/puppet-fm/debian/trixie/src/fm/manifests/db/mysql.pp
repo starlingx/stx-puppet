@@ -55,7 +55,7 @@ class fm::db::mysql(
 
   #include ::fm::deps
 
-  validate_string($password)
+  assert_type(String, $password)
 
   ::openstacklib::db::mysql { 'fm':
     user          => $user,

@@ -173,7 +173,9 @@ class dcmanager::api (
     }
 
     if $keystone_auth_admin_prefix {
-      validate_re($keystone_auth_admin_prefix, '^(/.+[^/])?$')
+      unless $keystone_auth_admin_prefix =~ /^(\/.*[^\/])?$/ {
+        fail("Invalid keystone_auth_admin_prefix: ${$keystone_auth_admin_prefix}")
+      }
       dcmanager_config {
         'keystone_authtoken/auth_admin_prefix': value => $keystone_auth_admin_prefix;
       }
