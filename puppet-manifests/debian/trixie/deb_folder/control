@@ -45,6 +45,7 @@ Depends: ${misc:Depends}, puppet,
  puppet-network,
  puppet-module-voxpupuli-collectd,
  python3-ruamel.yaml
+Replaces: puppet-agent
 Description: Puppet configuration and manifests
  Puppet lets you centrally manage every important aspect of your system using a
  cross-platform specification language that manages all the separate elements
