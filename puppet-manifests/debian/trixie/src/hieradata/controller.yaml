@@ -168,10 +168,7 @@ nfv::nfvi::infrastructure_rest_api_data_port_fault_handling_enabled: false
 keystone::service::enabled: false
 keystone::token_provider: 'fernet'
 keystone::max_token_size: 255,
-keystone::debug: false
 keystone::enable_ssl: false
-keystone::use_syslog: true
-keystone::log_facility: 'local2'
 keystone::db::database_connection_recycle_time: 60
 keystone::db::database_max_pool_size: 1
 keystone::db::database_max_overflow: 50
