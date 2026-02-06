@@ -108,13 +108,12 @@ class openstack::horizon
   # Horizon is not used in distributed cloud subclouds
   if $platform::params::distributed_cloud_role != 'subcloud'  {
 
-    include ::horizon::params
     file { '/etc/openstack-dashboard/horizon-config.ini':
       ensure  => present,
       content => template('openstack/horizon-params.erb'),
       mode    => '0644',
       owner   => 'root',
-      group   => $horizon::params::apache_group,
+      group   => 'www-data',
     }
 
 
