@@ -30,13 +30,13 @@ class sysinv::conductor (
     }
   }
 
-  if $::sysinv::params::conductor_package {
+  if $sysinv::params::conductor_package {
     Package['sysinv-conductor'] -> Sysinv_config<||>
     Package['sysinv-conductor'] -> Sysinv_api_paste_ini<||>
     Package['sysinv-conductor'] -> Service['sysinv-conductor']
     package { 'sysinv-conductor':
       ensure => $package_ensure,
-      name   => $::sysinv::params::conductor_package,
+      name   => $sysinv::params::conductor_package,
     }
   }
 
@@ -48,7 +48,7 @@ class sysinv::conductor (
 
   service { 'sysinv-conductor':
     ensure    => $ensure,
-    name      => $::sysinv::params::conductor_service,
+    name      => $sysinv::params::conductor_service,
     enable    => $enabled,
     hasstatus => false,
     require   => Package['sysinv'],

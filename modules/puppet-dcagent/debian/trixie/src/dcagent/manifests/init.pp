@@ -37,10 +37,10 @@ class dcagent (
 
   package { 'dcagent':
     ensure => $package_ensure,
-    name   => $::dcagent::params::package_name,
+    name   => $dcagent::params::package_name,
   }
 
-  file { $::dcagent::params::conf_file:
+  file { $dcagent::params::conf_file:
     ensure  => present,
     mode    => '0600',
     require => Package['dcagent'],

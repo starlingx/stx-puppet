@@ -20,32 +20,32 @@ class nfv (
 
   package { 'nfv':
     ensure  => 'present',
-    name    => $::nfv::params::package_name,
+    name    => $nfv::params::package_name,
     require => Anchor['nfv-start'],
   }
 
-  file { $::nfv::params::nfv_vim_conf:
+  file { $nfv::params::nfv_vim_conf:
     ensure  => 'present',
     require => Package['nfv'],
   }
 
   package { 'nfv-plugins':
     ensure  => 'present',
-    name    => $::nfv::params::nfv_plugin_package_name,
+    name    => $nfv::params::nfv_plugin_package_name,
     require => Anchor['nfv-start'],
   }
 
-  file { $::nfv::params::nfv_plugin_alarm_conf:
+  file { $nfv::params::nfv_plugin_alarm_conf:
     ensure  => 'present',
     require => Package['nfv-plugins'],
   }
 
-  file { $::nfv::params::nfv_plugin_event_log_conf:
+  file { $nfv::params::nfv_plugin_event_log_conf:
     ensure  => 'present',
     require => Package['nfv-plugins'],
   }
 
-  file { $::nfv::params::nfv_plugin_nfvi_conf:
+  file { $nfv::params::nfv_plugin_nfvi_conf:
     ensure  => 'present',
     require => Package['nfv-plugins'],
   }

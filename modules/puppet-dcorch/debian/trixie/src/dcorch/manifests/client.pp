@@ -27,7 +27,7 @@ class dcorch::client(
 
   package { 'dcorchclient':
     ensure => $package_ensure,
-    name   => $::dcorch::params::client_package,
+    name   => $dcorch::params::client_package,
     tag    => 'dcorch-package',
   }
 }

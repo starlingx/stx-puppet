@@ -41,10 +41,10 @@ class dcdbsync (
 
   package { 'dcdbsync':
     ensure => $package_ensure,
-    name   => $::dcdbsync::params::package_name,
+    name   => $dcdbsync::params::package_name,
   }
 
-  file { $::dcdbsync::params::conf_file:
+  file { $dcdbsync::params::conf_file:
     ensure  => present,
     mode    => '0600',
     require => Package['dcdbsync'],

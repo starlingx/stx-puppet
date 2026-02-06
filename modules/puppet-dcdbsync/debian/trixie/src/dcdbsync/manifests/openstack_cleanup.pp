@@ -17,7 +17,7 @@ class dcdbsync::openstack_cleanup {
 
   include dcdbsync::params
 
-  file { $::dcdbsync::params::openstack_conf_file:
+  file { $dcdbsync::params::openstack_conf_file:
     ensure => absent,
   }
 }

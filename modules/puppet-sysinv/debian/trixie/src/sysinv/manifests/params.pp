@@ -22,7 +22,7 @@ class sysinv::params {
   $certalarm_conf = '/etc/sysinv/cert-alarm.conf'
   $sysinv_paste_api_ini = '/etc/sysinv/api-paste.ini'
 
-  if $::osfamily == 'Debian' {
+  if $facts['os']['family'] == 'Debian' {
     $package_name       = 'sysinv'
     $client_package     = 'cgtsclient'
     $api_package        = false
@@ -35,7 +35,7 @@ class sysinv::params {
     $certalarm_package  = false
     $db_sync_command    = 'sysinv-dbsync'
 
-  } elsif($::osfamily == 'RedHat') {
+  } elsif($facts['os']['family'] == 'RedHat') {
 
     $package_name       = 'sysinv'
     $client_package     = 'cgtscli'
@@ -49,7 +49,7 @@ class sysinv::params {
     $certalarm_package  = false
     $db_sync_command    = 'sysinv-dbsync'
 
-  } elsif($::osfamily == 'WRLinux') {
+  } elsif($facts['os']['family'] == 'WRLinux') {
 
     $package_name       = 'sysinv'
     $client_package     = 'cgtscli'
@@ -64,6 +64,6 @@ class sysinv::params {
     $db_sync_command    = 'sysinv-dbsync'
 
   } else {
-    fail("unsuported osfamily ${::osfamily}, currently WindRiver, Debian, Redhat are the only supported platforms")
+    fail("unsuported osfamily ${facts['os']['family']}, currently WindRiver, Debian, Redhat are the only supported platforms")
   }
 }

@@ -19,11 +19,11 @@ class sysinv::db::sync {
   include sysinv::params
 
   exec { 'sysinv-dbsync':
-    command     => $::sysinv::params::db_sync_command,
+    command     => $sysinv::params::db_sync_command,
     path        => '/usr/bin',
     user        => 'sysinv',
     refreshonly => true,
-    require     => [File[$::sysinv::params::sysinv_conf], Class['sysinv']],
+    require     => [File[$sysinv::params::sysinv_conf], Class['sysinv']],
     logoutput   => 'on_failure',
   }
 }

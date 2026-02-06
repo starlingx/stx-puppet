@@ -100,12 +100,12 @@ class dcagent::api (
 
   Dcagent_config<||> ~> Service['dcagent-audit']
 
-  if $::dcagent::params::api_package {
+  if $dcagent::params::api_package {
     Package['dcagent-audit'] -> Dcagent_config<||>
     Package['dcagent-audit'] -> Service['dcagent-audit']
     package { 'dcagent-audit':
       ensure => $package_ensure,
-      name   => $::dcagent::params::api_package,
+      name   => $dcagent::params::api_package,
     }
   }
 
@@ -185,7 +185,7 @@ class dcagent::api (
 
   service { 'dcagent-audit':
     ensure     => $ensure,
-    name       => $::dcagent::params::api_service,
+    name       => $dcagent::params::api_service,
     enable     => $enabled,
     hasstatus  => true,
     hasrestart => true,

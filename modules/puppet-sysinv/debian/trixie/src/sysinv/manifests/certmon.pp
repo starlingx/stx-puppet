@@ -34,15 +34,15 @@ class sysinv::certmon (
 ) {
   include sysinv::params
 
-  if $::sysinv::params::certmon_package {
+  if $sysinv::params::certmon_package {
     Package['certmon'] -> Certmon_config<||>
     package { 'certmon':
       ensure => $package_ensure,
-      name   => $::sysinv::params::certmon_package,
+      name   => $sysinv::params::certmon_package,
     }
   }
 
-  file { $::sysinv::params::certmon_conf:
+  file { $sysinv::params::certmon_conf:
     ensure  => present,
     owner   => 'root',
     group   => 'root',

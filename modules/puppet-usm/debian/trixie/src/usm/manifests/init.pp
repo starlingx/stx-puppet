@@ -13,7 +13,7 @@ class usm (
 ) {
   include usm::params
 
-  file { $::usm::params::usm_conf:
+  file { $usm::params::usm_conf:
     ensure => present,
     owner  => 'usm',
     group  => 'usm',
@@ -33,7 +33,7 @@ class usm (
     enable => true,
   }
 
-  if $::personality == 'controller' {
+  if $facts[personality] == 'controller' {
     Usm_config<||> ~> service { 'software-controller-daemon.service':
       ensure => 'running',
       enable => true,

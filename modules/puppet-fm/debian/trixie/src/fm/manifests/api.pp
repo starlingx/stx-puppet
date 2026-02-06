@@ -50,10 +50,10 @@ class fm::api (
   $host                           = '0.0.0.0',
   $port                           = '18002',
   $workers                        = 1,
-  $service_name                   = $::fm::params::api_service,
+  $service_name                   = $fm::params::api_service,
   $sync_db                        = false,
   $auth_strategy                  = 'keystone',
-  $enable_proxy_headers_parsing   = $::os_service_default,
+  $enable_proxy_headers_parsing   = $os_service_default,
   $paste_config                   = '/etc/fm/api-paste.ini',
 ) inherits fm::params {
 
@@ -67,7 +67,7 @@ class fm::api (
 
   package { 'fm-api':
     ensure => $package_ensure,
-    name   => $::fm::params::api_package,
+    name   => $fm::params::api_package,
     tag    => 'fm-package',
   }
 
@@ -83,10 +83,10 @@ class fm::api (
     include ::fm::db::sync
   }
 
-  if $service_name == $::fm::params::api_service {
+  if $service_name == $fm::params::api_service {
     service { 'fm-api':
       ensure     => $service_ensure,
-      name       => $::fm::params::api_service,
+      name       => $fm::params::api_service,
       enable     => $enabled,
       hasstatus  => true,
       hasrestart => true,

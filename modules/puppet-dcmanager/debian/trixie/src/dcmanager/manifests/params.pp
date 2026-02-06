@@ -12,7 +12,7 @@ class dcmanager::params {
   $dcmanager_dir = '/etc/dcmanager'
   $dcmanager_conf = '/etc/dcmanager/dcmanager.conf'
 
-  if $::osfamily == 'Debian' {
+  if $facts['os']['family'] == 'Debian' {
     $package_name       = 'distributedcloud-dcmanager'
     $client_package     = 'distributedcloud-client-dcmanagerclient'
     $api_package        = false
@@ -21,7 +21,7 @@ class dcmanager::params {
     $manager_service     = 'dcmanager-manager'
     $db_sync_command    = 'dcmanager-manage db_sync'
 
-  } elsif($::osfamily == 'RedHat') {
+  } elsif($facts['os']['family'] == 'RedHat') {
 
     $package_name       = 'distributedcloud-dcmanager'
     $client_package     = 'distributedcloud-client-dcmanagerclient'
@@ -31,7 +31,7 @@ class dcmanager::params {
     $manager_service     = 'dcmanager-manager'
     $db_sync_command    = 'dcmanager-manage db_sync'
 
-  } elsif($::osfamily == 'WRLinux') {
+  } elsif($facts['os']['family'] == 'WRLinux') {
 
     $package_name       = 'dcmanager'
     $client_package     = 'distributedcloud-client-dcmanagerclient'
@@ -42,6 +42,6 @@ class dcmanager::params {
     $db_sync_command    = 'dcmanager-manage db_sync'
 
   } else {
-    fail("unsuported osfamily ${::osfamily}, currently WindRiver, Debian, Redhat are the only supported platforms")
+    fail("unsuported osfamily ${facts['os']['family']}, currently WindRiver, Debian, Redhat are the only supported platforms")
   }
 }

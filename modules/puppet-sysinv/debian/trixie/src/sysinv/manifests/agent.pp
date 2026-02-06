@@ -34,7 +34,7 @@ class sysinv::agent (
     }
   }
 
-  if ($::sysinv::agent::dpdk_elf_file != undef) {
+  if ($sysinv::agent::dpdk_elf_file != undef) {
     sysinv_config {
       'dpdk/dpdk_elf': value => $dpdk_elf_file;
     }
@@ -44,13 +44,13 @@ class sysinv::agent (
     'lldp/drivers': value => join($lldp_drivers,',');
   }
 
-  if $::sysinv::params::agent_package {
+  if $sysinv::params::agent_package {
     Package['sysinv-agent'] -> Sysinv_config<||>
     Package['sysinv-agent'] -> Sysinv_api_paste_ini<||>
     Package['sysinv-agent'] -> Service['sysinv-agent']
     package { 'sysinv-agent':
       ensure => $package_ensure,
-      name   => $::sysinv::params::agent_package,
+      name   => $sysinv::params::agent_package,
     }
   }
 
@@ -62,7 +62,7 @@ class sysinv::agent (
 
   service { 'sysinv-agent':
     ensure    => $ensure,
-    name      => $::sysinv::params::agent_service,
+    name      => $sysinv::params::agent_service,
     enable    => $enabled,
     hasstatus => false,
     require   => Package['sysinv'],

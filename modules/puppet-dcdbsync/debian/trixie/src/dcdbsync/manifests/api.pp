@@ -99,12 +99,12 @@ class dcdbsync::api (
 
   Dcdbsync_config<||> ~> Service['dcdbsync-api']
 
-  if $::dcdbsync::params::api_package {
+  if $dcdbsync::params::api_package {
     Package['dcdbsync-api'] -> Dcdbsync_config<||>
     Package['dcdbsync-api'] -> Service['dcdbsync-api']
     package { 'dcdbsync-api':
       ensure => $package_ensure,
-      name   => $::dcdbsync::params::api_package,
+      name   => $dcdbsync::params::api_package,
     }
   }
 
@@ -173,7 +173,7 @@ class dcdbsync::api (
 
   service { 'dcdbsync-api':
     ensure     => $ensure,
-    name       => $::dcdbsync::params::api_service,
+    name       => $dcdbsync::params::api_service,
     enable     => $enabled,
     hasstatus  => true,
     hasrestart => true,

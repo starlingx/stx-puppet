@@ -13,7 +13,7 @@ class dcorch::params {
   $dcorch_conf = '/etc/dcorch/dcorch.conf'
   $dcorch_paste_api_ini = '/etc/dcorch/api-paste.ini'
 
-  if $::osfamily == 'Debian' {
+  if $facts['os']['family'] == 'Debian' {
     $package_name          = 'distributedcloud-dcorch'
     $client_package        = 'distributedcloud-client-dcorchclient'
     $api_package           = false
@@ -25,7 +25,7 @@ class dcorch::params {
 
     $db_sync_command       = 'dcorch-manage db_sync'
 
-  } elsif($::osfamily == 'RedHat') {
+  } elsif($facts['os']['family'] == 'RedHat') {
 
     $package_name          = 'distributedcloud-dcorch'
     $client_package        = 'distributedcloud-client-dcorchclient'
@@ -38,7 +38,7 @@ class dcorch::params {
 
     $db_sync_command       = 'dcorch-manage db_sync'
 
-  } elsif($::osfamily == 'WRLinux') {
+  } elsif($facts['os']['family'] == 'WRLinux') {
 
     $package_name          = 'dcorch'
     $client_package        = 'distributedcloud-client-dcorchclient'
@@ -51,6 +51,6 @@ class dcorch::params {
     $db_sync_command       = 'dcorch-manage db_sync'
 
   } else {
-    fail("unsuported osfamily ${::osfamily}, currently WindRiver, Debian, Redhat are the only supported platforms")
+    fail("unsuported osfamily ${facts['os']['family']}, currently WindRiver, Debian, Redhat are the only supported platforms")
   }
 }

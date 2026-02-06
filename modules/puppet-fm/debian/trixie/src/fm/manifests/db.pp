@@ -37,23 +37,23 @@
 #   (Optional) Defaults to $::os_service_default.
 #
 class fm::db (
-  $database_db_max_retries          = $::os_service_default,
+  $database_db_max_retries          = $os_service_default,
   $database_connection              = 'sqlite:////var/lib/fm/fm.sqlite',
-  $database_connection_recycle_time = $::os_service_default,
-  $database_max_pool_size           = $::os_service_default,
-  $database_max_retries             = $::os_service_default,
-  $database_retry_interval          = $::os_service_default,
-  $database_max_overflow            = $::os_service_default,
+  $database_connection_recycle_time = $os_service_default,
+  $database_max_pool_size           = $os_service_default,
+  $database_max_retries             = $os_service_default,
+  $database_retry_interval          = $os_service_default,
+  $database_max_overflow            = $os_service_default,
 ) {
 
   include ::fm::deps
 
-  $database_connection_real = pick($::fm::database_connection, $database_connection)
-  $database_connection_recycle_time = pick($::fm::connection_recycle_time, $database_connection_recycle_time)
-  $database_max_pool_size_real = pick($::fm::database_max_pool_size, $database_max_pool_size)
-  $database_max_retries_real = pick($::fm::database_max_retries, $database_max_retries)
-  $database_retry_interval_real = pick($::fm::database_retry_interval, $database_retry_interval)
-  $database_max_overflow_real = pick($::fm::database_max_overflow, $database_max_overflow)
+  $database_connection_real = pick($fm::database_connection, $database_connection)
+  $database_connection_recycle_time = pick($fm::connection_recycle_time, $database_connection_recycle_time)
+  $database_max_pool_size_real = pick($fm::database_max_pool_size, $database_max_pool_size)
+  $database_max_retries_real = pick($fm::database_max_retries, $database_max_retries)
+  $database_retry_interval_real = pick($fm::database_retry_interval, $database_retry_interval)
+  $database_max_overflow_real = pick($fm::database_max_overflow, $database_max_overflow)
 
   oslo::db { 'fm_config':
     db_max_retries          => $database_db_max_retries,

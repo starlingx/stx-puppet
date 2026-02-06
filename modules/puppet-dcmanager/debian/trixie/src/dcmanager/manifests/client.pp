@@ -26,7 +26,7 @@ class dcmanager::client(
 
   package { 'dcmanagerclient':
     ensure => $package_ensure,
-    name   => $::dcmanager::params::client_package,
+    name   => $dcmanager::params::client_package,
     tag    => 'dcmanager-package',
   }
 }

@@ -31,6 +31,6 @@ class sysinv::client(
 
   package { 'cgtsclient':
     ensure => $package_ensure,
-    name   => $::sysinv::params::client_package,
+    name   => $sysinv::params::client_package,
   }
 }

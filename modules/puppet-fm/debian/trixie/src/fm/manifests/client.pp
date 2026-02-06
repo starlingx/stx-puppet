@@ -15,7 +15,7 @@ class fm::client (
 
   package { 'fmclient':
     ensure => $ensure,
-    name   => $::fm::params::client_package,
+    name   => $fm::params::client_package,
     tag    => 'fmclient',
   }
 }

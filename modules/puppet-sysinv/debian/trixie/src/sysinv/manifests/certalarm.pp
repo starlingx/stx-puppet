@@ -34,15 +34,15 @@ class sysinv::certalarm (
 ) {
   include sysinv::params
 
-  if $::sysinv::params::certalarm_package {
+  if $sysinv::params::certalarm_package {
     Package['certalarm'] -> Certalarm_config<||>
     package { 'certalarm':
       ensure => $package_ensure,
-      name   => $::sysinv::params::certalarm_package,
+      name   => $sysinv::params::certalarm_package,
     }
   }
 
-  file { $::sysinv::params::certalarm_conf:
+  file { $sysinv::params::certalarm_conf:
     ensure  => present,
     owner   => 'root',
     group   => 'root',

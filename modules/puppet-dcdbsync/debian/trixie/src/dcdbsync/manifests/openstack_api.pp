@@ -166,7 +166,7 @@ class dcdbsync::openstack_api (
 
   service { 'dcdbsync-openstack-api':
     ensure     => $ensure,
-    name       => $::dcdbsync::params::api_openstack_service,
+    name       => $dcdbsync::params::api_openstack_service,
     enable     => $enabled,
     hasstatus  => true,
     hasrestart => true,

@@ -69,12 +69,12 @@ class dcorch (
 
   package { 'dcorch':
     ensure  => $package_ensure,
-    name    => $::dcorch::params::package_name,
+    name    => $dcorch::params::package_name,
     require => Anchor['dcorch-start'],
     tag     => 'dcorch-package',
   }
 
-  file { $::dcorch::params::dcorch_conf:
+  file { $dcorch::params::dcorch_conf:
     ensure  => present,
     mode    => '0640',
     owner   => 'dcorch',
@@ -82,7 +82,7 @@ class dcorch (
     require => Package['dcorch'],
   }
 
-  file { $::dcorch::params::dcorch_paste_api_ini:
+  file { $dcorch::params::dcorch_paste_api_ini:
     ensure  => present,
     mode    => '0640',
     owner   => 'dcorch',

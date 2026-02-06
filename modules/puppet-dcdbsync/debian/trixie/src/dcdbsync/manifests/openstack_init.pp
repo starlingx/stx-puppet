@@ -38,7 +38,7 @@ class dcdbsync::openstack_init (
 
   include dcdbsync::params
 
-  file { $::dcdbsync::params::openstack_conf_file:
+  file { $dcdbsync::params::openstack_conf_file:
     ensure => present,
     mode   => '0600',
   }

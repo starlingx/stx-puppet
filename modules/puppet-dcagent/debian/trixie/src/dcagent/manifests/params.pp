@@ -12,7 +12,7 @@ class dcagent::params {
   $conf_dir = '/etc/dcagent'
   $conf_file = '/etc/dcagent/dcagent.conf'
 
-  if $::osfamily == 'Debian' {
+  if $facts['os']['family'] == 'Debian' {
     $package_name           = 'distributedcloud-dcagent'
     $api_package            = false
     $api_service            = 'dcagent-api'

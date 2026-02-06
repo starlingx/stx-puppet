@@ -109,10 +109,10 @@ class dcorch::api_proxy (
   include dcorch::params
   include dcorch::deps
 
-  if $::dcorch::params::api_package {
+  if $dcorch::params::api_package {
     package { 'dcorch':
       ensure => $package_ensure,
-      name   => $::dcorch::params::api_proxy_package,
+      name   => $dcorch::params::api_proxy_package,
       tag    => 'dcorch-package',
     }
   }
@@ -197,7 +197,7 @@ class dcorch::api_proxy (
 
   service { 'dcorch-api-proxy':
     ensure     => $ensure,
-    name       => $::dcorch::params::api_proxy_service,
+    name       => $dcorch::params::api_proxy_service,
     enable     => $enabled,
     hasstatus  => true,
     hasrestart => true,

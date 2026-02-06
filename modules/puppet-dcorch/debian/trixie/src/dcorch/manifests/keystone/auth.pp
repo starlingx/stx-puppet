@@ -52,7 +52,7 @@ class dcorch::keystone::auth (
   $nfv_proxy_admin_url           = 'http://127.0.0.1:4545',
   $nfv_proxy_internal_url        = 'http://127.0.0.1:4545',
 ) {
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+  if $platform::params::distributed_cloud_role =='systemcontroller' {
     keystone::resource::service_identity { 'dcorch':
       configure_user      => $configure_user,
       configure_user_role => $configure_user_role,

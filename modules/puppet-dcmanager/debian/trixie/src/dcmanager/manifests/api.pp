@@ -108,10 +108,10 @@ class dcmanager::api (
   include dcmanager::params
   include dcmanager::deps
 
-  if $::dcmanager::params::api_package {
+  if $dcmanager::params::api_package {
     package { 'dcmanager':
       ensure => $package_ensure,
-      name   => $::dcmanager::params::api_package,
+      name   => $dcmanager::params::api_package,
       tag    => 'dcmanager-package',
     }
   }
@@ -198,7 +198,7 @@ class dcmanager::api (
 
   service { 'dcmanager-api':
     ensure     => $ensure,
-    name       => $::dcmanager::params::api_service,
+    name       => $dcmanager::params::api_service,
     enable     => $enabled,
     hasstatus  => true,
     hasrestart => true,

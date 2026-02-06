@@ -96,11 +96,11 @@ class sysinv (
 
   package { 'sysinv':
     ensure  => $package_ensure,
-    name    => $::sysinv::params::package_name,
+    name    => $sysinv::params::package_name,
     require => Anchor['sysinv-start'],
   }
 
-  file { $::sysinv::params::sysinv_conf:
+  file { $sysinv::params::sysinv_conf:
     ensure  => present,
     owner   => 'sysinv',
     group   => 'sysinv',
@@ -108,7 +108,7 @@ class sysinv (
     require => Package['sysinv'],
   }
 
-  file { $::sysinv::params::sysinv_paste_api_ini:
+  file { $sysinv::params::sysinv_paste_api_ini:
     ensure  => present,
     owner   => 'sysinv',
     group   => 'sysinv',

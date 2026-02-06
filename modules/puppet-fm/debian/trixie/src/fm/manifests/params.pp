@@ -1,6 +1,6 @@
 class fm::params {
 
-  case $::osfamily {
+  case $facts['os']['family'] {
     'RedHat': {
       $client_package = 'python-fmclient'
       $api_package    = 'fm-rest-api'
@@ -12,9 +12,9 @@ class fm::params {
       $api_service    = 'fm-api'
     }
     default: {
-      fail("Unsupported osfamily: ${::osfamily} operatingsystem")
+      fail("Unsupported osfamily: ${facts['os']['family']} operatingsystem")
     }
 
-  } # Case $::osfamily
+  } # Case $facts['os']['family']
 
 }

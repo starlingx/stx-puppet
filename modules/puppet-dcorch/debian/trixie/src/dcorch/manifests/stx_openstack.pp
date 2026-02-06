@@ -38,7 +38,7 @@ class dcorch::stx_openstack (
   include ::platform::params
 
   # configuration for accessing openstack keystone
-  if $::platform::params::stx_openstack_applied {
+  if $platform::params::stx_openstack_applied {
     dcorch_config {
       'openstack_cache/auth_uri': value => "${keystone_identity_uri}/v3";
       'openstack_cache/admin_tenant': value => $keystone_admin_tenant;

@@ -186,13 +186,13 @@ class sysinv::api (
   Sysinv_config<||> ~> Exec['sysinv-dbsync']
   Sysinv_api_paste_ini<||> ~> Service['sysinv-api']
 
-  if $::sysinv::params::api_package {
+  if $sysinv::params::api_package {
     Package['sysinv'] -> Sysinv_config<||>
     Package['sysinv'] -> Sysinv_api_paste_ini<||>
     Package['sysinv'] -> Service['sysinv-api']
     package { 'sysinv':
       ensure => $package_ensure,
-      name   => $::sysinv::params::api_package,
+      name   => $sysinv::params::api_package,
     }
   }
 
@@ -328,7 +328,7 @@ class sysinv::api (
 
   service { 'sysinv-api':
     ensure     => $ensure,
-    name       => $::sysinv::params::api_service,
+    name       => $sysinv::params::api_service,
     enable     => $enabled,
     hasstatus  => true,
     hasrestart => true,
@@ -336,9 +336,9 @@ class sysinv::api (
   }
   Keystone_endpoint<||> -> Service['sysinv-api']
 
-  if $::osfamily == 'Redhat' {
+  if $facts['os']['family'] == 'RedHat' {
     exec { 'sysinv-dbsync':
-      command     => $::sysinv::params::db_sync_command,
+      command     => $sysinv::params::db_sync_command,
       path        => '/usr/bin',
       user        => 'sysinv',
       refreshonly => true,
@@ -347,13 +347,13 @@ class sysinv::api (
       # Only do the db sync if both controllers are running the same software
       # version. Avoids impacting mate controller during an upgrade.
       onlyif      => [
-        "test ${::controller_sw_versions_match} = true",
+        "test ${facts['controller_sw_versions_match']} = true",
         'systemctl status postgresql'
       ]
     }
-  } elsif($::osfamily == 'Debian') {
+  } elsif($facts['os']['family'] == 'Debian') {
     exec { 'sysinv-dbsync':
-      command     => $::sysinv::params::db_sync_command,
+      command     => $sysinv::params::db_sync_command,
       path        => '/usr/bin',
       user        => 'sysinv',
       refreshonly => true,
@@ -362,7 +362,7 @@ class sysinv::api (
       # Only do the db sync if both controllers are running the same software
       # version. Avoids impacting mate controller during an upgrade.
       onlyif      => [
-        "test ${::controller_sw_versions_match} = true",
+        "test ${facts['controller_sw_versions_match']} = true",
         'systemctl status postgresql@13-main'
       ]
     }

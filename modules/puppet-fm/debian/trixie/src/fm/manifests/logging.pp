@@ -87,31 +87,31 @@
 #    Example: 'Y-%m-%d %H:%M:%S'
 #
 class fm::logging(
-  $use_syslog                    = $::os_service_default,
-  $use_stderr                    = $::os_service_default,
-  $log_facility                  = $::os_service_default,
+  $use_syslog                    = $os_service_default,
+  $use_stderr                    = $os_service_default,
+  $log_facility                  = $os_service_default,
   $log_dir                       = '/var/log/fm',
-  $debug                         = $::os_service_default,
-  $logging_context_format_string = $::os_service_default,
-  $logging_default_format_string = $::os_service_default,
-  $logging_debug_format_suffix   = $::os_service_default,
-  $logging_exception_prefix      = $::os_service_default,
-  $log_config_append             = $::os_service_default,
-  $default_log_levels            = $::os_service_default,
-  $publish_errors                = $::os_service_default,
-  $fatal_deprecations            = $::os_service_default,
-  $instance_format               = $::os_service_default,
-  $instance_uuid_format          = $::os_service_default,
-  $log_date_format               = $::os_service_default,
+  $debug                         = $os_service_default,
+  $logging_context_format_string = $os_service_default,
+  $logging_default_format_string = $os_service_default,
+  $logging_debug_format_suffix   = $os_service_default,
+  $logging_exception_prefix      = $os_service_default,
+  $log_config_append             = $os_service_default,
+  $default_log_levels            = $os_service_default,
+  $publish_errors                = $os_service_default,
+  $fatal_deprecations            = $os_service_default,
+  $instance_format               = $os_service_default,
+  $instance_uuid_format          = $os_service_default,
+  $log_date_format               = $os_service_default,
 ) {
 
   include ::fm::deps
 
-  $use_syslog_real   = pick($::fm::use_syslog,$use_syslog)
-  $use_stderr_real   = pick($::fm::use_stderr,$use_stderr)
-  $log_facility_real = pick($::fm::log_facility,$log_facility)
-  $log_dir_real      = pick($::fm::log_dir,$log_dir)
-  $debug_real        = pick($::fm::debug,$debug)
+  $use_syslog_real   = pick($fm::use_syslog,$use_syslog)
+  $use_stderr_real   = pick($fm::use_stderr,$use_stderr)
+  $log_facility_real = pick($fm::log_facility,$log_facility)
+  $log_dir_real      = pick($fm::log_dir,$log_dir)
+  $debug_real        = pick($fm::debug,$debug)
 
   oslo::log { 'fm_config':
     debug                         => $debug_real,

@@ -16,10 +16,10 @@ class dcmanager::manager (
   include dcmanager::params
   include dcmanager::deps
 
-  if $::dcmanager::params::manager_package {
+  if $dcmanager::params::manager_package {
     package { 'dcmanager-manager':
       ensure => $package_ensure,
-      name   => $::dcmanager::params::manager_package,
+      name   => $dcmanager::params::manager_package,
       tag    => 'dcmanager-package',
     }
   }
@@ -32,7 +32,7 @@ class dcmanager::manager (
 
   service { 'dcmanager-manager':
     ensure    => $ensure,
-    name      => $::dcmanager::params::manager_service,
+    name      => $dcmanager::params::manager_service,
     enable    => $enabled,
     hasstatus => false,
     require   => Package['dcmanager'],

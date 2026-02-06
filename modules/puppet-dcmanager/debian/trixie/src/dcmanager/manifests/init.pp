@@ -63,11 +63,11 @@ class dcmanager (
 
   package { 'dcmanager':
     ensure  => $package_ensure,
-    name    => $::dcmanager::params::package_name,
+    name    => $dcmanager::params::package_name,
     require => Anchor['dcmanager-start'],
   }
 
-  file { $::dcmanager::params::dcmanager_conf:
+  file { $dcmanager::params::dcmanager_conf:
     ensure  => present,
     mode    => '0600',
     require => Package['dcmanager'],

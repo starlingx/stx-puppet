@@ -13,7 +13,7 @@ class dcorch::db::sync {
   include dcorch::deps
 
   exec { 'dcorch-dbsync':
-    command     => $::dcorch::params::db_sync_command,
+    command     => $dcorch::params::db_sync_command,
     path        => '/usr/bin',
     refreshonly => true,
     logoutput   => 'on_failure',
@@ -26,6 +26,6 @@ class dcorch::db::sync {
     notify      => Anchor['dcorch::dbsync::end'],
     # Only do the db sync if both controllers are running the same software
     # version. Avoids impacting mate controller during an upgrade.
-    onlyif      => "test ${::controller_sw_versions_match} = true",
+    onlyif      => "test ${facts['controller_sw_versions_match']} = true",
   }
 }

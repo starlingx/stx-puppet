@@ -16,10 +16,10 @@ class dcorch::engine (
   include dcorch::params
   include dcorch::deps
 
-  if $::dcorch::params::engine_package {
+  if $dcorch::params::engine_package {
     package { 'dcorch-engine':
       ensure => $package_ensure,
-      name   => $::dcorch::params::engine_package,
+      name   => $dcorch::params::engine_package,
       tag    => 'dcorch-package',
     }
   }
@@ -32,7 +32,7 @@ class dcorch::engine (
 
   service { 'dcorch-engine':
     ensure    => $ensure,
-    name      => $::dcorch::params::engine_service,
+    name      => $dcorch::params::engine_service,
     enable    => $enabled,
     hasstatus => false,
     tag       => 'dcorch-service',
