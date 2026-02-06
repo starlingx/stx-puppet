@@ -1,24 +1,15 @@
 class platform::ldap::params (
   $admin_pw,
   $admin_hashed_pw = undef,
-  $provider_uri = $::osfamily ? {
-    'RedHat' => 'ldap://controller-1',
-    default  => 'ldaps://controller-1',
-  },
+  $provider_uri = 'ldaps://controller-1',
   $server_id = undef,
   $ldapserver_remote = false,
   $ldapserver_host = undef,
   $bind_anonymous = false,
   $nslcd_threads = 2,
   $nslcd_idle_timelimit = 600,
-  $slapd_etc_path = $::osfamily ? {
-    'RedHat' => '/etc/openldap',
-    default  => '/etc/ldap',
-  },
-  $slapd_mod_path = $::osfamily ? {
-    'RedHat' => '/usr/lib64/openldap',
-    default  => '/usr/lib/ldap',
-  },
+  $slapd_etc_path = '/etc/ldap',
+  $slapd_mod_path = '/usr/lib/ldap',
   $nslcd_gid = 'ldap',
   $secure_cert = '',
   $secure_key = '',
@@ -37,24 +28,26 @@ class platform::ldap::server
 
 class platform::ldap::server::local
   inherits ::platform::ldap::params {
+  file { '/tmp/slaptest':
+    ensure => directory,
+    mode   => '0600',
+    owner  => 'root',
+    group  => 'root',
+  }
+
   exec { 'slapd-convert-config':
-    command => "/usr/sbin/slaptest -f ${slapd_etc_path}/slapd.conf -F ${slapd_etc_path}/schema/",
+    command => "/usr/sbin/slaptest -f ${slapd_etc_path}/slapd.conf -F /tmp/slaptest",
+    onlyif  => "/usr/bin/test -e ${slapd_etc_path}/slapd.conf"
+  }
+
+  exec { 'slapd-move-converted-config':
+    command => "/bin/mv -f /tmp/slaptest/* ${slapd_etc_path}/schema",
     onlyif  => "/usr/bin/test -e ${slapd_etc_path}/slapd.conf"
   }
 
   exec { 'slapd-conf-move-backup':
     command => "/bin/mv -f ${slapd_etc_path}/slapd.conf ${slapd_etc_path}/slapd.conf.backup",
     onlyif  => "/usr/bin/test -e ${slapd_etc_path}/slapd.conf"
-  }
-
-  if $::osfamily == 'RedHat' {
-    service { 'nscd':
-      ensure     => 'running',
-      enable     => true,
-      name       => 'nscd',
-      hasstatus  => true,
-      hasrestart => true,
-    }
   }
 
   service { 'openldap':
@@ -98,62 +91,29 @@ class platform::ldap::server::local
     }
   }
 
-  if $::osfamily == 'RedHat' {
-    file { '/var/cracklib':
-      ensure  => 'directory',
-      recurse => true,
-    }
-    -> file { '/var/cracklib/cracklib-small':
-      ensure => link,
-      target => '/usr/share/cracklib/cracklib-small.pwd',
-    }
-  }
-
   # start openldap with updated config and updated nsswitch
   # then convert slapd config to db format. Note, slapd must have run and created the db prior to this.
-  if $::osfamily == 'RedHat' {
-    Exec['stop-openldap']
-    -> Exec['update-slapd-conf']
-    -> Service['nscd']
-    -> Service['nslcd']
-    -> Service['openldap']
-    -> Exec['slapd-convert-config']
-    -> Exec['restart-openldap']
-    -> class { '::platform::ldap::secure::config':}
-    -> Exec['slapd-conf-move-backup']
-  }
-  else {
-    Exec['stop-openldap']
-    -> Exec['update-slapd-conf']
-    -> Service['openldap']
-    -> Exec['slapd-convert-config']
-    -> Exec['restart-openldap']
-    -> class { '::platform::ldap::secure::config': }
-    -> Exec['configure-ldaps']
-    -> Exec['slapd-conf-move-backup']
-  }
+  Exec['stop-openldap']
+  -> Exec['update-slapd-conf']
+  -> Service['openldap']
+  -> File['/tmp/slaptest']
+  -> Exec['slapd-convert-config']
+  -> Exec['slapd-move-converted-config']
+  -> Exec['restart-openldap']
+  -> class { '::platform::ldap::secure::config': }
+  -> Exec['configure-ldaps']
+  -> Exec['slapd-conf-move-backup']
 }
 
 
 class platform::ldap::client (
-  $ldap_protocol = $::osfamily ? {
-    'RedHat' => 'ldap',
-    default  => 'ldaps',
-  },
+  $ldap_protocol = 'ldaps',
 )
   inherits ::platform::ldap::params {
   include ::platform::params
 
   $openldap_ca_file = '/etc/pki/ca-trust/source/anchors/openldap-ca.crt'
-
-  case $::osfamily {
-    'RedHat': {
-      $ca_update_cmd = 'update-ca-trust'
-    }
-    default: {
-      $ca_update_cmd = 'update-ca-certificates --localcertsdir /etc/pki/ca-trust/source/anchors'
-    }
-  }
+  $ca_update_cmd = 'update-ca-certificates --localcertsdir /etc/pki/ca-trust/source/anchors'
 
   file { "${slapd_etc_path}/ldap.conf":
       ensure  => 'present',
@@ -168,21 +128,6 @@ class platform::ldap::client (
       owner   => $::platform::params::sysadmin_user_name,
       group   => $::platform::params::protected_group_name,
       content => template('platform/ldap.conf.erb'),
-  }
-
-  if $::osfamily == 'RedHat' {
-    file { '/etc/nslcd.conf':
-      ensure  => 'present',
-      replace => true,
-      content => template('platform/nslcd.conf.erb'),
-    }
-    -> service { 'nslcd':
-      ensure     => 'running',
-      enable     => true,
-      name       => 'nslcd',
-      hasstatus  => true,
-      hasrestart => true,
-    }
   }
 
   if $::personality == 'controller' {
@@ -223,12 +168,7 @@ class platform::ldap::bootstrap
     Class['platform::ldap::server::local'] -> Class[$name]
 
     $dn = 'cn=ldapadmin,dc=cgcs,dc=local'
-    if $::osfamily == 'RedHat' {
-      $ldap_admin_group = 'root'
-    }
-    else {
-      $ldap_admin_group = 'users'
-    }
+    $ldap_admin_group = 'users'
 
     class {'::platform::ldap::client':
       ldap_protocol => 'ldap',
@@ -261,14 +201,8 @@ class platform::ldap::secure::config
   # application of controller manifest.
 
   $certs_etc_path = "${slapd_etc_path}/certs"
-  if $::osfamily == 'RedHat' {
-    $ldap_user = 'ldap'
-    $ldap_group = 'ldap'
-  }
-  else {
-    $ldap_user = 'openldap'
-    $ldap_group = 'openldap'
-  }
+  $ldap_user = 'openldap'
+  $ldap_group = 'openldap'
 
   if (! empty($secure_cert)) and (! empty($secure_key)) {
     file { 'ldap-cert':
