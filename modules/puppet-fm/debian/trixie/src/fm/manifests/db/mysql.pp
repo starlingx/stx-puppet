@@ -59,7 +59,7 @@ class fm::db::mysql(
 
   ::openstacklib::db::mysql { 'fm':
     user          => $user,
-    password_hash => mysql_password($password),
+    password      => $password,
     dbname        => $dbname,
     host          => $host,
     charset       => $charset,
