@@ -52,7 +52,7 @@ class openstack::keystone (
 
     Class[$name] -> Class['::platform::client']
 
-    include ::keystone::client
+    include ::openstacklib::openstackclient
     include ::keystone::cache
 
     # Configure keystone graceful shutdown timeout
@@ -477,7 +477,7 @@ class openstack::keystone::upgrade (
       ensure => absent,
     }
 
-    include ::keystone::client
+    include ::openstacklib::openstackclient
   }
 
 }
