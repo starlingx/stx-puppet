@@ -1,0 +1,17 @@
+# This file is managed by Puppet.
+#
+# logrotate.d configuration
+/var/log/charon.log
+{
+  nodateext
+  size 10M
+  start 1
+  rotate 20
+  missingok
+  notifempty
+  compress
+  sharedscripts
+  postrotate
+    swanctl --reload-settings > /dev/null 2>&1 || true
+  endscript
+}

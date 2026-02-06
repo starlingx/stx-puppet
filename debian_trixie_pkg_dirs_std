@@ -1,0 +1,12 @@
+puppet-manifests
+modules/puppet-dcagent
+modules/puppet-dcdbsync
+modules/puppet-dcmanager
+modules/puppet-dcorch
+modules/puppet-fm
+modules/puppet-mtce
+modules/puppet-nfv
+modules/puppet-smapi
+modules/puppet-sshd
+modules/puppet-sysinv
+modules/puppet-usm

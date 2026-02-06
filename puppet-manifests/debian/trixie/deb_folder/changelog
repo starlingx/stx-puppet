@@ -1,0 +1,5 @@
+puppet-manifests (1.0.0-1) unstable; urgency=medium
+
+  * Initial release.
+
+ -- Chuck Short <charles.short@windriver.com>  Tue, 14 Sep 2021 09:44:13 -0400

@@ -1,0 +1,12 @@
+#1/bin/sh
+
+set -e
+
+if [ "${1}" = "configure" ] ; then
+        update-alternatives --install /usr/share/puppet/modules/mtce puppet-module-starlingx-mtce \
+            /usr/share/puppet/modules.available/mtce 500
+fi
+
+#DEBHELPER#
+
+exit 0

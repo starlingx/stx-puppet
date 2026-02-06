@@ -1,0 +1,17 @@
+[Unit]
+Description=Synchronous Ethernet (SynceE) service
+After=ptp4l.service
+
+[Service]
+Type=simple
+EnvironmentFile=-<%= @ptp_options_dir %>/ptpinstance/synce4l-instance-%i
+ExecStart=/usr/sbin/synce4l -f <%= @ptp_conf_dir %>/ptpinstance/synce4l-%i.conf $OPTIONS
+ExecStartPost=/bin/bash -c 'echo $MAINPID > /var/run/synce4l-%i.pid'
+ExecStopPost=/bin/rm -f /var/run/synce4l-%i.pid
+Restart=on-failure
+RestartPreventExitStatus=SIGTERM SIGINT SIGKILL SIGABRT 255
+CPUSchedulingPolicy=fifo
+CPUSchedulingPriority=70
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,20 @@
+<%- if @management_interface -%>
+management_interface=<%= @management_interface %>
+<%- else -%>
+management_interface=
+<%- end -%>
+<%- if @cluster_host_interface -%>
+cluster_host_interface=<%= @cluster_host_interface %>
+<%- else -%>
+cluster_host_interface=
+<%- end -%>
+<%- if @oam_interface -%>
+oam_interface=<%= @oam_interface %>
+<%- else -%>
+oam_interface=
+<%- end -%>
+<%- if @data_interface == true -%>
+data_network_interface=<%= @data_interface_str %>
+<%- else -%>
+data_network_interface=
+<%- end -%>

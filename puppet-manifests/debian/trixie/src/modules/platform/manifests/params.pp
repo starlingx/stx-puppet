@@ -1,0 +1,127 @@
+class platform::params (
+  $hostname,
+  $controller_hostname,
+  $pxeboot_hostname,
+  $config_path = undef,
+  $controller_0_hostname = undef,
+  $controller_1_hostname = undef,
+  $controller_fqdn = undef,
+  $controller_0_fqdn = undef,
+  $controller_1_fqdn = undef,
+  $controller_upgrade = false,
+  $mate_hostname = undef,
+  $nfs_proto = 'udp',
+  $nfs_rw_size = 1024,
+  $region_1_name = undef,
+  $region_2_name = undef,
+  $region_config = false,
+  $distributed_cloud_role = undef,
+  $sdn_enabled = false,
+  $software_version = undef,
+  $system_mode = undef,
+  $system_type = undef,
+  $system_name = undef,
+  $platform_cpu_count = undef,
+  $hyperthreading_enabled = false,
+  $vswitch_type = undef,
+  $security_profile = undef,
+  $security_feature = undef,
+  $stx_openstack_applied = false,
+  $system_controller_addr = undef,
+  $system_controller_mgmt_addr = undef,
+  $virtual_system = false,
+  $apparmor = 'disabled',
+  $sctp_autoload = 'enabled',
+  $ksoftirqd_priority = undef,
+  $irq_work_priority = undef,
+  $oidc_role_binding = '',
+) {
+  $ipv4 = 4
+  $ipv6 = 6
+
+  $nfs_mount_options = "timeo=30,proto=${nfs_proto},vers=3,rsize=${nfs_rw_size},wsize=${nfs_rw_size}"
+
+  $sysadmin_user_name = 'sysadmin'
+  $sysadmin_user_dir = '/home/sysadmin'
+  $protected_group_name = 'sys_protected'
+  $protected_group_id = '345'
+  $sys_admin_group_name = 'sys_admin'
+  $sys_admin_group_id = '500'
+  $sys_configurator_group_name = 'sys_configurator'
+  $sys_configurator_group_id = '501'
+  $sys_operator_group_name = 'sys_operator'
+  $sys_operator_group_id = '502'
+  $sys_reader_group_name = 'sys_reader'
+  $sys_reader_group_id = '503'
+  $deny_ssh_group_name = 'denyssh'
+  $deny_ssh_group_id = '10000'
+
+  $phys_core_count = Integer($::physical_core_count)
+  $plat_res_mem = Integer($::platform_res_mem)
+
+  # Engineering parameters common to openstack services:
+
+  # max number of workers
+  $eng_max_workers = 20
+  # min number of workers
+  $eng_min_workers = 1
+  # min platform core count
+  $platform_default_min_cpu_count = 2
+  # total system memory per worker
+  $eng_worker_mb = 2000
+  # memory headroom per worker (e.g., buffers, cached)
+  $eng_overhead_mb = 1000
+
+  # number of workers per service
+  if ($system_type != 'All-in-one' or $distributed_cloud_role == 'systemcontroller') {
+    # number of workers we can support based on memory
+    $small_footprint = false
+    $eng_workers_mem = floor($::memorysize_mb) / ($eng_worker_mb + $eng_overhead_mb)
+    $eng_workers = min($eng_max_workers, $eng_workers_mem, max($phys_core_count, 2))
+    $eng_workers_by_2 = min($eng_max_workers, $eng_workers_mem, max($phys_core_count/2, 2))
+    $eng_workers_by_4 = min($eng_max_workers, $eng_workers_mem, max($phys_core_count/4, 2))
+    $eng_workers_by_5 = min($eng_max_workers, $eng_workers_mem, max($phys_core_count/5, 2))
+    $eng_workers_by_6 = min($eng_max_workers, $eng_workers_mem, max($phys_core_count/6, 2))
+  } else {
+    $small_footprint = true
+    # Set eng_workers for AIO based on the number of platform cores, not exceeding 2 for
+    # AIO simplex, Xeon-D and virtual box and not exceeding 3 for AIO duplex.
+    # All eng_workers derivatives are set to 1 for AIO.
+    # Services can add an additional worker if it is deemed necessary in their own puppet files.
+    if ($platform_cpu_count <= $platform_default_min_cpu_count) {
+      # When Hyper-Threading is enabled, consider only the quantity of physical cores
+      # to define the number of eng_workers
+      if $hyperthreading_enabled {
+        $eng_workers = $platform_cpu_count/2
+      } else {
+        $eng_workers = $platform_cpu_count
+      }
+    } else {
+      if $system_mode == 'simplex' or ($phys_core_count <= 8 and $plat_res_mem < 14500) or str2bool($::is_virtual) {
+        $eng_workers = $platform_default_min_cpu_count
+      } else {
+        $eng_workers = $platform_default_min_cpu_count + 1
+      }
+    }
+    $eng_workers_by_2 = $eng_min_workers
+    $eng_workers_by_4 = $eng_min_workers
+    $eng_workers_by_5 = $eng_min_workers
+    $eng_workers_by_6 = $eng_min_workers
+  }
+
+  $init_database = $controller_upgrade
+  $init_keystone = $controller_upgrade
+}
+
+class platform::params::config_oidc_role_binding::runtime
+{
+  include ::platform::params
+  $oidc_role_binding = $::platform::params::oidc_role_binding
+  file { '/etc/platform/.rolebindings.conf':
+    ensure  => present,
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+    content => template('platform/oidc_rolebinding.conf.erb'),
+  }
+}

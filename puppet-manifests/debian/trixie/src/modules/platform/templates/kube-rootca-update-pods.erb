@@ -1,0 +1,135 @@
+# Rolling restart pods for them to pickup the new cluster root CA certs
+
+# Trigger rollout restart for all deployments and daemonsets so that they
+# restart in parallel.
+
+declare -A namespaces=()
+declare -A deployments=()
+declare -A daemonsets=()
+declare -A statefulsets=()
+
+namespaces=$(kubectl get namespace -o jsonpath='{.items[*].metadata.name}')
+
+for namespace in $namespaces; do
+    sets=$(kubectl get deployments -n $namespace -o jsonpath='{.items[*].metadata.name}')
+    sets=${sets//[$'\t\r\n']}
+    if [ ! -z "$sets" ]; then
+        deployments["$namespace"]="$sets"
+    fi
+
+    sets=$(kubectl get daemonsets -n $namespace -o jsonpath='{.items[*].metadata.name}')
+    sets=${sets//[$'\t\r\n']}
+    if [ ! -z "$sets" ]; then
+        daemonsets["$namespace"]="$sets"
+    fi
+
+    sets=$(kubectl get statefulsets -n $namespace -o jsonpath='{.items[*].metadata.name}')
+    sets=${sets//[$'\t\r\n']}
+    if [ ! -z "$sets" ]; then
+        statefulsets["$namespace"]="$sets"
+    fi
+done
+
+# Trigger rollout restart. If strategy is OnDelete, delete all pods.
+function trigger_restart () {
+    local kind=$1
+    local namespace=$2
+    local sets=$3
+    for name in $sets; do
+        kubectl rollout restart "$kind" "$name" -n "$namespace"
+
+        local strategy
+        strategy="$(
+            kubectl get "$kind" "$name" -n "$namespace" -o jsonpath='{.spec.updateStrategy.type}'
+        )"
+
+        if [ "$strategy" = "OnDelete" ]; then
+            app="$(kubectl get "$kind" "$name" -n "$namespace" \
+                -o jsonpath='{.spec.selector.matchLabels.app}')"
+            kubectl delete pod -l app="$app" -n "$namespace"
+        fi
+    done
+}
+
+for namespace in ${!deployments[@]}; do
+    trigger_restart deployment "$namespace" "${deployments[$namespace]}"
+done
+for namespace in ${!daemonsets[@]}; do
+    trigger_restart daemonset "$namespace" "${daemonsets[$namespace]}"
+done
+for namespace in ${!statefulsets[@]}; do
+    trigger_restart statefulset "$namespace" "${statefulsets[$namespace]}"
+done
+
+# Check the rollout status. Check every 45 seconds for, at least, 30 mins.
+# The execution time of "kubectl rollout status" commands is not counted.
+max_retries=40
+retry_interval=45
+max_retry_time=$(($max_retries*$retry_interval))
+
+function check_status () {
+    local retry=$1
+    local kind=$2
+    local namespace=$3
+    local sets=$4
+    local ret=0
+    for name in $sets; do
+        local strategy
+        strategy="$(
+            kubectl get "$kind" "$name" -n "$namespace" -o jsonpath='{.spec.updateStrategy.type}'
+        )"
+        if [ "$strategy" = "OnDelete" ]; then
+            app="$(kubectl get "$kind" "$name" -n "$namespace" \
+                -o jsonpath='{.spec.selector.matchLabels.app}')"
+            kubectl wait --for=condition=Ready --timeout=500ms \
+                pod -l app="$app" -n "$namespace" 2>/dev/null
+        else
+            kubectl rollout status --timeout=100ms $kind $name -n $namespace 2>/dev/null
+        fi
+
+        if [ $? -ne 0 ]; then
+            ret=1
+            if [ $retry -eq $max_retries ]; then
+                echo "ATTENTION $kind: rollout of $name in ns: $namespace not completed in $max_retry_time seconds."
+            else
+                echo "INFO $kind: rollout of $name in ns: $namespace not completed yet. Check $retry of $max_retries."
+            fi
+        fi
+    done
+    return $ret
+}
+
+for (( retry=1; retry<=$max_retries; retry++ )); do
+    sleep $retry_interval
+    notcomplete=0
+    # Deployments
+    for namespace in ${!deployments[@]}; do
+        check_status $retry "deployment" $namespace "${deployments[$namespace]}"
+        if [ $? -ne 0 ]; then
+            notcomplete=1
+        fi
+    done
+    # Daemonsets
+    for namespace in ${!daemonsets[@]}; do
+        check_status $retry "daemonset" $namespace "${daemonsets[$namespace]}"
+        if [ $? -ne 0 ]; then
+            notcomplete=1
+        fi
+    done
+    # Statefulsets
+    for namespace in ${!statefulsets[@]}; do
+        check_status $retry "statefulset" $namespace "${statefulsets[$namespace]}"
+        if [ $? -ne 0 ]; then
+            notcomplete=1
+        fi
+    done
+
+    # Exit if all restart completed
+    if [ $notcomplete -eq 0 ]; then
+        echo "INFO Rollout completed successfully."
+        exit 0
+    fi
+done
+
+echo "ERROR Rollout failed."
+exit 1

@@ -1,0 +1,12 @@
+#1/bin/sh
+
+set -e
+
+if [ "${1}" = "configure" ] ; then
+    update-alternatives --install /usr/share/puppet/modules/fm \
+       puppet-module-starlingx-fm /usr/share/puppet/modules.available/fm 500
+fi
+
+#DEBHELPER#
+
+exit 0

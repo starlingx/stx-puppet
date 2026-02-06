@@ -1,0 +1,12 @@
+#1/bin/sh
+
+set -e
+
+if [ "${1}" = "configure" ] ; then
+    update-alternatives --install /usr/share/puppet/modules/dcagent \
+        puppet-module-starlingx-dcagent /usr/share/puppet/modules.available/dcagent 500
+fi
+
+#DEBHELPER#
+
+exit 0

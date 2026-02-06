@@ -1,0 +1,13 @@
+#1/bin/sh
+
+set -e
+
+if [ "${1}" = "configure" ] ; then
+    update-alternatives --install \
+        /usr/share/puppet/modules/nfv puppet-module-starlingx-nfv \
+        /usr/share/puppet/modules.available/nfv 500
+fi
+
+#DEBHELPER#
+
+exit 0

@@ -1,0 +1,5 @@
+puppet-sshd (1.0.0-1) unstable; urgency=medium
+
+  * Initial release.
+
+ -- Chuck Short <charles.short@windriver.com>  Mon, 13 Sep 2021 09:15:22 -0400

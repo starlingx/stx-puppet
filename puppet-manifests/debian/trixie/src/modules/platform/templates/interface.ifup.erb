@@ -1,0 +1,4 @@
+ifdown <%= @name -%>; ifup <%= @name -%>
+<%- @used_by.each do |iface| -%>
+    ifdown <%= iface -%>; ifup <%= iface -%>
+<%- end -%>

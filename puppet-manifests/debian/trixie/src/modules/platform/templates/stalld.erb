@@ -1,0 +1,100 @@
+# Copyright (c) 2025 Wind River Systems, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# parameters for the stalld service
+#
+
+# list of cpus to monitor (default: all online)
+# ex: CLIST="-c 1,2,5"
+<%= @cpu_list ? "CLIST=\"-c #{@cpu_list}\"" : "CLIST=" %>
+
+# Dispatch Mode
+# ex: AGGR=--aggressive_mode
+<% dispatch_opts = [] %>
+<% dispatch_opts << "--aggressive_mode"     if @aggressive_mode %>
+<% dispatch_opts << "--adaptive_mode"       if @adaptive_mode %>
+<% dispatch_opts << "--power_mode"          if @power_mode %>
+AGGR=<%= dispatch_opts.join(' ') %>
+
+# Period parameter for SCHED_DEADLINE in nanoseconds
+# ex: BP="--boost_period 1000000000"
+<%= @boost_period ? "BP=\"--boost_period #{@boost_period}\"" : "BP=" %>
+
+# Runtime parameter for SCHED_DEADLINE in nanoseconds
+# ex: BR="--boost_runtime 20000"
+<%= @boost_runtime ? "BR=\"--boost_runtime #{@boost_runtime}\"" : "BR=" %>
+
+# Duration parameter for SCHED_DEADLINE in seconds
+# ex: BD="--boost_duration 3"
+<%= @boost_duration ? "BD=\"--boost_duration #{@boost_duration}\"" : "BD=" %>
+
+# Ignore threads
+# if there are threads by the name thread1,thread2
+# that need be ignored, populate IT as shown below
+# IT="--ignore_threads thread.*", multiple regexes must be comma
+# separated without any whitespace between them
+<%= @ignore_threads ? "IT=\"--ignore_threads #{@ignore_threads}\"" : "IT=" %>
+
+# Ignore processes
+# if there are processes by the name proc1,proc2
+# that need be ignored, populate IP as shown below
+# IT="--ignore_processes proc.*", multiple regexes must be comma
+# separated without any whitespace between them
+<%= @ignore_processes ? "IP=\"--ignore_processes #{@ignore_processes}\"" : "IP=" %>
+
+# Starving Threshold in seconds
+# this value the time the thread must be kept ready but not
+# actually run to decide that the thread is starving
+# ex: THRESH="--starving_threshold 2"
+<%= @starving_threshold ? "THRESH=\"--starving_threshold #{@starving_threshold}\"" : "THRESH=" %>
+
+# Logging options
+#
+# Set logging to be some combination of:
+#     --log_only
+#     --verbose
+#     --log_kmsg
+#     --log_syslog
+#     or Nothing (default)
+# ex: LOGONLY=--log_only
+<% log_opts = [] %>
+<% log_opts << "--log_only" if @log_only %>
+<% log_opts << "--verbose"  if @verbose %>
+<% log_opts << "--log_kmsg" if @log_kmsg %>
+<% log_opts << "--log_syslog" if @log_syslog %>
+LOGGING=<%= log_opts.join(' ') %>
+
+# Run in the foreground
+# ex: FG=--foreground
+# note: when using this should change the service Type to be simple
+<%= @foreground ? "FG=--foreground" : "FG=" %>
+
+# Write a pidfile
+# ex: PF=--pidfile /run/stalld.pid
+<%= @pidfile ? "PF=\"--pidfile #{@pidfile}\"" : "PF=" %>
+
+# select the backend to run using the '--backend' option
+# options are:
+# 	--backend sched_debug
+# 	    parse the debugfs sched/debug file
+#	--backend queue_track
+# 	    use the BPF backend to directly map runqueue state
+<%= @backend ? "BE=\"--backend #{@backend}\"" : "BE=" %>
+
+# Additional custom arguments if provided
+# --systemd
+# --granularity <seconds>
+# --reservation <percentage>
+# --affinity <cpu list>
+
+<% custom_opts = [] %>
+
+<% custom_opts << "--systemd"                       if @systemd %>
+<% custom_opts << "--granularity #{@granularity}"   if @granularity %>
+<% custom_opts << "--reservation #{@reservation}"   if @reservation %>
+<% custom_opts << "--affinity #{@affinity}"         if @affinity %>
+<% custom_opts << "#{@custom_args}"                 if @custom_args %>
+
+# Misc
+
+CUSTOM=<%= custom_opts.join(' ') %>

@@ -1,0 +1,27 @@
+[Unit]
+Description=etcd - highly-available key value store
+Documentation=https://etcd.io/docs
+Documentation=man:etcd
+
+[Service]
+EnvironmentFile=-/etc/default/etcd
+User=root
+NotifyAccess=all
+Type=notify
+ExecStart=
+ExecStart=-/bin/bash -c "GOMAXPROCS=<%= @etcd_max_procs %> /usr/bin/etcd"
+ExecStartPost=/bin/bash -c 'echo $MAINPID >/var/run/etcd.pid'
+ExecStop=
+ExecStopPost=/bin/bash -c 'rm -f /var/run/etcd.pid'
+
+# syscall filtering
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# cgroup performance engineering
+# - etcdserver has critical latency requirements for CPU and disk IO
+Slice=<%= scope['platform::k8splatform::params::slice'] %>
+CPUShares=<%= scope['platform::k8splatform::params::etcd_shares'] %>
+Nice=-19
+IOSchedulingClass=best-effort
+IOSchedulingPriority=0
