@@ -151,9 +151,6 @@ class openstack::horizon
       django_debug          => $is_django_debug,
       file_upload_temp_dir  => '/var/tmp',
       listen_ssl            => $horizon_ssl,
-      horizon_cert          => $horizon_cert,
-      horizon_key           => $horizon_key,
-      horizon_ca            => $horizon_ca,
       neutron_options       => {
         'enable_lb'       => $neutron_enable_lb,
         'enable_firewall' => $neutron_enable_firewall,
