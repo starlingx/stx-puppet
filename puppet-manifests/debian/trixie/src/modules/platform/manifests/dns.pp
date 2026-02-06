@@ -1,5 +1,5 @@
 class platform::dns::dnsmasq::params (
-  $efi_bootloader = $::osfamily ? {
+  $efi_bootloader = $facts['os']['family'] ? {
     'RedHat' => $::architecture ? {
       'aarch64' => 'EFI/grubaa64.efi',
       'arm64' => 'EFI/grubaa64.efi',
@@ -11,7 +11,7 @@ class platform::dns::dnsmasq::params (
       default => 'EFI/BOOT/bootx64.efi',
     },
   },
-  $uefi_bootloader = $::osfamily ? {
+  $uefi_bootloader = $facts['os']['family'] ? {
     'RedHat' => 'EFI/shim.efi',
     default => $::architecture ? {
       'aarch64' => 'EFI/BOOT/bootaa64.efi',

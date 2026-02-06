@@ -7,7 +7,7 @@ class platform::lvm::params (
 class platform::lvm
   inherits platform::lvm::params {
 
-  if $::osfamily == 'RedHat' {
+  if $facts['os']['family'] == 'RedHat' {
     # Mask socket unit as well to make sure
     # systemd socket activation does not happen
     service { 'lvm2-lvmetad.socket':

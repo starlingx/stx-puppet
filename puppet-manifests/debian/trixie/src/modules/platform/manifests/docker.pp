@@ -1,5 +1,5 @@
 class platform::docker::params (
-  $package_name = $::osfamily ? {
+  $package_name = $facts['os']['family'] ? {
     'Debian' => 'docker.io',
     default => 'docker-ce',
   },

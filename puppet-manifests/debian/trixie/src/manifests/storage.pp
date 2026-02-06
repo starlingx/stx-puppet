@@ -46,7 +46,7 @@ class { '::platform::config::storage::post':
   stage => post,
 }
 
-if $::osfamily == 'Debian' {
+if $facts['os']['family'] == 'Debian' {
   lookup('classes', {merge => unique}).include
 } else {
   hiera_include('classes')

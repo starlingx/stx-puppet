@@ -117,7 +117,7 @@ class platform::compute::grub::update
   $truncated_grub_updates = strip(regsubst($grub_updates, /nohz_full=disabled/, ''))
 
   $to_be_removed = join($keys, ' ')
-  if $::osfamily == 'RedHat' {
+  if $facts['os']['family'] == 'RedHat' {
     exec { 'Remove the cpu arguments':
       command => "grubby --update-kernel=ALL --remove-args='${to_be_removed}'",
     }
@@ -132,7 +132,7 @@ class platform::compute::grub::update
       command   => "/usr/local/bin/puppet-update-default-grub.sh --add ${truncated_grub_updates}",
       logoutput => true,
     }
-  } elsif($::osfamily == 'Debian') {
+  } elsif($facts['os']['family'] == 'Debian') {
     notice("Removing kernel args: ${to_be_removed}")
     notice("Adding kernel args: ${truncated_grub_updates}")
     exec { 'Remove the cpu arguments from /boot/efi/EFI/BOOT/boot.env':
@@ -493,7 +493,7 @@ class platform::compute {
   require ::platform::compute::iscsi_setup
 
   # Not included in Debian until libvirt gets included
-  if $::osfamily == 'RedHat' {
+  if $facts['os']['family'] == 'RedHat' {
     require ::platform::compute::kvm_timer_advance
   }
 }

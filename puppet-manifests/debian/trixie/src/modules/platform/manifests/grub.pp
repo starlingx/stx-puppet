@@ -11,7 +11,7 @@ class platform::grub::security_features {
   include platform::params
   $managed_security_params = 'nopti nospectre_v2 nospectre_v1'
 
-  if $::osfamily == 'RedHat' {
+  if $facts['os']['family'] == 'RedHat' {
     # Run grubby to update params
     # First, remove all the parameters we manage, then we add back in the ones
     # we want to use
@@ -38,7 +38,7 @@ class platform::grub::security_features {
       logoutput => true,
       onlyif    => "test -n \"${platform::params::security_feature}\"",
     }
-  } elsif($::osfamily == 'Debian') {
+  } elsif($facts['os']['family'] == 'Debian') {
     exec { 'removing managed security kernel params from /boot/efi/EFI/BOOT/boot.env':
       command => "/usr/local/bin/puppet-update-grub-env.py --remove-kernelparams \"${managed_security_params}\"",
     }

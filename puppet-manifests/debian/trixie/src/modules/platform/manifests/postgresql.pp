@@ -66,7 +66,7 @@ class platform::postgresql::params
   }
 
   $root_dir = '/var/lib/postgresql'
-  $config_dir = $::osfamily ? {
+  $config_dir = $facts['os']['family'] ? {
     'RedHat' => '/etc/postgresql',
     default => '/etc/postgresql/17/main',
   }
@@ -112,7 +112,7 @@ class platform::postgresql::server
   postgresql::server::config_entry { 'autovacuum_max_workers':
     value => $autovacuum_max_workers,
   }
-  if $::osfamily == 'Debian' {
+  if $facts['os']['family'] == 'Debian' {
     # Set max worker processes
     postgresql::server::config_entry { 'max_worker_processes':
       value => $max_worker_processes,
@@ -162,7 +162,7 @@ class platform::postgresql::server
   }
 
   # turn jit 'off' on Debian (it is on by default) since it negatively impacts performance
-  if $::osfamily == 'Debian' {
+  if $facts['os']['family'] == 'Debian' {
     postgresql::server::config_entry { 'jit':
       value => 'off',
     }
@@ -212,7 +212,7 @@ class platform::postgresql::server
       }
     }
 
-    if $::osfamily == 'Debian' {
+    if $facts['os']['family'] == 'Debian' {
       postgresql::server::config_entry { 'max_wal_size':
         # checkpoint_segments was replaced by min_wal_size and max_wal_size
         # since Postgres 9.5. The default value of min_wal_size is 80MB.
@@ -250,7 +250,7 @@ class platform::postgresql::post {
   # however, it needs to be stopped/disabled to allow SM to manage the service.
   # To allow for the transition it must be explicitely stopped. Once puppet
   # can directly handle SM managed services, then this can be removed.
-  if $::osfamily == 'RedHat' {
+  if $facts['os']['family'] == 'RedHat' {
     exec { 'stop postgresql service':
         command => 'systemctl stop postgresql; systemctl disable postgresql',
     }
@@ -267,7 +267,7 @@ class platform::postgresql::bootstrap
 
   Class['::platform::drbd::pgsql'] -> Class[$name]
 
-  if $::osfamily == 'RedHat' {
+  if $facts['os']['family'] == 'RedHat' {
     exec { 'Empty pg dir':
         command => "rm -fR ${root_dir}/*",
     }
@@ -328,7 +328,7 @@ class platform::postgresql::bootstrap
     ip_mask_deny_postgres_user => $ip_mask_deny_postgres_user
   }
 
-  if $::osfamily == 'Debian' {
+  if $facts['os']['family'] == 'Debian' {
     exec { 'Disable systemd from starting postgresql':
         command => 'echo manual > /etc/postgresql/17/main/start.conf ; systemctl daemon-reload',
     }
@@ -348,7 +348,7 @@ class platform::postgresql::bootstrap
 class platform::postgresql::upgrade
   inherits ::platform::postgresql::params {
 
-  if $::osfamily == 'RedHat' {
+  if $facts['os']['family'] == 'RedHat' {
     exec { 'Move Config files':
         command => "mkdir -p ${config_dir} && mv ${data_dir}/*.conf ${config_dir}/ && ln -s ${config_dir}/*.conf ${data_dir}/",
     }

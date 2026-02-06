@@ -20,7 +20,7 @@ class platform::sssd::params (
 class platform::sssd::config
   inherits ::platform::sssd::params {
 
-  if $::osfamily == 'Debian' {
+  if $facts['os']['family'] == 'Debian' {
     # Generate sssd systemd override file
     $sssd_override_dir = '/etc/systemd/system/sssd.service.d'
 
@@ -66,9 +66,10 @@ class platform::sssd::domain::runtime
 
   include ::platform::sssd::config
 
-  Class['::platform::sssd::config']
-  -> exec { 'restart sssd service':
-    command => '/usr/local/sbin/pmon-restart sssd',
-    onlyif  => "test '${::osfamily }' == 'Debian'",
+  if $facts['os']['family'] == 'Debian' {
+    Class['::platform::sssd::config']
+      -> exec { 'restart sssd service':
+        command => '/usr/local/sbin/pmon-restart sssd',
+      }
   }
 }

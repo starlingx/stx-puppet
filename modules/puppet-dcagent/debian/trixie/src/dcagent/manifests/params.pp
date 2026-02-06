@@ -18,6 +18,6 @@ class dcagent::params {
     $api_service            = 'dcagent-api'
 
   } else {
-    fail("Unsupported osfamily ${::osfamily}")
+    fail("Unsupported osfamily ${facts['os']['family']}")
   }
 }

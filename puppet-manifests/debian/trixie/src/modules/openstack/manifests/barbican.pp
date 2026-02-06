@@ -43,7 +43,7 @@ class openstack::barbican
   }
 
   # On Debian barbican uses barbican-common to configure logrotate
-  if $::osfamily == 'Debian' {
+  if $facts['os']['family'] == 'Debian' {
     file { '/etc/logrotate.d/barbican-common':
       ensure  => present,
       content => template('openstack/barbican-api-logrotate.erb')
@@ -122,7 +122,7 @@ class openstack::barbican::service (
   # On Debian barbican is set to run by UWSGI by default so
   # it doesn't update gunicorn-config.py. Update it in order
   # to run by gunicorn.
-  if $::osfamily == 'Debian' {
+  if $facts['os']['family'] == 'Debian' {
     file_line { 'Modify bind_port in gunicorn-config.py':
       path  => '/etc/barbican/gunicorn-config.py',
       line  => "bind = '${gunicorn_bind}:${api_port}'",

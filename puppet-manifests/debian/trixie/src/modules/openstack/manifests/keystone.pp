@@ -8,7 +8,7 @@ class openstack::keystone::params(
   $admin_port = 5000,
   $region_name = undef,
   $system_controller_region = undef,
-  $service_name = $::osfamily ? {
+  $service_name = $facts['os']['family'] ? {
     'RedHat' => 'openstack-keystone',
     default  => 'keystone',
   },
@@ -72,7 +72,7 @@ class openstack::keystone (
     # These two params are included in ::keystone::security_compliance
     # in newer version of keystone puppet module (this is the case for
     # Debian 11)
-    if $::osfamily == 'RedHat' {
+    if $facts['os']['family'] == 'RedHat' {
       keystone_config {
           'security_compliance/lockout_duration': value => $lockout_period;
           'security_compliance/lockout_failure_attempts': value => $lockout_retries;
@@ -306,7 +306,7 @@ class openstack::keystone::server::runtime {
 class openstack::keystone::endpoint::runtime {
 
   if str2bool($::is_controller_active) and !find_file('/var/run/.enrollment_in_progress') {
-    case $::osfamily {
+    case $facts['os']['family'] {
         'RedHat': {
             include ::keystone::endpoint
         }
@@ -439,7 +439,7 @@ class openstack::keystone::upgrade (
       before  => Class['::keystone']
     }
 
-    case $::osfamily {
+    case $facts['os']['family'] {
         'RedHat': {
             class { '::keystone':
               upgrade_token_cmd     => $upgrade_token_cmd,

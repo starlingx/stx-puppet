@@ -11,7 +11,7 @@ Exec {
 
 include ::platform::config
 
-if $::osfamily == 'Debian' {
+if $facts['os']['family'] == 'Debian' {
   lookup('classes', {merge => unique}).include
 } else {
   hiera_include('classes')

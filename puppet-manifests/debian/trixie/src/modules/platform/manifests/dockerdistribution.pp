@@ -109,7 +109,7 @@ class platform::dockerdistribution::config
   $used_config = '/etc/docker-distribution/registry/config.yml'
   $open_file_limit = 4096
 
-  if $::osfamily == 'Debian' {
+  if $facts['os']['family'] == 'Debian' {
     $service_name = 'docker-registry.service'
   } else {
     $service_name = 'docker-distribution.service'
@@ -263,7 +263,7 @@ class platform::dockerdistribution::garbagecollect {
   $runtime_config = '/etc/docker-distribution/registry/runtime_config.yml'
   $readonly_config = '/etc/docker-distribution/registry/readonly_config.yml'
   $used_config = '/etc/docker-distribution/registry/config.yml'
-  $registry_cmd = $::osfamily ? { 'Debian' => 'docker-registry', default => 'registry' }
+  $registry_cmd = $facts['os']['family'] ? { 'Debian' => 'docker-registry', default => 'registry' }
 
   exec { 'turn registry read only':
     command => "ln -fs ${readonly_config} ${used_config}",

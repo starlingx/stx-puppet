@@ -13,7 +13,7 @@ class platform::sysctl::vm_min_free_kbytes (
   $reserve_mb = 128,
 ) inherits platform::sysctl::params {
   # Try to keep reserve_mb free per_every_gb of memory
-  $want_min_free_kbytes = (floor($::memorysize_mb) / ($per_every_gb * 1024)) * $reserve_mb * 1024
+  $want_min_free_kbytes = (floor($facts['memory']['system']['total_bytes'] / (1024 * 1024)) / ($per_every_gb * 1024)) * $reserve_mb * 1024
   $min_free_kbytes = max($want_min_free_kbytes, $minimum_kb)
   sysctl::value { 'vm.min_free_kbytes':
     value  => String($min_free_kbytes),

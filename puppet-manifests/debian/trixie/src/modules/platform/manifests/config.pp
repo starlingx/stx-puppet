@@ -384,7 +384,7 @@ class platform::config::nvme
 class platform::config::apparmor {
   include ::platform::params
 
-  if $::osfamily == 'Debian' {
+  if $facts['os']['family'] == 'Debian' {
     if $::platform::params::apparmor == 'enabled' {
         exec { 'set-apparmor':
           command => '/usr/bin/sed -i "s/apparmor=0/apparmor=1/" /boot/1/kernel.env',
@@ -515,7 +515,7 @@ class platform::config::timezone
 
 
 class platform::config::tpm {
-  if $::osfamily == 'Debian' {
+  if $facts['os']['family'] == 'Debian' {
     $tpm_certs = lookup({'name'  => 'platform::tpm::tpm_data', 'merge' => 'hash', 'default_value' => undef})
   } else {
     $tpm_certs = hiera_hash('platform::tpm::tpm_data', undef)
@@ -537,7 +537,7 @@ class platform::config::tpm {
 
 
 class platform::config::kdump {
-  if $::osfamily == 'RedHat' {
+  if $facts['os']['family'] == 'RedHat' {
     file_line { '/etc/kdump.conf dracut_args':
       path  => '/etc/kdump.conf',
       line  => 'dracut_args --omit-drivers "ice e1000e i40e ixgbe ixgbevf iavf mlx5_ib mlx5_core bnxt_en bnxt_re"',
@@ -558,7 +558,7 @@ class platform::config::kdump {
 class platform::config::certs::ssl_ca
   inherits ::platform::config::certs::params {
 
-  case $::osfamily {
+  case $facts['os']['family'] {
     'RedHat': {
       $ssl_ca_file = '/etc/pki/ca-trust/source/anchors/ca-cert.pem'
       $ca_update_cmd = 'update-ca-trust'
@@ -624,13 +624,13 @@ class platform::config::certs::ssl_ca
     onlyif      => 'systemctl is-enabled docker.service | grep -wq enabled',
     refreshonly => true
   }
-  -> exec { 'restart sssd service on cert install/uninstall':
-    command     => '/usr/local/sbin/pmon-restart sssd',
-    subscribe   => File[$ssl_ca_file],
-    refreshonly => true,
-    onlyif      => "test '${::osfamily }' == 'Debian'",
+  if $facts['os']['family'] == 'Debian' {
+    exec { 'restart sssd service on cert install/uninstall':
+      command     => '/usr/local/sbin/pmon-restart sssd',
+      subscribe   => File[$ssl_ca_file],
+      refreshonly => true,
+    }
   }
-
   if str2bool($::is_controller_active) {
     Exec['restart sssd service on cert install/uninstall']
     -> file { '/etc/platform/.ssl_ca_complete':
@@ -653,7 +653,7 @@ class platform::config::dc_root_ca
   $dc_root_ca_file = '/etc/pki/ca-trust/source/anchors/dc-adminep-root-ca.crt'
   $dc_adminep_cert_file = '/etc/ssl/private/admin-ep-cert.pem'
 
-  case $::osfamily {
+  case $facts['os']['family'] {
     'RedHat': {
       $ca_update_cmd = 'update-ca-trust'
     }
@@ -730,7 +730,7 @@ class platform::config::post
   include ::platform::params
   include ::platform::config::dnsmasq
 
-  case $::osfamily {
+  case $facts['os']['family'] {
     'RedHat': {
       $cronservice = 'crond'
     }
@@ -738,9 +738,9 @@ class platform::config::post
       $cronservice = 'cron'
     }
     default: {
-      fail("unsuported osfamily ${::osfamily}, currently Debian and Redhat are the only supported platforms")
+      fail("unsuported osfamily ${facts['os']['family']}, currently Debian and Redhat are the only supported platforms")
     }
-  } # Case $::osfamily
+  } # Case $facts['os']['family']
 
   service { $cronservice:
     ensure => 'running',

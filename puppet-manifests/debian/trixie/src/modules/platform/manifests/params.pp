@@ -76,7 +76,7 @@ class platform::params (
   if ($system_type != 'All-in-one' or $distributed_cloud_role == 'systemcontroller') {
     # number of workers we can support based on memory
     $small_footprint = false
-    $eng_workers_mem = floor($::memorysize_mb) / ($eng_worker_mb + $eng_overhead_mb)
+    $eng_workers_mem = floor($facts['memory']['system']['total_bytes'] / (1024 * 1024)) / ($eng_worker_mb + $eng_overhead_mb)
     $eng_workers = min($eng_max_workers, $eng_workers_mem, max($phys_core_count, 2))
     $eng_workers_by_2 = min($eng_max_workers, $eng_workers_mem, max($phys_core_count/2, 2))
     $eng_workers_by_4 = min($eng_max_workers, $eng_workers_mem, max($phys_core_count/4, 2))

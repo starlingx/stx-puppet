@@ -69,7 +69,7 @@ class platform::sm
   $pg_fs_device                  = $::platform::drbd::pgsql::params::device
   $pg_fs_directory               = $::platform::drbd::pgsql::params::mountpoint
   $pg_data_dir                   = "${pg_fs_directory}/${platform_sw_version}"
-  $pg_ctl_bin                    = $::osfamily ? {
+  $pg_ctl_bin                    = $facts['os']['family'] ? {
     'RedHat' => '/usr/bin/pg_ctl',
     default => '/usr/lib/postgresql/17/bin/pg_ctl'
   }

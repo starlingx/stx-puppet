@@ -128,7 +128,7 @@ class platform::vswitch::ovs(
 
     Mount[$hugepage_dir] -> Service['openvswitch']
 
-    $hugepage_mountpoint = $::osfamily ? {
+    $hugepage_mountpoint = $facts['os']['family'] ? {
       'Debian' => "/var/rootdirs${hugepage_dir}",
       default => $hugepage_dir,
     }

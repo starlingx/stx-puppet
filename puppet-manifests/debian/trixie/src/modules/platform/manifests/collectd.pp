@@ -17,7 +17,7 @@ class platform::collectd::params (
   $encoding = undef,
 
   $collectd_d_dir = undef,
-  $plugin_dir = $::osfamily ? {
+  $plugin_dir = $facts['os']['family'] ? {
     'RedHat' => '/usr/lib64/collectd',
     'Debian' => '/usr/lib/collectd',
     default   => '/usr/lib64/collectd',
@@ -50,7 +50,7 @@ class platform::collectd
     $address = regsubst($elem.delete(":${server_ports[$i]}"),'[\[\]]','','G')
   }
 
-  case $::osfamily {
+  case $facts['os']['family'] {
     'RedHat': {
       $config_file = '/etc/collectd.conf'
     }
@@ -60,9 +60,9 @@ class platform::collectd
       $encoding = undef
     }
     default: {
-      fail("unsupported osfamily ${::osfamily}, currently Debian and Redhat are the only supported platforms")
+      fail("unsupported osfamily ${facts['os']['family']}, currently Debian and Redhat are the only supported platforms")
     }
-  } # Case $::osfamily
+  } # Case $facts['os']['family']
 
   file { $config_file:
     ensure  => 'present',
