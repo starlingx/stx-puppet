@@ -112,7 +112,9 @@ define platform::haproxy::proxy (
     'http-response'   => $hsts_option_header,
   }
 
-  $all_options = $options + $acl_option
+  # Filter out undef and empty values for puppet-haproxy 8.x compatibility
+  $filtered_options = $options.filter |$key, $value| { $value != undef and $value != '' }
+  $all_options = $filtered_options + $acl_option
 
   if $public_ip != undef and $public_secondary_ip == undef {
     haproxy::frontend { $name:
@@ -160,15 +162,19 @@ define platform::haproxy::proxy (
       $timeout_option = undef
     }
 
+    # Filter out undef and empty values for puppet-haproxy 8.x compatibility
+    $backend_options = {
+      'server'   => "${server_name} ${private_ip}:${backend_port}",
+      'timeout'  => $timeout_option,
+      'mode'     => $mode_option,
+      'retry-on' => $retry_on
+    }
+    $filtered_backend_options = $backend_options.filter |$key, $value| { $value != undef and $value != '' }
+
     haproxy::backend { $name:
       collect_exported => false,
       name             => "${name}-internal",
-      options          => {
-        'server'   => "${server_name} ${private_ip}:${backend_port}",
-        'timeout'  => $timeout_option,
-        'mode'     => $mode_option,
-        'retry-on' => $retry_on
-      }
+      options          => $filtered_backend_options
     }
   }
 }
@@ -195,15 +201,19 @@ define platform::haproxy::alt_backend (
     $timeout_option = undef
   }
 
+  # Filter out undef and empty values for puppet-haproxy 8.x compatibility
+  $backend_options = {
+    'server'   => "${server_name} ${private_ip}:${alt_private_port}",
+    'timeout'  => $timeout_option,
+    'mode'     => $mode_option,
+    'retry-on' => $retry_on
+  }
+  $filtered_backend_options = $backend_options.filter |$key, $value| { $value != undef and $value != '' }
+
   haproxy::backend { $backend_name:
     collect_exported => false,
     name             => $backend_name,
-    options          => {
-      'server'   => "${server_name} ${private_ip}:${alt_private_port}",
-      'timeout'  => $timeout_option,
-      'mode'     => $mode_option,
-      'retry-on' => $retry_on
-    }
+    options          => $filtered_backend_options
   }
 }
 
