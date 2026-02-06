@@ -15,28 +15,28 @@ class platform::drbd::params (
   include ::platform::params
   include ::platform::network::blackhole
 
-  $host1 = $::platform::params::controller_0_hostname
-  $host2 = $::platform::params::controller_1_hostname
+  $host1 = $platform::params::controller_0_hostname
+  $host2 = $platform::params::controller_1_hostname
 
   include ::platform::network::mgmt::params
-  $ip1 = $::platform::network::mgmt::params::controller0_address
+  $ip1 = $platform::network::mgmt::params::controller0_address
 
   # adding a dummy address that will fail to respond. The selected destination addresses
   # discard packets via iptables
-  $system_mode = $::platform::params::system_mode
+  $system_mode = $platform::params::system_mode
 
   if $system_mode == 'simplex' {
-    if $::platform::network::mgmt::params::controller0_address =~ Stdlib::IP::Address::V6 {
-      $ip2 = $::platform::network::blackhole::ipv6_host
+    if $platform::network::mgmt::params::controller0_address =~ Stdlib::IP::Address::V6 {
+      $ip2 = $platform::network::blackhole::ipv6_host
     } else {
-      $ip2 = $::platform::network::blackhole::ipv4_host
+      $ip2 = $platform::network::blackhole::ipv4_host
     }
   }
   else {
-    $ip2 = $::platform::network::mgmt::params::controller1_address
+    $ip2 = $platform::network::mgmt::params::controller1_address
   }
 
-  $manage = str2bool($::is_initial_config)
+  $manage = str2bool($is_initial_config)
 }
 
 
@@ -60,33 +60,33 @@ define platform::drbd::filesystem (
   $lv_device = "/dev/${vg_name}/${lv_name}"
 
   if $manage_override == undef {
-    $drbd_manage = $::platform::drbd::params::manage
+    $drbd_manage = $platform::drbd::params::manage
   } else {
     $drbd_manage = $manage_override
   }
   if $ha_primary_override == undef {
-    $drbd_primary = $::platform::drbd::params::ha_primary
+    $drbd_primary = $platform::drbd::params::ha_primary
   } else {
     $drbd_primary = $ha_primary_override
   }
   if $initial_setup_override == undef {
-    $drbd_initial = $::platform::drbd::params::initial_setup
+    $drbd_initial = $platform::drbd::params::initial_setup
   } else {
     $drbd_initial = $initial_setup_override
   }
   if $automount_override == undef {
-    $drbd_automount = $::platform::drbd::params::automount
+    $drbd_automount = $platform::drbd::params::automount
   } else {
     $drbd_automount = $automount_override
   }
   if $ip2_override == undef {
-    $ip2 = $::platform::drbd::params::ip2
+    $ip2 = $platform::drbd::params::ip2
   } else {
     $ip2 = $ip2_override
   }
-  if $::platform::drbd::params::secure == true {
-    $drbd_hmac = $::platform::drbd::params::hmac
-    $drbd_secret = $::platform::drbd::params::secret
+  if $platform::drbd::params::secure == true {
+    $drbd_hmac = $platform::drbd::params::hmac
+    $drbd_secret = $platform::drbd::params::secret
   } else {
     $drbd_hmac = undef
     $drbd_secret = undef
@@ -147,20 +147,20 @@ define platform::drbd::filesystem (
         after-resync-target  =>
           "/usr/local/sbin/sm-notify -s ${sm_service} -e sync-end",
       },
-      host1         => $::platform::drbd::params::host1,
-      host2         => $::platform::drbd::params::host2,
-      ip1           => $::platform::drbd::params::ip1,
+      host1         => $platform::drbd::params::host1,
+      host2         => $platform::drbd::params::host2,
+      ip1           => $platform::drbd::params::ip1,
       ip2           => $ip2,
       manage        => $drbd_manage,
       ha_primary    => $drbd_primary,
       initial_setup => $drbd_initial,
       automount     => $drbd_automount,
-      fs_type       => $::platform::drbd::params::fs_type,
-      link_util     => $::platform::drbd::params::link_util,
-      link_speed    => $::platform::drbd::params::link_speed,
-      num_parallel  => $::platform::drbd::params::num_parallel,
-      rtt_ms        => $::platform::drbd::params::rtt_ms,
-      cpumask       => $::platform::drbd::params::cpumask,
+      fs_type       => $platform::drbd::params::fs_type,
+      link_util     => $platform::drbd::params::link_util,
+      link_speed    => $platform::drbd::params::link_speed,
+      num_parallel  => $platform::drbd::params::num_parallel,
+      rtt_ms        => $platform::drbd::params::rtt_ms,
+      cpumask       => $platform::drbd::params::cpumask,
       resync_after  => $resync_after,
       hmac          => $drbd_hmac,
       secret        => $drbd_secret,
@@ -274,8 +274,8 @@ class platform::drbd::extension (
   include ::platform::params
   include ::platform::drbd::platform::params
 
-  if str2bool($::is_primary_disk_rotational) {
-    $resync_after = $::platform::drbd::platform::params::resource_name
+  if str2bool($is_primary_disk_rotational) {
+    $resync_after = $platform::drbd::platform::params::resource_name
   } else {
     $resync_after = undef
   }
@@ -305,7 +305,7 @@ class platform::drbd::dc_vault::params (
 class platform::drbd::dc_vault (
 ) inherits ::platform::drbd::dc_vault::params {
 
-  if str2bool($::is_standalone_controller) {
+  if str2bool($is_standalone_controller) {
     $drbd_primary = true
     $drbd_initial = true
     $drbd_automount = undef
@@ -461,23 +461,23 @@ class platform::drbd::cephmon ()
   inherits ::platform::drbd::cephmon::params {
   include ::platform::ceph::params
 
-  $system_mode = $::platform::params::system_mode
-  $system_type = $::platform::params::system_type
+  $system_mode = $platform::params::system_mode
+  $system_type = $platform::params::system_type
 
   # If migrating from AIO SX to DX we want to override
   # these properties and handle it as an initial ceph setup
   # so DRBD is properly configured
-  if $::platform::ceph::params::simplex_to_duplex_migration {
+  if $platform::ceph::params::simplex_to_duplex_migration {
     $drbd_primary = true
     $drbd_initial = true
     $drbd_automount = false
-  } elsif ((str2bool($::is_controller_active) or str2bool($::is_standalone_controller))
-      and ! str2bool($::is_node_ceph_configured)) {
+  } elsif ((str2bool($is_controller_active) or str2bool($is_standalone_controller))
+      and ! str2bool($is_node_ceph_configured)) {
     # Active controller, first time configuration.
     $drbd_primary = true
     $drbd_initial = true
     $drbd_automount = true
-  } elsif str2bool($::is_standalone_controller) {
+  } elsif str2bool($is_standalone_controller) {
     # Active standalone controller, successive reboots.
     $drbd_primary = true
     $drbd_initial = undef
@@ -490,12 +490,12 @@ class platform::drbd::cephmon ()
     $drbd_automount = undef
   }
 
-  if ($::platform::ceph::params::service_enabled and
+  if ($platform::ceph::params::service_enabled and
     $system_type == 'All-in-one' and 'duplex' in $system_mode) {
     platform::drbd::filesystem { $resource_name:
       vg_name                => $vg_name,
       lv_name                => $lv_name,
-      lv_size                => $::platform::ceph::params::mon_lv_size,
+      lv_size                => $platform::ceph::params::mon_lv_size,
       port                   => $port,
       device                 => $device,
       mountpoint             => $mountpoint,
@@ -523,17 +523,17 @@ class platform::drbd::rook::params (
 class platform::drbd::rook ()
   inherits ::platform::drbd::rook::params {
 
-  $system_mode = $::platform::params::system_mode
-  $system_type = $::platform::params::system_type
+  $system_mode = $platform::params::system_mode
+  $system_type = $platform::params::system_type
 
-  if ((str2bool($::is_controller_active) or str2bool($::is_standalone_controller))
-    and ! str2bool($::is_node_drbd_rook_configured)) {
+  if ((str2bool($is_controller_active) or str2bool($is_standalone_controller))
+    and ! str2bool($is_node_drbd_rook_configured)) {
     # Active controller, first time configuration.
     $drbd_primary = true
     $drbd_initial = true
     $drbd_automount = true
 
-  } elsif str2bool($::is_standalone_controller) {
+  } elsif str2bool($is_standalone_controller) {
     # Active standalone controller, successive reboots.
     $drbd_primary = true
     $drbd_initial = undef
@@ -583,7 +583,7 @@ class platform::drbd(
   $service_enable = false,
   $service_ensure = 'stopped',
 ) {
-  if str2bool($::is_standalone_controller)
+  if str2bool($is_standalone_controller)
   {
     # Enable DRBD on standalone
     class { '::drbd':

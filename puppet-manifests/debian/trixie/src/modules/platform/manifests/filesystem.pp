@@ -16,7 +16,7 @@ define platform::filesystem (
   $ensure_mount = 'mounted',
 ) {
   include ::platform::filesystem::params
-  $vg_name = $::platform::filesystem::params::vg_name
+  $vg_name = $platform::filesystem::params::vg_name
 
   $device = "/dev/${vg_name}/${lv_name}"
 
@@ -138,7 +138,7 @@ define platform::filesystem::resize(
   $devmapper,
 ) {
   include ::platform::filesystem::params
-  $vg_name = $::platform::filesystem::params::vg_name
+  $vg_name = $platform::filesystem::params::vg_name
 
   $device = "/dev/${vg_name}/${lv_name}"
 
@@ -367,7 +367,7 @@ class platform::filesystem::storage {
 
 
 class platform::filesystem::compute {
-  if $::personality == 'worker' {
+  if $personality == 'worker' {
     include ::platform::filesystem::instances
     include ::platform::filesystem::ceph
     include ::platform::filesystem::scratch
@@ -420,9 +420,9 @@ class platform::filesystem::log_bind {
 class platform::filesystem::backup::runtime {
 
   include ::platform::filesystem::backup::params
-  $lv_name = $::platform::filesystem::backup::params::lv_name
-  $lv_size = $::platform::filesystem::backup::params::lv_size
-  $devmapper = $::platform::filesystem::backup::params::devmapper
+  $lv_name = $platform::filesystem::backup::params::lv_name
+  $lv_size = $platform::filesystem::backup::params::lv_size
+  $devmapper = $platform::filesystem::backup::params::devmapper
 
   platform::filesystem::resize { $lv_name:
     lv_name   => $lv_name,
@@ -435,9 +435,9 @@ class platform::filesystem::backup::runtime {
 class platform::filesystem::scratch::runtime {
 
   include ::platform::filesystem::scratch::params
-  $lv_name = $::platform::filesystem::scratch::params::lv_name
-  $lv_size = $::platform::filesystem::scratch::params::lv_size
-  $devmapper = $::platform::filesystem::scratch::params::devmapper
+  $lv_name = $platform::filesystem::scratch::params::lv_name
+  $lv_size = $platform::filesystem::scratch::params::lv_size
+  $devmapper = $platform::filesystem::scratch::params::devmapper
 
   platform::filesystem::resize { $lv_name:
     lv_name   => $lv_name,
@@ -450,10 +450,10 @@ class platform::filesystem::conversion::runtime {
   include ::platform::filesystem::conversion
   include ::platform::filesystem::conversion::params
 
-  $conversion_enabled = $::platform::filesystem::conversion::params::conversion_enabled
-  $lv_name = $::platform::filesystem::conversion::params::lv_name
-  $lv_size = $::platform::filesystem::conversion::params::lv_size
-  $devmapper = $::platform::filesystem::conversion::params::devmapper
+  $conversion_enabled = $platform::filesystem::conversion::params::conversion_enabled
+  $lv_name = $platform::filesystem::conversion::params::lv_name
+  $lv_size = $platform::filesystem::conversion::params::lv_size
+  $devmapper = $platform::filesystem::conversion::params::devmapper
 
   if $conversion_enabled {
     Class['::platform::filesystem::conversion']
@@ -463,7 +463,7 @@ class platform::filesystem::conversion::runtime {
       devmapper => $devmapper,
     }
   } else {
-    $mountpoint = $::platform::filesystem::conversion::params::mountpoint
+    $mountpoint = $platform::filesystem::conversion::params::mountpoint
     exec { "umount ${lv_name} mountpoint ${mountpoint}":
       command => "umount ${mountpoint}; true",
       onlyif  => "mountpoint -q ${mountpoint}",
@@ -475,10 +475,10 @@ class platform::filesystem::instances::runtime {
   include ::platform::filesystem::instances
   include ::platform::filesystem::instances::params
 
-  $instances_enabled = $::platform::filesystem::instances::params::instances_enabled
-  $lv_name = $::platform::filesystem::instances::params::lv_name
-  $lv_size = $::platform::filesystem::instances::params::lv_size
-  $devmapper = $::platform::filesystem::instances::params::devmapper
+  $instances_enabled = $platform::filesystem::instances::params::instances_enabled
+  $lv_name = $platform::filesystem::instances::params::lv_name
+  $lv_size = $platform::filesystem::instances::params::lv_size
+  $devmapper = $platform::filesystem::instances::params::devmapper
 
   if $instances_enabled {
     Class['::platform::filesystem::instances']
@@ -493,9 +493,9 @@ class platform::filesystem::instances::runtime {
 class platform::filesystem::kubelet::runtime {
 
   include ::platform::filesystem::kubelet::params
-  $lv_name = $::platform::filesystem::kubelet::params::lv_name
-  $lv_size = $::platform::filesystem::kubelet::params::lv_size
-  $devmapper = $::platform::filesystem::kubelet::params::devmapper
+  $lv_name = $platform::filesystem::kubelet::params::lv_name
+  $lv_size = $platform::filesystem::kubelet::params::lv_size
+  $devmapper = $platform::filesystem::kubelet::params::devmapper
 
   platform::filesystem::resize { $lv_name:
     lv_name   => $lv_name,
@@ -511,9 +511,9 @@ class platform::filesystem::kubelet::runtime {
 class platform::filesystem::docker::runtime {
 
   include ::platform::filesystem::docker::params
-  $lv_name = $::platform::filesystem::docker::params::lv_name
-  $lv_size = $::platform::filesystem::docker::params::lv_size
-  $devmapper = $::platform::filesystem::docker::params::devmapper
+  $lv_name = $platform::filesystem::docker::params::lv_name
+  $lv_size = $platform::filesystem::docker::params::lv_size
+  $devmapper = $platform::filesystem::docker::params::devmapper
 
   platform::filesystem::resize { $lv_name:
     lv_name   => $lv_name,
@@ -546,9 +546,9 @@ class platform::filesystem::log
 class platform::filesystem::log::runtime {
 
   include ::platform::filesystem::log::params
-  $lv_name = $::platform::filesystem::log::params::lv_name
-  $lv_size = $::platform::filesystem::log::params::lv_size
-  $devmapper = $::platform::filesystem::log::params::devmapper
+  $lv_name = $platform::filesystem::log::params::lv_name
+  $lv_size = $platform::filesystem::log::params::lv_size
+  $devmapper = $platform::filesystem::log::params::devmapper
 
   platform::filesystem::resize { $lv_name:
       lv_name   => $lv_name,
@@ -581,9 +581,9 @@ class platform::filesystem::var
 class platform::filesystem::var::runtime {
 
   include ::platform::filesystem::var::params
-  $lv_name = $::platform::filesystem::var::params::lv_name
-  $lv_size = $::platform::filesystem::var::params::lv_size
-  $devmapper = $::platform::filesystem::var::params::devmapper
+  $lv_name = $platform::filesystem::var::params::lv_name
+  $lv_size = $platform::filesystem::var::params::lv_size
+  $devmapper = $platform::filesystem::var::params::devmapper
 
   platform::filesystem::resize { $lv_name:
       lv_name   => $lv_name,
@@ -616,9 +616,9 @@ class platform::filesystem::root
 class platform::filesystem::root::runtime {
 
   include ::platform::filesystem::root::params
-  $lv_name = $::platform::filesystem::root::params::lv_name
-  $lv_size = $::platform::filesystem::root::params::lv_size
-  $devmapper = $::platform::filesystem::root::params::devmapper
+  $lv_name = $platform::filesystem::root::params::lv_name
+  $lv_size = $platform::filesystem::root::params::lv_size
+  $devmapper = $platform::filesystem::root::params::devmapper
 
   platform::filesystem::resize { $lv_name:
       lv_name   => $lv_name,
@@ -629,7 +629,7 @@ class platform::filesystem::root::runtime {
 
 class platform::filesystem::luks {
 
-  if !str2bool($::is_controller_active) and !str2bool($::is_standalone_controller) {
+  if !str2bool($is_controller_active) and !str2bool($is_standalone_controller) {
 
     # Execute rsync command only on the standby controller
     exec { 'rsync_luks_folder':
@@ -688,10 +688,10 @@ class platform::filesystem::ceph::runtime {
   include ::platform::filesystem::ceph
   include ::platform::filesystem::ceph::params
 
-  $ceph_enabled = $::platform::filesystem::ceph::params::ceph_enabled
-  $lv_name = $::platform::filesystem::ceph::params::lv_name
-  $lv_size = $::platform::filesystem::ceph::params::lv_size
-  $devmapper = $::platform::filesystem::ceph::params::devmapper
+  $ceph_enabled = $platform::filesystem::ceph::params::ceph_enabled
+  $lv_name = $platform::filesystem::ceph::params::lv_name
+  $lv_size = $platform::filesystem::ceph::params::lv_size
+  $devmapper = $platform::filesystem::ceph::params::devmapper
 
   if $ceph_enabled {
     Class['::platform::filesystem::ceph']
@@ -701,7 +701,7 @@ class platform::filesystem::ceph::runtime {
       devmapper => $devmapper,
     }
   } else {
-    $mountpoint = $::platform::filesystem::ceph::params::mountpoint
+    $mountpoint = $platform::filesystem::ceph::params::mountpoint
     exec { "umount ${lv_name} mountpoint ${mountpoint}":
       command => "umount ${mountpoint}; true",
       onlyif  => "mountpoint -q ${mountpoint}",

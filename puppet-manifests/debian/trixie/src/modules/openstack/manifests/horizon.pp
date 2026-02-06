@@ -29,15 +29,15 @@ class openstack::horizon
   include ::platform::network::pxeboot::params
   include ::openstack::keystone::params
 
-  $controller_address       = $::platform::network::mgmt::params::controller_address
-  $mgmt_subnet_network      = $::platform::network::mgmt::params::subnet_network
-  $mgmt_subnet_prefixlen    = $::platform::network::mgmt::params::subnet_prefixlen
-  $pxeboot_subnet_network   = $::platform::network::pxeboot::params::subnet_network
-  $pxeboot_subnet_prefixlen = $::platform::network::pxeboot::params::subnet_prefixlen
+  $controller_address       = $platform::network::mgmt::params::controller_address
+  $mgmt_subnet_network      = $platform::network::mgmt::params::subnet_network
+  $mgmt_subnet_prefixlen    = $platform::network::mgmt::params::subnet_prefixlen
+  $pxeboot_subnet_network   = $platform::network::pxeboot::params::subnet_network
+  $pxeboot_subnet_prefixlen = $platform::network::pxeboot::params::subnet_prefixlen
 
-  $keystone_api_version     = $::openstack::keystone::params::api_version
-  $keystone_auth_uri        = $::openstack::keystone::params::auth_uri
-  $keystone_host_url        = $::openstack::keystone::params::host_url
+  $keystone_api_version     = $openstack::keystone::params::api_version
+  $keystone_auth_uri        = $openstack::keystone::params::auth_uri
+  $keystone_host_url        = $openstack::keystone::params::host_url
 
   #The intention here is to set up /var/www as a chroot'ed
   #environment for lighttpd so that it will remain in a jail under /www.
@@ -86,19 +86,19 @@ class openstack::horizon
       content => template('openstack/lighttpd-inc.conf.erb')
   }
 
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
-    $workers = min($::platform::params::eng_workers_by_2, 6)
+  if $platform::params::distributed_cloud_role =='systemcontroller' {
+    $workers = min($platform::params::eng_workers_by_2, 6)
   } else {
-    $workers = $::platform::params::eng_workers_by_2
+    $workers = $platform::params::eng_workers_by_2
   }
-  if str2bool($::is_initial_config) {
+  if str2bool($is_initial_config) {
     exec { 'Stop lighttpd':
       command => 'systemctl stop lighttpd; systemctl disable lighttpd',
       require => User['www']
     }
   }
 
-  if str2bool($::selinux) {
+  if str2bool($facts['os']['selinux']['enabled']) {
     selboolean{ 'httpd_can_network_connect':
       value      => on,
       persistent => true,
@@ -106,7 +106,7 @@ class openstack::horizon
   }
 
   # Horizon is not used in distributed cloud subclouds
-  if $::platform::params::distributed_cloud_role != 'subcloud'  {
+  if $platform::params::distributed_cloud_role != 'subcloud'  {
 
     include ::horizon::params
     file { '/etc/openstack-dashboard/horizon-config.ini':
@@ -114,20 +114,20 @@ class openstack::horizon
       content => template('openstack/horizon-params.erb'),
       mode    => '0644',
       owner   => 'root',
-      group   => $::horizon::params::apache_group,
+      group   => $horizon::params::apache_group,
     }
 
 
     $is_django_debug = 'False'
-    $bind_host = $::platform::network::mgmt::params::subnet_version ? {
+    $bind_host = $platform::network::mgmt::params::subnet_version ? {
       6       => '::0',
       default => '0.0.0.0',
       # TO-DO(mmagr): Add IPv6 support when hostnames are used
     }
 
-    if $::platform::params::region_config {
+    if $platform::params::region_config {
       $horizon_keystone_url = "${keystone_auth_uri}/${keystone_api_version}"
-      $region_2_name = $::platform::params::region_2_name
+      $region_2_name = $platform::params::region_2_name
       $region_openstack_host = $openstack_host
       file { '/etc/openstack-dashboard/region-config.ini':
         ensure  => present,
@@ -146,7 +146,7 @@ class openstack::horizon
       secret_key            => $secret_key,
       keystone_url          => $horizon_keystone_url,
       keystone_default_role => '_member_',
-      server_aliases        => [$controller_address, $::fqdn, 'localhost'],
+      server_aliases        => [$controller_address, $facts['networking']['fqdn'], 'localhost'],
       allowed_hosts         => '*',
       hypervisor_options    => {'can_set_mount_point' => false, },
       django_debug          => $is_django_debug,
@@ -166,7 +166,7 @@ class openstack::horizon
 
     # hack for memcached, for now we bind to localhost on ipv6
     # https://bugzilla.redhat.com/show_bug.cgi?id=1210658
-    $memcached_bind_host = $::platform::network::mgmt::params::subnet_version ? {
+    $memcached_bind_host = $platform::network::mgmt::params::subnet_version ? {
       6       => 'localhost6',
       default => '0.0.0.0',
       # TO-DO(mmagr): Add IPv6 support when hostnames are used

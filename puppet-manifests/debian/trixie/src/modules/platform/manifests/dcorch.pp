@@ -23,7 +23,7 @@ class platform::dcorch::params (
 
   include ::platform::network::mgmt::params
 
-  $system_mode = $::platform::params::system_mode
+  $system_mode = $platform::params::system_mode
 
   # FQDN can be used after:
   # - after the bootstrap for any installation
@@ -32,12 +32,12 @@ class platform::dcorch::params (
   # - just AIO-SX can use FQDN during the an upgrade. For other installs
   #     the active controller in older release can resolve the .internal FQDN
   #     when the mate controller is updated to N+1 version
-  if (!str2bool($::is_upgrade_do_not_use_fqdn) or $system_mode == 'simplex') {
-    if (str2bool($::is_bootstrap_completed)) {
+  if (!str2bool($is_upgrade_do_not_use_fqdn) or $system_mode == 'simplex') {
+    if (str2bool($is_bootstrap_completed)) {
       $fqdn_ready = true
     } else {
-      if ($::platform::network::mgmt::params::fqdn_ready != undef) {
-        $fqdn_ready = $::platform::network::mgmt::params::fqdn_ready
+      if ($platform::network::mgmt::params::fqdn_ready != undef) {
+        $fqdn_ready = $platform::network::mgmt::params::fqdn_ready
       }
       else {
         $fqdn_ready = false
@@ -49,39 +49,39 @@ class platform::dcorch::params (
   }
 
   if ($fqdn_ready) {
-    $api_host = $::platform::params::controller_fqdn
+    $api_host = $platform::params::controller_fqdn
   } else {
-    $api_host = $::platform::network::mgmt::params::controller_address
+    $api_host = $platform::network::mgmt::params::controller_address
   }
 }
 
 
 class platform::dcorch
   inherits ::platform::dcorch::params {
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+  if $platform::params::distributed_cloud_role =='systemcontroller' {
     include ::platform::params
     include ::platform::amqp::params
     include ::platform::network::mgmt::params
 
-    if $::platform::params::init_database {
+    if $platform::params::init_database {
       include ::dcorch::db::postgresql
     }
 
-    $system_mode = $::platform::params::system_mode
+    $system_mode = $platform::params::system_mode
 
     # If not defined, worker values can vary from 4 to 6 depending
     # on the number of physical cores and memory available
-    if $::platform::dcorch::params::engine_workers == undef {
-      $engine_workers_value = min($::platform::params::eng_workers_by_2, 6)
+    if $platform::dcorch::params::engine_workers == undef {
+      $engine_workers_value = min($platform::params::eng_workers_by_2, 6)
     } else {
-      $engine_workers_value = $::platform::dcorch::params::engine_workers
+      $engine_workers_value = $platform::dcorch::params::engine_workers
     }
 
     class { '::dcorch':
-      rabbit_host       => $::platform::dcorch::params::rabbit_host,
-      rabbit_port       => $::platform::amqp::params::port,
-      rabbit_userid     => $::platform::amqp::params::auth_user,
-      rabbit_password   => $::platform::amqp::params::auth_password,
+      rabbit_host       => $platform::dcorch::params::rabbit_host,
+      rabbit_port       => $platform::amqp::params::port,
+      rabbit_userid     => $platform::amqp::params::auth_user,
+      rabbit_password   => $platform::amqp::params::auth_password,
       proxy_bind_host   => $api_host,
       proxy_remote_host => $api_host,
       engine_workers    => $engine_workers_value,
@@ -103,7 +103,7 @@ class platform::dcorch
 
 class platform::dcorch::firewall
   inherits ::platform::dcorch::params {
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+  if $platform::params::distributed_cloud_role =='systemcontroller' {
     platform::firewall::rule { 'dcorch-api':
       service_name => 'dcorch',
       ports        => $api_port,
@@ -128,7 +128,7 @@ class platform::dcorch::haproxy
   inherits ::platform::dcorch::params {
   include ::platform::haproxy::params
 
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+  if $platform::params::distributed_cloud_role =='systemcontroller' {
     platform::haproxy::proxy { 'dcorch-neutron-api-proxy':
       server_name  => 's-dcorch-neutron-api-proxy',
       public_port  => $neutron_api_proxy_port,
@@ -166,7 +166,7 @@ class platform::dcorch::haproxy
     platform::haproxy::proxy { 'dcorch-identity-api-proxy-admin':
       https_ep_type     => 'admin',
       server_name       => 's-dcorch-identity-api-proxy',
-      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_ip_address => $platform::haproxy::params::private_ip_address,
       public_port       => $identity_api_proxy_port + 1,
       private_port      => $identity_api_proxy_port,
     }
@@ -174,7 +174,7 @@ class platform::dcorch::haproxy
     platform::haproxy::proxy { 'dcorch-sysinv-api-proxy-admin':
       https_ep_type     => 'admin',
       server_name       => 's-dcorch-sysinv-api-proxy',
-      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_ip_address => $platform::haproxy::params::private_ip_address,
       public_port       => $sysinv_api_proxy_port + 1,
       private_port      => $sysinv_api_proxy_port,
       client_timeout    => $sysinv_api_proxy_client_timeout,
@@ -184,7 +184,7 @@ class platform::dcorch::haproxy
     platform::haproxy::proxy { 'dcorch-usm-api-proxy-admin':
       https_ep_type     => 'admin',
       server_name       => 's-dcorch-usm-api-proxy',
-      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_ip_address => $platform::haproxy::params::private_ip_address,
       public_port       => $usm_api_proxy_port + 1,
       private_port      => $usm_api_proxy_port,
     }
@@ -193,7 +193,7 @@ class platform::dcorch::haproxy
 
 class platform::dcorch::engine
   inherits ::platform::dcorch::params {
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+  if $platform::params::distributed_cloud_role =='systemcontroller' {
     include ::dcorch::engine
   }
 }
@@ -201,15 +201,15 @@ class platform::dcorch::engine
 
 class platform::dcorch::api_proxy
   inherits ::platform::dcorch::params {
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
-    if ($::platform::dcorch::params::service_create and
-        $::platform::params::init_keystone) {
+  if $platform::params::distributed_cloud_role =='systemcontroller' {
+    if ($platform::dcorch::params::service_create and
+        $platform::params::init_keystone) {
       include ::dcorch::keystone::auth
     }
 
     class { '::dcorch::api_proxy':
       bind_host => $api_host,
-      sync_db   => $::platform::params::init_database,
+      sync_db   => $platform::params::init_database,
     }
 
     include ::platform::dcorch::firewall
@@ -218,20 +218,20 @@ class platform::dcorch::api_proxy
 }
 
 class platform::dcorch::runtime {
-  if $::platform::params::distributed_cloud_role == 'systemcontroller' {
+  if $platform::params::distributed_cloud_role == 'systemcontroller' {
     include ::platform::amqp::params
     include ::dcorch
     include ::dcorch::db::postgresql
 
     class { '::dcorch::api_proxy':
-      sync_db   => str2bool($::is_standalone_controller),
+      sync_db   => str2bool($is_standalone_controller),
     }
   }
 }
 
 class platform::dcorch::stx_openstack::runtime
   inherits ::platform::dcorch::params {
-  if ($::platform::params::distributed_cloud_role == 'systemcontroller') {
+  if ($platform::params::distributed_cloud_role == 'systemcontroller') {
     if $service_create {
       class { '::dcorch::stx_openstack': }
     }

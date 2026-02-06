@@ -51,8 +51,8 @@ class platform::ceph::params(
 class platform::ceph
   inherits ::platform::ceph::params {
 
-  $system_mode = $::platform::params::system_mode
-  $system_type = $::platform::params::system_type
+  $system_mode = $platform::params::system_mode
+  $system_type = $platform::params::system_type
   if $service_enabled or $configure_ceph_mon_info {
     # Set the minimum set of monitors that form a valid cluster
     if $system_type == 'All-in-one' {
@@ -83,7 +83,7 @@ class platform::ceph
     file { '/etc/ceph/ceph.conf':
       ensure => file,
       owner  => 'root',
-      group  => $::platform::params::protected_group_name,
+      group  => $platform::params::protected_group_name,
       mode   => '0640',
     }
     -> class { '::ceph':
@@ -141,7 +141,7 @@ class platform::ceph
       $valid_monitors = [ $mon_0_host, $mon_1_host, $mon_2_host ]
     }
 
-    $::configured_ceph_monitors.each |Integer $index, String $monitor| {
+    $configured_ceph_monitors.each |Integer $index, String $monitor| {
       if ! ($monitor in $valid_monitors) {
         notice("Removing ${monitor} from ${ceph_config_file}")
 
@@ -226,8 +226,8 @@ class platform::ceph::mds_pmond_config {
 class platform::ceph::monitor
   inherits ::platform::ceph::params {
 
-  $system_mode = $::platform::params::system_mode
-  $system_type = $::platform::params::system_type
+  $system_mode = $platform::params::system_mode
+  $system_type = $platform::params::system_type
 
   if $service_enabled {
     # Check if it is necessary to reconfigure ceph mon ip due to mgmt network reconfiguration.
@@ -260,7 +260,7 @@ class platform::ceph::monitor
 
     if $system_type == 'All-in-one' and 'duplex' in $system_mode {
 
-      if $::personality == 'controller' {
+      if $personality == 'controller' {
         # In AIO-DX, the controllers have a fixed Ceph monitor managed by pmon.
         include ::platform::ceph::fixed_mon_pmond_config
         $configure_ceph_mon = true
@@ -269,7 +269,7 @@ class platform::ceph::monitor
         $configure_ceph_mon = false
       }
 
-      if str2bool($::is_controller_active) or str2bool($::is_standalone_controller) {
+      if str2bool($is_controller_active) or str2bool($is_standalone_controller) {
         # Ceph mon is configured on a DRBD partition,
         # when 'ceph' storage backend is added in sysinv.
         # Then SM takes care of starting ceph after manifests are applied.
@@ -283,13 +283,13 @@ class platform::ceph::monitor
           "mon.${floating_mon_host}/public_addr":   value => $floating_mon_ip;
         }
 
-        if $::hostname == $mon_0_host {
+        if $facts['networking']['hostname'] == $mon_0_host {
           Class['::ceph']
           -> ceph_config {
             "mon.${mon_1_host}/public_addr":   value => $mon_1_ip;
           }
         }
-        if $::hostname == $mon_1_host {
+        if $facts['networking']['hostname'] == $mon_1_host {
           Class['::ceph']
           -> ceph_config {
             "mon.${mon_0_host}/public_addr":   value => $mon_0_ip;
@@ -297,7 +297,9 @@ class platform::ceph::monitor
         }
       }
     } else {
-      if $::hostname == $mon_0_host or $::hostname == $mon_1_host or $::hostname == $mon_2_host {
+      if $facts['networking']['hostname'] == $mon_0_host or
+        $facts['networking']['hostname'] == $mon_1_host or
+        $facts['networking']['hostname'] == $mon_2_host {
         # This host has a Ceph mon
         $configure_ceph_mon = true
       } else {
@@ -321,7 +323,7 @@ class platform::ceph::monitor
       # if transition from AIO-SX to AIO-DX has started, we need to
       # wipe the logical volume before mounting DRBD
       # and remove the pmon.d managed ceph daemons
-      if ($simplex_to_duplex_migration and str2bool($::is_node_ceph_configured)) {
+      if ($simplex_to_duplex_migration and str2bool($is_node_ceph_configured)) {
         contain ::platform::ceph::migration::sx_to_dx::remove_mon
         include ::platform::ceph::migration::sx_to_dx::rebuild_mon
 
@@ -351,7 +353,7 @@ class platform::ceph::monitor
     Class['::ceph'] -> Ceph::Mon <| |>
 
     # ensure we load the crushmap at first unlock
-    if $system_type == 'All-in-one' and str2bool($::is_standalone_controller) {
+    if $system_type == 'All-in-one' and str2bool($is_standalone_controller) {
       if 'duplex' in $system_mode {
         $crushmap_txt = '/etc/sysinv/crushmap-controller-model.txt'
       } else {
@@ -406,14 +408,14 @@ class platform::ceph::monitor
         $fixed_mon_service_state = 'stopped'
       }
 
-      if $::hostname == $mon_0_host {
+      if $facts['networking']['hostname'] == $mon_0_host {
         ceph::mon { $mon_0_host:
           public_addr    => $mon_0_ip,
           mon_data       => '/var/lib/ceph/data/ceph-controller-0',
           service_ensure => $fixed_mon_service_state,
         }
       }
-      elsif $::hostname == $mon_1_host {
+      elsif $facts['networking']['hostname'] == $mon_1_host {
         ceph::mon { $mon_1_host:
           public_addr    => $mon_1_ip,
           mon_data       => '/var/lib/ceph/data/ceph-controller-1',
@@ -421,17 +423,17 @@ class platform::ceph::monitor
         }
       }
     } else {
-      if $::hostname == $mon_0_host {
+      if $facts['networking']['hostname'] == $mon_0_host {
         ceph::mon { $mon_0_host:
           public_addr => $mon_0_ip,
         }
       }
-      elsif $::hostname == $mon_1_host {
+      elsif $facts['networking']['hostname'] == $mon_1_host {
         ceph::mon { $mon_1_host:
           public_addr => $mon_1_ip,
         }
       }
-      elsif $::hostname == $mon_2_host {
+      elsif $facts['networking']['hostname'] == $mon_2_host {
         ceph::mon { $mon_2_host:
           public_addr => $mon_2_ip,
         }
@@ -445,14 +447,14 @@ class platform::ceph::monitor
 
   # explicitly bind ceph-mgr to host-specific address
   # to avoid automatic binding of floating address
-  if $::hostname == $mon_0_host {
+  if $facts['networking']['hostname'] == $mon_0_host {
     ceph_config{
-      "mgr.${$::hostname}/public_addr": value => $mon_0_ip;
+      "mgr.${$facts['networking']['hostname']}/public_addr": value => $mon_0_ip;
     }
   }
-  elsif $::hostname == $mon_1_host {
+  elsif $facts['networking']['hostname'] == $mon_1_host {
     ceph_config{
-      "mgr.${$::hostname}/public_addr": value => $mon_1_ip;
+      "mgr.${$facts['networking']['hostname']}/public_addr": value => $mon_1_ip;
     }
   }
 }
@@ -461,8 +463,8 @@ class platform::ceph::migration::sx_to_dx::remove_mon
   inherits platform::ceph::params {
   include ::platform::filesystem::params
 
-  $vg_name = $::platform::filesystem::params::vg_name
-  $drbd_device = $::platform::drbd::cephmon::params::device
+  $vg_name = $platform::filesystem::params::vg_name
+  $drbd_device = $platform::drbd::cephmon::params::device
   $lv_device = "/dev/${vg_name}/${mon_lv_name}"
 
   exec { 'Unmounting cephmon logical volume' :
@@ -528,7 +530,7 @@ class platform::ceph::migration::sx_to_dx::rebuild_mon
     onlyif  => "test -d ${mon_db_path_old}/store.db"
   }
 
-  $::configured_ceph_osds.each |Integer $index, String $osd| {
+  $configured_ceph_osds.each |Integer $index, String $osd| {
     exec { "Rebuilding monitor storage from OSD ${osd}" :
       command => "ceph-objectstore-tool --data-path /var/lib/ceph/osd/${osd} --no-mon-config\
                   --op update-mon-db --mon-store-path ${mon_db_path_new}",
@@ -564,7 +566,7 @@ class platform::ceph::migration::sx_to_dx::active_cluster_updates
   inherits platform::ceph::params {
 
   exec { 'Ensure Fixed Ceph Monitor is running' :
-    command => "/etc/init.d/ceph start mon.${$::hostname}",
+    command => "/etc/init.d/ceph start mon.${$facts['networking']['hostname']}",
   }
   -> exec { 'Ensure Floating Ceph Monitor is running' :
     command => '/etc/init.d/ceph start mon.controller',
@@ -601,25 +603,25 @@ class platform::ceph::migration::sx_to_dx::active_cluster_updates
 
 class platform::ceph::metadataserver::config
   inherits ::platform::ceph::params {
-  if $::hostname == $mon_0_host {
+  if $facts['networking']['hostname'] == $mon_0_host {
         Class['::ceph']
           -> ceph_config {
-            "mds.${$::hostname}/host": value => $mon_0_host;
-            "mds.${$::hostname}/public_addr": value => $mon_0_ip;
+            "mds.${$facts['networking']['hostname']}/host": value => $mon_0_host;
+            "mds.${$facts['networking']['hostname']}/public_addr": value => $mon_0_ip;
           }
     }
-  if $::hostname == $mon_1_host {
+  if $facts['networking']['hostname'] == $mon_1_host {
         Class['::ceph']
           -> ceph_config {
-            "mds.${$::hostname}/host": value => $mon_1_host;
-            "mds.${$::hostname}/public_addr": value => $mon_1_ip;
+            "mds.${$facts['networking']['hostname']}/host": value => $mon_1_host;
+            "mds.${$facts['networking']['hostname']}/public_addr": value => $mon_1_ip;
           }
     }
-  if $::hostname == $mon_2_host {
+  if $facts['networking']['hostname'] == $mon_2_host {
         Class['::ceph']
           -> ceph_config {
-            "mds.${$::hostname}/host": value => $mon_2_host;
-            "mds.${$::hostname}/public_addr": value => $mon_2_ip;
+            "mds.${$facts['networking']['hostname']}/host": value => $mon_2_host;
+            "mds.${$facts['networking']['hostname']}/public_addr": value => $mon_2_ip;
           }
     }
   }
@@ -629,7 +631,7 @@ class platform::ceph::metadataserver::controller::runtime
 
   include ::platform::ceph::metadataserver::config
 
-  if $::personality == 'controller' {
+  if $personality == 'controller' {
     include ::platform::sm::ceph::runtime
 
     # Make sure the metadata config is added before starting services
@@ -644,8 +646,10 @@ class platform::ceph::metadataserver::worker::runtime
   inherits ::platform::ceph::params {
 
   include ::platform::ceph::metadataserver::config
-  if $::personality == 'worker' {
-    if $::hostname == $mon_0_host or $::hostname == $mon_1_host or $::hostname == $mon_2_host {
+  if $personality == 'worker' {
+    if $facts['networking']['hostname'] == $mon_0_host or
+      $facts['networking']['hostname'] == $mon_1_host or
+      $facts['networking']['hostname'] == $mon_2_host {
       # Worker with a monitor assigned:
 
       # Make sure the metadata config and monitor is added before starting services
@@ -671,8 +675,8 @@ define platform::ceph::osd_crush_location(
   # Only set the crush location for additional tiers
   if $tier_name != 'storage' {
     ceph_config {
-      "osd.${$osd_id}/host":           value => "${$::platform::params::hostname}-${$tier_name}";
-      "osd.${$osd_id}/crush_location": value => "root=${tier_name}-tier host=${$::platform::params::hostname}-${$tier_name}";
+      "osd.${$osd_id}/host":           value => "${$platform::params::hostname}-${$tier_name}";
+      "osd.${$osd_id}/crush_location": value => "root=${tier_name}-tier host=${$platform::params::hostname}-${$tier_name}";
     }
   }
 }
@@ -813,9 +817,9 @@ class platform::ceph::rgw::keystone (
   if $rgw_enabled {
 
     if $swift_endpts_enabled {
-      $url = $::openstack::keystone::params::openstack_auth_uri
+      $url = $openstack::keystone::params::openstack_auth_uri
     } else {
-      $url = $::openstack::keystone::params::auth_uri
+      $url = $openstack::keystone::params::auth_uri
     }
 
     ceph::rgw::keystone { $rgw_client_name:
@@ -823,7 +827,7 @@ class platform::ceph::rgw::keystone (
       # for security reason. Use keystone service tenant credentials instead.
       rgw_keystone_admin_token         => '',
       rgw_keystone_url                 => $url,
-      rgw_keystone_version             => $::openstack::keystone::params::api_version,
+      rgw_keystone_version             => $openstack::keystone::params::api_version,
       rgw_keystone_accepted_roles      => 'admin,_member_',
       user                             => $rgw_user_name,
       use_pki                          => false,
@@ -847,7 +851,7 @@ class platform::ceph::rgw
     include ::platform::params
 
     include ::openstack::keystone::params
-    $auth_host = $::openstack::keystone::params::host_url
+    $auth_host = $openstack::keystone::params::host_url
 
     ceph::rgw { $rgw_client_name:
       user          => $rgw_user_name,
@@ -878,7 +882,7 @@ class platform::ceph::rgw
 }
 
 class platform::ceph::worker {
-  if $::personality == 'worker' {
+  if $personality == 'worker' {
     include ::platform::ceph
     include ::platform::ceph::monitor
     include ::platform::ceph::metadataserver::config
@@ -910,7 +914,7 @@ class platform::ceph::controller {
     # active controller. The ceph::osds class has to be skipped in this
     # case otherwise it will fail for not being able to find ceph monitor
     # cluster.
-    if str2bool($::is_active_controller_found) {
+    if str2bool($is_active_controller_found) {
       include ::platform::ceph::osds
 
       # Ensure partitions update prior to ceph storage configuration
@@ -923,10 +927,10 @@ class platform::ceph::runtime_base {
   include ::platform::ceph::metadataserver::runtime
   include ::platform::ceph
 
-  $system_mode = $::platform::params::system_mode
-  $system_type = $::platform::params::system_type
+  $system_mode = $platform::params::system_mode
+  $system_type = $platform::params::system_type
 
-  if $::personality == 'controller' {
+  if $personality == 'controller' {
     if $system_type == 'All-in-one' and 'duplex' in $system_mode {
       Drbd::Resource <| |> -> Class[$name]
     }
@@ -958,8 +962,8 @@ class platform::ceph::runtime_osds {
   # Since this is runtime we have to avoid checking status of Ceph while we
   # configure it. On AIO-DX ceph-osd processes are monitored by SM & on other
   # deployments they are pmon managed.
-  $system_mode = $::platform::params::system_mode
-  $system_type = $::platform::params::system_type
+  $system_mode = $platform::params::system_mode
+  $system_type = $platform::params::system_type
 
   if $system_type == 'All-in-one' and 'duplex' in $system_mode {
     exec { 'sm-unmanage service ceph-osd':

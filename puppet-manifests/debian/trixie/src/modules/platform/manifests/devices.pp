@@ -187,7 +187,7 @@ class platform::devices::fpga::n3000::reset
 class platform::devices::fpga::fec::config
   inherits ::platform::devices::fpga::fec::params {
   notice('Looking for N3000 device to reset...')
-  if $::is_n3000_present {
+  if $is_n3000_present {
     include platform::network::interfaces::sriov::enable
     include platform::devices::fpga::n3000::reset
   }
@@ -257,7 +257,7 @@ class platform::devices::acc200::config (
 }
 
 class platform::devices::qat::qat_4xxx {
-  if $::is_qat_device_present {
+  if $is_qat_device_present {
     notice('QAT device found.')
 
     $vf_driver = 'vfio-pci'

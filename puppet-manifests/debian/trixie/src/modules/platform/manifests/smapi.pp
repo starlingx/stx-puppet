@@ -16,12 +16,12 @@ class platform::smapi::haproxy
   include ::platform::params
   include ::platform::haproxy::params
 
-  $system_mode = $::platform::params::system_mode
+  $system_mode = $platform::params::system_mode
 
   if $system_mode != 'simplex' {
     platform::haproxy::proxy { 'sm-api-internal':
       server_name        => 's-smapi-internal',
-      public_ip_address  => $::platform::haproxy::params::private_ip_address,
+      public_ip_address  => $platform::haproxy::params::private_ip_address,
       public_port        => $port,
       public_api         => false,
       private_ip_address => $bind_ip,
@@ -36,12 +36,12 @@ class platform::smapi::haproxy
   }
 
   # Configure rules for DC https enabled admin endpoint.
-  if ($::platform::params::distributed_cloud_role == 'systemcontroller' or
-      $::platform::params::distributed_cloud_role == 'subcloud') {
+  if ($platform::params::distributed_cloud_role == 'systemcontroller' or
+      $platform::params::distributed_cloud_role == 'subcloud') {
     platform::haproxy::proxy { 'sm-api-admin':
       https_ep_type     => 'admin',
       server_name       => 's-smapi-admin',
-      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_ip_address => $platform::haproxy::params::private_ip_address,
       public_port       => $port + 1,
       private_port      => $port,
     }
@@ -50,12 +50,12 @@ class platform::smapi::haproxy
 
 class platform::smapi::common
   inherits ::platform::smapi::params {
-  if ($::platform::params::init_keystone) {
+  if ($platform::params::init_keystone) {
       include ::smapi::keystone::auth
   }
 
   include ::platform::params
-  $bind_host_name = $::platform::params::hostname
+  $bind_host_name = $platform::params::hostname
   file { '/etc/sm-api/sm-api.conf':
     ensure  => 'present',
     content => template('platform/sm-api.conf.erb'),

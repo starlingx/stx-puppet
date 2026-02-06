@@ -247,8 +247,8 @@ class platform::ptpinstance::params {
 
 class platform::ptpinstance::ptp_directories {
   include ::platform::ptpinstance::params
-  $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
-  $ptp_options_dir = $::platform::ptpinstance::params::ptp_options_dir
+  $ptp_conf_dir = $platform::ptpinstance::params::ptp_conf_dir
+  $ptp_options_dir = $platform::ptpinstance::params::ptp_options_dir
 
   file { "${ptp_conf_dir}/ptpinstance":
     ensure => directory,
@@ -266,8 +266,8 @@ class platform::ptpinstance::nic_clock (
   $nic_clock_config_extended = {},
 ) {
   include ::platform::ptpinstance::params
-  $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
-  $ptp_options_dir = $::platform::ptpinstance::params::ptp_options_dir
+  $ptp_conf_dir = $platform::ptpinstance::params::ptp_conf_dir
+  $ptp_options_dir = $platform::ptpinstance::params::ptp_options_dir
 
   require ::platform::ptpinstance::nic_clock::nic_reset
   require ::platform::ptpinstance::ptp_directories
@@ -299,7 +299,7 @@ class platform::ptpinstance::nic_clock::nic_reset (
   $nic_clock_config = $platform::ptpinstance::nic_clock::nic_clock_config,
   $nic_clock_enabled = $platform::ptpinstance::nic_clock::nic_clock_enabled
 ) {
-  $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
+  $ptp_conf_dir = $platform::ptpinstance::params::ptp_conf_dir
 
   if $nic_clock_enabled and find_file("${ptp_conf_dir}/ptpinstance/clock-conf.conf") {
     $clock_conf_values = read_clock_conf("${ptp_conf_dir}/ptpinstance/clock-conf.conf")
@@ -323,8 +323,8 @@ class platform::ptpinstance::gnss_monitor (
   $monitoring_enabled = false,
 ) {
   include ::platform::ptpinstance::params
-  $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
-  $ptp_options_dir = $::platform::ptpinstance::params::ptp_options_dir
+  $ptp_conf_dir = $platform::ptpinstance::params::ptp_conf_dir
+  $ptp_options_dir = $platform::ptpinstance::params::ptp_options_dir
 
   require ::platform::ptpinstance::ptp_directories
 
@@ -446,12 +446,12 @@ class platform::ptpinstance (
   $config = []
 ) {
   include ::platform::ptpinstance::params
-  $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
-  $ptp_options_dir = $::platform::ptpinstance::params::ptp_options_dir
+  $ptp_conf_dir = $platform::ptpinstance::params::ptp_conf_dir
+  $ptp_options_dir = $platform::ptpinstance::params::ptp_options_dir
 
   include  ::platform::ptpinstance::gnss_monitor
-  $monitoring_config = $::platform::ptpinstance::gnss_monitor::monitoring_config
-  $monitoring_enabled = $::platform::ptpinstance::gnss_monitor::monitoring_enabled
+  $monitoring_config = $platform::ptpinstance::gnss_monitor::monitoring_config
+  $monitoring_enabled = $platform::ptpinstance::gnss_monitor::monitoring_enabled
 
   require ::platform::ptpinstance::nic_clock
   $nic_clock_config_extended = $platform::ptpinstance::nic_clock::nic_clock_config_extended
@@ -615,7 +615,7 @@ class platform::ptpinstance::gnss_monitor_read_devices {
   # gpsd_monitored_devices: list, read DEVICES=".." from
   # ptp_options_dir/ptpinstance/gnss-monitor-ptp
   include ::platform::ptpinstance::params
-  $ptp_options_dir = $::platform::ptpinstance::params::ptp_options_dir
+  $ptp_options_dir = $platform::ptpinstance::params::ptp_options_dir
   $file_path = "${ptp_options_dir}/ptpinstance/gnss-monitor-ptp"
   if find_file($file_path) {
     $file_content = file($file_path)
@@ -634,7 +634,7 @@ class platform::ptpinstance::runtime {
   -> class { 'platform::ptpinstance::gnss_monitor': }
   -> class { 'platform::ptpinstance': runtime => true,
               previous_gpsd_monitored_devices =>
-              $::platform::ptpinstance::gnss_monitor_read_devices::gpsd_monitored_devices
+              $platform::ptpinstance::gnss_monitor_read_devices::gpsd_monitored_devices
   }
   -> exec { 'Ensure collectd is restarted':
     command => '/usr/local/sbin/pmon-restart collectd'

@@ -1,14 +1,13 @@
 class platform::etcd::params (
   $bind_address = '0.0.0.0',
   $bind_address_version = 4,
-  $port = 2379,
-  $node = 'controller',
-  $etcd_version = undef,
+  $port    = 2379,
+  $node   = 'controller',
 )
 {
   include ::platform::params
 
-  $sw_version = $::platform::params::software_version
+  $sw_version = $platform::params::software_version
   $etcd_basedir = '/opt/etcd'
   $etcd_dir = "${etcd_basedir}/db"
 
@@ -16,41 +15,11 @@ class platform::etcd::params (
   # /etc/etcd/etcd-server.crt. The CRT contains x509 certificate
   # subjectAltName with: cluster_floating_address (either IPv4 or IPv6),
   # and IPv4 loopback.
-  if $bind_address_version == $::platform::params::ipv6 {
+  if $bind_address_version == $platform::params::ipv6 {
     $client_url = "https://[${bind_address}]:${port},https://127.0.0.1:${port}"
   }
   else {
     $client_url = "https://${bind_address}:${port},https://127.0.0.1:${port}"
-  }
-}
-
-class platform::etcd::symlinks {
-  include ::platform::etcd::params
-
-  # List etcd binary versions in natural sort order, get minimum value.
-  # Getting this fall-back for paranoia reasons.
-  $etcd_version = $::platform::etcd::params::etcd_version
-  $etcd_min_version = strip(
-    generate('/bin/bash', '-c', '/bin/ls -v /usr/local/etcd | /bin/head -1')
-  )
-
-  if $etcd_version == undef {
-    notice("Falling back to etcd_version ${etcd_min_version} min installed version")
-    $version = $etcd_min_version.strip
-  } else {
-    $version = $etcd_version
-  }
-
-  notice("setting stage0 symlink, etcd_version is ${version}")
-  file { '/var/lib/etcd':
-      ensure => 'directory',
-      owner  => 'root',
-      group  => 'root',
-      mode   => '0755',
-  }
-  -> file { '/var/lib/etcd/stage0':
-    ensure => link,
-    target => "/usr/local/etcd/${version}/stage0",
   }
 }
 
@@ -61,12 +30,9 @@ class platform::etcd::setup {
   include ::platform::params
   include ::platform::k8splatform::params
 
-  # Update etcd symlink if needed.
-  require platform::etcd::symlinks
-
-  if $::platform::params::system_type == 'All-in-one' and
-    $::platform::params::distributed_cloud_role != 'systemcontroller' {
-    $etcd_max_procs = $::platform::params::eng_workers
+  if $platform::params::system_type == 'All-in-one' and
+    $platform::params::distributed_cloud_role != 'systemcontroller' {
+    $etcd_max_procs = $platform::params::eng_workers
   } else {
     $etcd_max_procs = '$(nproc)'
   }
@@ -153,7 +119,7 @@ class platform::etcd::datadir
 
   Class['::platform::drbd::etcd'] -> Class[$name]
 
-  if $::platform::params::init_database {
+  if $platform::params::init_database {
     file { $etcd_dir:
         ensure => 'directory',
         owner  => 'root',

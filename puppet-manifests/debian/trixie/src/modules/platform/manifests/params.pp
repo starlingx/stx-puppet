@@ -56,8 +56,8 @@ class platform::params (
   $deny_ssh_group_name = 'denyssh'
   $deny_ssh_group_id = '10000'
 
-  $phys_core_count = Integer($::physical_core_count)
-  $plat_res_mem = Integer($::platform_res_mem)
+  $phys_core_count = Integer($physical_core_count)
+  $plat_res_mem = Integer($platform_res_mem)
 
   # Engineering parameters common to openstack services:
 
@@ -97,7 +97,7 @@ class platform::params (
         $eng_workers = $platform_cpu_count
       }
     } else {
-      if $system_mode == 'simplex' or ($phys_core_count <= 8 and $plat_res_mem < 14500) or str2bool($::is_virtual) {
+      if $system_mode == 'simplex' or ($phys_core_count <= 8 and $plat_res_mem < 14500) or str2bool($is_virtual) {
         $eng_workers = $platform_default_min_cpu_count
       } else {
         $eng_workers = $platform_default_min_cpu_count + 1
@@ -116,7 +116,7 @@ class platform::params (
 class platform::params::config_oidc_role_binding::runtime
 {
   include ::platform::params
-  $oidc_role_binding = $::platform::params::oidc_role_binding
+  $oidc_role_binding = $platform::params::oidc_role_binding
   file { '/etc/platform/.rolebindings.conf':
     ensure  => present,
     owner   => 'root',

@@ -538,10 +538,10 @@ class platform::network::update_platform_nfs_ip_references (
   include ::platform::network::mgmt::params
   include ::platform::upgrade::params
 
-  $upgrade_to_release = $::platform::upgrade::params::to_release
-  $plat_nfs_ip = $::platform::network::mgmt::params::platform_nfs_address
-  $plat_nfs_prefixlen = $::platform::network::mgmt::params::subnet_prefixlen
-  $plat_nfs_iface = $::platform::network::mgmt::params::interface_name
+  $upgrade_to_release = $platform::upgrade::params::to_release
+  $plat_nfs_ip = $platform::network::mgmt::params::platform_nfs_address
+  $plat_nfs_prefixlen = $platform::network::mgmt::params::subnet_prefixlen
+  $plat_nfs_iface = $platform::network::mgmt::params::interface_name
 
   # if plat_nfs_ip is empty, it means upgrade-activate was called again and there is nothing to do
   if $plat_nfs_ip and $plat_nfs_ip != '' {
@@ -752,7 +752,7 @@ define platform::network::interfaces::rate_limit::interface (
 
   if ($max_rx_rate != undef or $max_tx_rate != undef) {
     include platform::network::interfaces::rate_limit::load_driver
-    if $::personality == 'controller' {
+    if $personality == 'controller' {
         include platform::network::interfaces::rate_limit::bypass
     }
   } else {
@@ -1117,11 +1117,11 @@ class platform::network {
 
   include ::platform::network::apply
 
-  $management_interface = $::platform::network::mgmt::params::interface_name
+  $management_interface = $platform::network::mgmt::params::interface_name
 
   $testcmd = '/usr/local/bin/connectivity_test'
 
-  if $::personality != 'controller' {
+  if $personality != 'controller' {
     if $management_interface {
       exec { 'connectivity-test-management':
         command => "${testcmd} -t 70 -i ${management_interface} controller-platform-nfs; /bin/true",
@@ -1143,10 +1143,10 @@ class platform::network::runtime {
 class platform::network::routes::runtime {
   include ::platform::network::routes
   include ::platform::params
-  $dc_role = $::platform::params::distributed_cloud_role
+  $dc_role = $platform::params::distributed_cloud_role
 
   # in DC setups the firewall needs to be updated also in the controllers
-  if ($dc_role == 'systemcontroller' and $::personality == 'controller') {
+  if ($dc_role == 'systemcontroller' and $personality == 'controller') {
 
     # systemcontroller for the management network
     include ::platform::firewall::mgmt::runtime
@@ -1154,7 +1154,7 @@ class platform::network::routes::runtime {
     Exec['apply-network-config route setup']
     -> Class['::platform::firewall::mgmt::runtime']
 
-  } elsif ($dc_role == 'subcloud' and $::personality == 'controller') {
+  } elsif ($dc_role == 'subcloud' and $personality == 'controller') {
 
     # subcloud for the management and admin networks
     include ::platform::firewall::mgmt::runtime

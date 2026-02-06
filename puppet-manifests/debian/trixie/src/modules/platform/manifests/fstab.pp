@@ -1,7 +1,7 @@
 class platform::fstab {
   include ::platform::params
 
-  if $::personality != 'controller' {
+  if $personality != 'controller' {
     exec { 'Unmount NFS filesystems':
       command => 'umount -a -t nfs ; sleep 5 ;',
     }

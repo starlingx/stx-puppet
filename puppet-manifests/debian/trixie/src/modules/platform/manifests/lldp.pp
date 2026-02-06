@@ -9,9 +9,9 @@ class platform::lldp
   inherits ::platform::lldp::params {
   include ::platform::params
 
-  $hostname = $::platform::params::hostname
-  $system = $::platform::params::system_name
-  $version = $::platform::params::software_version
+  $hostname = $platform::params::hostname
+  $system = $platform::params::system_name
+  $version = $platform::params::software_version
   $lldpd_override_dir = '/etc/systemd/system/lldpd.service.d'
 
 

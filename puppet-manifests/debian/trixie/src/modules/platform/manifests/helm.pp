@@ -62,9 +62,9 @@ class platform::helm::repositories
 
   -> platform::helm::repository { $helm_repositories:
     repo_base  => $target_helm_repos_base_dir,
-    repo_port  => $::openstack::horizon::params::http_port,
-    create     => $::is_initial_config,
-    sw_version => $::platform::params::software_version,
+    repo_port  => $openstack::horizon::params::http_port,
+    create     => $is_initial_config,
+    sw_version => $platform::params::software_version,
   }
 
   -> exec { 'Updating info of available charts locally from chart repo':
@@ -98,7 +98,7 @@ class platform::helm
     require => User['www']
   }
 
-  if (str2bool($::is_initial_config) and $::personality == 'controller') {
+  if (str2bool($is_initial_config) and $personality == 'controller') {
     include ::platform::helm::repositories
 
     Class['::platform::kubernetes::gate']

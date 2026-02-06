@@ -53,7 +53,7 @@ class platform::logpermission {
     mode   => '0640',
   }
 
-  if $::personality == 'controller' {
+  if $personality == 'controller' {
     # Change ownership to root:root for specific log files
     file { '/var/log/postgresql/postgresql-17-main.log':
       ensure => 'file',

@@ -20,7 +20,7 @@ class platform::usm
   -> user { 'usm':
     ensure           => 'present',
     comment          => 'usm Daemons',
-    groups           => ['nobody', 'usm', $::platform::params::protected_group_name],
+    groups           => ['nobody', 'usm', $platform::params::protected_group_name],
     home             => '/var/lib/usm',
     password         => '!!',
     password_max_age => '-1',
@@ -78,8 +78,8 @@ class platform::usm::haproxy
   }
 
   # Configure rules for DC https enabled admin endpoint.
-  if ($::platform::params::distributed_cloud_role == 'systemcontroller' or
-      $::platform::params::distributed_cloud_role == 'subcloud') {
+  if ($platform::params::distributed_cloud_role == 'systemcontroller' or
+      $platform::params::distributed_cloud_role == 'subcloud') {
 
     $alt_admin_backend_name = 'alt-usm-restapi-admin-internal'
     platform::haproxy::alt_backend { 'usm-restapi-admin':
@@ -98,7 +98,7 @@ class platform::usm::haproxy
     platform::haproxy::proxy { 'usm-restapi-admin':
       https_ep_type     => 'admin',
       server_name       => 's-usm',
-      public_ip_address => $::platform::haproxy::params::private_dc_ip_address,
+      public_ip_address => $platform::haproxy::params::private_dc_ip_address,
       public_port       => $private_port + 1,
       private_port      => $private_port + 2,
       server_timeout    => $server_timeout,
@@ -114,8 +114,8 @@ class platform::usm::api (
 
   include ::usm::api
 
-  if ($::platform::usm::params::service_create and
-      $::platform::params::init_keystone) {
+  if ($platform::usm::params::service_create and
+      $platform::params::init_keystone) {
     include ::usm::keystone::auth
   }
 

@@ -1,14 +1,14 @@
 class platform::postgresql::base::params {
   include ::platform::params
 
-  if $::platform::params::system_type == 'All-in-one' and
-      $::platform::params::distributed_cloud_role != 'systemcontroller' {
+  if $platform::params::system_type == 'All-in-one' and
+      $platform::params::distributed_cloud_role != 'systemcontroller' {
     # Scale down AIO
-    $autovacuum_max_workers = min($::platform::params::eng_workers, 5)
-    $max_worker_processes = min($::platform::params::eng_workers, 8)
-    $max_parallel_workers = min($::platform::params::eng_workers, 8)
-    $max_parallel_maintenance_workers = min($::platform::params::eng_workers, 2)
-    $max_parallel_workers_per_gather = min($::platform::params::eng_workers, 2)
+    $autovacuum_max_workers = min($platform::params::eng_workers, 5)
+    $max_worker_processes = min($platform::params::eng_workers, 8)
+    $max_parallel_workers = min($platform::params::eng_workers, 8)
+    $max_parallel_maintenance_workers = min($platform::params::eng_workers, 2)
+    $max_parallel_workers_per_gather = min($platform::params::eng_workers, 2)
   } else {
     # Make autovacuum more aggressive
     $autovacuum_max_workers = 5
@@ -34,35 +34,35 @@ class platform::postgresql::params
   include ::platform::postgresql::base::params
   include ::platform::postgresql::custom::params
 
-  if $::platform::postgresql::custom::params::autovacuum_max_workers {
-    $autovacuum_max_workers = $::platform::postgresql::custom::params::autovacuum_max_workers
+  if $platform::postgresql::custom::params::autovacuum_max_workers {
+    $autovacuum_max_workers = $platform::postgresql::custom::params::autovacuum_max_workers
   }
   else {
-    $autovacuum_max_workers = $::platform::postgresql::base::params::autovacuum_max_workers
+    $autovacuum_max_workers = $platform::postgresql::base::params::autovacuum_max_workers
   }
-  if $::platform::postgresql::custom::params::max_worker_processes {
-    $max_worker_processes = $::platform::postgresql::custom::params::max_worker_processes
-  }
-  else {
-    $max_worker_processes = $::platform::postgresql::base::params::max_worker_processes
-  }
-  if $::platform::postgresql::custom::params::max_parallel_workers {
-    $max_parallel_workers = $::platform::postgresql::custom::params::max_parallel_workers
+  if $platform::postgresql::custom::params::max_worker_processes {
+    $max_worker_processes = $platform::postgresql::custom::params::max_worker_processes
   }
   else {
-    $max_parallel_workers = $::platform::postgresql::base::params::max_parallel_workers
+    $max_worker_processes = $platform::postgresql::base::params::max_worker_processes
   }
-  if $::platform::postgresql::custom::params::max_parallel_maintenance_workers {
-    $max_parallel_maintenance_workers = $::platform::postgresql::custom::params::max_parallel_maintenance_workers
-  }
-  else {
-    $max_parallel_maintenance_workers = $::platform::postgresql::base::params::max_parallel_maintenance_workers
-  }
-  if $::platform::postgresql::custom::params::max_parallel_workers_per_gather {
-    $max_parallel_workers_per_gather = $::platform::postgresql::custom::params::max_parallel_workers_per_gather
+  if $platform::postgresql::custom::params::max_parallel_workers {
+    $max_parallel_workers = $platform::postgresql::custom::params::max_parallel_workers
   }
   else {
-    $max_parallel_workers_per_gather = $::platform::postgresql::base::params::max_parallel_workers_per_gather
+    $max_parallel_workers = $platform::postgresql::base::params::max_parallel_workers
+  }
+  if $platform::postgresql::custom::params::max_parallel_maintenance_workers {
+    $max_parallel_maintenance_workers = $platform::postgresql::custom::params::max_parallel_maintenance_workers
+  }
+  else {
+    $max_parallel_maintenance_workers = $platform::postgresql::base::params::max_parallel_maintenance_workers
+  }
+  if $platform::postgresql::custom::params::max_parallel_workers_per_gather {
+    $max_parallel_workers_per_gather = $platform::postgresql::custom::params::max_parallel_workers_per_gather
+  }
+  else {
+    $max_parallel_workers_per_gather = $platform::postgresql::base::params::max_parallel_workers_per_gather
   }
 
   $root_dir = '/var/lib/postgresql'
@@ -76,7 +76,7 @@ class platform::postgresql::params
   $password = undef
 
   include ::platform::network::mgmt::params
-  if $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
+  if $platform::network::mgmt::params::subnet_version == $platform::params::ipv6 {
     $ip_mask_allow_all_users = '::0/0'
     $ip_mask_deny_postgres_user = '::0/128'
   } else {
@@ -94,7 +94,7 @@ class platform::postgresql::server
 
   # Set up TimeZone
   postgresql::server::config_entry { 'timezone':
-    value => $::platform::config::params::timezone,
+    value => $platform::config::params::timezone,
   }
 
   # Set up autovacuum
@@ -158,7 +158,7 @@ class platform::postgresql::server
 
   # Set up logging timezone
   postgresql::server::config_entry { 'log_timezone':
-    value => $::platform::config::params::timezone,
+    value => $platform::config::params::timezone,
   }
 
   # turn jit 'off' on Debian (it is on by default) since it negatively impacts performance
@@ -176,9 +176,9 @@ class platform::postgresql::server
   # Set large values for postgres in standard or system controller.
   # In AIO or virtual box, use reduced settings.
   #
-  if ((str2bool($::is_worker_subfunction) and
-        ($::platform::params::distributed_cloud_role !='systemcontroller')) or
-      (str2bool($::is_virtual))) {
+  if ((str2bool($is_worker_subfunction) and
+        ($platform::params::distributed_cloud_role !='systemcontroller')) or
+      (str2bool($is_virtual))) {
     # Non system controller AIO or virtual box
     # 700 connections, 80MB shared_buffers
     postgresql::server::config_entry { 'max_connections':
@@ -203,7 +203,7 @@ class platform::postgresql::server
 
     # Optimized I/O settings for SSD on system controller:
     # Lower random read costs (4 to 1.1) and increase parallel I/O operations (1 to 200)
-    if $::platform::params::distributed_cloud_role == 'systemcontroller' {
+    if $platform::params::distributed_cloud_role == 'systemcontroller' {
       postgresql::server::config_entry { 'random_page_cost':
         value => '1.1',
       }

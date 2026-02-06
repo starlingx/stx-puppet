@@ -19,7 +19,7 @@ class platform::dcmanager::params (
 
   include ::platform::network::mgmt::params
 
-  $system_mode = $::platform::params::system_mode
+  $system_mode = $platform::params::system_mode
 
   # FQDN can be used after:
   # - after the bootstrap for any installation
@@ -28,12 +28,12 @@ class platform::dcmanager::params (
   # - just AIO-SX can use FQDN during the an upgrade. For other installs
   #     the active controller in older release can resolve the .internal FQDN
   #     when the mate controller is updated to N+1 version
-  if (!str2bool($::is_upgrade_do_not_use_fqdn) or $system_mode == 'simplex') {
-    if (str2bool($::is_bootstrap_completed)) {
+  if (!str2bool($is_upgrade_do_not_use_fqdn) or $system_mode == 'simplex') {
+    if (str2bool($is_bootstrap_completed)) {
       $fqdn_ready = true
     } else {
-      if ($::platform::network::mgmt::params::fqdn_ready != undef) {
-        $fqdn_ready = $::platform::network::mgmt::params::fqdn_ready
+      if ($platform::network::mgmt::params::fqdn_ready != undef) {
+        $fqdn_ready = $platform::network::mgmt::params::fqdn_ready
       }
       else {
         $fqdn_ready = false
@@ -45,51 +45,51 @@ class platform::dcmanager::params (
   }
 
   if ($fqdn_ready) {
-    $api_host = $::platform::params::controller_fqdn
+    $api_host = $platform::params::controller_fqdn
   } else {
-    $api_host = $::platform::network::mgmt::params::controller_address
+    $api_host = $platform::network::mgmt::params::controller_address
   }
 }
 
 
 class platform::dcmanager
   inherits ::platform::dcmanager::params {
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+  if $platform::params::distributed_cloud_role =='systemcontroller' {
     include ::platform::params
     include ::platform::amqp::params
     include ::platform::network::mgmt::params
 
-    if $::platform::params::init_database {
+    if $platform::params::init_database {
       include ::dcmanager::db::postgresql
     }
 
-    $system_mode = $::platform::params::system_mode
+    $system_mode = $platform::params::system_mode
 
     # If not defined, worker values can vary from 4 to 8 depending
     # on the number of physical cores and memory available
-    if $::platform::dcmanager::params::state_workers == undef {
-      $state_workers_value = min($::platform::params::eng_workers_by_2, 8)
+    if $platform::dcmanager::params::state_workers == undef {
+      $state_workers_value = min($platform::params::eng_workers_by_2, 8)
     } else {
-      $state_workers_value = $::platform::dcmanager::params::state_workers
+      $state_workers_value = $platform::dcmanager::params::state_workers
     }
 
-    if $::platform::dcmanager::params::audit_worker_workers == undef {
-      $audit_worker_workers_value = min($::platform::params::eng_workers_by_2, 8)
+    if $platform::dcmanager::params::audit_worker_workers == undef {
+      $audit_worker_workers_value = min($platform::params::eng_workers_by_2, 8)
     } else {
-      $audit_worker_workers_value = $::platform::dcmanager::params::audit_worker_workers
+      $audit_worker_workers_value = $platform::dcmanager::params::audit_worker_workers
     }
 
-    if $::platform::dcmanager::params::orch_worker_workers == undef {
-      $orch_worker_workers_value = min($::platform::params::eng_workers_by_2, 4)
+    if $platform::dcmanager::params::orch_worker_workers == undef {
+      $orch_worker_workers_value = min($platform::params::eng_workers_by_2, 4)
     } else {
-      $orch_worker_workers_value = $::platform::dcmanager::params::orch_worker_workers
+      $orch_worker_workers_value = $platform::dcmanager::params::orch_worker_workers
     }
 
     class { '::dcmanager':
-      rabbit_host          => $::platform::dcmanager::params::rabbit_host,
-      rabbit_port          => $::platform::amqp::params::port,
-      rabbit_userid        => $::platform::amqp::params::auth_user,
-      rabbit_password      => $::platform::amqp::params::auth_password,
+      rabbit_host          => $platform::dcmanager::params::rabbit_host,
+      rabbit_port          => $platform::amqp::params::port,
+      rabbit_userid        => $platform::amqp::params::auth_user,
+      rabbit_password      => $platform::amqp::params::auth_password,
       state_workers        => $state_workers_value,
       orch_worker_workers  => $orch_worker_workers_value,
       audit_worker_workers => $audit_worker_workers_value,
@@ -220,7 +220,7 @@ class platform::dcmanager::haproxy
   include ::platform::params
   include ::platform::haproxy::params
 
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+  if $platform::params::distributed_cloud_role =='systemcontroller' {
     platform::haproxy::proxy { 'dcmanager-restapi':
       server_name  => 's-dcmanager',
       public_port  => $api_port,
@@ -229,11 +229,11 @@ class platform::dcmanager::haproxy
   }
 
   # Configure rules for https enabled admin endpoint.
-  if $::platform::params::distributed_cloud_role == 'systemcontroller' {
+  if $platform::params::distributed_cloud_role == 'systemcontroller' {
     platform::haproxy::proxy { 'dcmanager-restapi-admin':
       https_ep_type     => 'admin',
       server_name       => 's-dcmanager',
-      public_ip_address => $::platform::haproxy::params::private_ip_address,
+      public_ip_address => $platform::haproxy::params::private_ip_address,
       public_port       => $api_port + 1,
       private_port      => $api_port,
     }
@@ -241,22 +241,22 @@ class platform::dcmanager::haproxy
 }
 
 class platform::dcmanager::manager {
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+  if $platform::params::distributed_cloud_role =='systemcontroller' {
     include ::dcmanager::manager
   }
 }
 
 class platform::dcmanager::api
   inherits ::platform::dcmanager::params {
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
-    if ($::platform::dcmanager::params::service_create and
-        $::platform::params::init_keystone) {
+  if $platform::params::distributed_cloud_role =='systemcontroller' {
+    if ($platform::dcmanager::params::service_create and
+        $platform::params::init_keystone) {
       include ::dcmanager::keystone::auth
     }
 
     class { '::dcmanager::api':
       bind_host => $api_host,
-      sync_db   => $::platform::params::init_database,
+      sync_db   => $platform::params::init_database,
     }
 
 
@@ -265,11 +265,11 @@ class platform::dcmanager::api
 }
 
 class platform::dcmanager::fs::runtime {
-  if $::platform::params::distributed_cloud_role == 'systemcontroller' {
+  if $platform::params::distributed_cloud_role == 'systemcontroller' {
     include ::platform::dcmanager::params
-    $iso_base_dir_source = $::platform::dcmanager::params::iso_base_dir_source
-    $iso_base_dir_target = $::platform::dcmanager::params::iso_base_dir_target
-    $deploy_base_dir = $::platform::dcmanager::params::deploy_base_dir
+    $iso_base_dir_source = $platform::dcmanager::params::iso_base_dir_source
+    $iso_base_dir_target = $platform::dcmanager::params::iso_base_dir_target
+    $deploy_base_dir = $platform::dcmanager::params::deploy_base_dir
 
     file {$iso_base_dir_source:
       ensure => directory,
@@ -294,12 +294,12 @@ class platform::dcmanager::fs::runtime {
 }
 
 class platform::dcmanager::runtime {
-  if $::platform::params::distributed_cloud_role == 'systemcontroller' {
+  if $platform::params::distributed_cloud_role == 'systemcontroller' {
     include ::platform::amqp::params
     include ::dcmanager
     include ::dcmanager::db::postgresql
     class { '::dcmanager::api':
-      sync_db   => str2bool($::is_standalone_controller),
+      sync_db   => str2bool($is_standalone_controller),
     }
   }
 }

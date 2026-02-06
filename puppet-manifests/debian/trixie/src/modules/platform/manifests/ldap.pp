@@ -125,12 +125,12 @@ class platform::ldap::client (
   file { "${::platform::params::sysadmin_user_dir}/.ldaprc":
       ensure  => 'present',
       replace => true,
-      owner   => $::platform::params::sysadmin_user_name,
-      group   => $::platform::params::protected_group_name,
+      owner   => $platform::params::sysadmin_user_name,
+      group   => $platform::params::protected_group_name,
       content => template('platform/ldap.conf.erb'),
   }
 
-  if $::personality == 'controller' {
+  if $personality == 'controller' {
     file { '/etc/ldapscripts/ldapscripts.conf':
       ensure  => 'present',
       replace => true,

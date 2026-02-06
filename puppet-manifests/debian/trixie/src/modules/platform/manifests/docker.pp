@@ -33,13 +33,13 @@ class platform::docker::params (
   include ::platform::network::cluster_host::params
   include ::platform::kubernetes::params
 
-  if $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
+  if $platform::network::mgmt::params::subnet_version == $platform::params::ipv6 {
     $localhost_address = '::1'
   } else {
     $localhost_address = '127.0.0.1'
   }
 
-  if $::platform::params::system_mode == 'simplex' {
+  if $platform::params::system_mode == 'simplex' {
     $no_proxy_unfiltered_list = @("EOL"/L)
       localhost,${localhost_address},registry.local,\
       ${platform::network::oam::params::gateway_address},\
@@ -86,7 +86,7 @@ class platform::docker::proxyconfig
 
   # Docker on Debian doesn't work with the NO_PROXY environment variable if it
   # has IPv6 addresses with square brackets, thus remove the square brackets
-  $no_proxy = regsubst($::platform::docker::params::no_proxy_complete_list, '\\[|\\]', '', 'G')
+  $no_proxy = regsubst($platform::docker::params::no_proxy_complete_list, '\\[|\\]', '', 'G')
 
   if $http_proxy or $https_proxy {
     file { '/etc/systemd/system/docker.service.d':
@@ -131,7 +131,7 @@ class platform::docker::proxyconfig
 
 class platform::docker::cpusharesconfig
 {
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+  if $platform::params::distributed_cloud_role =='systemcontroller' {
     # Define systemd DropIn override to set default CPUShares and
     # remove CPUQuota.
     $disable_cpu = @("DISABLECPU"/L)
@@ -200,7 +200,7 @@ class platform::docker::controller
 
 class platform::docker::worker
 {
-  if $::personality != 'controller' {
+  if $personality != 'controller' {
     include ::platform::docker::install
     include ::platform::docker::config
   }
@@ -208,7 +208,7 @@ class platform::docker::worker
 
 class platform::docker::storage
 {
-  if $::personality != 'controller' {
+  if $personality != 'controller' {
     include ::platform::docker::install
     include ::platform::docker::config
   }
@@ -266,9 +266,9 @@ class platform::docker::daemonconfig
   include ::platform::docker::params
   include ::platform::dockerdistribution::registries
 
-  $insecure_registries = $::platform::dockerdistribution::registries::insecure_registries
-  $max_concurrent_uploads = $::platform::docker::params::max_concurrent_uploads
-  $max_concurrent_downloads = $::platform::docker::params::max_concurrent_downloads
+  $insecure_registries = $platform::dockerdistribution::registries::insecure_registries
+  $max_concurrent_uploads = $platform::docker::params::max_concurrent_uploads
+  $max_concurrent_downloads = $platform::docker::params::max_concurrent_downloads
 
   file { '/etc/docker':
     ensure => 'directory',
@@ -291,7 +291,7 @@ class platform::docker::runtime
   include ::platform::docker::proxyconfig
   include ::platform::containerd::proxyconfig
 
-  if str2bool($::is_initial_config) {
+  if str2bool($is_initial_config) {
     $containerd_restart_cmd = 'systemctl restart containerd'
     $dockerd_restart_cmd = 'systemctl restart docker'
   }

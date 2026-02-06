@@ -18,11 +18,11 @@ define platform::firewall::rule (
 
   if $l3proto == undef {
     # if not provided use the primary OAM address subnet_version
-    $ip_version = $::platform::network::oam::params::subnet_version
-  } elsif $l3proto == $::platform::params::ipv4 {
-    $ip_version = $::platform::params::ipv4
-  } elsif $l3proto == $::platform::params::ipv6 {
-    $ip_version = $::platform::params::ipv6
+    $ip_version = $platform::network::oam::params::subnet_version
+  } elsif $l3proto == $platform::params::ipv4 {
+    $ip_version = $platform::params::ipv4
+  } elsif $l3proto == $platform::params::ipv6 {
+    $ip_version = $platform::params::ipv6
   }
 
   $provider = $ip_version ? {
@@ -182,9 +182,9 @@ class platform::firewall::calico::oam (
 ) {
   if $config != {} {
     $apply_script = 'calico_firewall_apply_policy.sh'
-    if $::personality == 'worker' {
+    if $personality == 'worker' {
       $cfgf = '/etc/kubernetes/kubelet.conf'
-    } elsif $::personality == 'controller' {
+    } elsif $personality == 'controller' {
       $cfgf = '/etc/kubernetes/admin.conf'
     }
     $yaml_config = hash2yaml($config)
@@ -210,9 +210,9 @@ class platform::firewall::calico::mgmt (
 ) {
   if $config != {} {
     $apply_script = 'calico_firewall_apply_policy.sh'
-    if $::personality == 'worker' {
+    if $personality == 'worker' {
       $cfgf = '/etc/kubernetes/kubelet.conf'
-    } elsif $::personality == 'controller' {
+    } elsif $personality == 'controller' {
       $cfgf = '/etc/kubernetes/admin.conf'
     }
     $yaml_config = hash2yaml($config)
@@ -238,9 +238,9 @@ class platform::firewall::calico::cluster_host  (
 ) {
   if $config != {} {
     $apply_script = 'calico_firewall_apply_policy.sh'
-    if $::personality == 'worker' {
+    if $personality == 'worker' {
       $cfgf = '/etc/kubernetes/kubelet.conf'
-    } elsif $::personality == 'controller' {
+    } elsif $personality == 'controller' {
       $cfgf = '/etc/kubernetes/admin.conf'
     }
     $yaml_config = hash2yaml($config)
@@ -266,9 +266,9 @@ class platform::firewall::calico::pxeboot  (
 ) {
   if $config != {} {
     $apply_script = 'calico_firewall_apply_policy.sh'
-    if $::personality == 'worker' {
+    if $personality == 'worker' {
       $cfgf = '/etc/kubernetes/kubelet.conf'
-    } elsif $::personality == 'controller' {
+    } elsif $personality == 'controller' {
       $cfgf = '/etc/kubernetes/admin.conf'
     }
     $yaml_config = hash2yaml($config)
@@ -294,9 +294,9 @@ class platform::firewall::calico::storage  (
 ) {
   if $config != {} {
     $apply_script = 'calico_firewall_apply_policy.sh'
-    if $::personality == 'worker' {
+    if $personality == 'worker' {
       $cfgf = '/etc/kubernetes/kubelet.conf'
-    } elsif $::personality == 'controller' {
+    } elsif $personality == 'controller' {
       $cfgf = '/etc/kubernetes/admin.conf'
     }
     $yaml_config = hash2yaml($config)
@@ -322,9 +322,9 @@ class platform::firewall::calico::admin  (
 ) {
   if $config != {} {
     $apply_script = 'calico_firewall_apply_policy.sh'
-    if $::personality == 'worker' {
+    if $personality == 'worker' {
       $cfgf = '/etc/kubernetes/kubelet.conf'
-    } elsif $::personality == 'controller' {
+    } elsif $personality == 'controller' {
       $cfgf = '/etc/kubernetes/admin.conf'
     }
     $yaml_config = hash2yaml($config)
@@ -349,9 +349,9 @@ class platform::firewall::calico::hostendpoint (
   $config = {}
 ) {
   $active_heps = keys($config)
-  if $::personality == 'worker' {
+  if $personality == 'worker' {
     $cfgf = '/etc/kubernetes/kubelet.conf'
-  } elsif $::personality == 'controller' {
+  } elsif $personality == 'controller' {
     $cfgf = '/etc/kubernetes/admin.conf'
   }
 
@@ -377,16 +377,16 @@ class platform::firewall::calico::hostendpoint (
   }
 
   # storage nodes do not run k8s
-  if $::personality != 'storage' {
+  if $personality != 'storage' {
 
     $remove_script = 'remove_unused_calico_hostendpoints.sh'
     $file_hep_active = '/tmp/hep_active.txt'
     exec { "get active hostendepoints: ${active_heps}":
       command => "echo ${active_heps} > ${file_hep_active}",
     }
-    -> exec { "remove unused hostendepoints ${::hostname} ${file_hep_active}":
+    -> exec { "remove unused hostendepoints ${facts['networking']['hostname']} ${file_hep_active}":
       path    => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
-      command => "${remove_script} ${::hostname} ${file_hep_active} ${cfgf}",
+      command => "${remove_script} ${facts['networking']['hostname']} ${file_hep_active} ${cfgf}",
       onlyif  => "test -f ${file_hep_active} && test ! -f /etc/platform/.platform_firewall_config_required"
     }
   }
@@ -396,9 +396,9 @@ define platform::firewall::calico::gnset (
   String $gns_name,
   Hash   $config = {}
 ) {
-  if $::personality == 'worker' {
+  if $personality == 'worker' {
     $cfgf = '/etc/kubernetes/kubelet.conf'
-  } elsif $::personality == 'controller' {
+  } elsif $personality == 'controller' {
     $cfgf = '/etc/kubernetes/admin.conf'
   } else {
     $cfgf = undef
@@ -461,14 +461,14 @@ class platform::firewall::calico::is_config_available {
   include ::platform::firewall::calico::storage
   include ::platform::firewall::calico::admin
   include ::platform::firewall::calico::hostendpoint
-  if $::personality != 'storage' {
-    if ($::platform::firewall::calico::oam::config == {}
-          and $::platform::firewall::calico::mgmt::config == {}
-          and $::platform::firewall::calico::cluster_host::config == {}
-          and $::platform::firewall::calico::pxeboot::config == {}
-          and $::platform::firewall::calico::storage::config == {}
-          and $::platform::firewall::calico::admin::config == {}
-          and $::platform::firewall::calico::hostendpoint::config == {}) {
+  if $personality != 'storage' {
+    if ($platform::firewall::calico::oam::config == {}
+          and $platform::firewall::calico::mgmt::config == {}
+          and $platform::firewall::calico::cluster_host::config == {}
+          and $platform::firewall::calico::pxeboot::config == {}
+          and $platform::firewall::calico::storage::config == {}
+          and $platform::firewall::calico::admin::config == {}
+          and $platform::firewall::calico::hostendpoint::config == {}) {
       exec { 'request platform::firewall runtime execution':
         path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
         command   => 'touch /etc/platform/.platform_firewall_config_required',
@@ -515,9 +515,9 @@ class platform::firewall::dc::nat::ldap::rule (
     $ensure = 'absent'
   }
 
-  $destination = $::platform::ldap::params::ldapserver_host
-  $mgmt_subnet = $::platform::network::mgmt::params::subnet_network
-  $mgmt_prefixlen = $::platform::network::mgmt::params::subnet_prefixlen
+  $destination = $platform::ldap::params::ldapserver_host
+  $mgmt_subnet = $platform::network::mgmt::params::subnet_network
+  $mgmt_prefixlen = $platform::network::mgmt::params::subnet_prefixlen
   $s_mgmt_subnet = "${mgmt_subnet}/${mgmt_prefixlen}"
 
   # SNAT rule is used to get worker / storage LDAP traffic to
@@ -541,27 +541,27 @@ class platform::firewall::dc::nat::ldap (
   $enabled = true,
 ) {
   include ::platform::params
-  $system_mode  = $::platform::params::system_mode
-  $dc_role      = $::platform::params::distributed_cloud_role
+  $system_mode  = $platform::params::system_mode
+  $dc_role      = $platform::params::distributed_cloud_role
 
   if ($system_mode != 'simplex' and $dc_role == 'subcloud') {
     include ::platform::network::admin::params
     include ::platform::network::mgmt::params
 
-    $controller_0_hostname = $::platform::params::controller_0_hostname
-    $controller_1_hostname = $::platform::params::controller_1_hostname
-    $admin_interface = $::platform::network::admin::params::interface_name
-    $mgmt_interface = $::platform::network::mgmt::params::interface_name
+    $controller_0_hostname = $platform::params::controller_0_hostname
+    $controller_1_hostname = $platform::params::controller_1_hostname
+    $admin_interface = $platform::network::admin::params::interface_name
+    $mgmt_interface = $platform::network::mgmt::params::interface_name
 
-    $hostname = $::platform::params::hostname
-    case $::hostname {
+    $hostname = $platform::params::hostname
+    case $facts['networking']['hostname'] {
       $controller_0_hostname: {
-        $mgmt_unit_ip  = $::platform::network::mgmt::params::controller0_address
-        $admin_unit_ip = $::platform::network::admin::params::controller0_address
+        $mgmt_unit_ip  = $platform::network::mgmt::params::controller0_address
+        $admin_unit_ip = $platform::network::admin::params::controller0_address
       }
       $controller_1_hostname: {
-        $mgmt_unit_ip  = $::platform::network::mgmt::params::controller1_address
-        $admin_unit_ip = $::platform::network::admin::params::controller1_address
+        $mgmt_unit_ip  = $platform::network::mgmt::params::controller1_address
+        $admin_unit_ip = $platform::network::admin::params::controller1_address
       }
       default: {
         fail("Hostname must be either ${controller_0_hostname} or ${controller_1_hostname}")
@@ -591,7 +591,7 @@ class platform::firewall::dc::nat::ldap::runtime {
 }
 
 class platform::firewall::rbac::worker {
-  if $::personality == 'controller' {
+  if $personality == 'controller' {
     $k8cfg = '--kubeconfig=/etc/kubernetes/admin.conf'
     $k8api = 'rbac.authorization.k8s.io'
     $reconfig = '/etc/platform/.platform_firewall_config_required'

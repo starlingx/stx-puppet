@@ -35,20 +35,20 @@ class openstack::keystone (
   # In the case of a Distributed Cloud deployment, apply the Keystone
   # controller configuration for each SubCloud, since Keystone is also
   # a localized service.
-  if (!$::platform::params::region_config or
-      $::platform::params::distributed_cloud_role == 'subcloud')  {
+  if (!$platform::params::region_config or
+      $platform::params::distributed_cloud_role == 'subcloud')  {
     include ::platform::amqp::params
     include ::platform::network::mgmt::params
     include ::platform::drbd::platform::params
 
     $keystone_key_repo_path = "${::platform::drbd::platform::params::mountpoint}/keystone"
-    if $::platform::params::distributed_cloud_role =='systemcontroller' {
-      $eng_workers = min($::platform::params::eng_workers, 10)
+    if $platform::params::distributed_cloud_role =='systemcontroller' {
+      $eng_workers = min($platform::params::eng_workers, 10)
     } else {
-      $eng_workers = $::platform::params::eng_workers
+      $eng_workers = $platform::params::eng_workers
     }
     $enabled = false
-    $bind_host = $::platform::network::mgmt::params::controller_address_url
+    $bind_host = $platform::network::mgmt::params::controller_address_url
 
     Class[$name] -> Class['::platform::client']
 
@@ -90,7 +90,7 @@ class openstack::keystone (
       enabled               => $enabled,
       enable_fernet_setup   => false,
       fernet_key_repository => "${keystone_key_repo_path}/fernet-keys",
-      default_transport_url => $::platform::amqp::params::transport_url,
+      default_transport_url => $platform::amqp::params::transport_url,
       service_name          => $service_name,
       token_expiration      => $token_expiration,
       notification_driver   => 'messagingv2',
@@ -129,7 +129,7 @@ class openstack::keystone (
     # Keystone users can only be added to the SQL backend (write support for
     # the LDAP backend has been removed). We can therefore set password rules
     # irrespective of the backend
-    if ! str2bool($::is_restore_in_progress) {
+    if ! str2bool($is_restore_in_progress) {
       # If the Restore is in progress then we need to apply the Keystone
       # Password rules as a runtime manifest, as the passwords in the hiera records
       # records may not be rule-compliant if this system was upgraded from R4
@@ -139,7 +139,7 @@ class openstack::keystone (
 
     include ::keystone::ldap
 
-    if $::platform::params::distributed_cloud_role == undef {
+    if $platform::params::distributed_cloud_role == undef {
       # Set up cron job that will rotate fernet keys. This is done every month on
       # the first day of the month at 00:25 by default. The cron job runs on both
       # controllers, but the script will only take action on the active controller.
@@ -175,12 +175,12 @@ class openstack::keystone::haproxy
   }
 
   # Configure rules for DC https enabled admin endpoint.
-  if ($::platform::params::distributed_cloud_role == 'systemcontroller' or
-      $::platform::params::distributed_cloud_role == 'subcloud') {
+  if ($platform::params::distributed_cloud_role == 'systemcontroller' or
+      $platform::params::distributed_cloud_role == 'subcloud') {
     platform::haproxy::proxy { 'keystone-restapi-admin':
       https_ep_type     => 'admin',
       server_name       => 's-keystone',
-      public_ip_address => $::platform::haproxy::params::private_dc_ip_address,
+      public_ip_address => $platform::haproxy::params::private_dc_ip_address,
       public_port       => $api_port + 1,
       private_port      => $api_port,
       retry_on          => 'conn-failure 0rtt-rejected',
@@ -211,15 +211,15 @@ class openstack::keystone::api
 
   include ::platform::params
 
-  if ($::openstack::keystone::params::service_create and
-      $::platform::params::init_keystone) {
+  if ($openstack::keystone::params::service_create and
+      $platform::params::init_keystone) {
     include ::keystone::endpoint
     include ::openstack::keystone::endpointgroup
 
     # Cleanup the endpoints created at bootstrap if they are not in
     # the subcloud region.
-    if ($::platform::params::distributed_cloud_role == 'subcloud' and
-        $::platform::params::region_2_name != 'RegionOne') {
+    if ($platform::params::distributed_cloud_role == 'subcloud' and
+        $platform::params::region_2_name != 'RegionOne') {
       $interfaces = [ 'public', 'internal', 'admin' ]
       Keystone_endpoint<||> -> Class['::platform::client']
       # clean up the bootstrap endpoints
@@ -245,18 +245,18 @@ class openstack::keystone::endpointgroup
   include ::platform::params
   include ::platform::client
 
-  # $::platform::params::init_keystone should be checked by the caller.
+  # $platform::params::init_keystone should be checked by the caller.
   # as this class should be only invoked when initializing keystone.
 
-  if ($::platform::params::distributed_cloud_role =='systemcontroller') {
-    $reference_region = $::openstack::keystone::params::region_name
-    $system_controller_region = $::openstack::keystone::params::system_controller_region
-    $os_username = $::platform::client::params::admin_username
-    $identity_region = $::platform::client::params::identity_region
-    $keystone_region = $::platform::client::params::keystone_identity_region
-    $keyring_file = $::platform::client::credentials::params::keyring_file
-    $auth_url = $::platform::client::params::identity_auth_url
-    $os_project_name = $::platform::client::params::admin_project_name
+  if ($platform::params::distributed_cloud_role =='systemcontroller') {
+    $reference_region = $openstack::keystone::params::region_name
+    $system_controller_region = $openstack::keystone::params::system_controller_region
+    $os_username = $platform::client::params::admin_username
+    $identity_region = $platform::client::params::identity_region
+    $keystone_region = $platform::client::params::keystone_identity_region
+    $keyring_file = $platform::client::credentials::params::keyring_file
+    $auth_url = $platform::client::params::identity_auth_url
+    $os_project_name = $platform::client::params::admin_project_name
     $api_version = 3
 
     file { "/etc/keystone/keystone-${reference_region}-filter.conf":
@@ -305,7 +305,7 @@ class openstack::keystone::server::runtime {
 
 class openstack::keystone::endpoint::runtime {
 
-  if str2bool($::is_controller_active) and !find_file('/var/run/.enrollment_in_progress') {
+  if str2bool($is_controller_active) and !find_file('/var/run/.enrollment_in_progress') {
     case $facts['os']['family'] {
         'RedHat': {
             include ::keystone::endpoint
@@ -324,21 +324,21 @@ class openstack::keystone::endpoint::runtime {
     include ::fm::keystone::auth
     include ::barbican::keystone::auth
 
-    if $::platform::params::distributed_cloud_role =='systemcontroller' {
+    if $platform::params::distributed_cloud_role =='systemcontroller' {
       include ::dcorch::keystone::auth
       include ::dcmanager::keystone::auth
       include ::dcdbsync::keystone::auth
     }
 
-    if $::platform::params::distributed_cloud_role == 'subcloud' {
+    if $platform::params::distributed_cloud_role == 'subcloud' {
       include ::dcdbsync::keystone::auth
       include ::dcagent::keystone::auth
     }
 
     include ::smapi::keystone::auth
 
-    if ($::platform::params::distributed_cloud_role == 'subcloud' and
-        $::platform::params::region_2_name != 'RegionOne') {
+    if ($platform::params::distributed_cloud_role == 'subcloud' and
+        $platform::params::region_2_name != 'RegionOne') {
       $interfaces = [ 'public', 'internal', 'admin' ]
       include ::platform::client
       # Cleanup the endpoints created at bootstrap if they are not in
@@ -406,7 +406,7 @@ class openstack::keystone::upgrade (
   $upgrade_token_file = undef,
 ) {
 
-  if $::platform::params::init_keystone {
+  if $platform::params::init_keystone {
     include ::keystone::db::postgresql
     include ::platform::params
     include ::platform::amqp::params
@@ -414,11 +414,11 @@ class openstack::keystone::upgrade (
     include ::platform::drbd::platform::params
 
     # the unit address is actually the configured default of the loopback address.
-    $bind_host = $::platform::network::mgmt::params::controller0_address
-    if $::platform::params::distributed_cloud_role =='systemcontroller' {
-      $eng_workers = min($::platform::params::eng_workers, 10)
+    $bind_host = $platform::network::mgmt::params::controller0_address
+    if $platform::params::distributed_cloud_role =='systemcontroller' {
+      $eng_workers = min($platform::params::eng_workers, 10)
     } else {
-      $eng_workers = $::platform::params::eng_workers
+      $eng_workers = $platform::params::eng_workers
     }
     $keystone_key_repo = "${::platform::drbd::platform::params::mountpoint}/keystone"
 
@@ -449,7 +449,7 @@ class openstack::keystone::upgrade (
               fernet_key_repository => "${keystone_key_repo}/fernet-keys",
               sync_db               => false,
               default_domain        => undef,
-              default_transport_url => $::platform::amqp::params::transport_url,
+              default_transport_url => $platform::amqp::params::transport_url,
             }
         }
 
@@ -462,7 +462,7 @@ class openstack::keystone::upgrade (
               fernet_key_repository => "${keystone_key_repo}/fernet-keys",
               sync_db               => false,
               default_domain        => undef,
-              default_transport_url => $::platform::amqp::params::transport_url,
+              default_transport_url => $platform::amqp::params::transport_url,
             }
         }
     }
@@ -484,14 +484,14 @@ class openstack::keystone::upgrade (
 
 class openstack::keystone::password::runtime {
 
-  if $::platform::params::distributed_cloud_role == 'systemcontroller' {
+  if $platform::params::distributed_cloud_role == 'systemcontroller' {
 
     class { '::dcmanager::api':
-      sync_db => str2bool($::is_standalone_controller),
+      sync_db => str2bool($is_standalone_controller),
     }
 
     class { '::dcorch::api_proxy':
-      sync_db => str2bool($::is_standalone_controller),
+      sync_db => str2bool($is_standalone_controller),
     }
 
     platform::sm::restart {'dcorch-engine': }
@@ -508,16 +508,16 @@ class openstack::keystone::fm::password::runtime {
   include ::platform::params
   include ::platform::fm::params
 
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
-    $assigned_workers = min($::platform::params::eng_workers, 6)
+  if $platform::params::distributed_cloud_role =='systemcontroller' {
+    $assigned_workers = min($platform::params::eng_workers, 6)
   } else {
-    $assigned_workers = $::platform::params::eng_workers
+    $assigned_workers = $platform::params::eng_workers
   }
 
   class { '::fm::api':
-    host    => $::platform::fm::params::api_host,
+    host    => $platform::fm::params::api_host,
     workers => $assigned_workers,
-    sync_db => $::platform::params::init_database,
+    sync_db => $platform::params::init_database,
   }
   Fm_config<||> ~> Service['fm-api']
 
@@ -540,7 +540,7 @@ class openstack::keystone::usm::password::runtime {
     enable => true,
   }
 
-  if $::personality == 'controller' {
+  if $personality == 'controller' {
     Usm_config<||> ~> service { 'software-controller-daemon.service':
       ensure => 'running',
       enable => true,

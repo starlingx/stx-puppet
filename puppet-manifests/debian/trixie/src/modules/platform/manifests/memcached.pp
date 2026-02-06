@@ -11,22 +11,22 @@ class platform::memcached::params(
   $service_restart = true,
 ) {
   include ::platform::params
-  $controller_0_hostname = $::platform::params::controller_0_hostname
-  $controller_1_hostname = $::platform::params::controller_1_hostname
-  $system_mode           = $::platform::params::system_mode
-  $system_type           = $::platform::params::system_type
+  $controller_0_hostname = $platform::params::controller_0_hostname
+  $controller_1_hostname = $platform::params::controller_1_hostname
+  $system_mode           = $platform::params::system_mode
+  $system_type           = $platform::params::system_type
 
   if $system_type == 'All-in-one' and
-    $::platform::params::distributed_cloud_role != 'systemcontroller' {
-    $processorcount = $::platform::params::eng_workers
+    $platform::params::distributed_cloud_role != 'systemcontroller' {
+    $processorcount = $platform::params::eng_workers
   } else {
-    $processorcount = $::processorcount
+    $processorcount = $facts['processors']['count']
   }
 
   if $system_mode == 'simplex' {
     $listen = $controller_0_hostname
   } else {
-    case $::hostname {
+    case $facts['networking']['hostname'] {
       $controller_0_hostname: {
         $listen = $controller_0_hostname
       }
@@ -44,7 +44,7 @@ class platform::memcached::params(
 class platform::memcached
   inherits ::platform::memcached::params {
 
-  if $::platform::params::distributed_cloud_role !='systemcontroller' {
+  if $platform::params::distributed_cloud_role !='systemcontroller' {
     $local_max_memory = $max_memory_small
   } else {
     $local_max_memory = $max_memory_large

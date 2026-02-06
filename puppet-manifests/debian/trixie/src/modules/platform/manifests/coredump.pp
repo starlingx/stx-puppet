@@ -40,7 +40,7 @@ class platform::coredump::k8s_token_handler::controller {
 class platform::coredump::k8s_token_handler::config {
     include ::platform::params
 
-    $sw_version = $::platform::params::software_version
+    $sw_version = $platform::params::software_version
 
     $token_file = file('/etc/k8s-coredump-conf.json','/dev/null')
     if($token_file != '') {

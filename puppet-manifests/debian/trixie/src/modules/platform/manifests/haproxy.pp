@@ -36,13 +36,13 @@ define platform::haproxy::proxy (
   if $enable_https != undef {
     $https_enabled = $enable_https
   } else {
-    $https_enabled = $::platform::haproxy::params::enable_https
+    $https_enabled = $platform::haproxy::params::enable_https
   }
 
   if $https_ep_type != undef {
     $https_ep = $https_ep_type
   } else {
-    $https_ep = $::platform::haproxy::params::https_ep_type
+    $https_ep = $platform::haproxy::params::https_ep_type
   }
 
   if $x_forwarded_proto {
@@ -74,14 +74,14 @@ define platform::haproxy::proxy (
     $public_ip = $public_ip_address
     $public_secondary_ip = $public_secondary_ip_address
   } else {
-    $public_ip = $::platform::haproxy::params::public_ip_address
-    $public_secondary_ip = $::platform::haproxy::params::public_secondary_ip_address
+    $public_ip = $platform::haproxy::params::public_ip_address
+    $public_secondary_ip = $platform::haproxy::params::public_secondary_ip_address
   }
 
   if $private_ip_address {
     $private_ip = $private_ip_address
   } else {
-    $private_ip = $::platform::haproxy::params::private_ip_address
+    $private_ip = $platform::haproxy::params::private_ip_address
   }
 
   if $client_timeout {
@@ -186,7 +186,7 @@ define platform::haproxy::alt_backend (
   if $private_ip_address {
     $private_ip = $private_ip_address
   } else {
-    $private_ip = $::platform::haproxy::params::private_ip_address
+    $private_ip = $platform::haproxy::params::private_ip_address
   }
 
   if $server_timeout {
@@ -215,13 +215,13 @@ class platform::haproxy::server {
 
   # If TPM mode is enabled then we need to configure
   # the TPM object and the TPM OpenSSL engine in HAPROXY
-  $tpm_object = $::platform::haproxy::params::tpm_object
-  $tpm_engine = $::platform::haproxy::params::tpm_engine
+  $tpm_object = $platform::haproxy::params::tpm_object
+  $tpm_engine = $platform::haproxy::params::tpm_engine
   if $tpm_object != undef {
     $tpm_options = {'tpm-object' => $tpm_object, 'tpm-engine' => $tpm_engine}
-    $global_options = merge($::platform::haproxy::params::global_options, $tpm_options)
+    $global_options = merge($platform::haproxy::params::global_options, $tpm_options)
   } else {
-    $global_options = $::platform::haproxy::params::global_options
+    $global_options = $platform::haproxy::params::global_options
   }
 
   class { '::haproxy':
@@ -231,7 +231,7 @@ class platform::haproxy::server {
   user { 'haproxy':
     ensure => 'present',
     shell  => '/sbin/nologin',
-    groups => [$::platform::params::protected_group_name],
+    groups => [$platform::params::protected_group_name],
   } -> Class['::haproxy']
 }
 
@@ -257,14 +257,14 @@ class platform::haproxy::runtime {
   include ::platform::nfv::haproxy
   include ::platform::ceph::haproxy
   include ::platform::fm::haproxy
-  if ($::platform::params::distributed_cloud_role == 'subcloud') {
+  if ($platform::params::distributed_cloud_role == 'subcloud') {
     include ::platform::dcagent::haproxy
   }
-  if ($::platform::params::distributed_cloud_role == 'systemcontroller' or
-      $::platform::params::distributed_cloud_role == 'subcloud') {
+  if ($platform::params::distributed_cloud_role == 'systemcontroller' or
+      $platform::params::distributed_cloud_role == 'subcloud') {
     include ::platform::dcdbsync::haproxy
   }
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
+  if $platform::params::distributed_cloud_role =='systemcontroller' {
     include ::platform::dcmanager::haproxy
     include ::platform::dcorch::haproxy
   }

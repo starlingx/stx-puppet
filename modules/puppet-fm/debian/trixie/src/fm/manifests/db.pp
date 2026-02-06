@@ -7,7 +7,7 @@
 # [*database_db_max_retries*]
 #   (optional) Maximum retries in case of connection error or deadlock error
 #   before error is raised. Set to -1 to specify an infinite retry count.
-#   Defaults to $::os_service_default
+#   Defaults to $os_service_default
 #
 # [*database_connection*]
 #   Url used to connect to database.
@@ -21,20 +21,20 @@
 #
 # [*database_max_pool_size*]
 #   Maximum number of SQL connections to keep open in a pool.
-#   (Optional) Defaults to $::os_service_default.
+#   (Optional) Defaults to $os_service_default.
 #
 # [*database_max_retries*]
 #   Maximum number of database connection retries during startup.
 #   Setting -1 implies an infinite retry count.
-#   (Optional) Defaults to $::os_service_default.
+#   (Optional) Defaults to $os_service_default.
 #
 # [*database_retry_interval*]
 #   Interval between retries of opening a database connection.
-#   (Optional) Defaults to $::os_service_default.
+#   (Optional) Defaults to $os_service_default.
 #
 # [*database_max_overflow*]
 #   If set, use this value for max_overflow with sqlalchemy.
-#   (Optional) Defaults to $::os_service_default.
+#   (Optional) Defaults to $os_service_default.
 #
 class fm::db (
   $database_db_max_retries          = $os_service_default,

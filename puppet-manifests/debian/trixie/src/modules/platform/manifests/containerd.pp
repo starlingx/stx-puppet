@@ -16,13 +16,13 @@ class platform::containerd::proxyconfig{
   include ::platform::containerd::install
 
   # inherit the proxy setting from docker
-  $http_proxy = $::platform::docker::params::http_proxy
-  $https_proxy = $::platform::docker::params::https_proxy
+  $http_proxy = $platform::docker::params::http_proxy
+  $https_proxy = $platform::docker::params::https_proxy
 
   # Containerd doesn't work with the NO_PROXY environment
   # variable if it has IPv6 addresses with square brackets,
   # remove the square brackets
-  $no_proxy = regsubst($::platform::docker::params::no_proxy_complete_list, '\\[|\\]', '', 'G')
+  $no_proxy = regsubst($platform::docker::params::no_proxy_complete_list, '\\[|\\]', '', 'G')
 
   file { '/etc/systemd/system/containerd.service.d':
     ensure => 'directory',
@@ -88,9 +88,9 @@ class platform::containerd::config
     require => File['/etc/systemd/system/containerd.service.d'],
   }
 
-  if $::platform::params::system_type == 'All-in-one' and
-      $::platform::params::distributed_cloud_role != 'systemcontroller' {
-    $containerd_max_proc = $::platform::params::eng_workers
+  if $platform::params::system_type == 'All-in-one' and
+      $platform::params::distributed_cloud_role != 'systemcontroller' {
+    $containerd_max_proc = $platform::params::eng_workers
 
     file { '/etc/systemd/system/containerd.service.d/containerd-max-proc.conf':
       ensure  => file,
@@ -108,30 +108,30 @@ class platform::containerd::config
   # containerd is not automatically restarted when plugins fail to load.
   Anchor['platform::networking'] -> Class[$name]
 
-  $insecure_registries = $::platform::dockerdistribution::registries::insecure_registries
-  $distributed_cloud_role = $::platform::params::distributed_cloud_role
+  $insecure_registries = $platform::dockerdistribution::registries::insecure_registries
+  $distributed_cloud_role = $platform::params::distributed_cloud_role
 
   # grab custom cri class entries
-  $custom_container_runtime = $::platform::containerd::params::custom_container_runtime
+  $custom_container_runtime = $platform::containerd::params::custom_container_runtime
 
   Class['::platform::filesystem::docker'] ~> Class[$name]
 
   # get cni bin directory
-  $k8s_cni_bin_dir = $::platform::kubernetes::params::k8s_cni_bin_dir
+  $k8s_cni_bin_dir = $platform::kubernetes::params::k8s_cni_bin_dir
 
   # generate the registry auth
   $registry_auth = chomp(
     base64('encode',
-      join([$::platform::mtce::params::auth_username,
-            $::platform::mtce::params::auth_pw], ':')))
+      join([$platform::mtce::params::auth_username,
+            $platform::mtce::params::auth_pw], ':')))
 
-  if $::platform::network::mgmt::params::subnet_version == $::platform::params::ipv6 {
+  if $platform::network::mgmt::params::subnet_version == $platform::params::ipv6 {
     $stream_server_address = '::1'
   } else {
     $stream_server_address = '127.0.0.1'
   }
 
-  $kubeadm_version = $::platform::kubernetes::params::kubeadm_version
+  $kubeadm_version = $platform::kubernetes::params::kubeadm_version
 
   $registry_local = 'registry.local:9001'
 
@@ -188,7 +188,7 @@ class platform::containerd::config
       content => template('platform/mirror-hosts.toml.erb'),
     }
   }
-  if $::platform::params::distributed_cloud_role == 'subcloud' {
+  if $platform::params::distributed_cloud_role == 'subcloud' {
     $registry_central = 'registry.central:9001'
 
     file { "/etc/containerd/certs.d/${registry_central}":
@@ -238,7 +238,7 @@ class platform::containerd::controller
 
 class platform::containerd::worker
 {
-  if $::personality != 'controller' {
+  if $personality != 'controller' {
     include ::platform::containerd::install
     include ::platform::containerd::config
   }
@@ -246,7 +246,7 @@ class platform::containerd::worker
 
 class platform::containerd::storage
 {
-  if $::personality != 'controller' {
+  if $personality != 'controller' {
     include ::platform::containerd::install
     include ::platform::containerd::config
   }

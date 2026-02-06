@@ -87,7 +87,7 @@ class platform::worker::storage (
       line  => "    global_filter = ${lvm_global_filter}",
       match => '^[\s]*#? global_filter =',
   }
-  if ! empty($::platform::lvm::vg::nova_local::physical_volumes) {
+  if ! empty($platform::lvm::vg::nova_local::physical_volumes) {
     File_line['disable_old_lvg_disks']
     -> exec { 'add device mapper mapping':
       command => 'lvchange -ay /dev/nova-local/instances_lv || true',

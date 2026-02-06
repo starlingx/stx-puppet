@@ -14,7 +14,7 @@ class platform::client
   inherits ::platform::client::params {
 
   include ::platform::client::credentials::params
-  $keyring_file = $::platform::client::credentials::params::keyring_file
+  $keyring_file = $platform::client::credentials::params::keyring_file
 
   file {'/etc/platform/openrc':
     ensure  => 'present',
@@ -35,7 +35,7 @@ class platform::client
     content => generate('/usr/bin/openstack', 'complete', '-q'),
   }
 
-  if $::personality == 'controller' {
+  if $personality == 'controller' {
     file {'/etc/ssl/private/openstack':
       ensure => 'directory',
       owner  => 'root',

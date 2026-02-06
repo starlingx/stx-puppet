@@ -9,8 +9,8 @@ class platform::sysinv::params (
 ) {
   # Set default values for database connection for AIO systems (except for
   # systemcontroller on DC)
-  if ($::platform::params::system_type == 'All-in-one' and
-      $::platform::params::distributed_cloud_role != 'systemcontroller') {
+  if ($platform::params::system_type == 'All-in-one' and
+      $platform::params::distributed_cloud_role != 'systemcontroller') {
     $db_connection_recycle_time = 60
     $db_pool_size = 1
     $db_over_size = 5
@@ -91,33 +91,33 @@ class platform::sysinv
 
   # On AIO systems, restrict the connection pool size
   # If database information doesn't exist in yaml file, use default values
-  if $::platform::sysinv::custom::params::db_connection_recycle_time {
+  if $platform::sysinv::custom::params::db_connection_recycle_time {
     Sysinv_config <| title == 'database/connection_recycle_time' |> {
-      value => $::platform::sysinv::custom::params::db_connection_recycle_time,
+      value => $platform::sysinv::custom::params::db_connection_recycle_time,
     }
   } else {
     Sysinv_config <| title == 'database/connection_recycle_time' |> {
-      value => $::platform::sysinv::params::db_connection_recycle_time,
+      value => $platform::sysinv::params::db_connection_recycle_time,
     }
   }
 
-  if $::platform::sysinv::custom::params::db_pool_size {
+  if $platform::sysinv::custom::params::db_pool_size {
     Sysinv_config <| title == 'database/max_pool_size' |> {
-      value => $::platform::sysinv::custom::params::db_pool_size,
+      value => $platform::sysinv::custom::params::db_pool_size,
     }
   } else {
     Sysinv_config <| title == 'database/max_pool_size' |> {
-      value => $::platform::sysinv::params::db_pool_size,
+      value => $platform::sysinv::params::db_pool_size,
     }
   }
 
-  if $::platform::sysinv::custom::params::db_over_size {
+  if $platform::sysinv::custom::params::db_over_size {
     Sysinv_config <| title == 'database/max_overflow' |> {
-      value => $::platform::sysinv::custom::params::db_over_size,
+      value => $platform::sysinv::custom::params::db_over_size,
     }
   } else {
     Sysinv_config <| title == 'database/max_overflow' |> {
-      value => $::platform::sysinv::params::db_over_size,
+      value => $platform::sysinv::params::db_over_size,
     }
   }
 }
@@ -144,12 +144,12 @@ class platform::sysinv::haproxy
   }
 
   # Configure rules for DC https enabled admin endpoint.
-  if ($::platform::params::distributed_cloud_role == 'systemcontroller' or
-      $::platform::params::distributed_cloud_role == 'subcloud') {
+  if ($platform::params::distributed_cloud_role == 'systemcontroller' or
+      $platform::params::distributed_cloud_role == 'subcloud') {
     platform::haproxy::proxy { 'sysinv-restapi-admin':
       https_ep_type     => 'admin',
       server_name       => 's-sysinv',
-      public_ip_address => $::platform::haproxy::params::private_dc_ip_address,
+      public_ip_address => $platform::haproxy::params::private_dc_ip_address,
       public_port       => $api_port + 1,
       private_port      => $api_port,
       server_timeout    => $server_timeout,
@@ -164,14 +164,14 @@ class platform::sysinv::api
   include ::platform::params
   include ::sysinv::api
 
-  if ($::platform::sysinv::params::service_create and
-      $::platform::params::init_keystone) {
+  if ($platform::sysinv::params::service_create and
+      $platform::params::init_keystone) {
     include ::sysinv::keystone::auth
 
     # Cleanup the endpoints created at bootstrap if they are not in
     # the subcloud region.
-    if ($::platform::params::distributed_cloud_role == 'subcloud' and
-        $::platform::params::region_2_name != 'RegionOne') {
+    if ($platform::params::distributed_cloud_role == 'subcloud' and
+        $platform::params::region_2_name != 'RegionOne') {
       Keystone_endpoint["${platform::params::region_2_name}/sysinv::platform"] -> Keystone_endpoint['RegionOne/sysinv::platform']
       keystone_endpoint { 'RegionOne/sysinv::platform':
         ensure       => 'absent',
@@ -185,20 +185,20 @@ class platform::sysinv::api
     }
   }
 
-  if ($::platform::sysinv::params::sysinv_api_workers != undef) {
+  if ($platform::sysinv::params::sysinv_api_workers != undef) {
 
     sysinv_config{
-      'DEFAULT/sysinv_api_workers': value => $::platform::sysinv::params::sysinv_api_workers
+      'DEFAULT/sysinv_api_workers': value => $platform::sysinv::params::sysinv_api_workers
     }
   } else {
-    if $::platform::params::distributed_cloud_role =='systemcontroller' {
+    if $platform::params::distributed_cloud_role =='systemcontroller' {
       sysinv_config{
-        'DEFAULT/sysinv_api_workers': value => min($::platform::params::eng_workers_by_5, 6);
+        'DEFAULT/sysinv_api_workers': value => min($platform::params::eng_workers_by_5, 6);
       }
     } else {
       # TODO(mpeters): move to sysinv puppet module parameters
       sysinv_config {
-        'DEFAULT/sysinv_api_workers': value => $::platform::params::eng_workers_by_5;
+        'DEFAULT/sysinv_api_workers': value => $platform::params::eng_workers_by_5;
       }
     }
   }

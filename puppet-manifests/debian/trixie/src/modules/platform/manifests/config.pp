@@ -46,10 +46,10 @@ class platform::config::file {
   include ::platform::ceph::params
 
   # dependent template variables
-  $management_interface = $::platform::network::mgmt::params::interface_name
-  $cluster_host_interface = $::platform::network::cluster_host::params::interface_name
-  $oam_interface = $::platform::network::oam::params::interface_name
-  $admin_interface = $::platform::network::admin::params::interface_name
+  $management_interface = $platform::network::mgmt::params::interface_name
+  $cluster_host_interface = $platform::network::cluster_host::params::interface_name
+  $oam_interface = $platform::network::oam::params::interface_name
+  $admin_interface = $platform::network::admin::params::interface_name
 
   $platform_conf = '/etc/platform/platform.conf'
 
@@ -107,7 +107,7 @@ class platform::config::file {
     }
   }
 
-  if $::platform::params::vswitch_type {
+  if $platform::params::vswitch_type {
     file_line { "${platform_conf} vswitch_type":
       path  => $platform_conf,
       line  => "vswitch_type=${::platform::params::vswitch_type}",
@@ -115,7 +115,7 @@ class platform::config::file {
     }
   }
 
-  if $::platform::params::system_type {
+  if $platform::params::system_type {
     file_line { "${platform_conf} system_type":
       path  => $platform_conf,
       line  => "system_type=${::platform::params::system_type}",
@@ -123,7 +123,7 @@ class platform::config::file {
     }
   }
 
-  if $::platform::params::system_mode {
+  if $platform::params::system_mode {
     file_line { "${platform_conf} system_mode":
       path  => $platform_conf,
       line  => "system_mode=${::platform::params::system_mode}",
@@ -131,7 +131,7 @@ class platform::config::file {
     }
   }
 
-  if $::platform::params::security_profile {
+  if $platform::params::security_profile {
     file_line { "${platform_conf} security_profile":
       path  => $platform_conf,
       line  => "security_profile=${::platform::params::security_profile}",
@@ -139,7 +139,7 @@ class platform::config::file {
     }
   }
 
-  if $::platform::params::sdn_enabled {
+  if $platform::params::sdn_enabled {
     file_line { "${platform_conf}f sdn_enabled":
       path  => $platform_conf,
       line  => 'sdn_enabled=yes',
@@ -154,7 +154,7 @@ class platform::config::file {
     }
   }
 
-  if $::platform::params::region_config {
+  if $platform::params::region_config {
     file_line { "${platform_conf} region_config":
       path  => $platform_conf,
       line  => 'region_config=yes',
@@ -178,7 +178,7 @@ class platform::config::file {
     }
   }
 
-  if $::platform::params::distributed_cloud_role {
+  if $platform::params::distributed_cloud_role {
     file_line { "${platform_conf} distributed_cloud_role":
       path  => $platform_conf,
       line  => "distributed_cloud_role=${::platform::params::distributed_cloud_role}",
@@ -186,7 +186,7 @@ class platform::config::file {
     }
   }
 
-  if $::platform::params::security_feature {
+  if $platform::params::security_feature {
     file_line { "${platform_conf} security_feature":
       path  => $platform_conf,
       line  => "security_feature=\"${::platform::params::security_feature}\"",
@@ -202,7 +202,7 @@ class platform::config::file {
 
   include platform::config::file::subfunctions::lowlatency
 
-  if $::platform::ceph::params::service_enabled {
+  if $platform::ceph::params::service_enabled {
     file_line { "${platform_conf} storage_network":
       path  => $platform_conf,
       line  => "ceph_network=${::platform::ceph::params::ceph_network}",
@@ -221,7 +221,7 @@ class platform::config::file::subfunctions::lowlatency {
 
   if str2bool($platform::sysctl::params::low_latency) {
     # low latency = true, append 'lowlatency'
-    if !str2bool($::is_lowlatency_subfunction) {
+    if !str2bool($is_lowlatency_subfunction) {
       $subfunctions = "${::subfunction},lowlatency"
 
       file_line { "${platform_conf} subfunctions":
@@ -233,8 +233,8 @@ class platform::config::file::subfunctions::lowlatency {
   }
   else {
     # low latency = false, remove 'lowlatency'
-    if str2bool($::is_lowlatency_subfunction) {
-      $subfunctions = regsubst($::subfunction, /,?lowlatency/,'')
+    if str2bool($is_lowlatency_subfunction) {
+      $subfunctions = regsubst($subfunction, /,?lowlatency/,'')
 
       file_line { "${platform_conf} subfunctions":
         path  => $platform_conf,
@@ -255,7 +255,7 @@ class platform::config::file::irq {
   include platform::params
   $platform_conf = '/etc/platform/platform.conf'
 
-  if $::platform::params::ksoftirqd_priority {
+  if $platform::params::ksoftirqd_priority {
     file_line { "${platform_conf} ksoftirqd_priority":
       path  => $platform_conf,
       line  => "ksoftirqd_priority=${::platform::params::ksoftirqd_priority}",
@@ -270,7 +270,7 @@ class platform::config::file::irq {
     }
   }
 
-  if $::platform::params::irq_work_priority {
+  if $platform::params::irq_work_priority {
     file_line { "${platform_conf} irq_work_priority":
       path  => $platform_conf,
       line  => "irq_work_priority=${::platform::params::irq_work_priority}",
@@ -385,7 +385,7 @@ class platform::config::apparmor {
   include ::platform::params
 
   if $facts['os']['family'] == 'Debian' {
-    if $::platform::params::apparmor == 'enabled' {
+    if $platform::params::apparmor == 'enabled' {
         exec { 'set-apparmor':
           command => '/usr/bin/sed -i "s/apparmor=0/apparmor=1/" /boot/1/kernel.env',
         }
@@ -406,8 +406,8 @@ class platform::config::mgmt_network_reconfig_update_runtime {
   include ::sysinv
   include ::platform::params
 
-  $platform_sw_version    = $::platform::params::software_version
-  $zeromq_bind_ip         = $::sysinv::rpc_zeromq_bind_ip
+  $platform_sw_version    = $platform::params::software_version
+  $zeromq_bind_ip         = $sysinv::rpc_zeromq_bind_ip
 
   # update hosts file to be used for all reboots
   exec { "Copy /etc/hosts to /opt/platform/config/${platform_sw_version}/hosts" :
@@ -472,8 +472,8 @@ class platform::config::hosts
 
   # The controller needs to add dns host records to /etc/hosts file for name resolution,
   # before initial unlock when dnsmasq service is not running
-  if ($::personality != 'controller') or
-      ($dns_host_records == [] or str2bool($::is_dnsmasq_running)) {
+  if ($personality != 'controller') or
+      ($dns_host_records == [] or str2bool($is_dnsmasq_running)) {
     create_resources('host', $merged_hosts, {})
   } else {
     $host_records_hash = $dns_host_records.map | $line | {
@@ -495,10 +495,10 @@ class platform::config::hosts
 class platform::config::dnsmasq {
   include ::platform::params
 
-  $config_path = $::platform::params::config_path
+  $config_path = $platform::params::config_path
   $path_exists = find_file($config_path)
 
-  if $path_exists and $::personality == 'controller' {
+  if $path_exists and $personality == 'controller' {
     file { "${config_path}/dnsmasq.addn_conf":
       ensure  => present,
     }
@@ -580,7 +580,7 @@ class platform::config::certs::ssl_ca
     }
   }
 
-  if str2bool($::is_initial_config) {
+  if str2bool($is_initial_config) {
     $containerd_restart_cmd = 'systemctl restart containerd'
     $dockerd_restart_cmd = 'systemctl restart docker'
   }
@@ -631,7 +631,7 @@ class platform::config::certs::ssl_ca
       refreshonly => true,
     }
   }
-  if str2bool($::is_controller_active) {
+  if str2bool($is_controller_active) {
     Exec['restart sssd service on cert install/uninstall']
     -> file { '/etc/platform/.ssl_ca_complete':
       ensure => present,
@@ -713,9 +713,9 @@ class platform::config::pre {
   include ::platform::config::kdump
   include ::platform::config::certs::ssl_ca
 
-  if (($::platform::params::distributed_cloud_role =='systemcontroller' or
-        $::platform::params::distributed_cloud_role =='subcloud') and
-      $::personality == 'controller') {
+  if (($platform::params::distributed_cloud_role =='systemcontroller' or
+        $platform::params::distributed_cloud_role =='subcloud') and
+      $personality == 'controller') {
     include ::platform::config::dc_root_ca
   }
   include ::platform::coredump::k8s_token_handler::config
@@ -749,7 +749,7 @@ class platform::config::post
 
   # When applying manifests to upgrade controller-1, we do not want SM or the
   # sysinv-agent or anything else that depends on these flags to start.
-  if ! $::platform::params::controller_upgrade {
+  if ! $platform::params::controller_upgrade {
     notice("Config UUID ${config_uuid}")
     file { '/etc/platform/.config_applied':
       ensure  => present,
@@ -785,7 +785,7 @@ class platform::config::controller::post
 {
   include ::platform::params
 
-  if ! $::platform::params::controller_upgrade {
+  if ! $platform::params::controller_upgrade {
     file { '/etc/platform/.initial_config_complete':
       ensure => present,
     }
@@ -818,7 +818,7 @@ class platform::config::worker::post
 {
   include ::platform::params
 
-  if ! $::platform::params::controller_upgrade {
+  if ! $platform::params::controller_upgrade {
     file { '/etc/platform/.initial_config_complete':
       ensure => present,
     }
@@ -844,7 +844,7 @@ class platform::config::storage::post
 {
   include ::platform::params
 
-  if ! $::platform::params::controller_upgrade {
+  if ! $platform::params::controller_upgrade {
     file { '/etc/platform/.initial_config_complete':
       ensure => present,
     }
@@ -910,7 +910,7 @@ class platform::config::sctp {
   include ::platform::params
   $exec_path = ['/sbin', '/usr/sbin', '/bin', '/usr/bin']
 
-  $sctp_autoload = $::platform::params::sctp_autoload
+  $sctp_autoload = $platform::params::sctp_autoload
 
   if $sctp_autoload == 'enabled' {
     file { '/etc/modules-load.d/sctp.conf':

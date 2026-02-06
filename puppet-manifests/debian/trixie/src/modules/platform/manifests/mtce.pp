@@ -27,7 +27,7 @@ class platform::mtce
   inherits ::platform::mtce::params {
 
   include ::platform::client::credentials::params
-  $keyring_directory = $::platform::client::credentials::params::keyring_directory
+  $keyring_directory = $platform::client::credentials::params::keyring_directory
 
   file { '/etc/mtc.ini':
     ensure  => present,
@@ -35,14 +35,14 @@ class platform::mtce
     content => template('mtce/mtc_ini.erb'),
   }
 
-  $boot_device = $::boot_disk_persistent_name
+  $boot_device = $boot_disk_persistent_name
 }
 
 
 class platform::mtce::agent
   inherits ::platform::mtce::params {
 
-  if $::platform::params::init_keystone {
+  if $platform::params::init_keystone {
     # configure a mtce keystone user
     keystone_user { $auth_username:
       ensure   => present,

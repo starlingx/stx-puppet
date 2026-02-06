@@ -13,7 +13,7 @@ class platform::compute::config
   include ::platform::collectd::restart
   include ::platform::kubernetes::params
 
-  $power_management = 'power-management=enabled' in $::platform::kubernetes::params::host_labels
+  $power_management = 'power-management=enabled' in $platform::kubernetes::params::host_labels
 
   file { '/etc/platform/worker_reserved.conf':
       ensure  => 'present',
@@ -22,7 +22,7 @@ class platform::compute::config
   }
   -> Exec['collectd-restart']
 
-  if $::platform::params::system_type != 'All-in-one' {
+  if $platform::params::system_type != 'All-in-one' {
     file { '/etc/systemd/system.conf.d/platform-cpuaffinity.conf':
         ensure  => 'present',
         replace => true,
@@ -81,7 +81,7 @@ class platform::compute::grub::params (
 
   include ::platform::kubernetes::params
 
-  if $::is_broadwell_processor {
+  if $is_broadwell_processor {
     $eptad = 'kvm-intel.eptad=0'
   } else {
     $eptad = ''
@@ -163,7 +163,7 @@ class platform::compute::grub::audit
   $cmd_ok = check_grub_config($grub_updates)
 
   # Handle controller in standard mode (non-worker)
-  if !str2bool($::is_worker_subfunction) {
+  if !str2bool($is_worker_subfunction) {
     notice('Handling non-worker node.')
     if $cmd_ok {
       notice('Boot Argument audit passed.')
@@ -172,7 +172,7 @@ class platform::compute::grub::audit
       include ::platform::compute::grub::recovery
     }
   } else {
-    $expected_n_cpus = Integer($::number_of_logical_cpus)
+    $expected_n_cpus = Integer($number_of_logical_cpus)
     $n_cpus_ok = ($n_cpus == $expected_n_cpus)
 
     if $cmd_ok and $n_cpus_ok {
@@ -211,7 +211,7 @@ class platform::compute::grub::runtime {
 # Mounts virtual hugetlbfs filesystems for each supported page size
 class platform::compute::hugetlbf {
 
-  if str2bool($::is_hugetlbfs_enabled) {
+  if str2bool($is_hugetlbfs_enabled) {
 
     $fs_list = generate('/bin/bash', '-c', 'ls -1d /sys/kernel/mm/hugepages/hugepages-*')
     $array = split($fs_list, '\n')
@@ -264,7 +264,7 @@ class platform::compute::hugetlbf {
     # Once we upstream a fix to the helm chart to automatically determine
     # the mountpoint then we can remove this.
     include ::platform::compute::grub::params
-    $default_pgsz_str = $::platform::compute::grub::params::default_pgsz
+    $default_pgsz_str = $platform::compute::grub::params::default_pgsz
     $page_size = strip(regsubst($default_pgsz_str, 'default_hugepagesz=', ''))
     $hugemnt ='/dev/hugepages'
     $options = "pagesize=${page_size}"
@@ -314,7 +314,7 @@ class platform::compute::allocate
   inherits ::platform::compute::hugepage::params {
 
   # determine the node file system
-  if str2bool($::is_per_numa_supported) {
+  if str2bool($is_per_numa_supported) {
     $nodefs = '/sys/devices/system/node'
   } else {
     $nodefs = '/sys/kernel/mm'
@@ -355,7 +355,7 @@ class platform::compute::allocate
 # Mount resctrl to allow Cache Allocation Technology per VM
 class platform::compute::resctrl {
 
-  if str2bool($::is_resctrl_supported) {
+  if str2bool($is_resctrl_supported) {
     mount { '/sys/fs/resctrl':
       ensure   => 'mounted',
       device   => 'resctrl',

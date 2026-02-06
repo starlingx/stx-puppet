@@ -70,7 +70,7 @@ class platform::ntp (
       hasrestart => true,
     }
 
-    if $::personality == 'controller' {
+    if $personality == 'controller' {
       Class['::platform::dns']
       -> Exec["enable-${ntp_service_name}"]
     } else {
@@ -88,12 +88,12 @@ class platform::ntp (
 
 class platform::ntp::server {
 
-  if $::personality == 'controller' {
+  if $personality == 'controller' {
     include ::platform::ntp
 
     include ::platform::params
-    $peer_server = $::platform::params::mate_hostname
-    $system_mode = $::platform::params::system_mode
+    $peer_server = $platform::params::mate_hostname
+    $system_mode = $platform::params::system_mode
 
     file { 'ntp_config':
       ensure  => file,
@@ -119,7 +119,7 @@ class platform::ntp::server {
 
 class platform::ntp::client {
 
-  if $::personality != 'controller' {
+  if $personality != 'controller' {
     include ::platform::ntp
 
     file { 'ntp_config':

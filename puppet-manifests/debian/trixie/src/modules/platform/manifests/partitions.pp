@@ -39,18 +39,18 @@ class platform::partitions
 
   # NOTE: Currently we are executing partition changes serially, not in bulk.
   platform::partitions::platform_manage_partition { 'check':
-    config => $::platform::partitions::params::check_config,
+    config => $platform::partitions::params::check_config,
   }
   -> platform::partitions::platform_manage_partition { 'delete':
-    config => $::platform::partitions::params::delete_config,
+    config => $platform::partitions::params::delete_config,
   }
   -> platform::partitions::platform_manage_partition { 'modify':
-    config                 => $::platform::partitions::params::modify_config,
-    shutdown_drbd_resource => $::platform::partitions::params::shutdown_drbd_resource,
-    system_mode            => $::platform::params::system_mode,
+    config                 => $platform::partitions::params::modify_config,
+    shutdown_drbd_resource => $platform::partitions::params::shutdown_drbd_resource,
+    system_mode            => $platform::params::system_mode,
   }
   -> platform::partitions::platform_manage_partition { 'create':
-    config => $::platform::partitions::params::create_config,
+    config => $platform::partitions::params::create_config,
   }
 }
 

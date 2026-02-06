@@ -37,11 +37,11 @@
 # [*enable_proxy_headers_parsing*]
 #   (Optional) Enable paste middleware to handle SSL requests through
 #   HTTPProxyToWSGI middleware.
-#   Defaults to $::os_service_default.
+#   Defaults to $os_service_default.
 #
 # [*paste_config*]
 #   (Optional) Configuration file for WSGI definition of API
-#   Defaults to $::os_service_default.
+#   Defaults to $os_service_default.
 #
 class fm::api (
   $manage_service                 = true,

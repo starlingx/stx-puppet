@@ -11,8 +11,8 @@ class platform::fm::params (
 ) {
   # Set default values for database connection for AIO systems (except for
   # systemcontroller on DC)
-  if ($::platform::params::system_type == 'All-in-one' and
-      $::platform::params::distributed_cloud_role != 'systemcontroller') {
+  if ($platform::params::system_type == 'All-in-one' and
+      $platform::params::distributed_cloud_role != 'systemcontroller') {
     $db_connection_recycle_time = 60
     $db_pool_size = 1
     $db_over_size = 5
@@ -36,22 +36,22 @@ class platform::fm::config
   # Decides between -in order- (1) custom: defined by system parameters,
   # (2) AIO values defined on params class, or (3) the default values defined
   # on personality yaml
-  if $::platform::fm::custom::params::db_connection_recycle_time {
-    $db_connection_recycle_time = $::platform::fm::custom::params::db_connection_recycle_time
+  if $platform::fm::custom::params::db_connection_recycle_time {
+    $db_connection_recycle_time = $platform::fm::custom::params::db_connection_recycle_time
   } else {
-    $db_connection_recycle_time = $::platform::fm::params::db_connection_recycle_time
+    $db_connection_recycle_time = $platform::fm::params::db_connection_recycle_time
   }
 
-  if $::platform::fm::custom::params::db_pool_size {
-    $db_pool_size = $::platform::fm::custom::params::db_pool_size
+  if $platform::fm::custom::params::db_pool_size {
+    $db_pool_size = $platform::fm::custom::params::db_pool_size
   } else {
-    $db_pool_size = $::platform::fm::params::db_pool_size
+    $db_pool_size = $platform::fm::params::db_pool_size
   }
 
-  if $::platform::fm::custom::params::db_over_size {
-    $db_over_size = $::platform::fm::custom::params::db_over_size
+  if $platform::fm::custom::params::db_over_size {
+    $db_over_size = $platform::fm::custom::params::db_over_size
   } else {
-    $db_over_size = $::platform::fm::params::db_over_size
+    $db_over_size = $platform::fm::params::db_over_size
   }
 
   class { '::fm':
@@ -74,7 +74,7 @@ class platform::fm
   include ::platform::fm::config
 
   include ::platform::params
-  if $::platform::params::init_database {
+  if $platform::params::init_database {
     include ::fm::db::postgresql
   }
 }
@@ -85,12 +85,12 @@ class platform::fm::haproxy
   include ::platform::params
   include ::platform::haproxy::params
 
-  $system_mode = $::platform::params::system_mode
+  $system_mode = $platform::params::system_mode
 
   if $system_mode != 'simplex' {
     platform::haproxy::proxy { 'fm-api-internal':
       server_name        => 's-fm-api-internal',
-      public_ip_address  => $::platform::haproxy::params::private_ip_address,
+      public_ip_address  => $platform::haproxy::params::private_ip_address,
       public_port        => $api_port,
       private_ip_address => $api_host,
       private_port       => $api_port,
@@ -105,12 +105,12 @@ class platform::fm::haproxy
   }
 
   # Configure rules for DC https enabled admin endpoint.
-  if ($::platform::params::distributed_cloud_role == 'systemcontroller' or
-      $::platform::params::distributed_cloud_role == 'subcloud') {
+  if ($platform::params::distributed_cloud_role == 'systemcontroller' or
+      $platform::params::distributed_cloud_role == 'subcloud') {
     platform::haproxy::proxy { 'fm-api-admin':
       https_ep_type     => 'admin',
       server_name       => 's-fm-api-admin',
-      public_ip_address => $::platform::haproxy::params::private_dc_ip_address,
+      public_ip_address => $platform::haproxy::params::private_dc_ip_address,
       public_port       => $api_port + 1,
       private_port      => $api_port,
     }
@@ -123,10 +123,10 @@ class platform::fm::api
   include ::platform::params
 
   # Assign up to 6 workers for system controllers
-  if $::platform::params::distributed_cloud_role =='systemcontroller' {
-    $assigned_workers = min($::platform::params::eng_workers, 6)
+  if $platform::params::distributed_cloud_role =='systemcontroller' {
+    $assigned_workers = min($platform::params::eng_workers, 6)
   } else {
-    $assigned_workers = $::platform::params::eng_workers
+    $assigned_workers = $platform::params::eng_workers
   }
 
   # override the configuration of fm-api.service
@@ -148,8 +148,8 @@ class platform::fm::api
   }
 
   if $service_enabled {
-    if ($::platform::fm::service_create and
-        $::platform::params::init_keystone) {
+    if ($platform::fm::service_create and
+        $platform::params::init_keystone) {
       include ::fm::keystone::auth
     }
 
@@ -158,7 +158,7 @@ class platform::fm::api
     class { '::fm::api':
       host    => $api_host,
       workers => $assigned_workers,
-      sync_db => $::platform::params::init_database,
+      sync_db => $platform::params::init_database,
     }
 
     include ::platform::fm::haproxy

@@ -74,10 +74,10 @@ class platform::strongswan::swanctl_config (
   # on their role (active or standby) at the time it is configed.
   # During swact, the symlink will be updated accordingly.
   if !empty($connections_active) {
-    $swanctl_dir          = $::platform::strongswan::params::swanctl_dir
-    $swanctl_current_conf = $::platform::strongswan::params::swanctl_current_conf
-    $swanctl_active_conf  = $::platform::strongswan::params::swanctl_active_conf
-    $swanctl_standby_conf = $::platform::strongswan::params::swanctl_standby_conf
+    $swanctl_dir          = $platform::strongswan::params::swanctl_dir
+    $swanctl_current_conf = $platform::strongswan::params::swanctl_current_conf
+    $swanctl_active_conf  = $platform::strongswan::params::swanctl_active_conf
+    $swanctl_standby_conf = $platform::strongswan::params::swanctl_standby_conf
 
     platform::strongswan::generate_swanctl_conf{ 'Generate swanctl_active.conf':
       includes    => $includes,
@@ -151,26 +151,26 @@ class platform::strongswan::config
 
   # Update strongswan configuration
   -> class { 'strongswan':
-    charon             => $::platform::strongswan::params::strongswan,
+    charon             => $platform::strongswan::params::strongswan,
     strongswan_include => $strongswan_include,
   }
 
   # Update charon_logging configuration
   -> class { '::strongswan::charon_logging':
-    charon_logging => $::platform::strongswan::params::charon_logging,
+    charon_logging => $platform::strongswan::params::charon_logging,
   }
 
   # Update charon configuration
   -> class { '::strongswan::charon':
-    charon_options => $::platform::strongswan::params::charon,
+    charon_options => $platform::strongswan::params::charon,
   }
 
   # Update swanctl configuration
   -> class { '::platform::strongswan::swanctl_config':
-    includes             => $::platform::strongswan::params::includes,
-    connections          => $::platform::strongswan::params::swanctl,
-    connections_active   => $::platform::strongswan::params::swanctl_active,
-    is_active_controller => $::platform::strongswan::params::is_active_controller,
+    includes             => $platform::strongswan::params::includes,
+    connections          => $platform::strongswan::params::swanctl,
+    connections_active   => $platform::strongswan::params::swanctl_active,
+    is_active_controller => $platform::strongswan::params::is_active_controller,
   }
 
   # Restart charon

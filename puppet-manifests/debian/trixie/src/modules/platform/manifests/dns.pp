@@ -1,11 +1,11 @@
 class platform::dns::dnsmasq::params (
   $efi_bootloader = $facts['os']['family'] ? {
-    'RedHat' => $::architecture ? {
+    'RedHat' => $facts['os']['architecture'] ? {
       'aarch64' => 'EFI/grubaa64.efi',
       'arm64' => 'EFI/grubaa64.efi',
       default => 'EFI/grubx64.efi',
     },
-    default => $::architecture ? {
+    default => $facts['os']['architecture'] ? {
       'aarch64' => 'EFI/BOOT/bootaa64.efi',
       'arm64' => 'EFI/BOOT/bootaa64.efi',
       default => 'EFI/BOOT/bootx64.efi',
@@ -13,7 +13,7 @@ class platform::dns::dnsmasq::params (
   },
   $uefi_bootloader = $facts['os']['family'] ? {
     'RedHat' => 'EFI/shim.efi',
-    default => $::architecture ? {
+    default => $facts['os']['architecture'] ? {
       'aarch64' => 'EFI/BOOT/bootaa64.efi',
       'arm64' => 'EFI/grubaa64.efi',
       default => 'EFI/BOOT/bootx64.efi'
@@ -25,48 +25,48 @@ class platform::dns::dnsmasq
   inherits ::platform::dns::dnsmasq::params {
 
   # dependent template variables
-  $install_uuid = $::install_uuid
-  $system_mode = $::platform::params::system_mode
+  $install_uuid = $install_uuid
+  $system_mode = $platform::params::system_mode
 
   include ::platform::params
-  $config_path = $::platform::params::config_path
-  $pxeboot_hostname = $::platform::params::pxeboot_hostname
-  $mgmt_hostname = $::platform::params::controller_hostname
+  $config_path = $platform::params::config_path
+  $pxeboot_hostname = $platform::params::pxeboot_hostname
+  $mgmt_hostname = $platform::params::controller_hostname
 
   include ::platform::network::pxeboot::params
-  $pxeboot_interface = $::platform::network::pxeboot::params::interface_name
-  $pxeboot_subnet_version = $::platform::network::pxeboot::params::subnet_version
-  $pxeboot_subnet_start = $::platform::network::pxeboot::params::subnet_start
-  $pxeboot_subnet_end = $::platform::network::pxeboot::params::subnet_end
-  $pxeboot_controller_address = $::platform::network::pxeboot::params::controller_address
+  $pxeboot_interface = $platform::network::pxeboot::params::interface_name
+  $pxeboot_subnet_version = $platform::network::pxeboot::params::subnet_version
+  $pxeboot_subnet_start = $platform::network::pxeboot::params::subnet_start
+  $pxeboot_subnet_end = $platform::network::pxeboot::params::subnet_end
+  $pxeboot_controller_address = $platform::network::pxeboot::params::controller_address
 
   if $pxeboot_subnet_version == 4 {
-    $pxeboot_subnet_netmask = $::platform::network::pxeboot::params::subnet_netmask
+    $pxeboot_subnet_netmask = $platform::network::pxeboot::params::subnet_netmask
   } else {
-    $pxeboot_subnet_netmask = $::platform::network::pxeboot::params::subnet_prefixlen
+    $pxeboot_subnet_netmask = $platform::network::pxeboot::params::subnet_prefixlen
   }
 
   include ::platform::network::mgmt::params
-  $mgmt_interface = $::platform::network::mgmt::params::interface_name
-  $mgmt_subnet_version = $::platform::network::mgmt::params::subnet_version
-  $mgmt_subnet_start = $::platform::network::mgmt::params::subnet_start
-  $mgmt_subnet_end = $::platform::network::mgmt::params::subnet_end
-  $mgmt_controller_address = $::platform::network::mgmt::params::controller_address
-  $mgmt_network_mtu = $::platform::network::mgmt::params::mtu
+  $mgmt_interface = $platform::network::mgmt::params::interface_name
+  $mgmt_subnet_version = $platform::network::mgmt::params::subnet_version
+  $mgmt_subnet_start = $platform::network::mgmt::params::subnet_start
+  $mgmt_subnet_end = $platform::network::mgmt::params::subnet_end
+  $mgmt_controller_address = $platform::network::mgmt::params::controller_address
+  $mgmt_network_mtu = $platform::network::mgmt::params::mtu
 
   if $mgmt_subnet_version == 4 {
-    $mgmt_subnet_netmask = $::platform::network::mgmt::params::subnet_netmask
+    $mgmt_subnet_netmask = $platform::network::mgmt::params::subnet_netmask
   } else {
-    $mgmt_subnet_netmask = $::platform::network::mgmt::params::subnet_prefixlen
+    $mgmt_subnet_netmask = $platform::network::mgmt::params::subnet_prefixlen
   }
 
   include ::platform::kubernetes::params
-  $service_domain = $::platform::kubernetes::params::service_domain
-  $dns_service_ip = $::platform::kubernetes::params::dns_service_ip
-  $distributed_cloud_role = $::platform::params::distributed_cloud_role
-  $sc_address = $::platform::params::system_controller_addr
-  $sc_mgmt_address = $::platform::params::system_controller_mgmt_addr
-  $is_virtual_system = $::platform::params::virtual_system
+  $service_domain = $platform::kubernetes::params::service_domain
+  $dns_service_ip = $platform::kubernetes::params::dns_service_ip
+  $distributed_cloud_role = $platform::params::distributed_cloud_role
+  $sc_address = $platform::params::system_controller_addr
+  $sc_mgmt_address = $platform::params::system_controller_mgmt_addr
+  $is_virtual_system = $platform::params::virtual_system
 
   file { '/etc/dnsmasq.conf':
       ensure  => 'present',
@@ -101,7 +101,7 @@ class platform::dns {
   # complete, as per the anchor dependency above. This is necessary because
   # the networking configuration can wipe the /etc/resolv.conf file.
   contain ::platform::dns::resolv
-  if $::personality == 'controller' {
+  if $personality == 'controller' {
     contain ::platform::dns::dnsmasq
   }
 }

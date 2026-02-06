@@ -27,29 +27,29 @@ class platform::dockerdistribution::registries {
   # insecure-registries used in template insecuredockerregistry.conf.erb
   # If all registries are secure, insecure_registries will be an empty array
   $registries = [
-    {url => $::platform::docker::params::k8s_registry,
-    secure => $::platform::docker::params::k8s_registry_secure},
+    {url => $platform::docker::params::k8s_registry,
+    secure => $platform::docker::params::k8s_registry_secure},
 
-    {url => $::platform::docker::params::gcr_registry,
-    secure => $::platform::docker::params::gcr_registry_secure},
+    {url => $platform::docker::params::gcr_registry,
+    secure => $platform::docker::params::gcr_registry_secure},
 
-    {url => $::platform::docker::params::quay_registry,
-    secure => $::platform::docker::params::quay_registry_secure},
+    {url => $platform::docker::params::quay_registry,
+    secure => $platform::docker::params::quay_registry_secure},
 
-    {url => $::platform::docker::params::docker_registry,
-    secure => $::platform::docker::params::docker_registry_secure},
+    {url => $platform::docker::params::docker_registry,
+    secure => $platform::docker::params::docker_registry_secure},
 
-    {url => $::platform::docker::params::elastic_registry,
-    secure => $::platform::docker::params::elastic_registry_secure},
+    {url => $platform::docker::params::elastic_registry,
+    secure => $platform::docker::params::elastic_registry_secure},
 
-    {url => $::platform::docker::params::ghcr_registry,
-    secure => $::platform::docker::params::ghcr_registry_secure},
+    {url => $platform::docker::params::ghcr_registry,
+    secure => $platform::docker::params::ghcr_registry_secure},
 
-    {url => $::platform::docker::params::registryk8s_registry,
-    secure => $::platform::docker::params::registryk8s_registry_secure},
+    {url => $platform::docker::params::registryk8s_registry,
+    secure => $platform::docker::params::registryk8s_registry_secure},
 
-    {url => $::platform::docker::params::icr_registry,
-    secure => $::platform::docker::params::icr_registry_secure},
+    {url => $platform::docker::params::icr_registry,
+    secure => $platform::docker::params::icr_registry_secure},
   ]
 
   $insecure_registries_list = $registries.filter |$registry| { $registry['secure'] == 'False' }
@@ -70,7 +70,7 @@ class platform::dockerdistribution::config
   include ::platform::haproxy::params
   include ::platform::docker::daemonconfig
 
-  $system_mode = $::platform::params::system_mode
+  $system_mode = $platform::params::system_mode
   # FQDN can be used after:
   # - after the bootstrap for any installation
   # - mate controller uses FQDN if mgmt::params::fqdn_ready is present
@@ -78,12 +78,12 @@ class platform::dockerdistribution::config
   # - just AIO-SX can use FQDN during the an upgrade. For other installs
   #     the active controller in older release can resolve the .internal FQDN
   #     when the mate controller is updated to N+1 version
-  if (!str2bool($::is_upgrade_do_not_use_fqdn) or $system_mode == 'simplex') {
-    if (str2bool($::is_bootstrap_completed)) {
+  if (!str2bool($is_upgrade_do_not_use_fqdn) or $system_mode == 'simplex') {
+    if (str2bool($is_bootstrap_completed)) {
       $fqdn_ready = true
     } else {
-      if ($::platform::network::mgmt::params::fqdn_ready != undef) {
-        $fqdn_ready = $::platform::network::mgmt::params::fqdn_ready
+      if ($platform::network::mgmt::params::fqdn_ready != undef) {
+        $fqdn_ready = $platform::network::mgmt::params::fqdn_ready
       }
       else {
         $fqdn_ready = false
@@ -95,15 +95,15 @@ class platform::dockerdistribution::config
   }
 
   if ($fqdn_ready == true) {
-    $docker_registry_host = $::platform::params::controller_fqdn
+    $docker_registry_host = $platform::params::controller_fqdn
   } else {
-    $docker_registry_host = $::platform::network::mgmt::params::controller_address_url
+    $docker_registry_host = $platform::network::mgmt::params::controller_address_url
   }
 
-  if $::platform::params::distributed_cloud_role == 'subcloud' {
+  if $platform::params::distributed_cloud_role == 'subcloud' {
     $docker_realm_host = 'registry.local'
   } else {
-    $docker_realm_host = $::platform::haproxy::params::public_address_url
+    $docker_realm_host = $platform::haproxy::params::public_address_url
   }
   $runtime_config = '/etc/docker-distribution/registry/runtime_config.yml'
   $used_config = '/etc/docker-distribution/registry/config.yml'
@@ -154,9 +154,9 @@ class platform::dockerdistribution::config
     source => "puppet:///modules/${module_name}/registry-token-server"
   }
 
-  if $::platform::params::system_type == 'All-in-one' and
-    $::platform::params::distributed_cloud_role != 'systemcontroller' {
-    $registry_token_server_max_procs = $::platform::params::eng_workers
+  if $platform::params::system_type == 'All-in-one' and
+    $platform::params::distributed_cloud_role != 'systemcontroller' {
+    $registry_token_server_max_procs = $platform::params::eng_workers
 
     file { '/etc/systemd/system/registry-token-server.service.d':
       ensure => 'directory',
@@ -188,9 +188,9 @@ class platform::dockerdistribution::config
     content => template('platform/docker-distribution-override.conf.erb'),
   }
 
-  if $::platform::params::system_type == 'All-in-one' and
-    $::platform::params::distributed_cloud_role != 'systemcontroller' {
-    $docker_registry_max_procs = $::platform::params::eng_workers
+  if $platform::params::system_type == 'All-in-one' and
+    $platform::params::distributed_cloud_role != 'systemcontroller' {
+    $docker_registry_max_procs = $platform::params::eng_workers
 
     file { "/etc/systemd/system/${service_name}.d/docker-distribution-stx-override.conf":
       ensure  => file,
@@ -210,13 +210,13 @@ class platform::dockerdistribution::compute
 
   include ::platform::docker::daemonconfig
 
-  if $::personality != 'controller' {
+  if $personality != 'controller' {
     # it is for worker node only, since controller node already has ca cert in ssl folder.
 
     # containerd requires ca file to access local secure registry
     # For self signed cert, ca file is itself.
     # cert_file and key_file are not needed when TLS mutual authentication is unused.
-    $shared_dir = $::platform::params::config_path
+    $shared_dir = $platform::params::config_path
     $certs_dir = '/etc/ssl/private'
     file { $certs_dir:
       ensure => 'directory',

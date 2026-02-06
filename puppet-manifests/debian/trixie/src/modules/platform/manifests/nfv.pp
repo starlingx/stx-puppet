@@ -18,7 +18,7 @@ class platform::nfv {
     ensure           => 'present',
     comment          => 'nfv',
     gid              => '172',
-    groups           => ['nobody', 'nfv', $::platform::params::protected_group_name],
+    groups           => ['nobody', 'nfv', $platform::params::protected_group_name],
     home             => '/var/lib/nfv',
     password         => '!!',
     password_max_age => '-1',
@@ -79,12 +79,12 @@ class platform::nfv::haproxy
   }
 
   # Configure rules for DC https enabled admin endpoint.
-  if ($::platform::params::distributed_cloud_role == 'systemcontroller' or
-      $::platform::params::distributed_cloud_role == 'subcloud') {
+  if ($platform::params::distributed_cloud_role == 'systemcontroller' or
+      $platform::params::distributed_cloud_role == 'subcloud') {
     platform::haproxy::proxy { 'vim-restapi-admin':
       https_ep_type     => 'admin',
       server_name       => 's-vim-restapi',
-      public_ip_address => $::platform::haproxy::params::private_dc_ip_address,
+      public_ip_address => $platform::haproxy::params::private_dc_ip_address,
       public_port       => $api_port + 1,
       private_port      => $api_port,
     }
@@ -95,8 +95,8 @@ class platform::nfv::haproxy
 class platform::nfv::api
   inherits ::platform::nfv::params {
 
-  if ($::platform::nfv::params::service_create and
-      $::platform::params::init_keystone) {
+  if ($platform::nfv::params::service_create and
+      $platform::params::init_keystone) {
     include ::nfv::keystone::auth
   }
 

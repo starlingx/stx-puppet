@@ -12,8 +12,8 @@ class platform::remotelogging
 
   if $enabled {
     include ::platform::params
-    $system_name = $::platform::params::system_name
-    $hostname = $::hostname
+    $system_name = $platform::params::system_name
+    $hostname = $facts['networking']['hostname']
 
     if($transport == 'tls') {
       $server = "{tcp(\"${ip_address}\" port(${port}) tls(peer-verify(\"required-untrusted\")));};"
@@ -70,7 +70,7 @@ class platform::remotelogging::proxy(
 
   include ::platform::network::oam::params
 
-  $oam_interface = $::platform::network::oam::params::interface_name
+  $oam_interface = $platform::network::oam::params::interface_name
 
   if $enabled {
 
@@ -105,7 +105,7 @@ class platform::remotelogging::proxy(
 class platform::remotelogging::runtime {
   include ::platform::remotelogging
 
-  if $::personality == 'controller' {
+  if $personality == 'controller' {
     include ::platform::remotelogging::proxy
   }
 }
