@@ -79,7 +79,7 @@ class platform::sysinv
   # once the log configuration has been moved to oslo::log
   sysinv_config {
     'DEFAULT/logging_context_format_string': value =>
-      'sysinv %(asctime)s.%(msecs)03d %(process)d %(levelname)s %(name)s [%(request_id)s %(user)s %(tenant)s] %(instance)s%(message)s';
+      'sysinv %(asctime)s.%(msecs)03d %(process)d %(levelname)s %(name)s [%(request_id)s %(user)s %(project)s] %(instance)s%(message)s';
     'DEFAULT/logging_default_format_string': value =>
       'sysinv %(asctime)s.%(msecs)03d %(process)d %(levelname)s %(name)s [-] %(instance)s%(message)s';
   }
