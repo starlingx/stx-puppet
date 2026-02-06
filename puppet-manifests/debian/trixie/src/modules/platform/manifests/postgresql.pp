@@ -68,7 +68,7 @@ class platform::postgresql::params
   $root_dir = '/var/lib/postgresql'
   $config_dir = $::osfamily ? {
     'RedHat' => '/etc/postgresql',
-    default => '/etc/postgresql/13/main',
+    default => '/etc/postgresql/17/main',
   }
 
   $data_dir = "${root_dir}/${::platform::params::software_version}"
@@ -295,11 +295,11 @@ class platform::postgresql::bootstrap
     }
   } else {
     exec { 'Drop pg database':
-        command => 'pg_dropcluster 13 main',
+        command => 'pg_dropcluster 17 main --stop',
     }
 
     -> exec { 'Create pg database':
-        command => "pg_createcluster -d ${data_dir} 13 main",
+        command => "pg_createcluster -d ${data_dir} 17 main",
     }
 
     -> exec { 'Set up symbolic links to config files':
@@ -307,11 +307,11 @@ class platform::postgresql::bootstrap
     }
 
     -> exec { 'Explicitly turn off jit':
-        command => 'pg_conftool 13 main set jit off',
+        command => 'pg_conftool 17 main set jit off',
     }
 
     -> exec { 'Disable include_dir':
-        command => 'pg_conftool 13 main remove include_dir',
+        command => 'pg_conftool 17 main remove include_dir',
     }
 
     -> exec { 'Change pg dir permissions':
@@ -330,7 +330,7 @@ class platform::postgresql::bootstrap
 
   if $::osfamily == 'Debian' {
     exec { 'Disable systemd from starting postgresql':
-        command => 'echo manual > /etc/postgresql/13/main/start.conf ; systemctl daemon-reload',
+        command => 'echo manual > /etc/postgresql/17/main/start.conf ; systemctl daemon-reload',
     }
     Class['::postgresql::server'] -> Exec['Disable systemd from starting postgresql']
   }

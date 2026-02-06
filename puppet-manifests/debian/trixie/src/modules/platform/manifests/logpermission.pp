@@ -55,7 +55,7 @@ class platform::logpermission {
 
   if $::personality == 'controller' {
     # Change ownership to root:root for specific log files
-    file { '/var/log/postgresql/postgresql-13-main.log':
+    file { '/var/log/postgresql/postgresql-17-main.log':
       ensure => 'file',
       owner  => 'root',
       group  => 'root',
