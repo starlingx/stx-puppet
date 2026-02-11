@@ -60,6 +60,16 @@ class platform::helm::repositories
 
   Anchor['platform::services']
 
+  # Ensure /home/sysadmin/.cache has the right ownership to store Helm's cache.
+  # Needed for platform upgrade scenarios where the directory ownership is modified
+  # during the lifecycle of the previous version.
+  -> exec { 'set /home/sysadmin/.cache ownership':
+    command   => 'chown sysadmin:sys_protected /home/sysadmin/.cache',
+    logoutput => true,
+    path      => '/bin:/usr/bin',
+    onlyif    => 'stat -c "%U:%G" /home/sysadmin/.cache | grep -qv "sysadmin:sys_protected"',
+  }
+
   -> platform::helm::repository { $helm_repositories:
     repo_base  => $target_helm_repos_base_dir,
     repo_port  => $::openstack::horizon::params::http_port,
