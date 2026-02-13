@@ -4,12 +4,17 @@ Documentation=https://etcd.io/docs
 Documentation=man:etcd
 
 [Service]
+Environment="GOMAXPROCS=<%= @etcd_max_procs %>"
 EnvironmentFile=-/etc/default/etcd
 User=root
 NotifyAccess=all
 Type=notify
+Restart=on-failure
+RestartSec=5s
+RemainAfterExit=no
+
 ExecStart=
-ExecStart=-/bin/bash -c "GOMAXPROCS=<%= @etcd_max_procs %> /usr/bin/etcd"
+ExecStart=/usr/bin/etcd
 ExecStartPost=/bin/bash -c 'echo $MAINPID >/var/run/etcd.pid'
 ExecStop=
 ExecStopPost=/bin/bash -c 'rm -f /var/run/etcd.pid'
