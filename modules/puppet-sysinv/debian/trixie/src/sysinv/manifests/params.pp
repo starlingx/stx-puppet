@@ -21,49 +21,16 @@ class sysinv::params {
   $certmon_conf = '/etc/sysinv/cert-mon.conf'
   $certalarm_conf = '/etc/sysinv/cert-alarm.conf'
   $sysinv_paste_api_ini = '/etc/sysinv/api-paste.ini'
+  $package_name = 'sysinv'
+  $client_package = 'cgtsclient'
+  $api_package = false
+  $api_service = 'sysinv-api'
+  $conductor_package = false
+  $conductor_service = 'sysinv-conductor'
+  $agent_package = false
+  $agent_service = 'sysinv-agent'
+  $certmon_package = false
+  $certalarm_package = false
+  $db_sync_command = 'sysinv-dbsync'
 
-  if $facts['os']['family'] == 'Debian' {
-    $package_name       = 'sysinv'
-    $client_package     = 'cgtsclient'
-    $api_package        = false
-    $api_service        = 'sysinv-api'
-    $conductor_package  = false
-    $conductor_service  = 'sysinv-conductor'
-    $agent_package      = false
-    $agent_service      = 'sysinv-agent'
-    $certmon_package    = false
-    $certalarm_package  = false
-    $db_sync_command    = 'sysinv-dbsync'
-
-  } elsif($facts['os']['family'] == 'RedHat') {
-
-    $package_name       = 'sysinv'
-    $client_package     = 'cgtscli'
-    $api_package        = false
-    $api_service        = 'sysinv-api'
-    $conductor_package  = false
-    $conductor_service  = 'sysinv-conductor'
-    $agent_package      = false
-    $agent_service      = 'sysinv-agent'
-    $certmon_package    = false
-    $certalarm_package  = false
-    $db_sync_command    = 'sysinv-dbsync'
-
-  } elsif($facts['os']['family'] == 'WRLinux') {
-
-    $package_name       = 'sysinv'
-    $client_package     = 'cgtscli'
-    $api_package        = false
-    $api_service        = 'sysinv-api'
-    $conductor_package  = false
-    $conductor_service  = 'sysinv-conductor'
-    $agent_package      = false
-    $agent_service      = 'sysinv-agent'
-    $certmon_package    = false
-    $certalarm_package  = false
-    $db_sync_command    = 'sysinv-dbsync'
-
-  } else {
-    fail("unsuported osfamily ${facts['os']['family']}, currently WindRiver, Debian, Redhat are the only supported platforms")
-  }
 }

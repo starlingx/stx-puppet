@@ -12,45 +12,14 @@ class dcorch::params {
   $dcorch_dir = '/etc/dcorch'
   $dcorch_conf = '/etc/dcorch/dcorch.conf'
   $dcorch_paste_api_ini = '/etc/dcorch/api-paste.ini'
+  $package_name = 'distributedcloud-dcorch'
+  $client_package = 'distributedcloud-client-dcorchclient'
+  $api_package = false
+  $api_service = 'dcorch-api'
+  $engine_package = false
+  $engine_service = 'dcorch-engine'
+  $api_proxy_package = false
+  $api_proxy_service = 'dcorch-api-proxy'
+  $db_sync_command = 'dcorch-manage db_sync'
 
-  if $facts['os']['family'] == 'Debian' {
-    $package_name          = 'distributedcloud-dcorch'
-    $client_package        = 'distributedcloud-client-dcorchclient'
-    $api_package           = false
-    $api_service           = 'dcorch-api'
-    $engine_package        = false
-    $engine_service        = 'dcorch-engine'
-    $api_proxy_package      = false
-    $api_proxy_service      = 'dcorch-api-proxy'
-
-    $db_sync_command       = 'dcorch-manage db_sync'
-
-  } elsif($facts['os']['family'] == 'RedHat') {
-
-    $package_name          = 'distributedcloud-dcorch'
-    $client_package        = 'distributedcloud-client-dcorchclient'
-    $api_package           = false
-    $api_service           = 'dcorch-api'
-    $engine_package        = false
-    $engine_service        = 'dcorch-engine'
-    $api_proxy_package      = false
-    $api_proxy_service      = 'dcorch-api-proxy'
-
-    $db_sync_command       = 'dcorch-manage db_sync'
-
-  } elsif($facts['os']['family'] == 'WRLinux') {
-
-    $package_name          = 'dcorch'
-    $client_package        = 'distributedcloud-client-dcorchclient'
-    $api_package           = false
-    $api_service           = 'dcorch-api'
-    $engine_package        = false
-    $engine_service        = 'dcorch-engine'
-    $api_proxy_package      = false
-    $api_proxy_service      = 'dcorch-api-proxy'
-    $db_sync_command       = 'dcorch-manage db_sync'
-
-  } else {
-    fail("unsuported osfamily ${facts['os']['family']}, currently WindRiver, Debian, Redhat are the only supported platforms")
-  }
 }

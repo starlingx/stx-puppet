@@ -117,30 +117,13 @@ class platform::compute::grub::update
   $truncated_grub_updates = strip(regsubst($grub_updates, /nohz_full=disabled/, ''))
 
   $to_be_removed = join($keys, ' ')
-  if $facts['os']['family'] == 'RedHat' {
-    exec { 'Remove the cpu arguments':
-      command => "grubby --update-kernel=ALL --remove-args='${to_be_removed}'",
-    }
-    -> exec { 'Remove the cpu arguments from /etc/default/grub':
-      command   => "/usr/local/bin/puppet-update-default-grub.sh --remove ${to_be_removed}",
-      logoutput => true,
-    }
-    -> exec { 'Add the cpu arguments':
-      command => "grubby --update-kernel=ALL --args='${truncated_grub_updates}'",
-    }
-    -> exec { 'Add the cpu arguments to /etc/default/grub':
-      command   => "/usr/local/bin/puppet-update-default-grub.sh --add ${truncated_grub_updates}",
-      logoutput => true,
-    }
-  } elsif($facts['os']['family'] == 'Debian') {
-    notice("Removing kernel args: ${to_be_removed}")
-    notice("Adding kernel args: ${truncated_grub_updates}")
-    exec { 'Remove the cpu arguments from /boot/efi/EFI/BOOT/boot.env':
-      command   => "/usr/local/bin/puppet-update-grub-env.py --remove-kernelparams '${to_be_removed}'",
-    }
-    -> exec { 'Add the cpu arguments to /boot/efi/EFI/BOOT/boot.env':
-      command   => "/usr/local/bin/puppet-update-grub-env.py --add-kernelparams '${truncated_grub_updates}'",
-    }
+  notice("Removing kernel args: ${to_be_removed}")
+  notice("Adding kernel args: ${truncated_grub_updates}")
+  exec { 'Remove the cpu arguments from /boot/efi/EFI/BOOT/boot.env':
+    command   => "/usr/local/bin/puppet-update-grub-env.py --remove-kernelparams '${to_be_removed}'",
+  }
+  -> exec { 'Add the cpu arguments to /boot/efi/EFI/BOOT/boot.env':
+    command   => "/usr/local/bin/puppet-update-grub-env.py --add-kernelparams '${truncated_grub_updates}'",
   }
 }
 

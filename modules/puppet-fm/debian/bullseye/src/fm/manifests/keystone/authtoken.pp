@@ -229,33 +229,16 @@ class fm::keystone::authtoken(
     fail('Please set password for FM service user')
   }
 
-  case $::osfamily {
-    'RedHat': {
-      keystone::resource::authtoken { 'fm_config':
-        username            => $username,
-        password            => $password,
-        project_name        => $project_name,
-        auth_url            => $auth_url,
-        auth_uri            => $auth_uri,
-        auth_type           => $auth_type,
-        user_domain_name    => $user_domain_name,
-        project_domain_name => $project_domain_name,
-        region_name         => $region_name,
-      }
-    }
-
-    default : {
-      keystone::resource::authtoken { 'fm_config':
-        username             => $username,
-        password             => $password,
-        project_name         => $project_name,
-        auth_url             => $auth_url,
-        www_authenticate_uri => $auth_uri,
-        auth_type            => $auth_type,
-        user_domain_name     => $user_domain_name,
-        project_domain_name  => $project_domain_name,
-        region_name          => $region_name,
-      }
-    }
+  keystone::resource::authtoken { 'fm_config':
+    username             => $username,
+    password             => $password,
+    project_name         => $project_name,
+    auth_url             => $auth_url,
+    www_authenticate_uri => $auth_uri,
+    auth_type            => $auth_type,
+    user_domain_name     => $user_domain_name,
+    project_domain_name  => $project_domain_name,
+    region_name          => $region_name,
   }
+
 }

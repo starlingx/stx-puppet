@@ -12,21 +12,9 @@ class dcdbsync::params {
   $conf_dir = '/etc/dcdbsync'
   $conf_file = '/etc/dcdbsync/dcdbsync.conf'
   $openstack_conf_file = '/etc/dcdbsync/dcdbsync_openstack.conf'
+  $package_name = 'distributedcloud-dcdbsync'
+  $api_package = false
+  $api_service = 'dcdbsync-api'
+  $api_openstack_service = 'dcdbsync-openstack-api'
 
-  if $facts['os']['family'] == 'Debian' {
-    $package_name           = 'distributedcloud-dcdbsync'
-    $api_package            = false
-    $api_service            = 'dcdbsync-api'
-    $api_openstack_service  = 'dcdbsync-openstack-api'
-
-  } elsif($facts['os']['family'] == 'RedHat') {
-
-    $package_name           = 'distributedcloud-dcdbsync'
-    $api_package            = false
-    $api_service            = 'dcdbsync-api'
-    $api_openstack_service  = 'dcdbsync-openstack-api'
-
-  } else {
-    fail("Unsupported osfamily ${facts['os']['family']}")
-  }
 }

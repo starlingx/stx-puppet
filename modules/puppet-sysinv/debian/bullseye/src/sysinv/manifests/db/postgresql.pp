@@ -46,22 +46,12 @@ class sysinv::db::postgresql(
   $privileges = 'ALL',
 ) {
 
-  if $::osfamily == 'Debian' {
-    ::openstacklib::db::postgresql { 'sysinv':
-      password   => $password,
-      dbname     => $dbname,
-      user       => $user,
-      encoding   => $encoding,
-      privileges => $privileges,
-    }
-  } else {
-    ::openstacklib::db::postgresql { 'sysinv':
-      password_hash => postgresql_password($user, $password),
-      dbname        => $dbname,
-      user          => $user,
-      encoding      => $encoding,
-      privileges    => $privileges,
-    }
+  ::openstacklib::db::postgresql { 'sysinv':
+    password   => $password,
+    dbname     => $dbname,
+    user       => $user,
+    encoding   => $encoding,
+    privileges => $privileges,
   }
 
   ::Openstacklib::Db::Postgresql['sysinv'] ~> Service <| title == 'sysinv-api' |>

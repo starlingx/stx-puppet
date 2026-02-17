@@ -11,13 +11,8 @@ class dcagent::params {
 
   $conf_dir = '/etc/dcagent'
   $conf_file = '/etc/dcagent/dcagent.conf'
+  $package_name = 'distributedcloud-dcagent'
+  $api_package = false
+  $api_service = 'dcagent-api'
 
-  if $facts['os']['family'] == 'Debian' {
-    $package_name           = 'distributedcloud-dcagent'
-    $api_package            = false
-    $api_service            = 'dcagent-api'
-
-  } else {
-    fail("Unsupported osfamily ${facts['os']['family']}")
-  }
 }

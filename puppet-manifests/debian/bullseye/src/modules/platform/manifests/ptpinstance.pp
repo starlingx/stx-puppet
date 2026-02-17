@@ -235,14 +235,8 @@ define platform::ptpinstance::nic_clock_reset (
 }
 
 class platform::ptpinstance::params {
-  if $::osfamily == 'Debian' {
-    $ptp_conf_dir = '/etc/linuxptp'
-    $ptp_options_dir = '/etc/default'
-  }
-  else {
-    $ptp_conf_dir = '/etc'
-    $ptp_options_dir = '/etc/sysconfig'
-  }
+  $ptp_conf_dir = '/etc/linuxptp'
+  $ptp_options_dir = '/etc/default'
 }
 
 class platform::ptpinstance::ptp_directories {

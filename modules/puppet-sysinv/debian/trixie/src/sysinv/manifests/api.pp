@@ -340,36 +340,19 @@ class sysinv::api (
   }
   Keystone_endpoint<||> -> Service['sysinv-api']
 
-  if $facts['os']['family'] == 'RedHat' {
-    exec { 'sysinv-dbsync':
-      command     => $sysinv::params::db_sync_command,
-      path        => '/usr/bin',
-      user        => 'sysinv',
-      refreshonly => true,
-      logoutput   => 'on_failure',
-      require     => Package['sysinv'],
-      # Only do the db sync if both controllers are running the same software
-      # version. Avoids impacting mate controller during an upgrade.
-      onlyif      => [
-        "test ${facts['controller_sw_versions_match']} = true",
-        'systemctl status postgresql'
-      ]
-    }
-  } elsif($facts['os']['family'] == 'Debian') {
-    exec { 'sysinv-dbsync':
-      command     => $sysinv::params::db_sync_command,
-      path        => '/usr/bin',
-      user        => 'sysinv',
-      refreshonly => true,
-      logoutput   => 'on_failure',
-      require     => Package['sysinv'],
-      # Only do the db sync if both controllers are running the same software
-      # version. Avoids impacting mate controller during an upgrade.
-      onlyif      => [
-        "test ${facts['controller_sw_versions_match']} = true",
-        'systemctl status postgresql@13-main'
-      ]
-    }
+  exec { 'sysinv-dbsync':
+    command     => $sysinv::params::db_sync_command,
+    path        => '/usr/bin',
+    user        => 'sysinv',
+    refreshonly => true,
+    logoutput   => 'on_failure',
+    require     => Package['sysinv'],
+    # Only do the db sync if both controllers are running the same software
+    # version. Avoids impacting mate controller during an upgrade.
+    onlyif      => [
+      "test ${facts['controller_sw_versions_match']} = true",
+      'systemctl status postgresql@13-main'
+    ]
   }
 
 }

@@ -536,20 +536,11 @@ class platform::config::tpm {
 
 
 class platform::config::kdump {
-  if $facts['os']['family'] == 'RedHat' {
-    file_line { '/etc/kdump.conf dracut_args':
-      path  => '/etc/kdump.conf',
-      line  => 'dracut_args --omit-drivers "ice e1000e i40e ixgbe ixgbevf iavf mlx5_ib mlx5_core bnxt_en bnxt_re"',
-      match => '^dracut_args .*--omit-drivers',
-    }
-    ~> service { 'kdump': }
-  } else {
-    exec { 'enable-kdump-tools':
-      command => '/usr/bin/systemctl enable kdump-tools.service',
-    }
-    -> service{ 'kdump-tools':
-      enable => true,
-    }
+  exec { 'enable-kdump-tools':
+    command => '/usr/bin/systemctl enable kdump-tools.service',
+  }
+  -> service{ 'kdump-tools':
+    enable => true,
   }
 }
 
@@ -557,27 +548,19 @@ class platform::config::kdump {
 class platform::config::certs::ssl_ca
   inherits ::platform::config::certs::params {
 
-  case $facts['os']['family'] {
-    'RedHat': {
-      $ssl_ca_file = '/etc/pki/ca-trust/source/anchors/ca-cert.pem'
-      $ca_update_cmd = 'update-ca-trust'
-    }
-    default: {
-      # This directory does not exist by default on debian
-      $ca_trust_dir = '/etc/pki/ca-trust/source/anchors'
-      file { ['/etc/pki', '/etc/pki/ca-trust', '/etc/pki/ca-trust/source', $ca_trust_dir]:
-        ensure => 'directory',
-        owner  => root,
-        group  => root,
-        mode   => '0755',
-      }
-      # update-ca-certificates command only scans for *.crt files
-      $ssl_ca_file = "${ca_trust_dir}/ca-cert.crt"
-      # This updates Debian's Trusted CAs file which is /etc/ssl/certs/ca-certificates.crt
-      # with certificates present in *.crt files in $ca_trust_dir
-      $ca_update_cmd = "update-ca-certificates --localcertsdir ${ca_trust_dir}"
-    }
+  # This directory does not exist by default on debian
+  $ca_trust_dir = '/etc/pki/ca-trust/source/anchors'
+  file { ['/etc/pki', '/etc/pki/ca-trust', '/etc/pki/ca-trust/source', $ca_trust_dir]:
+    ensure => 'directory',
+    owner  => root,
+    group  => root,
+    mode   => '0755',
   }
+  # update-ca-certificates command only scans for *.crt files
+  $ssl_ca_file = "${ca_trust_dir}/ca-cert.crt"
+  # This updates Debian's Trusted CAs file which is /etc/ssl/certs/ca-certificates.crt
+  # with certificates present in *.crt files in $ca_trust_dir
+  $ca_update_cmd = "update-ca-certificates --localcertsdir ${ca_trust_dir}"
 
   if str2bool($is_initial_config) {
     $containerd_restart_cmd = 'systemctl restart containerd'
@@ -651,15 +634,7 @@ class platform::config::dc_root_ca
   inherits ::platform::config::dccert::params {
   $dc_root_ca_file = '/etc/pki/ca-trust/source/anchors/dc-adminep-root-ca.crt'
   $dc_adminep_cert_file = '/etc/ssl/private/admin-ep-cert.pem'
-
-  case $facts['os']['family'] {
-    'RedHat': {
-      $ca_update_cmd = 'update-ca-trust'
-    }
-    default: {
-      $ca_update_cmd = 'update-ca-certificates --localcertsdir /etc/pki/ca-trust/source/anchors'
-    }
-  }
+  $ca_update_cmd = 'update-ca-certificates --localcertsdir /etc/pki/ca-trust/source/anchors'
 
   if ! empty($dc_adminep_crt) {
     file { 'adminep-cert':
@@ -729,19 +704,7 @@ class platform::config::post
   include ::platform::params
   include ::platform::config::dnsmasq
 
-  case $facts['os']['family'] {
-    'RedHat': {
-      $cronservice = 'crond'
-    }
-    'Debian': {
-      $cronservice = 'cron'
-    }
-    default: {
-      fail("unsuported osfamily ${facts['os']['family']}, currently Debian and Redhat are the only supported platforms")
-    }
-  } # Case $facts['os']['family']
-
-  service { $cronservice:
+  service { 'cron':
     ensure => 'running',
     enable => true,
   }
