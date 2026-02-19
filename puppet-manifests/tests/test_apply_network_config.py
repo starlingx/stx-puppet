@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025 Wind River Systems, Inc.
+# Copyright (c) 2025-2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -1774,6 +1774,15 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
                           'metric': '1'},
                           anc.create_route_obj_from_entry(
                               "13.13.1.0 255.255.255.0 12.12.1.65 bond0 metric 1"))
+        self.assertEqual({'ifname': 'vlan200',
+                          'network': '13.13.3.0',
+                          'netmask': '255.255.255.0',
+                          'nexthop': '12.12.3.113',
+                          'src': '12.12.3.50',
+                          'metric': '1'},
+                          anc.create_route_obj_from_entry(
+                              "13.13.3.0 255.255.255.0 12.12.3.113 vlan200 "
+                              "src 12.12.3.50 metric 1"))
 
     def test_get_prefix_length(self):
         self.assertEqual(0, anc.get_prefix_length('0.0.0.0'))

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-# Copyright (c) 2025 Wind River Systems, Inc.
+# Copyright (c) 2025-2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -680,8 +680,9 @@ def create_route_obj_from_entry(route_entry):
                  "netmask": verbs[1],
                  "nexthop": verbs[2],
                  "ifname": verbs[3]}
-    if len(verbs) > 4:
-        route_obj["metric"] = verbs[5]
+    for key in ["metric", "src"]:
+        if key in verbs and verbs.index(key) + 1 < len(verbs):
+            route_obj[key] = verbs[verbs.index(key) + 1]
     return route_obj
 
 
@@ -731,6 +732,8 @@ def get_route_description(route, full=True):
     linux_network = get_linux_network(route)
     gateway = f" via {route['nexthop']} dev {route['ifname']}" if full else ""
     descr = f"{linux_network}{gateway}"
+    if src := route.get("src", None):
+        descr += f" src {src}"
     if metric := route.get("metric", None):
         descr += f" metric {metric}"
     return descr
