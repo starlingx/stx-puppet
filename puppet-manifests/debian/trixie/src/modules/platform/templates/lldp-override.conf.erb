@@ -1,7 +1,7 @@
 [Service]
 # syscall filtering
 SystemCallFilter=@system-service
-SystemCallFilter=mount
+SystemCallFilter=fsopen fsconfig fsmount move_mount
 SystemCallFilter=umount
 SystemCallFilter=chroot
 SystemCallErrorNumber=EPERM
