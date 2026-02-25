@@ -38,16 +38,14 @@
 #   (optional) Maximum database connection retries during startup.
 #   Defaults to undef.
 #
-# [*database_idle_timeout*]
-#   (optional) Timeout before idle database connections are reaped.
-#   Defaults to undef.
+# [*connection_recycle_time*]
+#   (optional) Connections which have been present in the connection pool
+#   longer than this number of seconds will be replaced with a new one the
+#   next time they are checked out from the pool.
+#   Defaults to: undef.
 #
 # [*database_retry_interval*]
 #   (optional) Interval between retries of opening a database connection.
-#   Defaults to undef.
-#
-# [*database_min_pool_size*]
-#   (optional) Minimum number of SQL connections to keep open in a pool.
 #   Defaults to undef.
 #
 # [*database_max_pool_size*]
@@ -66,8 +64,7 @@ class fm (
   $log_facility                       = undef,
   $log_dir                            = undef,
   $database_connection                = undef,
-  $database_idle_timeout              = undef,
-  $database_min_pool_size             = undef,
+  $connection_recycle_time            = undef,
   $database_max_pool_size             = undef,
   $database_max_retries               = undef,
   $database_retry_interval            = undef,
@@ -96,7 +93,7 @@ class fm (
   $real_connection = regsubst($database_connection,'^postgresql:','postgresql+psycopg2:')
   fm_config {
     'database/connection':               value => $real_connection, secret => true;
-    'database/connection_recycle_time':  value => $database_idle_timeout;
+    'database/connection_recycle_time':  value => $connection_recycle_time;
     'database/max_pool_size':            value => $database_max_pool_size;
     'database/max_overflow':             value => $database_max_overflow;
   }
