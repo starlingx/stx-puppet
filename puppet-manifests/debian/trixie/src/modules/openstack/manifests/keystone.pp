@@ -241,7 +241,7 @@ class openstack::keystone::endpointgroup
     $os_username = $platform::client::params::admin_username
     $identity_region = $platform::client::params::identity_region
     $keystone_region = $platform::client::params::keystone_identity_region
-    $keyring_file = $platform::client::credentials::params::keyring_file
+    $keyring_script_file = $platform::client::credentials::params::keyring_script_file
     $auth_url = $platform::client::params::identity_auth_url
     $os_project_name = $platform::client::params::admin_project_name
     $api_version = 3

@@ -26,8 +26,8 @@ class platform::mtce::params (
 class platform::mtce
   inherits ::platform::mtce::params {
 
-  include ::platform::client::credentials::params
-  $keyring_directory = $::platform::client::credentials::params::keyring_directory
+  include ::platform::params
+  $keyring_directory = $::platform::params::keyring_directory
 
   file { '/etc/mtc.ini':
     ensure  => present,
