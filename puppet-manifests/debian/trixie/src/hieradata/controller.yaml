@@ -180,6 +180,7 @@ keystone::sync_db: false
 keystone::enable_proxy_headers_parsing: true
 keystone::log_file: /dev/null
 keystone::logging::log_config_append : '/etc/keystone/logging.conf'
+keystone::enable_credential_setup: false
 
 keystone::endpoint::default_domain: 'Default'
 keystone::endpoint::version: 'v3'
