@@ -11,20 +11,20 @@ class platform::sysinv::params (
   # systemcontroller on DC)
   if ($::platform::params::system_type == 'All-in-one' and
       $::platform::params::distributed_cloud_role != 'systemcontroller') {
-    $db_idle_timeout = 60
+    $db_connection_recycle_time = 60
     $db_pool_size = 1
     $db_over_size = 5
   } else {
-    $db_idle_timeout = undef
+    $db_connection_recycle_time = undef
     $db_pool_size = undef
     $db_over_size = undef
   }
 }
 
 class platform::sysinv::custom::params (
-  $db_idle_timeout = undef,
-  $db_pool_size    = undef,
-  $db_over_size    = undef,
+  $db_connection_recycle_time = undef,
+  $db_pool_size               = undef,
+  $db_over_size               = undef,
 ) {}
 
 class platform::sysinv
@@ -91,13 +91,13 @@ class platform::sysinv
 
   # On AIO systems, restrict the connection pool size
   # If database information doesn't exist in yaml file, use default values
-  if $::platform::sysinv::custom::params::db_idle_timeout {
+  if $::platform::sysinv::custom::params::db_connection_recycle_time {
     Sysinv_config <| title == 'database/connection_recycle_time' |> {
-      value => $::platform::sysinv::custom::params::db_idle_timeout,
+      value => $::platform::sysinv::custom::params::db_connection_recycle_time,
     }
   } else {
     Sysinv_config <| title == 'database/connection_recycle_time' |> {
-      value => $::platform::sysinv::params::db_idle_timeout,
+      value => $::platform::sysinv::params::db_connection_recycle_time,
     }
   }
 

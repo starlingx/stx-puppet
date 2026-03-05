@@ -17,7 +17,7 @@ platform::mtce::params::sm_server_port: 2124
 platform::mtce::params::sm_client_port: 2224
 
 # sysinv
-sysinv::database_idle_timeout: 60
+sysinv::connection_recycle_time: 60
 sysinv::database_max_overflow: 64
 sysinv::database_max_pool_size: 1
 sysinv::use_syslog: true

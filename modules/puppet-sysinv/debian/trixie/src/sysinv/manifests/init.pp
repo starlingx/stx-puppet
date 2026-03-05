@@ -1,7 +1,7 @@
 #
 # Files in this package are licensed under Apache; see LICENSE file.
 #
-# Copyright (c) 2013-2021 Wind River Systems, Inc.
+# Copyright (c) 2013-2021,2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -19,7 +19,7 @@
 
 class sysinv (
   $database_connection         = '',
-  $database_idle_timeout       = 3600,
+  $connection_recycle_time     = 3600,
   $database_max_pool_size      = 5,
   $database_max_overflow       = 10,
   $journal_max_size            = 51200,
@@ -163,7 +163,7 @@ class sysinv (
 
   sysinv_config {
     'database/connection':               value => $real_connection, secret => true;
-    'database/connection_recycle_time':  value => $database_idle_timeout;
+    'database/connection_recycle_time':  value => $connection_recycle_time;
     'database/max_pool_size':            value => $database_max_pool_size;
     'database/max_overflow':             value => $database_max_overflow;
   }

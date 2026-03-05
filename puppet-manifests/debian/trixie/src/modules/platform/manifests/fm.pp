@@ -13,20 +13,20 @@ class platform::fm::params (
   # systemcontroller on DC)
   if ($::platform::params::system_type == 'All-in-one' and
       $::platform::params::distributed_cloud_role != 'systemcontroller') {
-    $db_idle_timeout = 60
+    $db_connection_recycle_time = 60
     $db_pool_size = 1
     $db_over_size = 5
   } else {
-    $db_idle_timeout = undef
+    $db_connection_recycle_time = undef
     $db_pool_size = undef
     $db_over_size = undef
   }
 }
 
 class platform::fm::custom::params (
-  $db_idle_timeout = undef,
-  $db_pool_size    = undef,
-  $db_over_size    = undef,
+  $db_connection_recycle_time = undef,
+  $db_pool_size               = undef,
+  $db_over_size               = undef,
 ) {}
 
 class platform::fm::config
@@ -36,10 +36,10 @@ class platform::fm::config
   # Decides between -in order- (1) custom: defined by system parameters,
   # (2) AIO values defined on params class, or (3) the default values defined
   # on personality yaml
-  if $::platform::fm::custom::params::db_idle_timeout {
-    $db_idle_timeout = $::platform::fm::custom::params::db_idle_timeout
+  if $::platform::fm::custom::params::db_connection_recycle_time {
+    $db_connection_recycle_time = $::platform::fm::custom::params::db_connection_recycle_time
   } else {
-    $db_idle_timeout = $::platform::fm::params::db_idle_timeout
+    $db_connection_recycle_time = $::platform::fm::params::db_connection_recycle_time
   }
 
   if $::platform::fm::custom::params::db_pool_size {
@@ -55,15 +55,14 @@ class platform::fm::config
   }
 
   class { '::fm':
-    region_name            => $region_name,
-    system_name            => $system_name,
-    sysinv_catalog_info    => $sysinv_catalog_info,
-    snmp_enabled           => $snmp_enabled,
-    snmp_trap_server_port  => $snmp_trap_server_port,
-    database_idle_timeout  => $db_idle_timeout,
-    database_max_pool_size => $db_pool_size,
-    database_min_pool_size => $db_pool_size,
-    database_max_overflow  => $db_over_size,
+    region_name             => $region_name,
+    system_name             => $system_name,
+    sysinv_catalog_info     => $sysinv_catalog_info,
+    snmp_enabled            => $snmp_enabled,
+    snmp_trap_server_port   => $snmp_trap_server_port,
+    connection_recycle_time => $db_connection_recycle_time,
+    database_max_pool_size  => $db_pool_size,
+    database_max_overflow   => $db_over_size,
   }
 }
 
