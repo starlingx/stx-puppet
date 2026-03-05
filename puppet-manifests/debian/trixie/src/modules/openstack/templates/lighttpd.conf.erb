@@ -254,7 +254,7 @@ $SERVER["socket"] == "[::]:<%= @http_port %>" { }
 $SERVER["socket"] == ":<%= @https_port %>" {
     ssl.engine                 = "enable"
     ssl.pemfile                = "/etc/ssl/private/server-cert.pem"
-    ssl.ca-file                = "/etc/ssl/private/server-cert.pem"
+    ssl.ca-file                = "/etc/ssl/certs/ca-certificates.crt"
     ssl.use-sslv2              = "disable"
     ssl.use-sslv3              = "disable"
     ssl.cipher-list            = "ALL:!aNULL:!eNULL:!EXPORT:!TLSv1:!TLSv1.1:!SHA1:!3DES:!ARIA:!SHA256:!SHA384:!DES:!CAMELLIA:!MD5:!PSK:!RC4:!AES256-GCM-SHA384:!AES256-CCM8:!AES256-CCM:!AES128-GCM-SHA256:!AES128-CCM8:!AES128-CCM"
@@ -263,7 +263,7 @@ $SERVER["socket"] == ":<%= @https_port %>" {
 $SERVER["socket"] == "[::]:<%= @https_port %>" {
     ssl.engine                 = "enable"
     ssl.pemfile                = "/etc/ssl/private/server-cert.pem"
-    ssl.ca-file                = "/etc/ssl/private/server-cert.pem"
+    ssl.ca-file                = "/etc/ssl/certs/ca-certificates.crt"
     ssl.use-sslv2              = "disable"
     ssl.use-sslv3              = "disable"
     ssl.cipher-list            = "ALL:!aNULL:!eNULL:!EXPORT:!TLSv1:!TLSv1.1:!SHA1:!3DES:!ARIA:!SHA256:!SHA384:!DES:!CAMELLIA:!MD5:!PSK:!RC4:!AES256-GCM-SHA384:!AES256-CCM8:!AES256-CCM:!AES128-GCM-SHA256:!AES128-CCM8:!AES128-CCM"
