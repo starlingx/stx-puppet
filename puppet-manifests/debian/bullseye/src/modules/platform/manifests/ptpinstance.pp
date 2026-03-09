@@ -43,6 +43,29 @@ define platform::ptpinstance::ptp_config_files(
   }
 }
 
+class platform::ptpinstance::create_ptp_config_file (
+  $config = {},
+  $ptp_state = {},
+){
+  create_resources('platform::ptpinstance::ptp_config_files', $config, $ptp_state)
+}
+
+class platform::ptpinstance::ptp_interfaces_conf {
+  include ::platform::ptpinstance::params
+  $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
+  $ptp_options_dir = $::platform::ptpinstance::params::ptp_options_dir
+
+  require ::platform::ptpinstance::ptp_directories
+  require ::platform::ptpinstance::create_ptp_config_file
+
+  exec { 'create_ptp_interfaces_conf':
+    command  => "python /usr/share/puppet/modules/platform/files/create_ptp_interfaces_conf.py \
+                ${ptp_conf_dir}/ptpinstance/ \
+                ${ptp_options_dir}/ptpinstance/",
+    provider => shell,
+  }
+}
+
 class platform::ptpinstance::monitoring (
   $ptp_instances = {},
 ) {
@@ -564,15 +587,20 @@ class platform::ptpinstance (
   }
 
   if $enabled {
-    create_resources('platform::ptpinstance::ptp_config_files', $config,
-                      $ptp_state.merge({'gpsd_monitored_devices' => $gpsd_monitored_devices})
-    )
+    # Create PTP services configuration files
+    class { 'platform::ptpinstance::create_ptp_config_file':
+      config    => $config,
+      ptp_state => $ptp_state.merge({'gpsd_monitored_devices' => $gpsd_monitored_devices})
+    }
     create_resources('platform::ptpinstance::set_ptp4l_pmc_parameters', $config, $ptp_state)
 
     # Create monitoring configuration
     class { 'platform::ptpinstance::monitoring':
       ptp_instances => $config + $nic_clock_config_extended,
     }
+
+    # Create PTP interfaces configuration
+    class { 'platform::ptpinstance::ptp_interfaces_conf': }
   }
 
   exec { 'set-ice-gnss-thread-niceness':
