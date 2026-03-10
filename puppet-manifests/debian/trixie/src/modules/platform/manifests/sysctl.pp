@@ -114,7 +114,7 @@ class platform::sysctl::tuned inherits platform::sysctl::params {
   # Populate devices to disable APM using device_path
   # Eg.: devices_udev_regex=(ID_PATH=pci-0000:00:17.0-ata-1.0)|(ID_PATH=pci-0000:00:17.0-ata-2.0)
   file_line { 'tuned_populate_devices':
-    path  => '/etc/tuned/starlingx/tuned.conf',
+    path  => '/etc/tuned/profiles/starlingx/tuned.conf',
     line  => "devices_udev_regex=${tuned_devices}",
     match => '^[\s]*#?devices_udev_regex=',
   }
