@@ -90,7 +90,7 @@ class fm::logging(
   $use_syslog                    = $os_service_default,
   $use_stderr                    = $os_service_default,
   $log_facility                  = $os_service_default,
-  $log_dir                       = '/var/log/fm',
+  $log_dir                       = $os_service_default,
   $debug                         = $os_service_default,
   $logging_context_format_string = $os_service_default,
   $logging_default_format_string = $os_service_default,
