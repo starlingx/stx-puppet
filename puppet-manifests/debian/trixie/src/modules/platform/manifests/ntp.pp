@@ -1,6 +1,6 @@
 class platform::ntp::apparmor {
   exec { 'apparmor-update-ntpd':
-    command => "sed -i '/\\/etc\\/ntp.conf r,/a\\ \\ \\/etc\\/ntp_initial.conf r,' /etc/apparmor.d/usr.sbin.ntpd",
+    command => "sed -i '/\\/etc\\/ntpsec\\/ntp.conf r,/a\\ \\ \\/etc\\/ntp_initial.conf r,' /etc/apparmor.d/usr.sbin.ntpd",
     unless  => "grep -q '/etc/ntp_initial.conf r,' /etc/apparmor.d/usr.sbin.ntpd",
     notify  => Exec['reload-apparmor-ntp-profile'],
   }
@@ -60,7 +60,7 @@ class platform::ntp (
     -> exec { 'ntp-initial-config':
       command => "timeout ${ntpdate_timeout} /usr/sbin/ntpd -g -q -n -c /etc/ntp_initial.conf && /usr/sbin/hwclock --systohc",
       returns => [ 0, 1, 124 ],
-      onlyif  => "test ! -f /etc/platform/simplex || grep -q '^server' /etc/ntp.conf",
+      onlyif  => "test ! -f /etc/platform/simplex || grep -q '^server' /etc/ntpsec/ntp.conf",
     }
     -> service { $ntp_service_name:
       ensure     => 'running',
@@ -97,7 +97,7 @@ class platform::ntp::server {
 
     file { 'ntp_config':
       ensure  => file,
-      path    => '/etc/ntp.conf',
+      path    => '/etc/ntpsec/ntp.conf',
       mode    => '0640',
       content => template('platform/ntp.conf.server.erb'),
     }
@@ -124,7 +124,7 @@ class platform::ntp::client {
 
     file { 'ntp_config':
       ensure  => file,
-      path    => '/etc/ntp.conf',
+      path    => '/etc/ntpsec/ntp.conf',
       mode    => '0644',
       content => template('platform/ntp.conf.client.erb'),
     }
