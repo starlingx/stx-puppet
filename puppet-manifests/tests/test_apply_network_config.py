@@ -119,13 +119,23 @@ class NetworkingMock():  # pylint: disable=too-many-instance-attributes,too-many
 
     def _add_route_line(self, line):
         pieces = line.split()
-        if len(pieces) < 4:
+        if len(pieces) < 3:
             raise NetworkingMockError(f"Invalid route in '{anc.ETC_ROUTES_FILE}' file: '{line}'")
-        netmask_ip = IPAddress(pieces[1])
-        prefixlen = netmask_ip.netmask_bits()
-        network = f"{pieces[0]}/{prefixlen}"
-        metric = pieces[5] if len(pieces) > 4 else None
-        self._do_ip_route_add(network, pieces[2], pieces[3], metric)
+
+        network = ""
+        gateway = ""
+
+        if pieces[0] == "default":
+            network = "default"
+            gateway = pieces[1]
+        else:
+            netmask_ip = IPAddress(pieces[1])
+            prefixlen = netmask_ip.netmask_bits()
+            gateway = pieces[2]
+            network = f"{pieces[0]}/{prefixlen}"
+
+        metric = pieces[5] if len(pieces) > 5 else None
+        self._do_ip_route_add(network, gateway, pieces[3], metric)
 
     def _apply_etc_routes(self):
         if not self._fs.isfile(anc.ETC_ROUTES_FILE):
@@ -1021,8 +1031,12 @@ class ConfigFileGenerator():
 
     @staticmethod
     def _gen_route_line(route):
-        net = IPNetwork(route["net"])
-        line = f"{net.ip} {net.netmask} {route['via']} {route['dev']}"
+        network = route["net"]
+        if network == "default":
+            line = f"default {route['via']} {route['dev']}"
+        else:
+            net = IPNetwork(network)
+            line = f"{net.ip} {net.netmask} {route['via']} {route['dev']}"
         if metric := route.get("metric", None):
             line += f" metric {metric}"
         return line
@@ -1069,16 +1083,13 @@ class ConfigFileGenerator():
                 tree[anc.PUPPET_FILE] = self.generate_interfaces_file(interfaces)
             if routes := puppet_files.get("routes", None):
                 tree[anc.PUPPET_ROUTES_FILE] = self.generate_routes_file(routes)
-            if routes6 := puppet_files.get("routes6", None):
-                tree[anc.PUPPET_ROUTES6_FILE] = self.generate_routes_file(routes6)
 
         if etc_files:
             if interfaces := etc_files.get("interfaces", None):
                 self._generate_ifcfg_files(tree, interfaces)
             routes = etc_files.get("routes", [])
-            routes6 = etc_files.get("routes6", [])
-            if routes or routes6:
-                tree[anc.ETC_ROUTES_FILE] = self.generate_routes_file(routes + routes6)
+            if routes:
+                tree[anc.ETC_ROUTES_FILE] = self.generate_routes_file(routes)
 
         return tree
 
@@ -1552,8 +1563,7 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
                 "enp0s8:2-4": {"address": "fd01::2/64"}},
             "routes": [
                 {"net": "14.15.1.0/24", "via": "169.254.202.111", "dev": "enp0s8", "metric": 1},
-                {"net": "14.14.2.0/24", "via": "192.168.204.111", "dev": "enp0s8", "metric": 1}],
-            "routes6": [
+                {"net": "14.14.2.0/24", "via": "192.168.204.111", "dev": "enp0s8", "metric": 1},
                 {"net": "fa01:2::/64", "via": "fd01::111", "dev": "enp0s8", "metric": 1}],
         }
 
@@ -1708,15 +1718,13 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
         self._add_fs_mock(
             {anc.PUPPET_ROUTES_FILE:
                 "13.13.1.0 255.255.255.0 12.12.1.65 bond0 metric 1\n"
-                "13.13.2.0 255.255.255.0 12.12.3.37 enp0s8\n",
-             anc.PUPPET_ROUTES6_FILE:
+                "13.13.2.0 255.255.255.0 12.12.3.37 enp0s8\n"
                 "dead:beef:55:: ffff:ffff:ffff:ffff:: dead:beef::aa:1:453 bond0 metric 1\n"
                 "dead:beef:78:: ffff:ffff:ffff:ffff:: dead:beef:bb::bb:1:172 vlan200"})
         self._add_logger_mock()
 
         entries = self._mocked_call([self._mock_fs, self._mock_logger], anc.get_route_entries,
-                                    [anc.PUPPET_ROUTES_FILE, anc.PUPPET_ROUTES6_FILE])
-
+                                    [anc.PUPPET_ROUTES_FILE])
         self.assertEqual(['13.13.1.0 255.255.255.0 12.12.1.65 bond0 metric 1',
                           '13.13.2.0 255.255.255.0 12.12.3.37 enp0s8',
                           'dead:beef:55:: ffff:ffff:ffff:ffff:: dead:beef::aa:1:453 bond0 metric 1',
@@ -1979,8 +1987,7 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
         links = ["enc10", "enc11", "enc12", "enc13"]
         self._add_fs_mock(FILE_GEN.generate_file_tree(
             puppet_files={
-                "routes": [route for route in puppet_routes if ":" not in route["net"]],
-                "routes6": [route for route in puppet_routes if ":" in route["net"]]
+                "routes": puppet_routes
             },
             etc_files={
                 "interfaces": {
@@ -2717,8 +2724,7 @@ class TestEthAndLoMigration(MigrationBaseTestCase):
             {"net": "14.14.1.0/24", "via": "10.20.1.111", "dev": "enp0s3", "metric": 1},
             {"net": "14.14.2.0/24", "via": "192.168.204.111", "dev": "lo", "metric": 1},
             {"net": "14.14.3.0/24", "via": "192.168.206.111", "dev": "lo", "metric": 1},
-            {"net": "14.14.4.0/24", "via": "112.44.202.111", "dev": "enp0s9", "metric": 1}],
-        "routes6": [
+            {"net": "14.14.4.0/24", "via": "112.44.202.111", "dev": "enp0s9", "metric": 1},
             {"net": "fa01:1::/64", "via": "fd00::111", "dev": "enp0s3", "metric": 1},
             {"net": "fa01:2::/64", "via": "fd01::111", "dev": "lo", "metric": 1},
             {"net": "fa01:3::/64", "via": "fd02::111", "dev": "lo", "metric": 1},
@@ -2748,8 +2754,7 @@ class TestEthAndLoMigration(MigrationBaseTestCase):
             {"net": "14.15.1.0/24", "via": "169.254.202.111", "dev": "enp0s8", "metric": 1},
             {"net": "14.14.2.0/24", "via": "192.168.204.111", "dev": "enp0s8", "metric": 1},
             {"net": "14.14.3.0/24", "via": "192.168.206.111", "dev": "enp0s8", "metric": 1},
-            {"net": "14.14.4.0/24", "via": "112.44.202.111", "dev": "enp0s3", "metric": 1}],
-        "routes6": [
+            {"net": "14.14.4.0/24", "via": "112.44.202.111", "dev": "enp0s3", "metric": 1},
             {"net": "fa01:1::/64", "via": "fd00::111", "dev": "enp0s9", "metric": 1},
             {"net": "fa01:2::/64", "via": "fd01::111", "dev": "enp0s8", "metric": 1},
             {"net": "fa01:3::/64", "via": "fd02::111", "dev": "enp0s8", "metric": 1},
@@ -2830,8 +2835,7 @@ class TestEthToVLANMigration(MigrationBaseTestCase):
             {"net": "14.14.1.0/24", "via": "10.20.1.111", "dev": "enp0s3", "metric": 1},
             {"net": "14.15.1.0/24", "via": "169.254.202.111", "dev": "enp0s8", "metric": 1},
             {"net": "14.14.2.0/24", "via": "192.168.204.111", "dev": "enp0s8", "metric": 1},
-            {"net": "14.14.3.0/24", "via": "192.168.206.111", "dev": "enp0s8", "metric": 1}],
-        "routes6": [
+            {"net": "14.14.3.0/24", "via": "192.168.206.111", "dev": "enp0s8", "metric": 1},
             {"net": "fa01:1::/64", "via": "fd00::111", "dev": "enp0s3", "metric": 1},
             {"net": "fa01:2::/64", "via": "fd01::111", "dev": "enp0s8", "metric": 1},
             {"net": "fa01:3::/64", "via": "fd02::111", "dev": "enp0s8", "metric": 1}],
@@ -2855,8 +2859,7 @@ class TestEthToVLANMigration(MigrationBaseTestCase):
             {"net": "14.14.1.0/24", "via": "10.20.1.111", "dev": "enp0s3", "metric": 1},
             {"net": "14.15.1.0/24", "via": "169.254.202.111", "dev": "enp0s8", "metric": 1},
             {"net": "14.14.2.0/24", "via": "192.168.204.111", "dev": "vlan100", "metric": 1},
-            {"net": "14.14.3.0/24", "via": "192.168.206.111", "dev": "vlan200", "metric": 1}],
-        "routes6": [
+            {"net": "14.14.3.0/24", "via": "192.168.206.111", "dev": "vlan200", "metric": 1},
             {"net": "fa01:1::/64", "via": "fd00::111", "dev": "enp0s3", "metric": 1},
             {"net": "fa01:2::/64", "via": "fd01::111", "dev": "vlan100", "metric": 1},
             {"net": "fa01:3::/64", "via": "fd02::111", "dev": "vlan200", "metric": 1}],
@@ -2930,8 +2933,7 @@ class TestEthToBondingMigration(MigrationBaseTestCase):
             {"net": "14.14.1.0/24", "via": "10.20.1.111", "dev": "enp0s3", "metric": 1},
             {"net": "14.15.1.0/24", "via": "169.254.202.111", "dev": "enp0s8", "metric": 1},
             {"net": "14.14.2.0/24", "via": "192.168.204.111", "dev": "enp0s8", "metric": 1},
-            {"net": "14.14.3.0/24", "via": "192.168.206.111", "dev": "enp0s8", "metric": 1}],
-        "routes6": [
+            {"net": "14.14.3.0/24", "via": "192.168.206.111", "dev": "enp0s8", "metric": 1},
             {"net": "fa01:1::/64", "via": "fd00::111", "dev": "enp0s3", "metric": 1},
             {"net": "fa01:2::/64", "via": "fd01::111", "dev": "enp0s8", "metric": 1},
             {"net": "fa01:3::/64", "via": "fd02::111", "dev": "enp0s8", "metric": 1}],
@@ -2963,8 +2965,7 @@ class TestEthToBondingMigration(MigrationBaseTestCase):
             {"net": "14.14.1.0/24", "via": "10.20.1.111", "dev": "oam0", "metric": 1},
             {"net": "14.15.1.0/24", "via": "169.254.202.111", "dev": "pxeboot0", "metric": 1},
             {"net": "14.14.2.0/24", "via": "192.168.204.111", "dev": "vlan100", "metric": 1},
-            {"net": "14.14.3.0/24", "via": "192.168.206.111", "dev": "vlan200", "metric": 1}],
-        "routes6": [
+            {"net": "14.14.3.0/24", "via": "192.168.206.111", "dev": "vlan200", "metric": 1},
             {"net": "fa01:1::/64", "via": "fd00::111", "dev": "oam0", "metric": 1},
             {"net": "fa01:2::/64", "via": "fd01::111", "dev": "vlan100", "metric": 1},
             {"net": "fa01:3::/64", "via": "fd02::111", "dev": "vlan200", "metric": 1}],
@@ -3057,8 +3058,6 @@ class TestBondingMigration(MigrationBaseTestCase):
             {"net": "14.14.3.0/24", "via": "192.168.206.111", "dev": "enp0s8", "metric": 1},
             {"net": "14.14.4.0/24", "via": "112.154.1.111", "dev": "data0", "metric": 1},
             {"net": "14.14.5.0/24", "via": "112.155.1.111", "dev": "data1", "metric": 1},
-        ],
-        "routes6": [
             {"net": "fa01:1::/64", "via": "fd00::111", "dev": "enp0s3", "metric": 1},
             {"net": "fa01:2::/64", "via": "fd01::111", "dev": "enp0s8", "metric": 1},
             {"net": "fa01:3::/64", "via": "fd02::111", "dev": "enp0s8", "metric": 1},
@@ -3097,8 +3096,6 @@ class TestBondingMigration(MigrationBaseTestCase):
             {"net": "14.14.3.0/24", "via": "192.168.206.111", "dev": "enp0s10", "metric": 1},
             {"net": "14.14.4.0/24", "via": "112.154.1.111", "dev": "data0", "metric": 1},
             {"net": "14.14.5.0/24", "via": "112.155.1.111", "dev": "data1", "metric": 1},
-        ],
-        "routes6": [
             {"net": "fa01:1::/64", "via": "fd00::111", "dev": "enp0s3", "metric": 1},
             {"net": "fa01:2::/64", "via": "fd01::111", "dev": "enp0s10", "metric": 1},
             {"net": "fa01:3::/64", "via": "fd02::111", "dev": "enp0s10", "metric": 1},
@@ -3453,3 +3450,134 @@ class AuditDhcpTests(BaseTestCase):
 
         self.assertTrue(dhclient_started.get("started", False),
                         f"Expected dhclient to be started for interface {eth_iface}")
+
+
+class TestDefaultRouteRemoval(BaseTestCase):
+    """Tests for default route removal from current_routes_set in update_routes"""
+
+    _HEADER = "# HEADER: Last generated at: 2025-01-01 00:00:00 +0000"
+
+    def test_update_routes_removes_default_ipv4_from_etc_filter(self):
+        """Test that default IPv4 routes are removed from current_routes_set,
+           but still present in the kernel since the default route is configured by variable
+           in ifupdown
+        """
+        links = ["enp0s8"]
+        etc_routes = [
+            {"net": "default", "via": "10.10.10.1", "dev": "enp0s8", "metric": 1},
+            {"net": "10.33.1.0/24", "via": "10.10.10.101", "dev": "enp0s8", "metric": 1}
+        ]
+        puppet_routes = [
+            {"net": "10.33.1.0/24", "via": "10.10.10.101", "dev": "enp0s8", "metric": 1}
+        ]
+
+        self._add_fs_mock(FILE_GEN.generate_file_tree(
+            puppet_files={
+                "routes": puppet_routes
+            },
+            etc_files={
+                "interfaces": {
+                    "auto": links,
+                    "enp0s8": {"address": "10.10.10.3/24"}
+                },
+                "routes": etc_routes
+            }
+        ))
+        self._add_nw_mock(links)
+        self._add_scmd_mock()
+        self._add_logger_mock()
+        self._nwmock.apply_auto()
+
+        with mock.patch('debian.bullseye.src.bin.apply_network_config.get_header',
+             return_value=self._HEADER):
+            self._mocked_call([self._mock_fs, self._mock_syscmd, self._mock_sysinv_lock,
+                               self._mock_logger], anc.update_routes, None)
+
+        # Check log messages, the default route should be removed from the current_routes_set,
+        #  but not from the kernel
+        log_messages = [msg for level, msg in self._log.get_history()]
+        self.assertIn("Removing default route entries from current routes: {'default "
+                      "10.10.10.1 enp0s8 metric 1'}", log_messages)
+
+    def test_update_routes_removes_default_ipv6_from_current(self):
+        """Test that default IPv6 routes are removed from current_routes_set
+        """
+        links = ["enp0s8"]
+        etc_routes = [
+            {"net": "default", "via": "fd01::1", "dev": "enp0s8", "metric": 1024},
+            {"net": "fd33:1::/64", "via": "fd01::101", "dev": "enp0s8", "metric": 1}
+        ]
+        puppet_routes = [
+            {"net": "fd33:1::/64", "via": "fd01::101", "dev": "enp0s8", "metric": 1}
+        ]
+
+        self._add_fs_mock(FILE_GEN.generate_file_tree(
+            puppet_files={
+                "routes": puppet_routes
+            },
+            etc_files={
+                "interfaces": {
+                    "auto": links,
+                    "enp0s8": {"address": "fd01::3/64"}
+                },
+                "routes": etc_routes
+            }
+        ))
+        self._add_nw_mock(links)
+        self._add_scmd_mock()
+        self._add_logger_mock()
+        self._nwmock.apply_auto()
+
+        with mock.patch('debian.bullseye.src.bin.apply_network_config.get_header',
+             return_value=self._HEADER):
+            self._mocked_call([self._mock_fs, self._mock_syscmd, self._mock_sysinv_lock,
+                               self._mock_logger], anc.update_routes, None)
+
+        # Check log messages, the default route should be removed from the list, but not
+        # from the kernel
+        log_messages = [msg for level, msg in self._log.get_history()]
+        self.assertIn("Removing default route entries from current routes: {'default "
+                      "fd01::1 enp0s8 metric 1024'}", log_messages)
+
+    def test_update_routes_removes_multiple_default_routes(self):
+        """Test that multiple default routes are removed from current_routes_set
+        """
+        links = ["enp0s8", "enp0s9"]
+        etc_routes = [
+            {"net": "default", "via": "10.10.10.1", "dev": "enp0s8", "metric": 1},
+            {"net": "default", "via": "fd01::1", "dev": "enp0s9", "metric": 1024},
+            {"net": "10.33.1.0/24", "via": "10.10.10.101", "dev": "enp0s8", "metric": 1}
+        ]
+        puppet_routes = [
+            {"net": "10.33.1.0/24", "via": "10.10.10.101", "dev": "enp0s8", "metric": 1}
+        ]
+
+        self._add_fs_mock(FILE_GEN.generate_file_tree(
+            puppet_files={
+                "routes": puppet_routes
+            },
+            etc_files={
+                "interfaces": {
+                    "auto": links,
+                    "enp0s8": {"address": "10.10.10.3/24"},
+                    "enp0s9": {"address": "fd01::3/64"}
+                },
+                "routes": etc_routes
+            }
+        ))
+        self._add_nw_mock(links)
+        self._add_scmd_mock()
+        self._add_logger_mock()
+        self._nwmock.apply_auto()
+
+        with mock.patch('debian.bullseye.src.bin.apply_network_config.get_header',
+             return_value=self._HEADER):
+            self._mocked_call([self._mock_fs, self._mock_syscmd, self._mock_sysinv_lock,
+                               self._mock_logger], anc.update_routes, None)
+
+        # Check log messages, the default route should be removed from the list, but not
+        # from the kernel
+        log_messages = [msg for level, msg in self._log.get_history()]
+        self.assertTrue(
+            any("Removing default route entries from current routes:" in msg
+                for msg in log_messages))

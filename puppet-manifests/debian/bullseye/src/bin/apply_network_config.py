@@ -24,7 +24,6 @@ LOG_FILE = "/var/log/user.log"
 PUPPET_DIR = "/var/run/network-scripts.puppet"
 PUPPET_FILE = "/var/run/network-scripts.puppet/interfaces"
 PUPPET_ROUTES_FILE = "/var/run/network-scripts.puppet/routes"
-PUPPET_ROUTES6_FILE = "/var/run/network-scripts.puppet/routes6"
 ETC_ROUTES_FILE = "/etc/network/routes"
 ETC_DIR = "/etc/network/interfaces.d"
 SYSINV_LOCK_FILE = "/var/run/apply_network_config.lock"
@@ -1024,10 +1023,24 @@ def update_routes(updated_ifaces=None):
     if updated_ifaces is None:
         updated_ifaces = set()
 
-    new_routes = get_route_entries([PUPPET_ROUTES_FILE, PUPPET_ROUTES6_FILE])
+    new_routes = get_route_entries([PUPPET_ROUTES_FILE])
     new_routes_set = set(new_routes)
 
     current_routes = get_route_entries([ETC_ROUTES_FILE])
+
+    # during upgrade from previous version the default route was present in
+    # ETC_ROUTES_FILE
+    # this is not necessary anymore and can lead to errors. Removing this line.
+    # the default route is added as a variable for ifupdown of the interface
+    # Remove default route entries from current_routes list
+
+    default_routes = {route for route in current_routes
+                      if route.split()[0] in ("0.0.0.0", "::0", "default")}
+
+    if default_routes:
+        LOG.info(f"Removing default route entries from current routes: {default_routes}")
+
+    current_routes = [route for route in current_routes if route not in default_routes]
     current_routes_set = set(current_routes)
 
     write_routes_file(new_routes)
