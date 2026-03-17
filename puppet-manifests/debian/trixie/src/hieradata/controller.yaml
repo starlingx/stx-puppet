@@ -245,7 +245,7 @@ barbican::api::enable_proxy_headers_parsing: true
 barbican::api::logging::use_syslog: true
 barbican::api::logging::log_facility: 'local2'
 barbican::db::sync::user: 'root'
-barbican::db::database_idle_timeout: 60
+barbican::db::database_connection_recycle_time: 60
 barbican::db::database_max_pool_size: 1
 barbican::keystone-listener::enabled: false
 barbican::policy::policy_path: '/etc/barbican/policy.yaml'
