@@ -210,6 +210,9 @@ server.upload-dirs = ( "/tmp" )
 ## change max-keep-alive-idle (default: 5 secs)
 server.max-keep-alive-idle = 0
 
+# Increase max-fds to prevent ostree pull 403 HTTP errors (default: 1024)
+server.max-fds = 16384
+
 #### compress module
 #compress.cache-dir         = "/tmp/lighttpd/cache/compress/"
 #compress.filetype          = ("text/plain", "text/html")
