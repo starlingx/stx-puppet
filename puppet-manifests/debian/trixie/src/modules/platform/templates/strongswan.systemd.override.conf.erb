@@ -5,9 +5,16 @@ After=luks-fs-mgr.service
 [Service]
 ExecStartPre=/usr/bin/check-ipsec-luks-dir.sh
 
+# Wait for charon VICI socket before loading swanctl config.
+# In strongSwan 6.0.1 (Trixie), charon-systemd may not have the VICI
+# socket ready when the upstream ExecStartPost runs swanctl --load-all.
+ExecStartPost=
+ExecStartPost=/bin/bash -c 'for i in $(seq 1 30); do [ -e /run/charon.vici ] && exec /usr/sbin/swanctl --load-all --noprompt; sleep 1; done; echo "charon.vici not ready after 30s"; exit 1'
+ExecStartPost=/bin/bash -c 'echo $MAINPID > /var/run/charon.pid'
+
 # syscall filtering
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
 
-# pmond monitors strongswan-starter service
+# pmond monitors strongswan service
 Restart=no
