@@ -18,8 +18,36 @@ class openstack::horizon::params (
 
   $http_port = 8080,
   $https_port = 8443,
+
+  $session_timeout = 3000,
 ) { }
 
+class openstack::horizon::config
+  inherits ::openstack::horizon::params {
+
+  $horizon_dir = '/etc/openstack-dashboard'
+  $horizon_conf = '/etc/openstack-dashboard/local_settings.d/_30_stx_local_settings.py'
+
+  file { $horizon_dir:
+    ensure => directory,
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0755',
+  }
+  -> file { $horizon_conf:
+    ensure => file,
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0755',
+  }
+
+  # Update SESSION TIMEOUT
+  -> file_line { 'horizon_session_timeout':
+    path  => $horizon_conf,
+    line  => "SESSION_TIMEOUT=${openstack::horizon::params::session_timeout}",
+    match => '^SESSION_TIMEOUT',
+  }
+}
 
 class openstack::horizon
   inherits ::openstack::horizon::params {
@@ -28,6 +56,8 @@ class openstack::horizon
   include ::platform::network::mgmt::params
   include ::platform::network::pxeboot::params
   include ::openstack::keystone::params
+
+  include ::openstack::horizon::config
 
   $controller_address       = $::platform::network::mgmt::params::controller_address
   $mgmt_subnet_network      = $::platform::network::mgmt::params::subnet_network
