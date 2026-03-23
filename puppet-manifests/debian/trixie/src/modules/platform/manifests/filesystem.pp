@@ -631,12 +631,15 @@ class platform::filesystem::luks {
 
   if !str2bool($is_controller_active) and !str2bool($is_standalone_controller) {
 
-    # Execute rsync command only on the standby controller
+    # Execute rsync command only on the standby controller.
+    # Retry up to 6 times (30s apart) to allow IPsec tunnel establishment.
     exec { 'rsync_luks_folder':
       command   => '/usr/bin/rsync -v -acv --delete rsync://controller/luksdata/ /var/luks/stx/luks_fs/controller/',
       logoutput => true,
       # Allow exit code 0 (success) and 5 (Unknown module)
       returns   => [0, 5],
+      tries     => 6,
+      try_sleep => 30,
       onlyif    => [ "test ${::controller_sw_versions_match} = true", '/usr/local/bin/connectivity_test -t 10 controller', ],
     }
   }
