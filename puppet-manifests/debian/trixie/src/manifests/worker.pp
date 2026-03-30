@@ -14,7 +14,6 @@ Exec {
 include ::platform::config
 include ::platform::config::iscsi
 include ::platform::config::nvme
-include ::platform::users
 include ::platform::sysctl::compute
 include ::platform::dhclient
 include ::platform::partitions
@@ -27,6 +26,7 @@ include ::platform::fstab
 include ::platform::password
 include ::platform::ldap::client
 include ::platform::sssd
+include ::platform::users
 include ::platform::ntp::client
 include ::platform::ptpinstance
 include ::platform::ptpinstance::nic_clock

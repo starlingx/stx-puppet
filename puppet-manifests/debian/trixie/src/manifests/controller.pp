@@ -24,7 +24,6 @@ class { '::firewall':
 include ::platform::config
 include ::platform::config::iscsi
 include ::platform::config::nvme
-include ::platform::users
 include ::platform::sysctl::controller
 include ::platform::filesystem::controller
 include ::platform::firewall::calico::controller
@@ -39,6 +38,7 @@ include ::platform::password
 include ::platform::ldap::server
 include ::platform::ldap::client
 include ::platform::sssd
+include ::platform::users
 include ::platform::ntp::server
 include ::platform::ptpinstance
 include ::platform::ptpinstance::nic_clock
