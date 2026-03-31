@@ -28,6 +28,13 @@ class platform::users
     shell            => '/bin/bash',
   }
 
+  # Ensure sysadmin home directory has correct permissions.
+  # Shadow 4.16+ (Trixie) defaults home dirs to 0700 instead of 0755.
+  -> file { '/home/sysadmin':
+    ensure => directory,
+    mode   => '0755',
+  }
+
   # Set inactive password lock for sysadmin user to 45, only if it is
   # unlimited (-1) or exceeds 45 days
   -> exec { 'set inactive password lock for sysadmin':
@@ -105,6 +112,13 @@ class platform::users::bootstrap
     password_max_age => $sysadmin_password_max_age,
     password_min_age => $sysadmin_password_min_age,
     shell            => '/bin/bash',
+  }
+
+  # Ensure sysadmin home directory has correct permissions.
+  # Shadow 4.16+ (Trixie) defaults home dirs to 0700 instead of 0755.
+  -> file { '/home/sysadmin':
+    ensure => directory,
+    mode   => '0755',
   }
 
   # Set inactive password lock for sysadmin user to 45, only if it is
