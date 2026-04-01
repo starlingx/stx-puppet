@@ -1,7 +1,7 @@
 #
 # Files in this package are licensed under Apache; see LICENSE file.
 #
-# Copyright (c) 2013-2018 Wind River Systems, Inc.
+# Copyright (c) 2013-2018, 2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -48,6 +48,14 @@ class dcorch::db::postgresql(
     user       => $user,
     encoding   => $encoding,
     privileges => $privileges,
+  }
+
+  # PostgreSQL 15+ revokes CREATE on the public schema by default.
+  # Grant it explicitly so Alembic migrations can create tables.
+  postgresql_psql { "GRANT CREATE ON SCHEMA public TO \"${user}\"":
+    db      => $dbname,
+    unless  => "SELECT 1 FROM information_schema.role_table_grants WHERE grantee='${user}' AND table_schema='public' LIMIT 1",
+    require => Openstacklib::Db::Postgresql['dcorch'],
   }
 
   Anchor['dcorch::db::begin']
