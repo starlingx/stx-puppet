@@ -144,6 +144,14 @@ class openstack::barbican::service (
     default_transport_url        => $platform::amqp::params::transport_url,
   }
 
+  # Ensure bind_host and bind_port are present in barbican.conf
+  # for mtcAgent's barbican_config_handler to discover the
+  # Barbican API endpoint.
+  barbican_config {
+    'DEFAULT/bind_host': value => $api_host;
+    'DEFAULT/bind_port': value => $api_port;
+  }
+
   class { '::barbican::keystone::notification':
     enable_keystone_notification => true,
   }
