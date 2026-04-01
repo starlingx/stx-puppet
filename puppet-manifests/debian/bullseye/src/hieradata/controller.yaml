@@ -106,8 +106,8 @@ platform::haproxy::params::global_options:
   stats: 'socket /var/lib/haproxy/stats'
   ca-base: '/etc/ssl/certs'
   crt-base: '/etc/ssl/private'
-  ssl-default-bind-ciphers: 'kEECDH+aRSA+AES:kRSA+AES:+AES256:!RC4-SHA:!kEDH:!ECDHE-RSA-AES128-SHA:!ECDHE-RSA-AES256-SHA:!LOW:!EXP:!MD5:!aNULL:!eNULL'
-  ssl-default-bind-options: 'no-sslv3 no-tlsv10'
+  # TLS bind ciphers and options are now dynamically configured
+  # via platform config service parameters (tls-min-version, tls-cipher-suite)
 
 haproxy::defaults_options:
   log: 'global'

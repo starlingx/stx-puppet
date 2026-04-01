@@ -10,6 +10,10 @@ class platform::haproxy::params (
   $tpm_object = undef,
   $tpm_engine = '/usr/lib64/openssl/engines/libtpm2.so',
   $public_secondary_ip_address = undef,
+  $ssl_bind_options = undef,
+  $ssl_ciphers = undef,
+  $ssl_ciphersuites = undef,
+  $ssl_bind_curves = undef,
 ) { }
 
 
@@ -229,10 +233,25 @@ class platform::haproxy::server {
   $tpm_engine = $platform::haproxy::params::tpm_engine
   if $tpm_object != undef {
     $tpm_options = {'tpm-object' => $tpm_object, 'tpm-engine' => $tpm_engine}
-    $global_options = merge($platform::haproxy::params::global_options, $tpm_options)
+    $base_options = merge($platform::haproxy::params::global_options, $tpm_options)
   } else {
-    $global_options = $platform::haproxy::params::global_options
+    $base_options = $platform::haproxy::params::global_options
   }
+
+  # Merge TLS configuration from service parameters
+  $ssl_bind_options = $platform::haproxy::params::ssl_bind_options
+  $ssl_ciphers = $platform::haproxy::params::ssl_ciphers
+  $ssl_ciphersuites = $platform::haproxy::params::ssl_ciphersuites
+  $ssl_bind_curves = $platform::haproxy::params::ssl_bind_curves
+
+  $tls_options = delete_undef_values({
+    'ssl-default-bind-options'      => $ssl_bind_options,
+    'ssl-default-bind-ciphers'      => $ssl_ciphers,
+    'ssl-default-bind-ciphersuites' => $ssl_ciphersuites,
+    'ssl-default-bind-curves'       => $ssl_bind_curves,
+  })
+
+  $global_options = merge($base_options, $tls_options)
 
   class { '::haproxy':
       global_options => $global_options,
@@ -283,6 +302,10 @@ class platform::haproxy::runtime {
   include ::openstack::barbican::haproxy
   include ::platform::smapi::haproxy
   include ::platform::kubernetes::haproxy
+
+  class {'::platform::haproxy::reload':
+    stage => post
+  }
 }
 
 class platform::haproxy::restart::runtime {
