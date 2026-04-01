@@ -9,6 +9,7 @@ import argparse
 from datetime import datetime
 import errno
 import fcntl
+import json
 import logging as LOG
 from netaddr import AddrFormatError
 from netaddr import IPAddress
@@ -38,6 +39,14 @@ FLOCK_MAX_RETRY = 15
 FLOCK_WAIT_INTERVAL = 5
 MAX_RETRIES = 10
 INTF_WAIT_INTERVAL = 1
+
+
+# Patterns to log from ifupdown/ifupdown-extra
+#  output even if command don't fail
+IFUP_LOG_PATTERNS = [
+    "Replacing default route WITHOUT SRC",
+    "Replacing route WITHOUT SRC",
+]
 
 # Interface types
 ETH = "eth"
@@ -243,7 +252,6 @@ def apply_config(routes_only):
         updated_ifaces = update_interfaces()
         update_routes(updated_ifaces)
         check_enrollment_config()
-        log_network_info("post configuration")
     LOG.info("Finished")
 
 
@@ -574,9 +582,20 @@ def set_ifaces_up(config, ifaces):
         set_iface_up(iface)
 
 
+def parse_and_log_ifup_output(stdout, iface):
+    if not stdout:
+        return
+    for line in stdout.splitlines():
+        for pattern in IFUP_LOG_PATTERNS:
+            if pattern in line:
+                LOG.warning(f"[ifup {iface}] {line.strip()}")
+                break
+
+
 def set_iface_up(iface):
     LOG.info(f"Bringing {iface} up")
     retcode, stdout = execute_system_cmd(f"/sbin/ifup -v {iface}")
+    parse_and_log_ifup_output(stdout, iface)
     if retcode != 0:
         LOG.error(f"Command 'ifup' failed for interface {iface}: {format_stdout(stdout)}")
     return retcode
@@ -727,11 +746,106 @@ def add_route_entry_to_kernel(route_entry):
         LOG.error(f"Failed to add route entry '{route_entry}' to the kernel: {e}")
 
 
-def get_route_description(route, full=True):
+def _get_iface_addr_info(ifname, is_ipv6=False):
+    """Query interface address info via ip command.
+
+    Returns:
+        list: addr_info list on success, None on failure.
+    """
+    ipv6_flag = "-6 " if is_ipv6 else ""
+    cmd = f"/usr/sbin/ip -j {ipv6_flag}addr show dev {ifname}"
+    retcode, stdout = execute_system_cmd(cmd)
+    if retcode != 0:
+        return None
+    try:
+        iface_data = json.loads(stdout)
+    except json.JSONDecodeError:
+        return None
+    if not iface_data:
+        return None
+    return iface_data[0].get("addr_info", [])
+
+
+def _find_addr_entry(addr_info, src_base):
+    """Find the address entry matching src_base in addr_info."""
+    for addr in addr_info:
+        if addr.get("local") == src_base:
+            return addr
+    return None
+
+
+def _wait_for_ipv6_dad(ifname, src, src_base, max_retries=5):
+    """Wait for IPv6 DAD to complete.
+
+    Returns:
+        bool: True if address becomes valid, False otherwise.
+    """
+    for _ in range(max_retries):
+        addr_info = _get_iface_addr_info(ifname, is_ipv6=True)
+        if addr_info is None:
+            return False
+        addr = _find_addr_entry(addr_info, src_base)
+        if not addr:
+            return False
+        if addr.get("dadfailed") is True:
+            LOG.warning(f"IPv6 {src} changed to DAD failed state")
+            return False
+        if addr.get("tentative") is not True:
+            LOG.info(f"IPv6 {src} is now in valid state")
+            return True
+        time.sleep(0.3)
+    LOG.warning(
+        f"IPv6 {src} still in tentative state after retries"
+    )
+    return False
+
+
+def validate_src_ip(route):
+    """
+    Validate the source IP of a route.
+
+    If the IP is in a tentative state, the function retries up to 5 times
+    to check whether it becomes valid.
+
+    Returns:
+        bool: False if 'src' param exists but IP is invalid to be used.
+              True otherwise.
+    """
+    src = route.get("src")
+    ifname = route.get("ifname")
+    if not src or not ifname:
+        return True
+
+    is_ipv6 = ":" in src
+
+    if is_ipv6:
+        src_base = src.split('/')[0]
+
+        addr_info = _get_iface_addr_info(ifname, is_ipv6)
+        if addr_info is None:
+            LOG.warning(f"Failed to check IP {src} on interface {ifname}")
+            return False
+
+        src_addr = _find_addr_entry(addr_info, src_base)
+        if not src_addr:
+            LOG.warning(f"IP {src} not found on interface {ifname}")
+            return False
+
+        if src_addr.get("dadfailed") is True:
+            LOG.warning(f"IPv6 {src} is in DAD failed state")
+            return False
+
+        if src_addr.get("tentative") is True:
+            return _wait_for_ipv6_dad(ifname, src, src_base)
+
+    return True
+
+
+def get_route_description(route, full=True, include_src=True):
     linux_network = get_linux_network(route)
     gateway = f" via {route['nexthop']} dev {route['ifname']}" if full else ""
     descr = f"{linux_network}{gateway}"
-    if src := route.get("src", None):
+    if include_src and (src := route.get("src", None)):
         descr += f" src {src}"
     if metric := route.get("metric", None):
         descr += f" metric {metric}"
@@ -739,8 +853,13 @@ def get_route_description(route, full=True):
 
 
 def add_route_to_kernel(route):
-    description = get_route_description(route)
-    LOG.info(f"Route adding/replacing: {description}")
+    include_src = validate_src_ip(route)
+    description = get_route_description(route, include_src=include_src)
+    if not include_src:
+        LOG.warning(f"Route adding/replacing WITHOUT SRC: {description}")
+    else:
+        LOG.info(f"Route adding/replacing: {description}")
+
     retcode, stdout = execute_system_cmd(f"/usr/sbin/ip route replace {description}")
     if retcode != 0:
         LOG.error(f"Failed replacing route {description}:{format_stdout(stdout)}")
@@ -1157,11 +1276,58 @@ def audit_dhcp_ifaces(iface_configs):
             start_dhcp_iface(iface)
 
 
+def get_kernel_routes():
+    routes = set()
+    for ipv in ["", "-6"]:
+        rc, out = execute_system_cmd(f"/usr/sbin/ip {ipv} route show")
+        if rc == 0:
+            routes.update(out.strip().splitlines())
+    return routes
+
+
+def audit_routes():
+    LOG.info("Running routes audit")
+    route_entries = get_route_entries([ETC_ROUTES_FILE])
+    if not route_entries:
+        LOG.info("No routes to audit")
+        return
+
+    kernel_routes = get_kernel_routes()
+    for route_entry in route_entries:
+        route = create_route_obj_from_entry(route_entry)
+        try:
+            # Build route description with network, gateway and device
+            # for matching in the way the route is presented in the kernel
+            linux_network = get_linux_network(route)
+            nexthop = route['nexthop']
+            ifname = route['ifname']
+            # Match pattern: "network via gateway dev interface"
+            route_pattern = f"{linux_network} via {nexthop} dev {ifname}"
+
+            # If route has src parameter, we need to check it exists in kernel route
+            src_ip = route.get('src')
+            if src_ip:
+                route_pattern_with_src = f"{route_pattern} src {src_ip}"
+                found = any(route_pattern_with_src in kr for kr in kernel_routes)
+            else:
+                found = any(route_pattern in kr for kr in kernel_routes)
+
+        except InvalidNetmaskError as e:
+            LOG.error(f"Invalid route entry '{route_entry}': {e}")
+            continue
+
+        if not found:
+            LOG.info(f"Route missing in kernel, adding: {route_entry}")
+            add_route_entry_to_kernel(route_entry)
+
+
 def audit_config():
     LOG.info("Start config audit")
     current_config = get_current_config()
     audit_dhcp_ifaces(current_config)
+    audit_routes()
     LOG.info("Finished config audit")
+    log_network_info("post configuration")
 
 
 def main():

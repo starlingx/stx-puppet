@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+import json
 import mock
 import os
 import re
@@ -658,7 +659,7 @@ class NetworkingMock():  # pylint: disable=too-many-instance-attributes,too-many
         version = route_filter["version"]
         if version and route_net.version != version:
             return False
-        if route_net != filter_net:
+        if filter_net is not None and route_net != filter_net:
             return False
         for prop in ["via", "dev", "metric"]:
             if not (val := route_filter[prop]):
@@ -810,7 +811,8 @@ class SystemCommandMock():  # pylint: disable=too-few-public-methods
         return self._nwmock.ip_addr_show_addr(args[0])
 
     def _ip_route_show_all(self, args):
-        return self._nwmock.ip_route_show_all(args[0])
+        # args[0] can be None (for IPv4) or '-6' (for IPv6)
+        return self._nwmock.ip_route_show(args[0], None, None, None, None)
 
     def _ip_neigh_show_all(self, args):
         return self._nwmock.ip_neigh_show_all(args)
@@ -845,7 +847,7 @@ class SystemCommandMock():  # pylint: disable=too-few-public-methods
         (re.compile(R"^/usr/sbin/ip addr flush dev (\S+)$"), _ip_addr_flush),
         (re.compile(R"^(?:/usr/sbin/)?ip -o addr show to (\S+)$"), _ip_o_addr_show_to),
         (re.compile(R"^/usr/sbin/ip link set down dev (\S+)$"), _ip_link_set_down),
-        (re.compile(R"^/usr/sbin/ip (?:(-6) )?route show$"), _ip_route_show_all),
+        (re.compile(R"^/usr/sbin/ip\s+(?:(-6)\s+)?route\s+show$"), _ip_route_show_all),
         (re.compile(R"^/usr/sbin/ip neigh show$"), _ip_neigh_show_all),
         (re.compile(R"^/usr/sbin/ip (?:(-6) )?route show (\S+)(?: via (\S+) "
                     R"dev (\S+))?(?: metric (\S+))?$"), _ip_route_show),
@@ -3581,3 +3583,410 @@ class TestDefaultRouteRemoval(BaseTestCase):
         self.assertTrue(
             any("Removing default route entries from current routes:" in msg
                 for msg in log_messages))
+
+
+class TestAuditRoutes(BaseTestCase):
+    """Tests for audit_routes functionality"""
+
+    def test_audit_routes_all_present(self):
+        """Test audit when all routes are already in kernel"""
+        links = ["enp0s8"]
+        routes = [
+            {"net": "10.33.1.0/24", "via": "10.10.10.101", "dev": "enp0s8", "metric": 1}
+        ]
+
+        self._add_fs_mock(FILE_GEN.generate_file_tree(
+            etc_files={
+                "interfaces": {
+                    "auto": links,
+                    "enp0s8": {"address": "10.10.10.3/24"}
+                },
+                "routes": routes
+            }
+        ))
+        self._add_nw_mock(links)
+        self._add_scmd_mock()
+        self._add_logger_mock()
+        self._nwmock.apply_auto()
+
+        self._mocked_call([self._mock_fs, self._mock_syscmd, self._mock_logger],
+                          anc.audit_routes)
+
+        log_messages = [msg for level, msg in self._log.get_history()]
+        self.assertIn("Running routes audit", log_messages)
+        # Verify no routes were added since they're already present
+        self.assertNotIn("Route missing in kernel, adding:", " ".join(log_messages))
+
+    def test_audit_routes_missing_route(self):
+        """Test audit adds missing route to kernel"""
+        links = ["enp0s8"]
+        routes = [
+            {"net": "10.33.1.0/24", "via": "10.10.10.101", "dev": "enp0s8", "metric": 1}
+        ]
+
+        self._add_fs_mock(FILE_GEN.generate_file_tree(
+            etc_files={
+                "interfaces": {
+                    "auto": links,
+                    "enp0s8": {"address": "10.10.10.3/24"}
+                },
+                "routes": routes
+            }
+        ))
+        self._add_nw_mock(links)
+        self._add_scmd_mock()
+        self._add_logger_mock()
+        self._nwmock.apply_auto()
+
+        # Clear routes to simulate missing
+        # pylint: disable=protected-access
+        for route_id in list(self._nwmock._routes.keys()):
+            self._nwmock._routes.pop(route_id)
+
+        self._mocked_call([self._mock_fs, self._mock_syscmd, self._mock_logger],
+                          anc.audit_routes)
+
+        log_messages = [msg for level, msg in self._log.get_history()]
+        self.assertIn("Route missing in kernel, adding: 10.33.1.0 255.255.255.0 "
+                      "10.10.10.101 enp0s8 metric 1", log_messages)
+
+    def test_audit_routes_ipv6(self):
+        """Test audit with IPv6 routes"""
+        links = ["enp0s8"]
+        routes = [
+            {"net": "fd33:1::/64", "via": "fd01::101", "dev": "enp0s8", "metric": 1}
+        ]
+
+        self._add_fs_mock(FILE_GEN.generate_file_tree(
+            etc_files={
+                "interfaces": {
+                    "auto": links,
+                    "enp0s8": {"address": "fd01::3/64"}
+                },
+                "routes": routes
+            }
+        ))
+        self._add_nw_mock(links)
+        self._add_scmd_mock()
+        self._add_logger_mock()
+        self._nwmock.apply_auto()
+
+        # Clear routes
+        # pylint: disable=protected-access
+        for route_id in list(self._nwmock._routes.keys()):
+            self._nwmock._routes.pop(route_id)
+
+        self._mocked_call([self._mock_fs, self._mock_syscmd, self._mock_logger],
+                          anc.audit_routes)
+
+        log_messages = [msg for level, msg in self._log.get_history()]
+        self.assertTrue(any("Route missing in kernel, adding:" in msg
+                            for msg in log_messages))
+
+    def test_audit_routes_empty_file(self):
+        """Test audit when routes file is empty"""
+        links = ["enp0s8"]
+
+        self._add_fs_mock(FILE_GEN.generate_file_tree(
+            etc_files={
+                "interfaces": {
+                    "auto": links,
+                    "enp0s8": {"address": "10.10.10.3/24"}
+                },
+                "routes": []
+            }
+        ))
+        self._add_nw_mock(links)
+        self._add_scmd_mock()
+        self._add_logger_mock()
+        self._nwmock.apply_auto()
+
+        self._mocked_call([self._mock_fs, self._mock_syscmd, self._mock_logger],
+                          anc.audit_routes)
+
+        log_messages = [msg for level, msg in self._log.get_history()]
+        self.assertIn("No routes to audit", log_messages)
+
+    def test_audit_routes_invalid_netmask(self):
+        """Test audit handles invalid netmask gracefully"""
+        links = ["enp0s8"]
+
+        self._add_fs_mock({
+            anc.ETC_DIR: None,
+            anc.ETC_ROUTES_FILE:
+                "10.33.1.0 2555.255.255.0 10.10.10.101 enp0s8 metric 1\n"
+        })
+        self._add_nw_mock(links)
+        self._add_scmd_mock()
+        self._add_logger_mock()
+
+        self._mocked_call([self._mock_fs, self._mock_syscmd, self._mock_logger],
+                          anc.audit_routes)
+
+        log_messages = [msg for level, msg in self._log.get_history()]
+        self.assertTrue(any("Invalid route entry" in msg for msg in log_messages))
+
+    def test_audit_routes_multiple_routes(self):
+        """Test audit with multiple routes, some missing"""
+        links = ["enp0s8", "enp0s9"]
+        routes = [
+            {"net": "10.33.1.0/24", "via": "10.10.10.101", "dev": "enp0s8", "metric": 1},
+            {"net": "10.33.2.0/24", "via": "10.10.11.101", "dev": "enp0s9", "metric": 1}
+        ]
+
+        self._add_fs_mock(FILE_GEN.generate_file_tree(
+            etc_files={
+                "interfaces": {
+                    "auto": links,
+                    "enp0s8": {"address": "10.10.10.3/24"},
+                    "enp0s9": {"address": "10.10.11.3/24"}
+                },
+                "routes": routes
+            }
+        ))
+        self._add_nw_mock(links)
+        self._add_scmd_mock()
+        self._add_logger_mock()
+        self._nwmock.apply_auto()
+
+        # Remove one route to simulate partial missing
+        # pylint: disable=protected-access
+        route_to_remove = None
+        for route_id, route in self._nwmock._routes.items():
+            if str(route["net"]) == "10.33.2.0/24":
+                route_to_remove = route_id
+                break
+        if route_to_remove:
+            self._nwmock._routes.pop(route_to_remove)
+
+        self._mocked_call([self._mock_fs, self._mock_syscmd, self._mock_logger],
+                          anc.audit_routes)
+
+        log_messages = [msg for level, msg in self._log.get_history()]
+        # Should only add the missing route
+        self.assertTrue(any("10.33.2.0" in msg and "Route missing" in msg
+                            for msg in log_messages))
+
+
+class TestIPv6DADValidation(BaseTestCase):
+    """Tests for IPv6 DAD (Duplicate Address Detection) validation"""
+
+    def test_validate_src_ip_no_src(self):
+        """Test validate_src_ip returns True when no src parameter"""
+        route = {"network": "10.33.1.0", "netmask": "255.255.255.0",
+                 "nexthop": "10.10.10.101", "ifname": "enp0s8"}
+
+        result = anc.validate_src_ip(route)
+        self.assertTrue(result)
+
+    def test_validate_src_ip_ipv4(self):
+        """Test validate_src_ip returns True for IPv4 addresses"""
+        route = {"network": "10.33.1.0", "netmask": "255.255.255.0",
+                 "nexthop": "10.10.10.101", "ifname": "enp0s8",
+                 "src": "10.10.10.3"}
+
+        result = anc.validate_src_ip(route)
+        self.assertTrue(result)
+
+    def test_validate_src_ip_ipv6_valid(self):
+        """Test validate_src_ip with valid IPv6 address"""
+        route = {"network": "fd33:1::", "netmask": "ffff:ffff:ffff:ffff::",
+                 "nexthop": "fd01::101", "ifname": "enp0s8",
+                 "src": "fd01::3"}
+
+        def mock_execute_cmd(cmd):
+            if "ip -j -6 addr show" in cmd:
+                return 0, json.dumps([{
+                    "addr_info": [{
+                        "local": "fd01::3",
+                        "prefixlen": 64
+                    }]
+                }])
+            return 0, ""
+
+        with mock.patch('debian.bullseye.src.bin.apply_network_config.execute_system_cmd',
+                        side_effect=mock_execute_cmd):
+            result = anc.validate_src_ip(route)
+
+        self.assertTrue(result)
+
+    def test_validate_src_ip_ipv6_tentative_becomes_valid(self):
+        """Test validate_src_ip waits for tentative IPv6 to become valid"""
+        route = {"network": "fd33:1::", "netmask": "ffff:ffff:ffff:ffff::",
+                 "nexthop": "fd01::101", "ifname": "enp0s8",
+                 "src": "fd01::3"}
+
+        call_count = [0]
+
+        def mock_execute_cmd(cmd):
+            if "ip -j -6 addr show" in cmd:
+                call_count[0] += 1
+                if call_count[0] == 1:
+                    # First call: tentative state
+                    return 0, json.dumps([{
+                        "addr_info": [{
+                            "local": "fd01::3",
+                            "prefixlen": 64,
+                            "tentative": True
+                        }]
+                    }])
+                # Subsequent calls: valid state
+                return 0, json.dumps([{
+                    "addr_info": [{
+                        "local": "fd01::3",
+                        "prefixlen": 64
+                    }]
+                }])
+            return 0, ""
+
+        self._add_logger_mock()
+
+        with mock.patch('debian.bullseye.src.bin.apply_network_config.execute_system_cmd',
+                        side_effect=mock_execute_cmd), \
+             mock.patch('time.sleep'):
+            result = self._mocked_call([self._mock_logger], anc.validate_src_ip, route)
+
+        self.assertTrue(result)
+        log_messages = [msg for level, msg in self._log.get_history()]
+        self.assertTrue(any("is now in valid state" in msg for msg in log_messages))
+
+    def test_validate_src_ip_ipv6_dad_failed(self):
+        """Test validate_src_ip returns False when DAD fails"""
+        route = {"network": "fd33:1::", "netmask": "ffff:ffff:ffff:ffff::",
+                 "nexthop": "fd01::101", "ifname": "enp0s8",
+                 "src": "fd01::3"}
+
+        def mock_execute_cmd(cmd):
+            if "ip -j -6 addr show" in cmd:
+                return 0, json.dumps([{
+                    "addr_info": [{
+                        "local": "fd01::3",
+                        "prefixlen": 64,
+                        "dadfailed": True
+                    }]
+                }])
+            return 0, ""
+
+        self._add_logger_mock()
+
+        with mock.patch('debian.bullseye.src.bin.apply_network_config.execute_system_cmd',
+                        side_effect=mock_execute_cmd):
+            result = self._mocked_call([self._mock_logger], anc.validate_src_ip, route)
+
+        self.assertFalse(result)
+        log_messages = [msg for level, msg in self._log.get_history()]
+        self.assertTrue(any("DAD failed state" in msg for msg in log_messages))
+
+    def test_validate_src_ip_ipv6_tentative_timeout(self):
+        """Test validate_src_ip returns False when tentative state times out"""
+        route = {"network": "fd33:1::", "netmask": "ffff:ffff:ffff:ffff::",
+                 "nexthop": "fd01::101", "ifname": "enp0s8",
+                 "src": "fd01::3"}
+
+        def mock_execute_cmd(cmd):
+            if "ip -j -6 addr show" in cmd:
+                # Always return tentative state
+                return 0, json.dumps([{
+                    "addr_info": [{
+                        "local": "fd01::3",
+                        "prefixlen": 64,
+                        "tentative": True
+                    }]
+                }])
+            return 0, ""
+
+        self._add_logger_mock()
+
+        with mock.patch('debian.bullseye.src.bin.apply_network_config.execute_system_cmd',
+                        side_effect=mock_execute_cmd), \
+             mock.patch('time.sleep'):
+            result = self._mocked_call([self._mock_logger], anc.validate_src_ip, route)
+
+        self.assertFalse(result)
+        log_messages = [msg for level, msg in self._log.get_history()]
+        self.assertTrue(any("still in tentative state after retries" in msg
+                            for msg in log_messages))
+
+    def test_validate_src_ip_ipv6_not_found(self):
+        """Test validate_src_ip returns False when IPv6 address not found"""
+        route = {"network": "fd33:1::", "netmask": "ffff:ffff:ffff:ffff::",
+                 "nexthop": "fd01::101", "ifname": "enp0s8",
+                 "src": "fd01::3"}
+
+        def mock_execute_cmd(cmd):
+            if "ip -j -6 addr show" in cmd:
+                return 0, json.dumps([{
+                    "addr_info": [{
+                        "local": "fd01::99",  # Different address
+                        "prefixlen": 64
+                    }]
+                }])
+            return 0, ""
+
+        self._add_logger_mock()
+
+        with mock.patch('debian.bullseye.src.bin.apply_network_config.execute_system_cmd',
+                        side_effect=mock_execute_cmd):
+            result = self._mocked_call([self._mock_logger], anc.validate_src_ip, route)
+
+        self.assertFalse(result)
+        log_messages = [msg for level, msg in self._log.get_history()]
+        self.assertTrue(any("not found on interface" in msg for msg in log_messages))
+
+    def test_add_route_to_kernel_without_src(self):
+        """Test add_route_to_kernel logs warning when src is invalid"""
+        route = {"network": "fd33:1::", "netmask": "ffff:ffff:ffff:ffff::",
+                 "nexthop": "fd01::101", "ifname": "enp0s8",
+                 "src": "fd01::3"}
+
+        def mock_execute_cmd(cmd):
+            if "ip -j -6 addr show" in cmd:
+                return 0, json.dumps([{
+                    "addr_info": [{
+                        "local": "fd01::3",
+                        "prefixlen": 64,
+                        "dadfailed": True
+                    }]
+                }])
+            if "ip route replace" in cmd:
+                return 0, ""
+            return 0, ""
+
+        self._add_logger_mock()
+
+        with mock.patch('debian.bullseye.src.bin.apply_network_config.execute_system_cmd',
+                        side_effect=mock_execute_cmd):
+            self._mocked_call([self._mock_logger], anc.add_route_to_kernel, route)
+
+        log_messages = [msg for level, msg in self._log.get_history()]
+        self.assertTrue(any("WITHOUT SRC" in msg for msg in log_messages))
+
+    def test_add_route_to_kernel_with_valid_src(self):
+        """Test add_route_to_kernel includes src when valid"""
+        route = {"network": "fd33:1::", "netmask": "ffff:ffff:ffff:ffff::",
+                 "nexthop": "fd01::101", "ifname": "enp0s8",
+                 "src": "fd01::3"}
+
+        executed_cmd = []
+
+        def mock_execute_cmd(cmd):
+            if "ip -j -6 addr show" in cmd:
+                return 0, json.dumps([{
+                    "addr_info": [{
+                        "local": "fd01::3",
+                        "prefixlen": 64
+                    }]
+                }])
+            if "ip route replace" in cmd:
+                executed_cmd.append(cmd)
+                return 0, ""
+            return 0, ""
+
+        self._add_logger_mock()
+
+        with mock.patch('debian.bullseye.src.bin.apply_network_config.execute_system_cmd',
+                        side_effect=mock_execute_cmd):
+            self._mocked_call([self._mock_logger], anc.add_route_to_kernel, route)
+
+        self.assertTrue(len(executed_cmd) > 0)
+        self.assertIn("src fd01::3", executed_cmd[0])
