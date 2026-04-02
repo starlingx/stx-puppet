@@ -18,7 +18,13 @@ http:
   tls:
     certificate: /etc/ssl/private/registry-cert.crt
     key: /etc/ssl/private/registry-cert.key
-    minimumtls: tls1.2
+    minimumtls: <%= @tls_min_version %>
+<% if @tls_cipher_suites and !@tls_cipher_suites.empty? -%>
+    ciphersuites:
+<% @tls_cipher_suites.each do |cipher| -%>
+      - <%= cipher %>
+<% end -%>
+<% end -%>
   headers:
     X-Content-Type-Options: [nosniff]
 health:
