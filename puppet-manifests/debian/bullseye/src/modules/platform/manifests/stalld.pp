@@ -2,7 +2,6 @@ class platform::stalld::params (
 
   $config_file        = '/etc/default/stalld',    # Configuration file path
   $package_name       = 'stalld',                 # Package name
-  $package_version    = '1.19.6',                 # Package version
 
   $enable             = false,                    # Enable or disable stalld
 
