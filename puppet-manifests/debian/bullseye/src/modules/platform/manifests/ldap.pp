@@ -24,6 +24,8 @@ class platform::ldap::params (
   $secure_key = '',
   $ca_cert = '',
   $insecure_service = 'enabled',
+  $tls_protocol_min = undef,
+  $tls_cipher_suite = undef,
 ) {}
 
 class platform::ldap::server
@@ -320,5 +322,36 @@ class platform::ldap::insecure::runtime
   }
   -> exec { 'Restart openldap service':
     command => 'sm-restart-safe service open-ldap',
+  }
+}
+
+class platform::ldap::tls::runtime
+  inherits ::platform::ldap::params {
+  # Update OpenLDAP TLS settings in cn=config at runtime.
+  # Triggered by 'system service-parameter-apply platform'.
+  # Since slapd does not listen on ldapi:// and cn=config has
+  # no rootDN, we edit the cn=config LDIF file directly and
+  # restart slapd.
+
+  if ! $ldapserver_remote {
+    $cnconfig_ldif = "${slapd_etc_path}/schema/cn=config.ldif"
+
+    if $tls_protocol_min {
+      exec { 'Update olcTLSProtocolMin':
+        command => "/bin/sed -i 's/^olcTLSProtocolMin:.*/olcTLSProtocolMin: ${tls_protocol_min}/' ${cnconfig_ldif}",
+        onlyif  => "grep -q '^olcTLSProtocolMin:' ${cnconfig_ldif}",
+      }
+    }
+
+    if $tls_cipher_suite {
+      exec { 'Update olcTLSCipherSuite':
+        command => "/bin/sed -i '/^olcTLSCipherSuite:/{s|.*|olcTLSCipherSuite: ${tls_cipher_suite}|;n;/^ /d}' ${cnconfig_ldif}",
+        onlyif  => "grep -q '^olcTLSCipherSuite:' ${cnconfig_ldif}",
+      }
+    }
+
+    -> exec { 'Restart slapd for TLS update':
+      command => 'sm-restart-safe service open-ldap',
+    }
   }
 }
