@@ -401,7 +401,6 @@ class platform::config::apparmor::runtime {
   include ::platform::config::apparmor
 }
 
-
 class platform::config::mgmt_network_reconfig_update_runtime {
   include ::sysinv
   include ::platform::params
@@ -421,12 +420,12 @@ class platform::config::mgmt_network_reconfig_update_runtime {
     append_on_no_match => false,
   }
 
-  # Force a restart of memcached to pick up the new MGMT IP
+  # Restarts network-dependent services to bind to the updated MGMT IP address
   exec { 'systemctl enable memcached.service':
     command => '/usr/bin/systemctl restart memcached.service',
   }
+  platform::sm::restart { 'lighttpd': }
 }
-
 
 class platform::config::hosts
   inherits ::platform::config::params {
