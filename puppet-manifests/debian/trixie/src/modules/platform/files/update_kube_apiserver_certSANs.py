@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2020 Wind River Systems, Inc.
+# Copyright (c) 2020, 2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -7,7 +7,12 @@
 # kubernetes cluster configmap.
 
 import argparse
-import ruamel.yaml as yaml
+from ruamel.yaml import YAML
+from ruamel.yaml.compat import StringIO
+from ruamel.yaml.scalarstring import PreservedScalarString
+
+_yaml_rt = YAML(typ='rt')
+_yaml_rt.default_flow_style = False
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--configmap_file", required=True)
@@ -17,23 +22,21 @@ args = parser.parse_args()
 configmap_file = args.configmap_file
 
 with open(configmap_file, 'r') as dest:
-    configmap = yaml.load(dest, Loader=yaml.RoundTripLoader)
+    configmap = _yaml_rt.load(dest)
     # cluster config is a single string, so we need to parse the string
     # in order to modify it correctly
-    cluster_config = yaml.load(configmap['data']['ClusterConfiguration'],
-                               Loader=yaml.RoundTripLoader)
+    cluster_config = _yaml_rt.load(configmap['data']['ClusterConfiguration'])
 
 cluster_config['apiServer']['certSANs'] = \
     [item.strip() for item in args.certsans.split(',')]
 
-cluster_config_string = yaml.dump(cluster_config, Dumper=yaml.RoundTripDumper,
-                                  default_flow_style=False)
+outstream = StringIO()
+_yaml_rt.dump(cluster_config, outstream)
+cluster_config_string = outstream.getvalue()
 
-# use yaml.scalarstring.PreservedScalarString to make sure the yaml is
+# use PreservedScalarString to make sure the yaml is
 # constructed with proper formatting and tabbing
-cluster_config_string = yaml.scalarstring.PreservedScalarString(
-    cluster_config_string)
+cluster_config_string = PreservedScalarString(cluster_config_string)
 configmap['data']['ClusterConfiguration'] = cluster_config_string
 with open(configmap_file, 'w') as dest:
-    yaml.dump(configmap, dest, Dumper=yaml.RoundTripDumper,
-              default_flow_style=False)
+    _yaml_rt.dump(configmap, dest)

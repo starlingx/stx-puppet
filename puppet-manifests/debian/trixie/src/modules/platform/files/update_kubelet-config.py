@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022 Wind River Systems, Inc.
+# Copyright (c) 2022, 2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -8,7 +8,11 @@
 # The original input file is overwritten with merged values.
 
 import argparse
-import ruamel.yaml as yaml
+from ruamel.yaml import YAML
+from ruamel.yaml.scalarstring import PreservedScalarString
+
+_yaml_rt = YAML(typ='rt')
+_yaml_rt.default_flow_style = False
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--configmap_file', required=True)
@@ -31,12 +35,11 @@ evictionHard_default = {
 }
 
 with open(configmap_file, 'r') as dest:
-    configmap = yaml.load(dest, Loader=yaml.RoundTripLoader)
+    configmap = _yaml_rt.load(dest)
 
     # kubelet config is a single string. We need to parse the string
     # in order to modify it correctly.
-    kubelet_config = yaml.load(configmap['data']['kubelet'],
-                               Loader=yaml.RoundTripLoader)
+    kubelet_config = _yaml_rt.load(configmap['data']['kubelet'])
 
     # Update imageGC parameters
     kubelet_config['imageGCLowThresholdPercent'] = args.image_gc_low_threshold_percent
@@ -44,14 +47,14 @@ with open(configmap_file, 'r') as dest:
     kubelet_config['evictionHard'] = evictionHard_default
     kubelet_config['evictionHard']['imagefs.available'] = args.eviction_hard_imagefs_available
 
-    kubelet_config_string = yaml.dump(kubelet_config, Dumper=yaml.RoundTripDumper,
-                                      default_flow_style=False)
+    from ruamel.yaml.compat import StringIO
+    outstream = StringIO()
+    _yaml_rt.dump(kubelet_config, outstream)
+    kubelet_config_string = outstream.getvalue()
 
-# use yaml.scalarstring.PreservedScalarString to make sure the yaml is
+# use PreservedScalarString to make sure the yaml is
 # constructed with proper formatting and tabbing
-kubelet_config_string = yaml.scalarstring.PreservedScalarString(
-    kubelet_config_string)
+kubelet_config_string = PreservedScalarString(kubelet_config_string)
 configmap['data']['kubelet'] = kubelet_config_string
 with open(configmap_file, 'w') as dest:
-    yaml.dump(configmap, dest, Dumper=yaml.RoundTripDumper,
-              default_flow_style=False)
+    _yaml_rt.dump(configmap, dest)
