@@ -602,7 +602,7 @@ define platform::network::interfaces::rate_limit::tx_rate (
   Enum['present', 'absent'] $ensure_rule = 'present',
 ) {
 
-  $hashlimit_name = "${interface_name}-limit"
+  $hashlimit_name = "${interface_name}-limit-${max_tx_rate}"
 
   # Convert max_tx_rate to Kilobytes/second
   # 1 Megabit (Mb) = 125 Kilobytes (KB)
@@ -675,7 +675,7 @@ define platform::network::interfaces::rate_limit::rx_rate (
   Optional[Array[String]] $accept_subnet = undef,
   Enum['present', 'absent'] $ensure_rule = 'present',
 ) {
-  $hashlimit_name = "${interface_name}-limit"
+  $hashlimit_name = "${interface_name}-limit-${max_rx_rate}"
 
   # Convert max_rx_rate to Kilobytes/second
   # 1 Megabit (Mb) = 125 Kilobytes (KB)
