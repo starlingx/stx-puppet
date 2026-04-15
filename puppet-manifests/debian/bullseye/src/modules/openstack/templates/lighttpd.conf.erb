@@ -257,7 +257,11 @@ $SERVER["socket"] == ":<%= @https_port %>" {
     ssl.ca-file                = "/etc/ssl/private/server-cert.pem"
     ssl.use-sslv2              = "disable"
     ssl.use-sslv3              = "disable"
+<% if @tls_cipher_list %>
+    ssl.cipher-list            = "<%= @tls_cipher_list %>"
+<% else %>
     ssl.cipher-list            = "ALL:!aNULL:!eNULL:!EXPORT:!TLSv1:!TLSv1.1:!SHA1:!3DES:!ARIA:!SHA256:!SHA384:!DES:!CAMELLIA:!MD5:!PSK:!RC4:!AES256-GCM-SHA384:!AES256-CCM8:!AES256-CCM:!AES128-GCM-SHA256:!AES128-CCM8:!AES128-CCM"
+<% end %>
 }
 
 $SERVER["socket"] == "[::]:<%= @https_port %>" {
@@ -266,7 +270,11 @@ $SERVER["socket"] == "[::]:<%= @https_port %>" {
     ssl.ca-file                = "/etc/ssl/private/server-cert.pem"
     ssl.use-sslv2              = "disable"
     ssl.use-sslv3              = "disable"
+<% if @tls_cipher_list %>
+    ssl.cipher-list            = "<%= @tls_cipher_list %>"
+<% else %>
     ssl.cipher-list            = "ALL:!aNULL:!eNULL:!EXPORT:!TLSv1:!TLSv1.1:!SHA1:!3DES:!ARIA:!SHA256:!SHA384:!DES:!CAMELLIA:!MD5:!PSK:!RC4:!AES256-GCM-SHA384:!AES256-CCM8:!AES256-CCM:!AES128-GCM-SHA256:!AES128-CCM8:!AES128-CCM"
+<% end %>
 }
 <% else %>
 ###

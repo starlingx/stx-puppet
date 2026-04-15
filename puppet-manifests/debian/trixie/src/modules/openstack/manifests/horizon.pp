@@ -18,6 +18,9 @@ class openstack::horizon::params (
 
   $http_port = 8080,
   $https_port = 8443,
+
+  $tls_min_version = 'VersionTLS12',
+  $tls_cipher_list = undef,
 ) { }
 
 
