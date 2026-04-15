@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-# Copyright (c) 2024-2025 Wind River Systems, Inc.
+# Copyright (c) 2024-2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -24,7 +24,7 @@ active_controller_puppet_path = '/opt/platform/puppet/'
 
 KUBE_APISERVER_INTERNAL_PORT = 16443
 INITCONFIG_BASE_TEMPLATE = '''---
-apiVersion: kubeadm.k8s.io/v1beta3
+apiVersion: kubeadm.k8s.io/v1beta4
 kind: InitConfiguration
 localAPIEndpoint:
   advertiseAddress: {}

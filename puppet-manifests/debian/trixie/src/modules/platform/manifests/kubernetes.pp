@@ -670,11 +670,7 @@ class platform::kubernetes::master::init
     $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
     $creds_command = '$(cat /tmp/puppet/registry_credentials)'
 
-    if versioncmp(regsubst($version, '^v', ''), '1.29.0') >= 0 {
-      $generate_super_conf = true
-    } else {
-      $generate_super_conf = false
-    }
+    $generate_super_conf = true
 
     $resource_title = 'pre pull k8s images'
     $command = "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${version} | grep -v '/etcd:' | xargs -i crictl pull --creds ${creds_command} registry.local:9001/{}" # lint:ignore:140chars
@@ -707,7 +703,7 @@ class platform::kubernetes::master::init
       command   => 'setfacl -m g:sys_protected:r /etc/kubernetes/admin.conf',
       logoutput => true,
     }
-    # Fresh installation with Kubernetes 1.29 generates the super-admin.conf
+    # Fresh installation generates the super-admin.conf
     # only in controller-0 and not in controller-1. The following command
     # generates the super-admin.conf in controller-1.
     -> exec { 'generate the /etc/kubernetes/super-admin.conf':
@@ -801,10 +797,8 @@ class platform::kubernetes::master::init
       ensure => present,
     }
   } else {
-    # K8s control plane upgrade from 1.28 to 1.29 changes the ownership/permission
-    # of kube config file. We are resetting it after the control plane upgrade.
-    # In case of any failure before resetting it, this sets the correct ownership/permission
-    # to kube config during the host reboots after the initial install.
+    # Ensure correct ownership/permission of kube config file
+    # after control plane operations.
     file { '/etc/kubernetes/admin.conf':
       owner => 'root',
       group => 'root',
