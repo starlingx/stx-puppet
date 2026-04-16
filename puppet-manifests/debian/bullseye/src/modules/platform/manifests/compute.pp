@@ -404,38 +404,6 @@ class platform::compute::machine {
   }
 }
 
-class platform::compute::kvm_timer_advance(
-  $enabled = False,
-  $vcpu_pin_set = undef
-) {
-  if $enabled {
-    # include the declaration of the kubelet service
-    include ::platform::kubernetes::worker
-
-    file { '/etc/kvm-timer-advance/kvm-timer-advance.conf':
-      ensure  => 'present',
-      replace => true,
-      content => template('platform/kvm_timer_advance.conf.erb')
-    }
-    -> service { 'kvm_timer_advance_setup':
-      ensure => 'running',
-      enable => true,
-      before => Service['kubelet'],
-    }
-    # A separate enable is required since we have modified the service resource
-    # to never enable/disable services in puppet.
-    -> exec { 'Enable kvm_timer_advance_setup':
-      command => '/usr/bin/systemctl enable kvm_timer_advance_setup.service',
-    }
-  } else {
-    # A disable is required since we have modified the service resource
-    # to never enable/disable services in puppet and stop has no effect.
-    exec { 'Disable kvm_timer_advance_setup':
-      command => '/usr/bin/systemctl disable kvm_timer_advance_setup.service',
-    }
-  }
-}
-
 # Controls, based on the openstack_compute node label
 # the conditional loading of the non-open-source NVIDIA vGPU
 # drivers for commercial scenarios where they are built into
@@ -497,9 +465,4 @@ class platform::compute {
   require ::platform::compute::config
   require ::platform::compute::nvidia_vgpu_drivers
   require ::platform::compute::iscsi_setup
-
-  # Not included in Debian until libvirt gets included
-  if $::osfamily == 'RedHat' {
-    require ::platform::compute::kvm_timer_advance
-  }
 }
