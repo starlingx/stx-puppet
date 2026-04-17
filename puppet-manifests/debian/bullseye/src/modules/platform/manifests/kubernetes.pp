@@ -350,10 +350,7 @@ class platform::kubernetes::kubeadm {
 
   # Enable kubelet extra parameters that are node specific such as
   # cpumanager
-  $kubelet_path = $::osfamily ? {
-    'Debian' => '/etc/default/kubelet',
-    default => '/etc/sysconfig/kubelet',
-  }
+  $kubelet_path = '/etc/default/kubelet'
   file { $kubelet_path:
     ensure  => file,
     content => template('platform/kubelet.conf.erb'),

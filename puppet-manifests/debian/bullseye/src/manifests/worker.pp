@@ -63,8 +63,4 @@ class { '::platform::config::worker::post':
   stage => post,
 }
 
-if $::osfamily == 'Debian' {
-  lookup('classes', {merge => unique}).include
-} else {
-  hiera_include('classes')
-}
+lookup('classes', {merge => unique}).include

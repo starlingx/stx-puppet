@@ -43,17 +43,9 @@ class openstack::barbican
   }
 
   # On Debian barbican uses barbican-common to configure logrotate
-  if $::osfamily == 'Debian' {
-    file { '/etc/logrotate.d/barbican-common':
-      ensure  => present,
-      content => template('openstack/barbican-api-logrotate.erb')
-    }
-  }
-  else {
-    file { '/etc/logrotate.d/barbican-api':
-      ensure  => present,
-      content => template('openstack/barbican-api-logrotate.erb')
-    }
+  file { '/etc/logrotate.d/barbican-common':
+    ensure  => present,
+    content => template('openstack/barbican-api-logrotate.erb')
   }
 
   # Limit configuration file permission
@@ -122,13 +114,11 @@ class openstack::barbican::service (
   # On Debian barbican is set to run by UWSGI by default so
   # it doesn't update gunicorn-config.py. Update it in order
   # to run by gunicorn.
-  if $::osfamily == 'Debian' {
-    file_line { 'Modify bind_port in gunicorn-config.py':
-      path  => '/etc/barbican/gunicorn-config.py',
-      line  => "bind = '${gunicorn_bind}:${api_port}'",
-      match => '.*bind = .*',
-      tag   => 'modify-bind-port',
-    }
+  file_line { 'Modify bind_port in gunicorn-config.py':
+    path  => '/etc/barbican/gunicorn-config.py',
+    line  => "bind = '${gunicorn_bind}:${api_port}'",
+    match => '.*bind = .*',
+    tag   => 'modify-bind-port',
   }
 
   include ::platform::amqp::params

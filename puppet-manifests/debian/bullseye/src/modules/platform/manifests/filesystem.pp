@@ -168,7 +168,7 @@ define platform::filesystem::resize(
 class platform::filesystem::backup::params (
   $lv_name = 'backup-lv',
   $lv_size = '1',
-  $mountpoint = $::osfamily ? { 'Debian' => '/var/rootdirs/opt/backups', default => '/opt/backups' },
+  $mountpoint = '/var/rootdirs/opt/backups',
   $devmapper = '/dev/mapper/cgts--vg-backup--lv',
   $fs_type = 'ext4',
   $fs_options = ' '
@@ -189,10 +189,7 @@ class platform::filesystem::backup
 class platform::filesystem::scratch::params (
   $lv_size = '2',
   $lv_name = 'scratch-lv',
-  $mountpoint = $::osfamily ? {
-    'Debian' => '/var/rootdirs/scratch',
-    default => '/scratch',
-  },
+  $mountpoint = '/var/rootdirs/scratch',
   $devmapper = '/dev/mapper/cgts--vg-scratch--lv',
   $fs_type = 'ext4',
   $fs_options = ' ',
@@ -221,7 +218,7 @@ class platform::filesystem::conversion::params (
   $ensure = absent,
   $lv_size = '1',
   $lv_name = 'conversion-lv',
-  $mountpoint = $::osfamily ? { 'Debian' => '/var/rootdirs/opt/conversion', default => '/opt/conversion' },
+  $mountpoint = '/var/rootdirs/opt/conversion',
   $devmapper = '/dev/mapper/cgts--vg-conversion--lv',
   $fs_type = 'ext4',
   $fs_options = ' ',

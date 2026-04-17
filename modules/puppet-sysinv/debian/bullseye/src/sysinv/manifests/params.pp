@@ -1,7 +1,7 @@
 #
 # Files in this package are licensed under Apache; see LICENSE file.
 #
-# Copyright (c) 2013-2021 Wind River Systems, Inc.
+# Copyright (c) 2013-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -21,49 +21,16 @@ class sysinv::params {
   $certmon_conf = '/etc/sysinv/cert-mon.conf'
   $certalarm_conf = '/etc/sysinv/cert-alarm.conf'
   $sysinv_paste_api_ini = '/etc/sysinv/api-paste.ini'
+  $package_name = 'sysinv'
+  $client_package = 'cgtsclient'
+  $api_package = false
+  $api_service = 'sysinv-api'
+  $conductor_package = false
+  $conductor_service = 'sysinv-conductor'
+  $agent_package = false
+  $agent_service = 'sysinv-agent'
+  $certmon_package = false
+  $certalarm_package = false
+  $db_sync_command = 'sysinv-dbsync'
 
-  if $::osfamily == 'Debian' {
-    $package_name       = 'sysinv'
-    $client_package     = 'cgtsclient'
-    $api_package        = false
-    $api_service        = 'sysinv-api'
-    $conductor_package  = false
-    $conductor_service  = 'sysinv-conductor'
-    $agent_package      = false
-    $agent_service      = 'sysinv-agent'
-    $certmon_package    = false
-    $certalarm_package  = false
-    $db_sync_command    = 'sysinv-dbsync'
-
-  } elsif($::osfamily == 'RedHat') {
-
-    $package_name       = 'sysinv'
-    $client_package     = 'cgtscli'
-    $api_package        = false
-    $api_service        = 'sysinv-api'
-    $conductor_package  = false
-    $conductor_service  = 'sysinv-conductor'
-    $agent_package      = false
-    $agent_service      = 'sysinv-agent'
-    $certmon_package    = false
-    $certalarm_package  = false
-    $db_sync_command    = 'sysinv-dbsync'
-
-  } elsif($::osfamily == 'WRLinux') {
-
-    $package_name       = 'sysinv'
-    $client_package     = 'cgtscli'
-    $api_package        = false
-    $api_service        = 'sysinv-api'
-    $conductor_package  = false
-    $conductor_service  = 'sysinv-conductor'
-    $agent_package      = false
-    $agent_service      = 'sysinv-agent'
-    $certmon_package    = false
-    $certalarm_package  = false
-    $db_sync_command    = 'sysinv-dbsync'
-
-  } else {
-    fail("unsuported osfamily ${::osfamily}, currently WindRiver, Debian, Redhat are the only supported platforms")
-  }
 }

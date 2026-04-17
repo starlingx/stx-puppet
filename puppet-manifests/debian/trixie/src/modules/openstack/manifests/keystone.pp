@@ -8,10 +8,7 @@ class openstack::keystone::params(
   $admin_port = 5000,
   $region_name = undef,
   $system_controller_region = undef,
-  $service_name = $facts['os']['family'] ? {
-    'RedHat' => 'openstack-keystone',
-    default  => 'keystone',
-  },
+  $service_name = 'keystone',
   $token_expiration = 3600,
   $service_create = false,
   $fernet_keys_rotation_minute = '25',
@@ -67,16 +64,6 @@ class openstack::keystone (
     # shutdown timeout param
     keystone_config {
         'token/allow_expired_window': value => 0;
-    }
-
-    # These two params are included in ::keystone::security_compliance
-    # in newer version of keystone puppet module (this is the case for
-    # Debian 11)
-    if $facts['os']['family'] == 'RedHat' {
-      keystone_config {
-          'security_compliance/lockout_duration': value => $lockout_period;
-          'security_compliance/lockout_failure_attempts': value => $lockout_retries;
-      }
     }
 
     file { '/etc/keystone/keystone-extra.conf':
@@ -306,16 +293,8 @@ class openstack::keystone::server::runtime {
 class openstack::keystone::endpoint::runtime {
 
   if str2bool($is_controller_active) and !find_file('/var/run/.enrollment_in_progress') {
-    case $facts['os']['family'] {
-        'RedHat': {
-            include ::keystone::endpoint
-        }
-
-        default: {
-            class { '::keystone::bootstrap':
-              password => lookup('keystone::roles::admin::password'),
-            }
-        }
+    class { '::keystone::bootstrap':
+      password => lookup('keystone::roles::admin::password'),
     }
 
     include ::sysinv::keystone::auth
@@ -439,32 +418,15 @@ class openstack::keystone::upgrade (
       before  => Class['::keystone']
     }
 
-    case $facts['os']['family'] {
-        'RedHat': {
-            class { '::keystone':
-              upgrade_token_cmd     => $upgrade_token_cmd,
-              upgrade_token_file    => $upgrade_token_file,
-              enable_fernet_setup   => true,
-              enable_bootstrap      => false,
-              fernet_key_repository => "${keystone_key_repo}/fernet-keys",
-              sync_db               => false,
-              default_domain        => undef,
-              default_transport_url => $platform::amqp::params::transport_url,
-            }
-        }
-
-        default: {
-            class { '::keystone':
-              service_name          => 'keystone',
-              upgrade_token_cmd     => $upgrade_token_cmd,
-              upgrade_token_file    => $upgrade_token_file,
-              enable_fernet_setup   => true,
-              fernet_key_repository => "${keystone_key_repo}/fernet-keys",
-              sync_db               => false,
-              default_domain        => undef,
-              default_transport_url => $platform::amqp::params::transport_url,
-            }
-        }
+    class { '::keystone':
+      service_name          => 'keystone',
+      upgrade_token_cmd     => $upgrade_token_cmd,
+      upgrade_token_file    => $upgrade_token_file,
+      enable_fernet_setup   => true,
+      fernet_key_repository => "${keystone_key_repo}/fernet-keys",
+      sync_db               => false,
+      default_domain        => undef,
+      default_transport_url => $platform::amqp::params::transport_url,
     }
 
     # Add service account and endpoints for any new R6 services...

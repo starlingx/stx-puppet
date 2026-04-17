@@ -17,7 +17,6 @@ endif
 	install -m 755 -D bin/apply_network_config.py $(BINDIR)/apply_network_config.py
 	install -m 755 -D bin/k8s_wait_for_endpoints_health.py $(BINDIR)/k8s_wait_for_endpoints_health.py
 	install -m 755 -D bin/kube-wait-control-plane-terminated.sh $(BINDIR)/kube-wait-control-plane-terminated.sh
-	install -m 755 -D bin/puppet-update-default-grub.sh $(BINDIR)/puppet-update-default-grub.sh
 	install -m 755 -D bin/puppet-update-grub-env.py $(BINDIR)/puppet-update-grub-env.py
 	install -m 755 -D bin/remove_unused_calico_hostendpoints.sh $(BINDIR)/remove_unused_calico_hostendpoints.sh
 	install -m 755 -D bin/remove_unused_calico_networksets.sh $(BINDIR)/remove_unused_calico_networksets.sh
@@ -36,11 +35,7 @@ endif
 	install -m 755 -D bin/parse_sriov.py $(BINDIR)/parse_sriov.py
 
 	install -d -m 0755 $(CONFIGDIR)
-ifdef hiera_v5
-	install -m 640 etc/hiera_v5.yaml $(CONFIGDIR)/hiera.yaml
-else
 	install -m 640 etc/hiera.yaml $(CONFIGDIR)
-endif
 	cp -R hieradata $(CONFIGDIR)/
 	cp -R manifests $(CONFIGDIR)/
 	install -d -m 0755 $(MODULEDIR)

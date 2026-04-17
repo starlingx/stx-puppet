@@ -11,8 +11,4 @@ Exec {
 
 include ::platform::config
 
-if $::osfamily == 'Debian' {
-  lookup('classes', {merge => unique}).include
-} else {
-  hiera_include('classes')
-}
+lookup('classes', {merge => unique}).include

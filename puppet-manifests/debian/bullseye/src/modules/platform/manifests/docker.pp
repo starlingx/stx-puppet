@@ -1,8 +1,5 @@
 class platform::docker::params (
-  $package_name = $::osfamily ? {
-    'Debian' => 'docker.io',
-    default => 'docker-ce',
-  },
+  $package_name                = 'docker.io',
   $http_proxy                  = undef,
   $https_proxy                 = undef,
   $no_proxy                    = undef,
