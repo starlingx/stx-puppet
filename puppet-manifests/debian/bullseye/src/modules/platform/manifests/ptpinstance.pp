@@ -450,6 +450,8 @@ class platform::ptpinstance (
   require ::platform::ptpinstance::nic_clock
   $nic_clock_config_extended = $platform::ptpinstance::nic_clock::nic_clock_config_extended
 
+  require ::platform::ptpinstance::gnss_state
+
   if $monitoring_enabled and $monitoring_config['global_parameters']['devices'] {
     $gpsd_monitored_devices = split($monitoring_config['global_parameters']['devices'], ' ')
   } else {
@@ -625,6 +627,7 @@ class platform::ptpinstance::runtime {
   class { 'platform::ptpinstance::ptp_directories': }
   -> class { 'platform::ptpinstance::gnss_monitor_read_devices': }
   -> class { 'platform::ptpinstance::nic_clock': }
+  -> class { 'platform::ptpinstance::gnss_state': }
   -> class { 'platform::ptpinstance::gnss_monitor': }
   -> class { 'platform::ptpinstance': runtime => true,
               previous_gpsd_monitored_devices =>
@@ -775,6 +778,22 @@ define platform::ptpinstance::ptp_pin (
     command  => "PTP=$(basename /sys/class/net/${iface}/device/ptp/ptp*);\
       echo ${function} ${channel} > /sys/class/net/${iface}/device/ptp/\$PTP/pins/${pin}",
     provider => shell,
+  }
+}
+
+class platform::ptpinstance::gnss_state (
+  $gnss_pin_config = {},
+) {
+  $pin_package_label = pick_default($gnss_pin_config['pin_package_label'], '')
+  $state = pick_default($gnss_pin_config['state'], '')
+
+  if $pin_package_label != '' and $state != '' {
+    exec { "${pin_package_label}_${state}":
+      command   => "python /usr/share/puppet/modules/platform/files/change_network_card_pin_state.py \
+        --pin_package_label ${pin_package_label} --state ${state}",
+      logoutput => 'on_failure',
+      timeout   => 30,
+    }
   }
 }
 
@@ -946,35 +965,39 @@ define platform::ptpinstance::config_param (
     },
   }
 
-  if $cmds[$param][$value] {
-    $final_value = $cmds[$param][$value]
-  } elsif ($param in ['period_sdp0', 'period_sdp2', 'period_sdp20', 'period_sdp22']) and !$cmds[$param][$value] {
-    # This logic deals with periods set in nanoseconds, we don't have a fixed argument to
-    # those so this logic makes sure that the value is converted to seconds if needed.
-    # The minimum value is 100ns, and the maximum is 4s.
-    $period_s  = Integer($value) / 1000000000
-    $period_ns = Integer($value) % 1000000000
-    $channel = $param ? {
-      'period_sdp0'  => 1,
-      'period_sdp2'  => 2,
-      'period_sdp20' => 1,
-      'period_sdp22' => 2,
+  if $cmds[$param] {
+    if $cmds[$param][$value] {
+      $final_value = $cmds[$param][$value]
+    } elsif ($param in ['period_sdp0', 'period_sdp2', 'period_sdp20', 'period_sdp22']) and !$cmds[$param][$value] {
+      # This logic deals with periods set in nanoseconds, we don't have a fixed argument to
+      # those so this logic makes sure that the value is converted to seconds if needed.
+      # The minimum value is 100ns, and the maximum is 4s.
+      $period_s  = Integer($value) / 1000000000
+      $period_ns = Integer($value) % 1000000000
+      $channel = $param ? {
+        'period_sdp0'  => 1,
+        'period_sdp2'  => 2,
+        'period_sdp20' => 1,
+        'period_sdp22' => 2,
+      }
+      $final_value = {
+        'iface'         => $iface,
+        'pin'           => $pin,
+        'channel'       => $channel,
+        'start_time_s'  => 0,
+        'start_time_ns' => 0,
+        'period_s'      => $period_s,
+        'period_ns'     => $period_ns,
+      }
+    } elsif !$cmds[$param][$value] {
+      $final_value = undef
     }
-    $final_value = {
-      'iface'         => $iface,
-      'pin'           => $pin,
-      'channel'       => $channel,
-      'start_time_s'  => 0,
-      'start_time_ns' => 0,
-      'period_s'      => $period_s,
-      'period_ns'     => $period_ns,
-    }
-  } elsif !$cmds[$param][$value] {
-    $final_value = undef
   }
 
   if !$cmds[$param] {
-    notice("Skipped invalid clock parameter: ${param}.")
+    if !($param in ['gnss_enabled']) {
+      notice("Skipped invalid clock parameter: ${param}.")
+    }
   } elsif $final_value == undef {
     notice("Skipped invalid clock parameter value: ${param}: ${value}.")
   } else {
