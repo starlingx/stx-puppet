@@ -112,6 +112,7 @@ class platform::dcmanager
     $disable_cpu = @("DISABLECPU"/L)
       [Service]
       CPUShares=1024
+      CPUWeight=100
       CPUQuota=
       CPUQuotaPeriodSec=
       Slice=system.slice
@@ -179,6 +180,7 @@ class platform::dcmanager
     $disable_scope_cpu = @("DISABLESCOPECPU"/L)
       [Scope]
       CPUShares=1024
+      CPUWeight=100
       | DISABLESCOPECPU
 
     file { '/etc/systemd/system/init.scope.d/':

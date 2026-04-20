@@ -5,4 +5,7 @@ Before=slices.target
 [Slice]
 MemoryAccounting=true
 CPUAccounting=true
+# CPUShares for v1
 CPUShares=<%= @k8splatform_cpushares %>
+# CPUWeight for v2
+CPUWeight=<%= 1 + ((@k8splatform_cpushares - 2) * 9999) / 262142 %>
