@@ -51,7 +51,10 @@ python /usr/share/puppet/modules/platform/files/update_kubelet-config.py \
 --image_gc_high_threshold_percent <%= @kubelet_image_gc_high_threshold_percent %> \
 <%- end -%>
 <%- if @kubelet_eviction_hard_imagefs_available -%>
---eviction_hard_imagefs_available <%= @kubelet_eviction_hard_imagefs_available %>
+--eviction_hard_imagefs_available <%= @kubelet_eviction_hard_imagefs_available %> \
+<%- end -%>
+<%- if @cgroup_driver -%>
+--cgroup_driver <%= @cgroup_driver %>
 <%- end -%>
 
 if [ $? -ne 0 ]; then

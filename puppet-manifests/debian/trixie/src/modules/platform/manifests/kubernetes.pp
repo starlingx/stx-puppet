@@ -177,79 +177,91 @@ class platform::kubernetes::symlinks {
 
 class platform::kubernetes::cgroup::params (
   $cgroup_root = '/sys/fs/cgroup',
-  $cgroup_name = 'k8s-infra',
+  $cgroup_name = 'k8sinfra',
   $controllers = ['cpuset', 'cpu', 'cpuacct', 'memory', 'systemd', 'pids'],
 ) {}
 
 class platform::kubernetes::cgroup
   inherits ::platform::kubernetes::cgroup::params {
   include ::platform::kubernetes::params
+  include ::platform::params
 
-  $k8s_cpuset = $platform::kubernetes::params::k8s_cpuset
-  $k8s_nodeset = $platform::kubernetes::params::k8s_nodeset
+  # With cgroup v2 (unified hierarchy), per-controller directories do not
+  # exist.  The kubelet cgroup root is managed via systemd slices instead.
+  # Skip v1 directory creation when cgroup v2 is enabled.
+  if ! str2bool($platform::params::cgroup_v2_enabled) {
+    $k8s_cpuset = $platform::kubernetes::params::k8s_cpuset
+    $k8s_nodeset = $platform::kubernetes::params::k8s_nodeset
 
-  # Default to float across all cpus and numa nodes
-  if !defined('$k8s_cpuset') {
-    $k8s_cpuset = generate('/bin/cat', '/sys/devices/system/cpu/online')
-    notice("System default cpuset ${k8s_cpuset}.")
-  }
-  if !defined('$k8s_nodeset') {
-    $k8s_nodeset = generate('/bin/cat', '/sys/devices/system/node/online')
-    notice("System default nodeset ${k8s_nodeset}.")
-  }
-
-  # Create kubelet cgroup for the minimal set of required controllers.
-  # NOTE: The kubernetes cgroup_manager_linux func Exists() checks that
-  # specific subsystem cgroup paths actually exist on the system. The
-  # particular cgroup cgroupRoot must exist for the following controllers:
-  # "cpu", "cpuacct", "cpuset", "memory", "systemd", "pids".
-  # Reference:
-  #  https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/cm/cgroup_manager_linux.go
-  # systemd automatically mounts cgroups and controllers, so don't need
-  # to do that here.
-  notice("Create ${cgroup_root}/${controllers}/${cgroup_name}")
-  $controllers.each |String $controller| {
-    $cgroup_dir = "${cgroup_root}/${controller}/${cgroup_name}"
-    file { $cgroup_dir :
-      ensure => directory,
-      owner  => 'root',
-      group  => 'root',
-      mode   => '0700',
+    # Default to float across all cpus and numa nodes
+    if !defined('$k8s_cpuset') {
+      $k8s_cpuset = generate('/bin/cat', '/sys/devices/system/cpu/online')
+      notice("System default cpuset ${k8s_cpuset}.")
+    }
+    if !defined('$k8s_nodeset') {
+      $k8s_nodeset = generate('/bin/cat', '/sys/devices/system/node/online')
+      notice("System default nodeset ${k8s_nodeset}.")
     }
 
-    # Modify k8s cpuset resources to reflect platform configured cores.
-    # NOTE: Using 'exec' here instead of 'file' resource type with 'content'
-    # tag to update contents under /sys, since puppet tries to create files
-    # with temp names in the same directory, and the kernel only allows
-    # specific filenames to be created in these particular directories.
-    # This causes puppet to fail if we use the 'content' tag.
-    # NOTE: Child cgroups cpuset must be subset of parent. In the case where
-    # child directories already exist and we change the parent's cpuset to
-    # be a subset of what the children have, will cause the command to fail
-    # with "-bash: echo: write error: device or resource busy".
-    if $controller == 'cpuset' {
-      $cgroup_mems = "${cgroup_dir}/cpuset.mems"
-      $cgroup_cpus = "${cgroup_dir}/cpuset.cpus"
-      $cgroup_tasks = "${cgroup_dir}/tasks"
-
-      notice("Set ${cgroup_name} nodeset: ${k8s_nodeset}, cpuset: ${k8s_cpuset}")
-      File[ $cgroup_dir ]
-      -> exec { "Create ${cgroup_mems}" :
-        command => "/bin/echo ${k8s_nodeset} > ${cgroup_mems} || :",
-      }
-      -> exec { "Create ${cgroup_cpus}" :
-        command => "/bin/echo ${k8s_cpuset} > ${cgroup_cpus} || :",
-      }
-      -> file { $cgroup_tasks :
-        ensure => file,
+    # Create kubelet cgroup for the minimal set of required controllers.
+    # NOTE: The kubernetes cgroup_manager_linux func Exists() checks that
+    # specific subsystem cgroup paths actually exist on the system. The
+    # particular cgroup cgroupRoot must exist for the following controllers:
+    # "cpu", "cpuacct", "cpuset", "memory", "systemd", "pids".
+    # Reference:
+    #  https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/cm/cgroup_manager_linux.go
+    # systemd automatically mounts cgroups and controllers, so don't need
+    # to do that here.
+    notice("Create ${cgroup_root}/${controllers}/${cgroup_name}")
+    $controllers.each |String $controller| {
+      $cgroup_dir = "${cgroup_root}/${controller}/${cgroup_name}"
+      file { $cgroup_dir :
+        ensure => directory,
         owner  => 'root',
         group  => 'root',
-        mode   => '0644',
+        mode   => '0700',
+      }
+
+      # Modify k8s cpuset resources to reflect platform configured cores.
+      # NOTE: Using 'exec' here instead of 'file' resource type with 'content'
+      # tag to update contents under /sys, since puppet tries to create files
+      # with temp names in the same directory, and the kernel only allows
+      # specific filenames to be created in these particular directories.
+      # This causes puppet to fail if we use the 'content' tag.
+      # NOTE: Child cgroups cpuset must be subset of parent. In the case where
+      # child directories already exist and we change the parent's cpuset to
+      # be a subset of what the children have, will cause the command to fail
+      # with "-bash: echo: write error: device or resource busy".
+      if $controller == 'cpuset' {
+        $cgroup_mems = "${cgroup_dir}/cpuset.mems"
+        $cgroup_cpus = "${cgroup_dir}/cpuset.cpus"
+        $cgroup_tasks = "${cgroup_dir}/tasks"
+
+        notice("Set ${cgroup_name} nodeset: ${k8s_nodeset}, cpuset: ${k8s_cpuset}")
+        File[ $cgroup_dir ]
+        -> exec { "Create ${cgroup_mems}" :
+          command => "/bin/echo ${k8s_nodeset} > ${cgroup_mems} || :",
+        }
+        -> exec { "Create ${cgroup_cpus}" :
+          command => "/bin/echo ${k8s_cpuset} > ${cgroup_cpus} || :",
+        }
+        -> file { $cgroup_tasks :
+          ensure => file,
+          owner  => 'root',
+          group  => 'root',
+          mode   => '0644',
+        }
       }
     }
+  } else {
+    notice("cgroup v2 enabled: skipping v1 ${cgroup_name} directory creation")
   }
 }
 
+# Regenerate local kubelet config.yaml from the kubelet-config ConfigMap.
+# Runs after master::init so that apiserver is available.
+# Retries to handle apiserver startup delay.
+# Skips if local config already matches expected cgroupDriver and cgroupRoot.
 define platform::kubernetes::kube_command (
   $command,
   $logname,
@@ -2435,8 +2447,14 @@ class platform::kubernetes::master::apiserver::runtime{
 class platform::kubernetes::master::update_kubelet_params::runtime
   inherits ::platform::kubernetes::params {
 
+  include ::platform::params
   # Ensure kubectl symlink is up to date.  May not actually be needed.
   require platform::kubernetes::symlinks
+  # Cgroup driver: set by cgroup_v2_enabled service parameter toggle
+  $cgroup_driver = str2bool($platform::params::cgroup_v2_enabled) ? {
+    true    => 'systemd',
+    default => 'cgroupfs',
+  }
 
   $kubelet_image_gc_low_threshold_percent = $platform::kubernetes::params::kubelet_image_gc_low_threshold_percent
   $kubelet_image_gc_high_threshold_percent = $platform::kubernetes::params::kubelet_image_gc_high_threshold_percent
@@ -2467,8 +2485,14 @@ class platform::kubernetes::update_kubelet_config::runtime
     timeout     => 60,
   }
 
+  # Only restart kubelet if it is already running (try-restart pattern).
+  # During initial boot, kubelet may not be started yet.
   -> exec { 'restart kubelet':
       command => '/usr/local/sbin/pmon-restart kubelet',
+      onlyif  => [
+        'systemctl is-active kubelet | grep -q -w -e active -e failed',
+        'systemctl is-enabled kubelet | grep -wq enabled',
+      ],
   }
 
 }
