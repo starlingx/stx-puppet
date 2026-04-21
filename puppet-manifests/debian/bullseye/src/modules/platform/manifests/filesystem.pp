@@ -88,6 +88,12 @@ define platform::filesystem (
       onlyif  => "test ! -e /etc/platform/.${lv_name}"
     }
     # create filesystem
+    -> exec { "creating: xfs filesystem ${device}":
+      # For XFS, try with default stripe geometry first; fall back to -d noalign if it fails
+      command => "mkfs.xfs -f ${fs_options} ${device} || mkfs.xfs -f ${fs_options} -d noalign ${device}",
+      unless  => "blkid -s TYPE -o value ${device} | grep -qw ${fs_type}",
+      onlyif  => "test ${fs_type} = xfs",
+    }
     -> filesystem { $device:
       ensure  => $ensure,
       fs_type => $fs_type,
