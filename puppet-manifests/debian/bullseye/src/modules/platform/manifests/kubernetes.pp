@@ -685,12 +685,6 @@ class platform::kubernetes::master::init
       source => "puppet:///modules/${module_name}/kubeconfig.sh"
     }
 
-    # Remove the "master" taint from AIO master nodes. (Can be removed once the "control-plane" taint is the default.)
-    -> exec { 'remove master taint from master node':
-      command   => "kubectl --kubeconfig=/etc/kubernetes/admin.conf taint node ${::platform::params::hostname} node-role.kubernetes.io/master- || true", # lint:ignore:140chars
-      logoutput => true,
-      onlyif    => "test '${::platform::params::system_type }' == 'All-in-one'",
-    }
 
     # Remove the "control-plane" taint from AIO control-plane nodes
     -> exec { 'remove control-plane taint from control-plane node':
