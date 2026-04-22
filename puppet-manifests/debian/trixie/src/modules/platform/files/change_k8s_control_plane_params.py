@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2025 Wind River Systems, Inc.
+# Copyright (c) 2021-2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -9,7 +9,7 @@ import json
 import logging
 import os
 import requests
-import ruamel.yaml as yaml
+from ruamel.yaml import YAML
 from ruamel.yaml.compat import StringIO
 import shutil
 import signal
@@ -20,6 +20,11 @@ import time
 
 from sysinv.common import kubernetes  # pylint: disable=import-error
 from sysinv.common import service_parameter as sp  # pylint: disable=import-error
+
+# ruamel.yaml >= 0.18 removed the old yaml.load()/yaml.dump() API.
+# Use YAML instances with explicit typ instead.
+_yaml_rt = YAML(typ='rt')       # round-trip (preserves comments/order)
+_yaml_safe = YAML(typ='safe')   # safe loader (plain data structures)
 
 # pylint: disable-msg=broad-except
 
@@ -246,7 +251,7 @@ def patch_kubeadmin_configmap(new_data, is_controller_active):
         return 0
     try:
         configmap_name = 'kubeadm-config'
-        newyaml = yaml.YAML()
+        newyaml = YAML()
         outstream = StringIO()
         newyaml.dump(new_data, outstream)
         configmap_data = {'data': {'ClusterConfiguration': outstream.getvalue()}}
@@ -273,8 +278,8 @@ def get_k8s_cluster_configuration():
         if not configmap:
             LOG.error('Getting kubeadm-config configmap.')
             return False
-        cluster_config = yaml.load(
-            configmap.data['ClusterConfiguration'], Loader=yaml.RoundTripLoader)
+        cluster_config = _yaml_rt.load(
+            configmap.data['ClusterConfiguration'])
         return cluster_config
     except Exception as e:
         LOG.error("Getting cluster-config. %s", e)
@@ -294,7 +299,8 @@ def export_k8s_cluster_configuration(target_filename, cluster_cfg=None):
             return 1
     try:
         with open(target_filename, 'w') as file:
-            yaml.dump(cluster_cfg, file, Dumper=yaml.RoundTripDumper, default_flow_style=False)
+            _yaml_rt.default_flow_style = False
+            _yaml_rt.dump(cluster_cfg, file)
     except Exception as e:
         LOG.error('Saving cluster-config file. %s', e)
         return 1
@@ -576,9 +582,8 @@ def generates_kubeadm_config_file(
             try:
                 _cluster_cm_aux = get_k8s_configmap(
                     'kubeadm-config', namespace='kube-system')
-                cluster_cfg = yaml.load(
-                    _cluster_cm_aux.data['ClusterConfiguration'],
-                    Loader=yaml.RoundTripLoader)
+                cluster_cfg = _yaml_rt.load(
+                    _cluster_cm_aux.data['ClusterConfiguration'])
             except Exception as e:
                 LOG.error('Getting cluster-config configmap: %s', e)
                 return 1
@@ -600,7 +605,7 @@ def generates_kubeadm_config_file(
     # Intialize KubeletConfiguration
     try:
         with open(kubelet_bak_config_file, 'r') as file:
-            bak_kubelet_cfg = yaml.load(file, Loader=yaml.RoundTripLoader)
+            bak_kubelet_cfg = _yaml_rt.load(file)
     except FileNotFoundError:
         LOG.error('Kubelet bak config file not found.')
         return 1
@@ -624,8 +629,8 @@ def generates_kubeadm_config_file(
     # Updating kubeadm config file
     try:
         with open(kubeadm_config_file, 'a') as file:
-            yaml.dump(_kubelet_cfg, file, Dumper=yaml.RoundTripDumper,
-                      default_flow_style=False)
+            _yaml_rt.default_flow_style = False
+            _yaml_rt.dump(_kubelet_cfg, file)
         return 0
     except Exception as e:
         LOG.error('Updating kubeadm config file with KubeletConfiguration: %s', e)
@@ -648,7 +653,7 @@ def get_service_parameters_from_hieradata(
     # pylint: disable-msg=too-many-branches
     try:
         with open(hieradata_file, 'r') as _hieradata:
-            hieradata = yaml.load(_hieradata, Loader=yaml.Loader)
+            hieradata = _yaml_safe.load(_hieradata)
     except Exception as e:
         LOG.error('ERROR loading hieradata. %s', e)
         raise
@@ -1340,9 +1345,9 @@ def main():
         LOG.debug('Loading cluster_cfg from bak file.')
         try:
             with open(kubeadm_cm_bak_file, 'r') as file:
-                _kubeadm_cfg = yaml.load(file, Loader=yaml.RoundTripLoader)
-                cluster_cfg = yaml.load(_kubeadm_cfg['data']['ClusterConfiguration'],
-                                        Loader=yaml.RoundTripLoader)
+                _kubeadm_cfg = _yaml_rt.load(file)
+                cluster_cfg = _yaml_rt.load(
+                    _kubeadm_cfg['data']['ClusterConfiguration'])
         except Exception as e:
             msg = str('Loading cluster_cfg from bak file. {}'.format(e))
             LOG.error(msg)
