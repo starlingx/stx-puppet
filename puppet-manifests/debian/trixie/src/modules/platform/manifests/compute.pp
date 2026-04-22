@@ -51,6 +51,7 @@ class platform::compute::grub::params (
   $g_audit = '',
   $g_audit_backlog_limit = 'audit_backlog_limit=8192',
   $g_intel_pstate = '',
+  $g_amd_pstate = '',
   $ignore_recovery = false,
   $g_kthread_prio = '21',
   $keys = [
@@ -66,6 +67,7 @@ class platform::compute::grub::params (
     'audit',
     'audit_backlog_limit',
     'intel_pstate',
+    'amd_pstate',
   ],
 ) {
   include platform::sysctl::params
@@ -89,10 +91,14 @@ class platform::compute::grub::params (
 
   $updated_audit = "audit=${g_audit}"
 
-  if ! empty($g_intel_pstate) {
-    $intel_pstate = "intel_pstate=${g_intel_pstate}"
-  } else {
-    $intel_pstate = ''
+  $cpu_vendor = $facts['processors']['models'][0]
+  $intel_pstate = ($cpu_vendor =~ /Intel/ and !empty($g_intel_pstate)) ? {
+    true    => "intel_pstate=${g_intel_pstate}",
+    default => '',
+  }
+  $amd_pstate = ($cpu_vendor =~ /AMD/ and !empty($g_amd_pstate)) ? {
+    true    => "amd_pstate=${g_amd_pstate}",
+    default => '',
   }
 
   if str2bool($platform::sysctl::params::low_latency) {
@@ -103,7 +109,7 @@ class platform::compute::grub::params (
 
   $grub_updates = strip(
     # lint:ignore:140chars
-    "${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit} ${intel_pstate} ${nmi_watchdog} ${skew_tick} ${kthread_prio}"
+    "${eptad} ${g_hugepages} ${m_hugepages} ${default_pgsz} ${cpu_options} ${updated_audit} ${g_audit_backlog_limit} ${intel_pstate} ${amd_pstate} ${nmi_watchdog} ${skew_tick} ${kthread_prio}"
     # lint:endignore:140chars
     )
 }

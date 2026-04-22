@@ -836,6 +836,10 @@ class platform::kubernetes::master
   contain ::platform::kubernetes::configuration
   contain ::platform::haproxy::k8s_client_certificate
   contain ::platform::kubernetes::haproxy
+  # Only include worker::pci on Standard machine (not All-in-one)
+  if $platform::params::system_type != 'All-in-one' {
+    contain ::platform::kubernetes::worker::pci
+  }
 
   Class['::platform::sysctl::controller::reserve_ports'] -> Class[$name]
   Class['::platform::k8splatform'] -> Class[$name]
