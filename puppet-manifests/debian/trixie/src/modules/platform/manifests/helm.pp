@@ -114,6 +114,13 @@ class platform::helm
       logoutput => true,
     }
 
+    -> exec { 'wait for lighttpd ready for helm':
+      command   => 'curl -s -o /dev/null http://127.0.0.1:8080',
+      tries     => 30,
+      try_sleep => 1,
+      logoutput => true,
+    }
+
     -> Class['::platform::helm::repositories']
   }
 }
@@ -122,5 +129,14 @@ class platform::helm::runtime {
   include ::platform::helm::repositories
   include ::openstack::lighttpd::runtime
 
-  Exec['sm-restart-lighttpd'] -> Class['::platform::helm::repositories']
+  Exec['sm-restart-lighttpd']
+
+  -> exec { 'wait for lighttpd ready for helm runtime':
+    command   => 'curl -s -o /dev/null http://127.0.0.1:8080',
+    tries     => 30,
+    try_sleep => 1,
+    logoutput => true,
+  }
+
+  -> Class['::platform::helm::repositories']
 }
