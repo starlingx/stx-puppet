@@ -20,34 +20,55 @@ class platform::sssd::params (
 class platform::sssd::config
   inherits ::platform::sssd::params {
 
-  if $facts['os']['family'] == 'Debian' {
-    # Generate sssd systemd override file
-    $sssd_override_dir = '/etc/systemd/system/sssd.service.d'
+  # Ensure SSSD directories are owned by root and 'pipes' directories
+  # exist for SSSD internal dbus (stx 13 upgrade issue)
+  file { '/var/lib/sss':
+    ensure  => 'directory',
+    owner   => 'root',
+    group   => 'root',
+    recurse => true,
+  }
 
-    file { $sssd_override_dir:
-      ensure => 'directory',
-      owner  => 'root',
-      group  => 'root',
-      mode   => '0755',
-    }
-    -> file { "${sssd_override_dir}/sssd-stx-override.conf":
-      content => template('platform/sssd.systemd.override.conf.erb'),
-      owner   => 'root',
-      group   => 'root',
-      mode    => '0644',
-    }
+  file { '/var/lib/sss/pipes':
+    ensure => 'directory',
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0755',
+  }
 
-    # Update sssd configuration
-    class { 'sssd':
-      manage_package       => $manage_package,
-      manage_service       => $manage_service,
-      reconnection_retries => $reconnection_retries,
-      services             => $services,
-      nss_options          => $nss_options,
-      pam_options          => $pam_options,
-      sudo_options         => $sudo_options,
-      domains              => $domains,
-    }
+  file { '/var/lib/sss/pipes/private':
+    ensure => 'directory',
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0750',
+  }
+
+  # Generate sssd systemd override file
+  $sssd_override_dir = '/etc/systemd/system/sssd.service.d'
+
+  file { $sssd_override_dir:
+    ensure => 'directory',
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0755',
+  }
+  -> file { "${sssd_override_dir}/sssd-stx-override.conf":
+    content => template('platform/sssd.systemd.override.conf.erb'),
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+  }
+
+  # Update sssd configuration
+  class { 'sssd':
+    manage_package       => $manage_package,
+    manage_service       => $manage_service,
+    reconnection_retries => $reconnection_retries,
+    services             => $services,
+    nss_options          => $nss_options,
+    pam_options          => $pam_options,
+    sudo_options         => $sudo_options,
+    domains              => $domains,
   }
 }
 
