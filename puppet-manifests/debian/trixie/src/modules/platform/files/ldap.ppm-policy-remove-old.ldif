@@ -1,0 +1,3 @@
+dn: cn=default,ou=policies,dc=cgcs,dc=local
+changetype: modify
+delete: pwdCheckModule

@@ -91,6 +91,37 @@ class platform::ldap::server::local
     }
   }
 
+  # TODO: Remove after stx 13 upgrade.
+  # Update password policy to use ppm module attributes (pwdUseCheckModule,
+  # pwdCheckModuleArg) and remove the old pwdCheckModule attribute if present.
+  # This must run after slapd restarts with the new schema that defines these attributes.
+  # Only needed during upgrade — on bootstrap, initial_config.ldif already has the correct values.
+  if str2bool($usm_upgrade_in_progress) {
+    file { '/tmp/ldap-ppm-policy-upgrade.ldif':
+      source => 'puppet:///modules/platform/ldap.ppm-policy-upgrade.ldif',
+    }
+
+    file { '/tmp/ldap-ppm-policy-remove-old.ldif':
+      source => 'puppet:///modules/platform/ldap.ppm-policy-remove-old.ldif',
+    }
+
+    exec { 'upgrade-ppm-policy':
+      command => "ldapmodify -x -H ldap:/// -D cn=ldapadmin,dc=cgcs,dc=local -w \"${admin_pw}\" -f /tmp/ldap-ppm-policy-upgrade.ldif",
+    }
+
+    exec { 'remove-old-pwdCheckModule':
+      command => "ldapmodify -x -H ldap:/// -D cn=ldapadmin,dc=cgcs,dc=local -w \"${admin_pw}\" -f /tmp/ldap-ppm-policy-remove-old.ldif",
+      onlyif  => "ldapsearch -x -H ldap:/// -D cn=ldapadmin,dc=cgcs,dc=local -w \"${admin_pw}\" -b cn=default,ou=policies,dc=cgcs,dc=local -s base pwdCheckModule | grep -q 'pwdCheckModule:'",
+    }
+
+    Exec['restart-openldap']
+    -> File['/tmp/ldap-ppm-policy-upgrade.ldif']
+    -> Exec['upgrade-ppm-policy']
+    -> File['/tmp/ldap-ppm-policy-remove-old.ldif']
+    -> Exec['remove-old-pwdCheckModule']
+    -> Class['platform::ldap::secure::config']
+  }
+
   # start openldap with updated config and updated nsswitch
   # then convert slapd config to db format. Note, slapd must have run and created the db prior to this.
   Exec['stop-openldap']
