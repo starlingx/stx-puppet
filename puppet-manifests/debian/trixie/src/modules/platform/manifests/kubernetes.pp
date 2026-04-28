@@ -1104,6 +1104,9 @@ class platform::kubernetes::firewall
   include ::platform::network::mgmt::params
   include ::platform::network::mgmt::ipv4::params
   include ::platform::network::mgmt::ipv6::params
+  include ::platform::network::multicast::params
+  include ::platform::network::multicast::ipv4::params
+  include ::platform::network::multicast::ipv6::params
   include ::platform::docker::params
 
   # add http_proxy and https_proxy port to k8s firewall
@@ -1150,6 +1153,25 @@ class platform::kubernetes::firewall
       $s_mgmt_subnet4 = "${mgmt_subnet4}/${mgmt_prefixlen4}"
       $d_mgmt_subnet4 = "! ${s_mgmt_subnet4}"
 
+      if ($::platform::network::multicast::ipv4::params::subnet_network != undef) {
+        $multicast_subnet4 = $::platform::network::multicast::ipv4::params::subnet_network
+        $multicast_prefixlen4 = $::platform::network::multicast::ipv4::params::subnet_prefixlen
+        $d_multicast_subnet4 = "${multicast_subnet4}/${multicast_prefixlen4}"
+
+        # ACCEPT rule for multicast traffic from mgmt subnet.
+        platform::firewall::rule { 'kubernetes-multicast-nat4':
+          service_name => 'kubernetes',
+          table        => $table,
+          chain        => $chain,
+          proto        => $transport,
+          action       => 'accept',
+          host         => $s_mgmt_subnet4,
+          destination  => $d_multicast_subnet4,
+          l3proto      => $platform::params::ipv4,
+          rule_order   => '499',
+        }
+      }
+
       platform::firewall::rule { 'kubernetes-nat4':
         service_name => 'kubernetes',
         table        => $table,
@@ -1173,6 +1195,25 @@ class platform::kubernetes::firewall
 
       $s_mgmt_subnet6 = "${mgmt_subnet6}/${mgmt_prefixlen6}"
       $d_mgmt_subnet6 = "! ${s_mgmt_subnet6}"
+
+      if ($::platform::network::multicast::ipv6::params::subnet_network != undef) {
+        $multicast_subnet6 = $::platform::network::multicast::ipv6::params::subnet_network
+        $multicast_prefixlen6 = $::platform::network::multicast::ipv6::params::subnet_prefixlen
+        $d_multicast_subnet6 = "${multicast_subnet6}/${multicast_prefixlen6}"
+
+        # ACCEPT rule for multicast traffic from mgmt subnet.
+        platform::firewall::rule { 'kubernetes-multicast-nat6':
+          service_name => 'kubernetes',
+          table        => $table,
+          chain        => $chain,
+          proto        => $transport,
+          action       => 'accept',
+          host         => $s_mgmt_subnet6,
+          destination  => $d_multicast_subnet6,
+          l3proto      => $platform::params::ipv6,
+          rule_order   => '499',
+        }
+      }
 
       platform::firewall::rule { 'kubernetes-nat6':
         service_name => 'kubernetes',

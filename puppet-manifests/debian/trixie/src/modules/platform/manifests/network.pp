@@ -444,6 +444,64 @@ class platform::network::admin::params(
   # network type specific parameters
 ) { }
 
+class platform::network::multicast::ipv4::params(
+  # shared parameters with base class - required for auto hiera parameter lookup
+  $interface_address = undef,
+  $subnet_version = undef,
+  $subnet_network = undef,
+  $subnet_network_url = undef,
+  $subnet_prefixlen = undef,
+  $subnet_netmask = undef,
+  $subnet_start = undef,
+  $subnet_end = undef,
+  $gateway_address = undef,
+  $controller_address = undef,  # controller floating
+  $controller_address_url = undef,  # controller floating url address
+  $controller0_address = undef, # controller unit0
+  $controller1_address = undef, # controller unit1
+) { }
+
+class platform::network::multicast::ipv6::params(
+  # shared parameters with base class - required for auto hiera parameter lookup
+  $subnet_version = undef,
+  $subnet_network = undef,
+  $subnet_network_url = undef,
+  $subnet_prefixlen = undef,
+  $subnet_netmask = undef,
+  $subnet_start = undef,
+  $subnet_end = undef,
+  $gateway_address = undef,
+  $controller_address = undef,  # controller floating
+  $controller_address_url = undef,  # controller floating url address
+  $controller0_address = undef, # controller unit0
+  $controller1_address = undef, # controller unit1
+) { }
+
+class platform::network::multicast::params(
+  # this class contains the primary pool (ipv4 or ipv6) addresses for compatibility
+  # shared parameters with base class - required for auto hiera parameter lookup
+  $interface_name = undef,
+  $interface_address = undef,
+  $interface_devices = [],
+  $subnet_version = undef,
+  $subnet_network = undef,
+  $subnet_network_url = undef,
+  $subnet_prefixlen = undef,
+  $subnet_netmask = undef,
+  $subnet_start = undef,
+  $subnet_end = undef,
+  $gateway_address = undef,
+  $controller_address = undef,  # controller floating
+  $controller_address_url = undef,  # controller floating url address
+  $controller0_address = undef, # controller unit0
+  $controller1_address = undef, # controller unit1
+  $mtu = 1500,
+  # network type specific parameters
+  # TODO: remove platform_nfs_address when StarlingX rel 6 and 7 are not being used anymore
+  $platform_nfs_address = undef,
+  $fqdn_ready = undef,
+) { }
+
 define platform::network::network_address (
   $addresses,
   $ifname,

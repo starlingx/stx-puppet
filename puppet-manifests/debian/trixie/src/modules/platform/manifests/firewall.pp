@@ -5,12 +5,14 @@ define platform::firewall::rule (
   $ensure = present,
   $host = 'ALL',
   $jump  = undef,
+  $action = undef,
   $outiface = undef,
   $ports = undef,
   $proto = 'tcp',
   $table = undef,
   $tosource = undef,
   $l3proto = undef,
+  $rule_order = '500',
 ) {
 
   include ::platform::params
@@ -47,7 +49,7 @@ define platform::firewall::rule (
 
   # NAT rule
   if $jump == 'SNAT' or $jump == 'MASQUERADE' {
-    firewall { "500 ${service_name} ${heading} ${title}":
+    firewall { "${rule_order} ${service_name} ${heading} ${title}":
       ensure      => $ensure,
       table       => $table,
       proto       => $proto,
@@ -61,9 +63,21 @@ define platform::firewall::rule (
       chain       => $chain,
     }
   }
+  elsif $action == 'accept' and $table == 'nat' {
+    firewall { "${rule_order} ${service_name} ${heading} ${title}":
+      ensure      => $ensure,
+      table       => $table,
+      proto       => $proto,
+      action      => $action,
+      destination => $destination,
+      source      => $source,
+      protocol    => $protocol_family,
+      chain       => $chain,
+    }
+  }
   else {
     if $ports == undef {
-      firewall { "500 ${service_name} ${heading} ${title}":
+      firewall { "${rule_order} ${service_name} ${heading} ${title}":
         ensure   => $ensure,
         proto    => $proto,
         jump     => 'accept',
@@ -73,7 +87,7 @@ define platform::firewall::rule (
       }
     }
     else {
-      firewall { "500 ${service_name} ${heading} ${title}":
+      firewall { "${rule_order} ${service_name} ${heading} ${title}":
         ensure   => $ensure,
         proto    => $proto,
         dport    => $ports,
