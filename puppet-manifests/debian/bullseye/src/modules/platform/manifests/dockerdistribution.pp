@@ -2,6 +2,8 @@ class platform::dockerdistribution::params (
     $registry_ks_endpoint = undef,
     $registry_username = undef,
     $registry_password = undef,
+    $tls_min_version = 'tls1.2',
+    $tls_cipher_suites = [],
 ) {}
 
 define platform::dockerdistribution::write_config (
@@ -9,6 +11,8 @@ define platform::dockerdistribution::write_config (
   $file_path = '/etc/docker-distribution/registry/runtime_config.yml',
   $docker_registry_host = undef,
   $docker_realm_host = undef,
+  $tls_min_version = 'tls1.2',
+  $tls_cipher_suites = [],
 ){
   file { $file_path:
     ensure  => present,
@@ -114,6 +118,8 @@ class platform::dockerdistribution::config
   platform::dockerdistribution::write_config { 'runtime_config':
     docker_registry_host => $docker_registry_host,
     docker_realm_host    => $docker_realm_host,
+    tls_min_version      => $::platform::dockerdistribution::params::tls_min_version,
+    tls_cipher_suites    => $::platform::dockerdistribution::params::tls_cipher_suites,
   }
 
   -> exec { 'use runtime config file':
@@ -125,6 +131,8 @@ class platform::dockerdistribution::config
     file_path            => '/etc/docker-distribution/registry/readonly_config.yml',
     docker_registry_host => $docker_registry_host,
     docker_realm_host    => $docker_realm_host,
+    tls_min_version      => $::platform::dockerdistribution::params::tls_min_version,
+    tls_cipher_suites    => $::platform::dockerdistribution::params::tls_cipher_suites,
   }
 
   file { '/etc/docker-distribution/registry/token_server.conf':
@@ -246,9 +254,11 @@ class platform::dockerdistribution::reload {
   platform::sm::restart {'docker-distribution': }
 }
 
-# this does not update the config right now
-# the run time is only used to restart the token server and registry
+# Applies docker distribution configuration and triggers
+# reload of token server and registry services at runtime
 class platform::dockerdistribution::runtime {
+
+  include platform::dockerdistribution::config
 
   class {'::platform::dockerdistribution::reload':
     stage => post
