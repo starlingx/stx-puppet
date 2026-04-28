@@ -68,7 +68,7 @@ define platform::firewall::rule (
       ensure      => $ensure,
       table       => $table,
       proto       => $proto,
-      action      => $action,
+      jump        => $action,
       destination => $destination,
       source      => $source,
       protocol    => $protocol_family,

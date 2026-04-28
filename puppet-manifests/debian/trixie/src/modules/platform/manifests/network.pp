@@ -680,7 +680,7 @@ define platform::network::interfaces::rate_limit::tx_rate (
         address_pool   => 'ipv4',
         accept_subnet  => $accept_subnet,
         ensure_rule    => $ensure_rule,
-        provider       => 'iptables',
+        protocol       => 'IPv4',
         direction      => 'egress',
       }
     }
@@ -690,11 +690,11 @@ define platform::network::interfaces::rate_limit::tx_rate (
       chain           => 'OUTPUT',
       proto           => 'all',
       outiface        => $interface_name,
-      action          => 'drop',
+      jump            => 'drop',
       hashlimit_name  => "${hashlimit_name}-egress",
       hashlimit_above => "${max_tx_rate_kbps}kb/s",
       hashlimit_mode  => 'srcip',
-      provider        => 'iptables',
+      protocol        => 'IPv4',
     }
   }
 
@@ -707,7 +707,7 @@ define platform::network::interfaces::rate_limit::tx_rate (
         address_pool   => 'ipv6',
         accept_subnet  => $accept_subnet,
         ensure_rule    => $ensure_rule,
-        provider       => 'ip6tables',
+        protocol       => 'IPv6',
         direction      => 'egress',
       }
     }
@@ -717,11 +717,11 @@ define platform::network::interfaces::rate_limit::tx_rate (
       chain           => 'OUTPUT',
       proto           => 'all',
       outiface        => $interface_name,
-      action          => 'drop',
+      jump            => 'drop',
       hashlimit_name  => "${hashlimit_name}-egress",
       hashlimit_above => "${max_tx_rate_kbps}kb/s",
       hashlimit_mode  => 'srcip',
-      provider        => 'ip6tables',
+      protocol        => 'IPv6',
     }
   }
 }
@@ -753,7 +753,7 @@ define platform::network::interfaces::rate_limit::rx_rate (
         address_pool   => 'ipv4',
         accept_subnet  => $accept_subnet,
         ensure_rule    => $ensure_rule,
-        provider       => 'iptables',
+        protocol       => 'IPv4',
         direction      => 'ingress',
       }
     }
@@ -763,11 +763,11 @@ define platform::network::interfaces::rate_limit::rx_rate (
       chain           => 'INPUT',
       proto           => 'all',
       iniface         => $interface_name,
-      action          => 'drop',
+      jump            => 'drop',
       hashlimit_name  => "${hashlimit_name}-ingress",
       hashlimit_above => "${max_rx_rate_kbps}kb/s",
       hashlimit_mode  => 'dstip',
-      provider        => 'iptables',
+      protocol        => 'IPv4',
     }
   }
 
@@ -780,7 +780,7 @@ define platform::network::interfaces::rate_limit::rx_rate (
         address_pool   => 'ipv6',
         accept_subnet  => $accept_subnet,
         ensure_rule    => $ensure_rule,
-        provider       => 'ip6tables',
+        protocol       => 'IPv6',
         direction      => 'ingress',
       }
     }
@@ -790,11 +790,11 @@ define platform::network::interfaces::rate_limit::rx_rate (
       chain           => 'INPUT',
       proto           => 'all',
       iniface         => $interface_name,
-      action          => 'drop',
+      jump            => 'drop',
       hashlimit_name  => "${hashlimit_name}-ingress",
       hashlimit_above => "${max_rx_rate_kbps}kb/s",
       hashlimit_mode  => 'dstip',
-      provider        => 'ip6tables',
+      protocol        => 'IPv6',
     }
   }
 }
@@ -861,7 +861,7 @@ define platform::network::interfaces::accept::subnet (
   String $address_pool,
   Enum['ingress', 'egress'] $direction,
   Enum['present', 'absent'] $ensure_rule = 'present',
-  Enum['iptables', 'ip6tables'] $provider = undef,
+  Enum['IPv4', 'IPv6'] $protocol = undef,
   Optional[Array[String]] $accept_subnet = undef,
 ) {
   if $accept_subnet and !empty($accept_subnet) {
@@ -886,8 +886,8 @@ define platform::network::interfaces::accept::subnet (
             proto    => 'all',
             source   => $cidr,
             iniface  => $interface_name,
-            action   => 'accept',
-            provider => $provider,
+            jump     => 'accept',
+            protocol => $protocol,
           }
         } else {
           firewall { "101 accept ${network_type} ${direction} ${address_pool} ${interface_name}":
@@ -896,8 +896,8 @@ define platform::network::interfaces::accept::subnet (
             chain       => 'OUTPUT',
             destination => $cidr,
             outiface    => $interface_name,
-            action      => 'accept',
-            provider    => $provider,
+            jump        => 'accept',
+            protocol    => $protocol,
           }
         }
       } else {
@@ -920,16 +920,16 @@ class platform::network::interfaces::rate_limit::bypass {
     chain    => 'INPUT',
     proto    => 'udp',
     dport    => ['2222', '2223'],
-    action   => 'accept',
-    provider => 'iptables',
+    jump     => 'accept',
+    protocol => 'IPv4',
   }
 
   firewall { '201 accept egress State Synchronization and heartbeat traffic (IPv4)':
     chain    => 'OUTPUT',
     proto    => 'udp',
     sport    => ['2222', '2223'],
-    action   => 'accept',
-    provider => 'iptables',
+    jump     => 'accept',
+    protocol => 'IPv4',
   }
 
   # IPv6 Rules (ip6tables)
@@ -937,16 +937,16 @@ class platform::network::interfaces::rate_limit::bypass {
     chain    => 'INPUT',
     proto    => 'udp',
     dport    => ['2222', '2223'],
-    action   => 'accept',
-    provider => 'ip6tables',
+    jump     => 'accept',
+    protocol => 'IPv6',
   }
 
   firewall { '203 accept egress State Synchronization and heartbeat traffic (IPv6)':
     chain    => 'OUTPUT',
     proto    => 'udp',
     sport    => ['2222', '2223'],
-    action   => 'accept',
-    provider => 'ip6tables',
+    jump     => 'accept',
+    protocol => 'IPv6',
   }
 }
 
