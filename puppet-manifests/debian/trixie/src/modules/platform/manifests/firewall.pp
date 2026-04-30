@@ -63,12 +63,12 @@ define platform::firewall::rule (
       chain       => $chain,
     }
   }
-  elsif $action == 'accept' and $table == 'nat' {
+  elsif $jump == 'accept' and $table == 'nat' {
     firewall { "${rule_order} ${service_name} ${heading} ${title}":
       ensure      => $ensure,
       table       => $table,
       proto       => $proto,
-      jump        => $action,
+      jump        => $jump,
       destination => $destination,
       source      => $source,
       protocol    => $protocol_family,
