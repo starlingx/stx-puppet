@@ -14,7 +14,7 @@ export CINDER_ENDPOINT_TYPE=internalURL
 
 if [[ "${no_credentials}" == false ]]; then
     export OS_USERNAME=<%= @admin_username %>
-    export OS_PASSWORD=`TERM=linux <%= @keyring_file %> 2>/dev/null`
+    export OS_PASSWORD=`TERM=linux <%= @keyring_script_file %> 2>/dev/null`
 fi
 export OS_AUTH_TYPE=password
 export OS_AUTH_URL=<%= @identity_auth_url %>
@@ -30,7 +30,7 @@ if [[ "${no_credentials}" == false ]]; then
     if [ ! -z "${OS_PASSWORD}" ]; then
         export PS1='[\u@\h \W(keystone_$OS_USERNAME)]\$ '
     else
-        if [ ! -e <%= @keyring_file %> ]; then
+        if [ ! -e <%= @keyring_script_file %> ]; then
             echo 'Openstack Admin credentials can only be loaded from the active controller.'
         else
             echo 'Not enough privileges to read keyring password.'
@@ -39,7 +39,7 @@ if [[ "${no_credentials}" == false ]]; then
         return 1
     fi
 else
-    if [ ! -e <%= @keyring_file %> ]; then
+    if [ ! -e <%= @keyring_script_file %> ]; then
         echo 'This file should only be loaded from the active controller.'
         return 1
     fi

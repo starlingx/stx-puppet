@@ -14,7 +14,7 @@ class platform::client
   inherits ::platform::client::params {
 
   include ::platform::client::credentials::params
-  $keyring_file = $::platform::client::credentials::params::keyring_file
+  $keyring_script_file = $::platform::client::credentials::params::keyring_script_file
 
   file {'/etc/platform/openrc':
     ensure  => 'present',
@@ -51,28 +51,28 @@ class platform::client
 }
 
 class platform::client::credentials::params (
-  $keyring_base,
-  $keyring_directory,
-  $keyring_file,
+  $keyring_script_base,
+  $keyring_script_directory,
+  $keyring_script_file,
 ) { }
 
 class platform::client::credentials
   inherits ::platform::client::credentials::params {
 
   Class['::platform::drbd::platform']
-  -> file { $keyring_base:
+  -> file { $keyring_script_base:
     ensure => 'directory',
     owner  => 'root',
     group  => 'root',
     mode   => '0755',
   }
-  -> file { $keyring_directory:
+  -> file { $keyring_script_directory:
     ensure => 'directory',
     owner  => 'root',
     group  => 'root',
     mode   => '0755',
   }
-  -> file { $keyring_file:
+  -> file { $keyring_script_file:
     ensure  => 'file',
     owner   => 'root',
     group   => 'root',

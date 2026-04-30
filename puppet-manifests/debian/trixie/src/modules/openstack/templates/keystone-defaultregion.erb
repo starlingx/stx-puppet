@@ -1,4 +1,4 @@
-PASSWORD=$(TERM=linux <%= @keyring_file %> 2>/dev/null)
+PASSWORD=$(TERM=linux <%= @keyring_script_file %> 2>/dev/null)
 ENDPOINTGROUP_ID=$(openstack endpoint group create \
 distributed_cloud_<%=@reference_region %> \
 keystone-<%=@reference_region %>-filter.conf \

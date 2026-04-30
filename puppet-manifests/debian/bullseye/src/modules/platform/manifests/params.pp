@@ -35,6 +35,7 @@ class platform::params (
   $ksoftirqd_priority = undef,
   $irq_work_priority = undef,
   $oidc_role_binding = '',
+  $keyring_directory = undef,
 ) {
   $ipv4 = 4
   $ipv6 = 6
