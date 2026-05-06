@@ -222,6 +222,87 @@ class openstack::keystone::api
 }
 
 
+# Configure Keystone federation for OIDC/DEX WebSSO authentication (applied when OIDC enabled by oidc_issuer_url being set)
+class openstack::keystone::federation
+  inherits ::openstack::keystone::params {
+
+  include ::platform::params
+
+  $oidc_issuer_url = lookup(
+    'platform::kubernetes::kube_apiserver::params::oidc-issuer-url',
+    Optional[String], 'first', undef
+  )
+  $rc_file = '/etc/platform/openrc'
+
+  if $oidc_issuer_url != undef {
+
+    # Mapping rules that tell Keystone how to translate OIDC claims
+    # into local user/group assignments
+    file { '/etc/keystone/dex_mapping.json':
+      ensure  => present,
+      owner   => 'root',
+      group   => 'keystone',
+      mode    => '0640',
+      content => template('openstack/dex_mapping.json.erb'),
+    }
+
+    # Create Keystone resources for federation.
+    # Ordering: group -> project -> role -> IdP -> mapping -> protocol
+    # Each exec uses 'unless' to ensure idempotency.
+
+    -> exec { 'create federated_users group':
+      command   => "source ${rc_file} && openstack group create federated_users",
+      unless    => "source ${rc_file} && openstack group show federated_users",
+      logoutput => true,
+      provider  => shell,
+    }
+
+    -> exec { 'create federated_project':
+      command   => "source ${rc_file} && openstack project create federated_project",
+      unless    => "source ${rc_file} && openstack project show federated_project",
+      logoutput => true,
+      provider  => shell,
+    }
+
+    # Grant member role so federated users can access federated_project
+    -> exec { 'assign member role to federated_users':
+      command   => "source ${rc_file} && openstack role add --group federated_users --project federated_project member",
+      unless    => "source ${rc_file} && openstack role assignment list \
+                    --group federated_users --project federated_project --names | grep member",
+      logoutput => true,
+      provider  => shell,
+    }
+
+    # Register DEX as an Identity Provider in Keystone.
+    # The remote-id must match the 'iss' claim in DEX's JWT tokens.
+    -> exec { 'create dex identity provider':
+      command   => "source ${rc_file} && openstack identity provider create --remote-id ${oidc_issuer_url} dex",
+      unless    => "source ${rc_file} && openstack identity provider show dex",
+      logoutput => true,
+      provider  => shell,
+    }
+
+    # Create the mapping that links OIDC claims to local resources
+    -> exec { 'create dex_mapping':
+      command   => "source ${rc_file} && openstack mapping create --rules /etc/keystone/dex_mapping.json dex_mapping",
+      unless    => "source ${rc_file} && openstack mapping show dex_mapping",
+      logoutput => true,
+      provider  => shell,
+    }
+
+    # Register the openid protocol, linking the dex IdP to the mapping.
+    # This is the final piece that enables the federation endpoint:
+    # /v3/OS-FEDERATION/identity_providers/dex/protocols/openid/auth
+    -> exec { 'create openid protocol':
+      command   => "source ${rc_file} && openstack federation protocol create --identity-provider dex --mapping dex_mapping openid",
+      unless    => "source ${rc_file} && openstack federation protocol show --identity-provider dex openid",
+      logoutput => true,
+      provider  => shell,
+    }
+  }
+}
+
+
 class openstack::keystone::reload {
   platform::sm::restart {'keystone': }
 }
