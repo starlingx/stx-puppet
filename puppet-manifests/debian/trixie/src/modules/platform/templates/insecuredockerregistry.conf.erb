@@ -1,5 +1,8 @@
 {
     "insecure-registries" : <%= @insecure_registries %>,
     "max-concurrent-uploads": <%= @max_concurrent_uploads %>,
-    "max-concurrent-downloads": <%= @max_concurrent_downloads %>
+    "max-concurrent-downloads": <%= @max_concurrent_downloads %>,
+    "features": {
+        "containerd-snapshotter": false
+    }
 }
