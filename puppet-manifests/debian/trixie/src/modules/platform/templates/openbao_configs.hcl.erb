@@ -1,0 +1,131 @@
+#
+# Copyright (c) 2026 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Managed by puppet - do not edit
+#
+<%-
+  require 'ipaddr'
+  # Bracket an IPv6 literal for use in a host:port / URL authority
+  # (RFC 3986 / RFC 2732). No-op for IPv4, hostnames, and already-
+  # bracketed input. Mirrors sysinv utils.format_url_address().
+  def bao_hostport(addr)
+    return addr if addr.nil? || addr.start_with?('[')
+    begin
+      ip = IPAddr.new(addr)
+      return "[#{addr}]" if ip.ipv6?
+    rescue IPAddr::InvalidAddressError
+      # not an IP literal (hostname) - leave as-is
+    end
+    addr
+  end
+-%>
+
+log_level = "<%= @log_level %>"
+log_format = "<%= @log_format %>"
+ui = false
+
+cluster_addr = "https://<%= @cluster_addr_name %>:<%= @cluster_port %>"
+api_addr = "https://<%= bao_hostport(@effective_bind_address) %>:<%= @api_port %>"
+
+storage "raft" {
+  path    = "<%= @data_path %>"
+  node_id = "<%= @node_id %>"
+<% if @raft_peers and !@raft_peers.empty? -%>
+<% @raft_peers.each do |peer| -%>
+  retry_join {
+    leader_api_addr       = "https://<%= bao_hostport(peer) %>:<%= @api_port %>"
+    leader_tls_servername = "controller"
+  }
+<% end -%>
+<% end -%>
+}
+
+<% if @initial_start -%>
+# Bootstrap listener: default dual-stack wildcard [::] supports both
+# ipv4 and ipv6 when net.ipv6.bindv6only=0
+listener "tcp" {
+  address           = "<%= bao_hostport(@bootstrap_listen_address) %>:<%= @api_port %>"
+  tls_cert_file     = "<%= @cert_path %>/openbao-cert.crt"
+  tls_key_file      = "<%= @cert_path %>/openbao-cert.key"
+  tls_min_version   = "<%= @tls_min_version %>"
+  tls_cipher_suites = "<%= @ciphers_list %>"
+}
+<% else -%>
+# listeners after unlock: support multiple listeners via lists
+<% (Array(@loopback_listen_addresses) + Array(@mgmt_listen_addresses)).each do |addr| -%>
+listener "tcp" {
+  address           = "<%= bao_hostport(addr) %>:<%= @api_port %>"
+  tls_cert_file     = "<%= @cert_path %>/openbao-cert.crt"
+  tls_key_file      = "<%= @cert_path %>/openbao-cert.key"
+  tls_min_version   = "<%= @tls_min_version %>"
+  tls_cipher_suites = "<%= @ciphers_list %>"
+}
+<% end -%>
+<% end -%>
+
+telemetry {
+  prometheus_retention_time = "0"
+}
+
+# static auto-unseal
+seal "static" {
+  disabled       = false
+  current_key_id = "stx-initial"
+  current_key    = "file://<%= @luks_fs_mount %>/<%= @unseal_key_dir %>/<%= @unseal_key_file %>"
+}
+
+<% if @initial_start -%>
+initialize "policy" {
+  request "update-policy" {
+    operation = "update"
+    path = "sys/policies/acl/superuser"
+    data = {
+      policy = <<EOT
+path "*" {
+  capabilities = ["create", "update", "read", "delete", "list", "scan", "sudo"]
+}
+EOT
+    }
+  }
+}
+
+initialize "identity" {
+  request "mount-userpass" {
+    operation = "update"
+    path = "sys/auth/userpass"
+    data = {
+      type = "userpass"
+      description = "Initial userpass auth method"
+    }
+  }
+  request "userpass-add-user-admin" {
+    operation = "update"
+    path = "auth/userpass/users/admin"
+    data = {
+      "password" = {
+        eval_type   = "string"
+        eval_source = "file"
+        path = "<%= @luks_fs_mount %>/<%= @user_auth_dir %>/admin/pw"
+      }
+      "token_policies" = ["superuser"]
+    }
+  }
+}
+
+initialize "secret" {
+  request "enable-kv-v2" {
+    operation = "update"
+    path = "sys/mounts/secret"
+    data = {
+      type = "kv"
+      options = {
+        version = "2"
+      }
+      description = "kv-v2 secrets engine"
+    }
+  }
+}
+<% end -%>
+

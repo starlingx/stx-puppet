@@ -42,6 +42,7 @@ include ::platform::haproxy::server
 include ::platform::grub
 include ::platform::k8splatform
 include ::platform::etcd
+include ::platform::openbao
 include ::platform::docker::controller
 include ::platform::dockerdistribution
 include ::platform::containerd::controller
