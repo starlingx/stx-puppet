@@ -15,6 +15,8 @@ class platform::ldap::params (
   $secure_key = '',
   $ca_cert = '',
   $insecure_service = 'enabled',
+  $tls_protocol_min = undef,
+  $tls_cipher_suite = undef,
 ) {}
 
 class platform::ldap::server
@@ -285,5 +287,40 @@ class platform::ldap::insecure::runtime
   }
   -> exec { 'Restart openldap service':
     command => 'sm-restart-safe service open-ldap',
+  }
+}
+
+class platform::ldap::tls::runtime
+  inherits ::platform::ldap::params {
+  # Update OpenLDAP TLS settings in cn=config at runtime.
+  # Triggered by 'system service-parameter-apply platform'.
+  # Uses ldapmodify to update cn=config via the LDAP protocol,
+  # consistent with the existing configure-ldaps pattern.
+
+  if ! $ldapserver_remote {
+    if $tls_protocol_min and $tls_cipher_suite {
+      $tls_ldif = @("LDIF")
+        dn: cn=config
+        changetype: modify
+        replace: olcTLSProtocolMin
+        olcTLSProtocolMin: ${tls_protocol_min}
+        -
+        replace: olcTLSCipherSuite
+        olcTLSCipherSuite: ${tls_cipher_suite}
+        | LDIF
+
+      file { "${slapd_etc_path}/tls.ldif":
+        ensure  => present,
+        content => $tls_ldif,
+      }
+
+      -> exec { 'Update olcTLS config':
+        command => "ldapmodify -D cn=config -w \$(cat /etc/ldapscripts/ldapscripts.passwd) -xH ldap:/// -f ${slapd_etc_path}/tls.ldif",
+      }
+
+      -> exec { 'Restart slapd for TLS update':
+        command => 'sm-restart-safe service open-ldap',
+      }
+    }
   }
 }
