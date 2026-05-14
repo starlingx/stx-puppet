@@ -20,6 +20,9 @@ class openstack::horizon::params (
   $https_port = 8443,
 
   $session_timeout = 3000,
+
+  $tls_min_version = 'VersionTLS12',
+  $tls_cipher_list = undef,
 ) { }
 
 class openstack::horizon::config
