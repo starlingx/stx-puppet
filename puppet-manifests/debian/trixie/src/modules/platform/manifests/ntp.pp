@@ -92,8 +92,12 @@ class platform::ntp::server {
     include ::platform::ntp
 
     include ::platform::params
+    include ::platform::network::mgmt::params
+    include ::platform::network::oam::params
     $peer_server = $platform::params::mate_hostname
     $system_mode = $platform::params::system_mode
+    $mgmt_ip = $platform::network::mgmt::params::interface_address
+    $oam_ip = $platform::network::oam::params::interface_address
 
     file { 'ntp_config':
       ensure  => file,
@@ -115,6 +119,9 @@ class platform::ntp::client {
 
   if $personality != 'controller' {
     include ::platform::ntp
+
+    include ::platform::network::mgmt::params
+    $mgmt_ip = $platform::network::mgmt::params::interface_address
 
     file { 'ntp_config':
       ensure  => file,

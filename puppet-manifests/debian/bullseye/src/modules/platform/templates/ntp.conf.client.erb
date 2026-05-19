@@ -1,5 +1,11 @@
 driftfile /var/lib/ntp/drift
 
+# Only listen on loopback and management addresses
+interface ignore wildcard
+interface listen 127.0.0.1
+interface listen ::1
+interface listen <%= @mgmt_ip %>
+
 # Permit time synchronization with our time source, but do not
 # permit the source to query or modify the service on this system.
 restrict default kod nomodify notrap nopeer noquery
