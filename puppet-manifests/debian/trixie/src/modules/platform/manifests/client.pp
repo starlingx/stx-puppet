@@ -51,9 +51,15 @@ class platform::client
 }
 
 class platform::client::credentials::params (
-  $keyring_script_base,
-  $keyring_script_directory,
-  $keyring_script_file,
+  $keyring_script_base = lookup(
+    'platform::client::credentials::params::keyring_base',
+    {default_value => undef}),
+  $keyring_script_directory = lookup(
+    'platform::client::credentials::params::keyring_directory',
+    {default_value => undef}),
+  $keyring_script_file = lookup(
+    'platform::client::credentials::params::keyring_file',
+    {default_value => undef}),
 ) { }
 
 class platform::client::credentials
