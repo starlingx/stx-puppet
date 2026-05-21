@@ -315,16 +315,23 @@ class platform::lvm::csi::thin::runtime
   include ::platform::lvm::csi::thin::resources
 }
 
+define platform::lvm::csi::remove_vg {
+  exec { "vgremove ${name}":
+    command => "vgremove -fy ${name}",
+    path    => ['/usr/sbin', '/sbin'],
+    onlyif  => "vgs ${name}",
+  }
+}
+
 class platform::lvm::csi::remove_pv::runtime (
   $removing_pvs = lookup('platform::worker::storage::removing_pvs', Array, 'first', []),
 ) {
   include ::platform::lvm::params
   notice("Removing VG ${$::platform::lvm::params::removing_lvgs}")
   notice("Removing PV ${$removing_pvs}")
-  volume_group { $::platform::lvm::params::removing_lvgs:
-    ensure => absent,
+  platform::lvm::csi::remove_vg { $::platform::lvm::params::removing_lvgs:
   }
-  physical_volume { $removing_pvs:
+  -> physical_volume { $removing_pvs:
     ensure => absent,
   }
 }
