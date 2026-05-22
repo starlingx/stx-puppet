@@ -219,10 +219,6 @@ class openstack::keystone::api
   }
 
   include ::openstack::keystone::haproxy
-
-  # Federation is configured during full puppet runs (install, upgrade,
-  # host-unlock). It is not triggered by service-parameter-apply.
-  include ::openstack::keystone::federation
 }
 
 
@@ -231,38 +227,14 @@ class openstack::keystone::federation
   inherits ::openstack::keystone::params {
 
   include ::platform::params
-  include ::platform::network::oam::params
-  include ::openstack::horizon::params
 
   $oidc_issuer_url = lookup(
     'platform::kubernetes::kube_apiserver::params::oidc-issuer-url',
     Optional[String], 'first', undef
   )
-  $horizon_https_port = $::openstack::horizon::params::https_port
-  $oam_address = $::platform::network::oam::params::controller_address
-  $trusted_dashboard_url = "https://${oam_address}:${horizon_https_port}/auth/websso/"
   $rc_file = '/etc/platform/openrc'
 
-  if $oidc_issuer_url {
-    # Add 'openid' to Keystone auth methods and configure federation
-    # to use HTTP_OIDC_ISS for matching incoming requests to the
-    # correct Identity Provider
-    keystone_config {
-      'auth/methods':                   value => 'password,token,oauth1,mapped,application_credential,saml2,openid';
-      'federation/remote_id_attribute': value => 'HTTP_OIDC_ISS';
-      'federation/trusted_dashboard':   value => $trusted_dashboard_url;
-      'federation/sso_callback_template': value => '/etc/keystone/sso_callback_template.html';
-    }
-
-    # Template rendered by Keystone after successful SSO authentication.
-    # Auto-submits a form that POSTs the Keystone token to Horizon
-    file { '/etc/keystone/sso_callback_template.html':
-      ensure  => present,
-      owner   => 'root',
-      group   => 'keystone',
-      mode    => '0640',
-      content => template('openstack/sso_callback_template.html.erb'),
-    }
+  if $oidc_issuer_url != undef {
 
     # Mapping rules that tell Keystone how to translate OIDC claims
     # into local user/group assignments
@@ -318,15 +290,6 @@ class openstack::keystone::federation
       provider  => shell,
     }
 
-    # Update mapping if dex_mapping.json changes
-    -> exec { 'update dex_mapping':
-      command     => "source ${rc_file} && openstack mapping set --rules /etc/keystone/dex_mapping.json dex_mapping",
-      subscribe   => File['/etc/keystone/dex_mapping.json'],
-      refreshonly => true,
-      logoutput   => true,
-      provider    => shell,
-    }
-
     # Register the openid protocol, linking the dex IdP to the mapping.
     # This is the final piece that enables the federation endpoint:
     # /v3/OS-FEDERATION/identity_providers/dex/protocols/openid/auth
@@ -336,15 +299,6 @@ class openstack::keystone::federation
       logoutput => true,
       provider  => shell,
     }
-  } else {
-    # Clean up federation settings when OIDC is removed
-    keystone_config {
-      'federation/remote_id_attribute':   ensure => absent;
-      'federation/trusted_dashboard':     ensure => absent;
-      'federation/sso_callback_template': ensure => absent;
-    }
-    file { '/etc/keystone/sso_callback_template.html': ensure => absent; }
-    file { '/etc/keystone/dex_mapping.json': ensure => absent; }
   }
 }
 
@@ -410,9 +364,6 @@ class openstack::keystone::endpointgroup
 class openstack::keystone::server::runtime {
   include ::platform::client
   include ::openstack::keystone
-  # Federation can also be applied at runtime via service-parameter-apply identity,
-  # but only after oidc-auth-apps applications has been applied
-  include ::openstack::keystone::federation
 
   class {'::openstack::keystone::reload':
     stage => post
