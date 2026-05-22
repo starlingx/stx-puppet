@@ -230,6 +230,10 @@ class openstack::keystone::api
   }
 
   include ::openstack::keystone::haproxy
+
+  # Federation is configured during full puppet runs (install, upgrade,
+  # host-unlock) and at runtime after oidc-auth-apps is applied.
+  include ::openstack::keystone::federation
 }
 
 
@@ -238,14 +242,40 @@ class openstack::keystone::federation
   inherits ::openstack::keystone::params {
 
   include ::platform::params
+  include ::platform::network::oam::params
+  include ::openstack::horizon::params
 
   $oidc_issuer_url = lookup(
     'platform::kubernetes::kube_apiserver::params::oidc-issuer-url',
     Optional[String], 'first', undef
   )
+  $horizon_https_port = $::openstack::horizon::params::https_port
+  $oam_address = $::platform::network::oam::params::controller_address
+  $trusted_dashboard_url = "https://${oam_address}:${horizon_https_port}/auth/websso/"
   $rc_file = '/etc/platform/openrc'
+  # Check variable for Keystone readiness
+  $ks_ready = "source ${rc_file} && openstack token issue > /dev/null 2>&1"
 
-  if $oidc_issuer_url != undef {
+  if $oidc_issuer_url {
+    # Add 'openid' to Keystone auth methods and configure federation
+    # to use HTTP_OIDC_ISS for matching incoming requests to the
+    # correct Identity Provider
+    keystone_config {
+      'auth/methods':                     value => 'password,token,oauth1,mapped,application_credential,saml2,openid';
+      'federation/remote_id_attribute':   value => 'HTTP_OIDC_ISS';
+      'federation/trusted_dashboard':     value => $trusted_dashboard_url;
+      'federation/sso_callback_template': value => '/etc/keystone/sso_callback_template.html';
+    }
+
+    # Template rendered by Keystone after successful SSO authentication.
+    # Auto-submits a form that POSTs the Keystone token to Horizon
+    file { '/etc/keystone/sso_callback_template.html':
+      ensure  => present,
+      owner   => 'root',
+      group   => 'keystone',
+      mode    => '0640',
+      content => template('openstack/sso_callback_template.html.erb'),
+    }
 
     # Mapping rules that tell Keystone how to translate OIDC claims
     # into local user/group assignments
@@ -264,12 +294,18 @@ class openstack::keystone::federation
     -> exec { 'create federated_users group':
       command   => "source ${rc_file} && openstack group create federated_users",
       unless    => "source ${rc_file} && openstack group show federated_users",
+      onlyif    => $ks_ready,
+      tries     => 3,
+      try_sleep => 10,
       logoutput => true,
       provider  => shell,
     }
 
     -> exec { 'create federated_project':
       command   => "source ${rc_file} && openstack project create federated_project",
+      onlyif    => $ks_ready,
+      tries     => 3,
+      try_sleep => 10,
       unless    => "source ${rc_file} && openstack project show federated_project",
       logoutput => true,
       provider  => shell,
@@ -280,6 +316,9 @@ class openstack::keystone::federation
       command   => "source ${rc_file} && openstack role add --group federated_users --project federated_project member",
       unless    => "source ${rc_file} && openstack role assignment list \
                     --group federated_users --project federated_project --names | grep member",
+      onlyif    => $ks_ready,
+      tries     => 3,
+      try_sleep => 10,
       logoutput => true,
       provider  => shell,
     }
@@ -289,6 +328,9 @@ class openstack::keystone::federation
     -> exec { 'create dex identity provider':
       command   => "source ${rc_file} && openstack identity provider create --remote-id ${oidc_issuer_url} dex",
       unless    => "source ${rc_file} && openstack identity provider show dex",
+      onlyif    => $ks_ready,
+      tries     => 3,
+      try_sleep => 10,
       logoutput => true,
       provider  => shell,
     }
@@ -297,8 +339,21 @@ class openstack::keystone::federation
     -> exec { 'create dex_mapping':
       command   => "source ${rc_file} && openstack mapping create --rules /etc/keystone/dex_mapping.json dex_mapping",
       unless    => "source ${rc_file} && openstack mapping show dex_mapping",
+      onlyif    => $ks_ready,
+      tries     => 3,
+      try_sleep => 10,
       logoutput => true,
       provider  => shell,
+    }
+
+    # Update mapping if dex_mapping.json changes
+    -> exec { 'update dex_mapping':
+      command     => "source ${rc_file} && openstack mapping set --rules /etc/keystone/dex_mapping.json dex_mapping",
+      subscribe   => File['/etc/keystone/dex_mapping.json'],
+      refreshonly => true,
+      onlyif      => $ks_ready,
+      logoutput   => true,
+      provider    => shell,
     }
 
     # Register the openid protocol, linking the dex IdP to the mapping.
@@ -307,9 +362,43 @@ class openstack::keystone::federation
     -> exec { 'create openid protocol':
       command   => "source ${rc_file} && openstack federation protocol create --identity-provider dex --mapping dex_mapping openid",
       unless    => "source ${rc_file} && openstack federation protocol show --identity-provider dex openid",
+      onlyif    => $ks_ready,
+      tries     => 3,
+      try_sleep => 10,
       logoutput => true,
       provider  => shell,
     }
+  } else {
+    # Clean up federation settings when OIDC is removed
+    keystone_config {
+      'federation/remote_id_attribute':   ensure => absent;
+      'federation/trusted_dashboard':     ensure => absent;
+      'federation/sso_callback_template': ensure => absent;
+    }
+    file { '/etc/keystone/sso_callback_template.html': ensure => absent; }
+    file { '/etc/keystone/dex_mapping.json': ensure => absent; }
+
+    exec { 'delete openid protocol':
+      command  => "source ${rc_file} && openstack federation protocol delete --identity-provider dex openid",
+      onlyif   => "source ${rc_file} && openstack federation protocol show --identity-provider dex openid",
+      provider => shell,
+    }
+    -> exec { 'delete dex_mapping':
+      command  => "source ${rc_file} && openstack mapping delete dex_mapping",
+      onlyif   => "source ${rc_file} && openstack mapping show dex_mapping",
+      provider => shell,
+    }
+    -> exec { 'delete dex identity provider':
+      command  => "source ${rc_file} && openstack identity provider delete dex",
+      onlyif   => "source ${rc_file} && openstack identity provider show dex",
+      provider => shell,
+    }
+    # The federated_users group, federated_project, and role assignment
+    # are not removed automatically as they may contain user data or
+    # active resources. The role assignment is removed implicitly when
+    # the group or project is deleted. Manual cleanup if desired:
+    #   openstack group delete federated_users
+    #   openstack project delete federated_project
   }
 }
 
@@ -375,6 +464,9 @@ class openstack::keystone::endpointgroup
 class openstack::keystone::server::runtime {
   include ::platform::client
   include ::openstack::keystone
+  # Federation can also be applied at runtime via service-parameter-apply identity,
+  # but only after oidc-auth-apps applications has been applied
+  include ::openstack::keystone::federation
 
   class {'::openstack::keystone::reload':
     stage => post
