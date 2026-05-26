@@ -378,6 +378,7 @@ class platform::filesystem::compute {
     include ::platform::filesystem::ceph
     include ::platform::filesystem::scratch
     include ::platform::filesystem::kdump
+    include ::platform::filesystem::luks::keyring
 
     # The default docker size for controller is 20G
     # other than 40G. To prevent the docker size to
@@ -648,6 +649,25 @@ class platform::filesystem::luks {
       try_sleep => 30,
       onlyif    => [ "test ${::controller_sw_versions_match} = true", '/usr/local/bin/connectivity_test -t 10 controller', ],
     }
+  }
+}
+
+class platform::filesystem::luks::keyring {
+
+  # Sync only the keyring from the active controller's LUKS filesystem.
+  # This is needed on worker nodes so that sysinv-agent can authenticate
+  # to the local docker registry (e.g., during kubelet upgrades).
+  exec { 'create_luks_keyring_dir':
+    command => '/usr/bin/mkdir -p /var/luks/stx/luks_fs/controller/.keyring',
+    creates => '/var/luks/stx/luks_fs/controller/.keyring',
+  }
+  -> exec { 'rsync_luks_keyring':
+    command   => '/usr/bin/rsync -v -acv --delete rsync://controller/luksdata/.keyring/ /var/luks/stx/luks_fs/controller/.keyring/',
+    logoutput => true,
+    returns   => [0, 5],
+    tries     => 6,
+    try_sleep => 30,
+    onlyif    => '/usr/local/bin/connectivity_test -t 10 controller',
   }
 }
 
