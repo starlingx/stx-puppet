@@ -55,6 +55,7 @@ include ::platform::dockerdistribution
 include ::platform::containerd::controller
 include ::platform::kubernetes::master
 include ::platform::kubernetes::gate
+include ::platform::ejbca
 include ::platform::helm
 include ::platform::tty
 include ::platform::coredump::k8s_token_handler::controller
