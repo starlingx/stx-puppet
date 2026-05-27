@@ -704,7 +704,11 @@ class platform::config::post
 
   # When applying manifests to upgrade controller-1, we do not want SM or the
   # sysinv-agent or anything else that depends on these flags to start.
-  if ! $::platform::params::controller_upgrade {
+  # Also skip writing when config_uuid is the default 'install' value to avoid
+  # overwriting a valid UUID during upgrades. On fresh installs
+  # the file either doesn't exist or already contains 'install', so skipping
+  # the write has no effect.
+  if ! $::platform::params::controller_upgrade and $config_uuid != 'install' {
     notice("Config UUID ${config_uuid}")
     file { '/etc/platform/.config_applied':
       ensure  => present,
