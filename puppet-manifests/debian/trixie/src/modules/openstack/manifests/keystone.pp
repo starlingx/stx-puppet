@@ -66,6 +66,17 @@ class openstack::keystone (
         'token/allow_expired_window': value => 0;
     }
 
+    $protected_services = [
+      'barbican', 'sysinv', 'mtce', 'fm', 'dcdbsync',
+      'dcagent', 'dcorch', 'vim', 'dcmanager', 'smapi', 'usm',
+    ]
+
+    # Used to block password for the protected services via keystone patch
+    # (0006-Block-self-pwd-change-for-protected-services.patch)
+    keystone_config {
+      'stx/protected_services': value => join($protected_services, ',');
+    }
+
     file { '/etc/keystone/keystone-extra.conf':
       ensure  => present,
       owner   => 'root',
