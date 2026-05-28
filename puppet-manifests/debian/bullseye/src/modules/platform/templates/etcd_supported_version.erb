@@ -1,0 +1,41 @@
+#!/bin/bash
+ETCD_DIR="/usr/local/etcd"
+KUBEADM_DIR="/usr/local/kubernetes"
+KUBE_VER="<%= @kubeadm_version %>"
+
+if [ -z "$KUBE_VER" ]; then
+    /bin/ls -v "$ETCD_DIR" | /bin/tail -1
+    exit 0
+fi
+
+KUBEADM="${KUBEADM_DIR}/${KUBE_VER}/stage1/usr/bin/kubeadm"
+if [ ! -x "$KUBEADM" ]; then
+    /bin/ls -v "$ETCD_DIR" | /bin/tail -1
+    exit 0
+fi
+
+ETCD_IMAGE=$($KUBEADM config images list --kubernetes-version "v${KUBE_VER}" 2>/dev/null | grep etcd)
+if [ -z "$ETCD_IMAGE" ]; then
+    /bin/ls -v "$ETCD_DIR" | /bin/tail -1
+    exit 0
+fi
+
+ETCD_TAG="${ETCD_IMAGE##*:}"
+ETCD_VER="${ETCD_TAG%%-*}"
+SUPPORTED_MAJOR_MINOR="${ETCD_VER%.*}"
+
+BEST=""
+for v in $(/bin/ls -v "$ETCD_DIR"); do
+    V_MAJOR_MINOR="${v%.*}"
+    HIGHEST=$(printf "%s\n%s" "$V_MAJOR_MINOR" "$SUPPORTED_MAJOR_MINOR" | sort -V | tail -1)
+    # Check if V_MAJOR_MINOR <= SUPPORTED_MAJOR_MINOR (version compare)
+    if [ "$HIGHEST" = "$SUPPORTED_MAJOR_MINOR" ]; then
+        BEST="$v"
+    fi
+done
+
+if [ -n "$BEST" ]; then
+    echo "$BEST"
+else
+    /bin/ls -v "$ETCD_DIR" | /bin/tail -1
+fi
