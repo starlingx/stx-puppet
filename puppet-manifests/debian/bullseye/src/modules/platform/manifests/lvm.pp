@@ -4,6 +4,8 @@ class platform::lvm::params (
   $cgts_thin_pool_enabled = false,
   $cgts_thin_pool_size = '',
   $removing_lvgs = [],
+  $csi_service_enabled = false,
+  $node_lvm_csi_configured_flag = '/etc/platform/.node_lvm_csi_configured',
 ) {}
 
 
@@ -334,4 +336,23 @@ class platform::lvm::csi::remove_pv::runtime (
   -> physical_volume { $removing_pvs:
     ensure => absent,
   }
+}
+
+class platform::lvm::csi::flag
+  inherits ::platform::lvm::params {
+
+  if $csi_service_enabled {
+    $ensure_value = 'present'
+  } else {
+    $ensure_value = 'absent'
+  }
+
+  file { $node_lvm_csi_configured_flag:
+    ensure  => $ensure_value,
+    content => '',
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0640',
+  }
+
 }
