@@ -14,8 +14,8 @@ class platform::fm::params (
   if ($platform::params::system_type == 'All-in-one' and
       $platform::params::distributed_cloud_role != 'systemcontroller') {
     $db_connection_recycle_time = 60
-    $db_pool_size = 1
-    $db_over_size = 5
+    $db_pool_size = 5
+    $db_over_size = 10
   } else {
     $db_connection_recycle_time = undef
     $db_pool_size = undef
