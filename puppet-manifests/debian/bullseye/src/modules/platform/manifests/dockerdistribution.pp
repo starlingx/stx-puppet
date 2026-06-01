@@ -270,6 +270,7 @@ class platform::dockerdistribution::garbagecollect {
   $readonly_config = '/etc/docker-distribution/registry/readonly_config.yml'
   $used_config = '/etc/docker-distribution/registry/config.yml'
   $registry_cmd = 'docker-registry'
+  $repo_dir = '/var/lib/docker-distribution/docker/registry/v2/repositories'
 
   exec { 'turn registry read only':
     command => "ln -fs ${readonly_config} ${used_config}",
@@ -283,6 +284,24 @@ class platform::dockerdistribution::garbagecollect {
 
   -> exec { 'run garbage collect':
     command => "/usr/bin/${registry_cmd} garbage-collect ${used_config}",
+  }
+
+  # Remove repository directories that have no valid tags remaining.
+  # After garbage-collect removes unreferenced blobs, repos with
+  # no tags still linger in the catalog. This cleans them up.
+  # The check looks for 'current/link' files under _manifests/tags/
+  # which indicate a valid tag reference exists.
+  -> exec { 'remove untagged repository entries':
+    command => "find ${repo_dir} -type d -name _manifests \
+                | while read manifests_dir; do \
+                    if ! find \$manifests_dir/tags -name link -path '*/current/link' \
+                         -print -quit 2>/dev/null | grep -q .; then \
+                      repo_path=\$(dirname \$manifests_dir); \
+                      logger -t registry-gc \"Removing untagged repo: \$repo_path\"; \
+                      rm -rf \$repo_path; \
+                    fi; \
+                  done",
+    onlyif  => "test -d ${repo_dir}",
   }
 
   -> exec { 'turn registry back to read write':
