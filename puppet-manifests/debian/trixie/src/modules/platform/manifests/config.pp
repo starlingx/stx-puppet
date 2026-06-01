@@ -53,6 +53,14 @@ class platform::config::file {
 
   $platform_conf = '/etc/platform/platform.conf'
 
+  # Scope permissions to users requiring access.
+  file { $platform_conf:
+    ensure => present,
+    owner  => 'root',
+    group  => 'root',
+    mode   => '0640',
+  }
+
   file_line { "${platform_conf} sw_version":
     path  => $platform_conf,
     line  => "sw_version=${::platform::params::software_version}",
