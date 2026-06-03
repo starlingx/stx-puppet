@@ -70,11 +70,16 @@ class platform::lvm::vg::cgts_vg::resizing::runtime (
   $pool_name = 'lvmcsi-pool',
 )
   inherits ::platform::lvm::params {
-
+  # unless_resize avoid class execution if there are not different between
+  # cgts_thin_pool_size and the pool size on VG
+  # lint:ignore:140chars
+  $unless_resize = "test $(lvs --noheadings --nosuffix --units g -o lv_size ${vg_name}/${pool_name} | tr -d ' ' | cut -d. -f1) -ge ${cgts_thin_pool_size}"
+  # lint:endignore:140chars
   exec { "resizing thin pool ${pool_name}":
     command => "lvresize -L ${cgts_thin_pool_size}G ${vg_name}/${pool_name}",
-    path    => ['/usr/sbin', '/sbin'],
+    path    => ['/usr/sbin', '/sbin', '/usr/bin', '/bin'],
     onlyif  => "lvs ${vg_name}/${pool_name}",
+    unless  => $unless_resize,
   }
 }
 
@@ -206,20 +211,25 @@ define platform::lvm::csi::create_thinpool(
       ''      => '',
       default => "--poolmetadatasize ${metadata_size}",
     }
+    # unless_resize avoids class execution if there are not different between
+    # pool_size and the real pool size on VG
     # lint:ignore:only_variable_string
+    # lint:ignore:140chars
     if "${pool_size}" =~ /%/ {
       $npool_size = "-l ${pool_size}"
+      $unless_resize = "test $(vgs --noheadings --nosuffix --units m -o vg_free ${vg_name} | tr -d ' ' | cut -d. -f1) -le 0"
     } else {
       $npool_size = "-L ${pool_size}G"
+      $unless_resize = "test $(lvs --noheadings --nosuffix --units g -o lv_size ${vg_name}/${pool_name} | tr -d ' ' | cut -d. -f1) -ge ${pool_size}"
     }
     # lint:endignore:only_variable_string
+    # lint:endignore:140chars
 
-    # If the ThinPool exists, its a PV addition operation, so, we need to
-    # extend it size, otherwise, create the thinpool.
     exec { "resizing thin pool ${pool_name}":
       command => "lvresize ${npool_size} ${vg_name}/${pool_name}",
-      path    => ['/usr/sbin', '/sbin'],
+      path    => ['/usr/sbin', '/sbin', '/usr/bin', '/bin'],
       onlyif  => "lvs ${vg_name}/${pool_name}",
+      unless  => $unless_resize,
     }
     exec { "create thin pool ${pool_name}":
       command => "lvcreate -T ${npool_size} ${metadata_param} ${vg_name}/${pool_name}",
