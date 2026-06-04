@@ -218,6 +218,7 @@ class platform::docker::config::bootstrap
   inherits ::platform::docker::params {
 
   require ::platform::filesystem::docker
+  include ::platform::docker::daemonconfig
 
   Class['::platform::filesystem::docker'] ~> Class[$name]
 
@@ -228,6 +229,7 @@ class platform::docker::config::bootstrap
     require => [
       Package['docker'],
       Mount['docker-lv'],
+      File['/etc/docker/daemon.json'],
     ],
   }
   -> exec { 'enable-docker':
