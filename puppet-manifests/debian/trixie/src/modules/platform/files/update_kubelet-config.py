@@ -19,6 +19,8 @@ parser.add_argument('--configmap_file', required=True)
 parser.add_argument('--image_gc_low_threshold_percent', type=int, default=75)
 parser.add_argument('--image_gc_high_threshold_percent', type=int, default=79)
 parser.add_argument('--eviction_hard_imagefs_available', default='2Gi')
+parser.add_argument('--cgroup_driver', default='cgroupfs',
+                    help='Set cgroupDriver (systemd or cgroupfs)')
 args = parser.parse_args()
 
 configmap_file = args.configmap_file
@@ -46,6 +48,10 @@ with open(configmap_file, 'r') as dest:
     kubelet_config['imageGCHighThresholdPercent'] = args.image_gc_high_threshold_percent
     kubelet_config['evictionHard'] = evictionHard_default
     kubelet_config['evictionHard']['imagefs.available'] = args.eviction_hard_imagefs_available
+
+    # Update cgroupDriver if specified
+    if args.cgroup_driver:
+        kubelet_config['cgroupDriver'] = args.cgroup_driver
 
     from ruamel.yaml.compat import StringIO
     outstream = StringIO()

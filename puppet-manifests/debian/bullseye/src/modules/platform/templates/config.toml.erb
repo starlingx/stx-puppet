@@ -34,7 +34,7 @@ oom_score = 0
     enable_selinux = false
     sandbox_image = "<%= @pause_image %>"
     stats_collect_period = 10
-    systemd_cgroup = false
+    systemd_cgroup = <%= @cgroup_v2_enabled %>
     enable_tls_streaming = false
     max_container_log_line_size = 16384
     [plugins."io.containerd.grpc.v1.cri".containerd]
@@ -53,7 +53,7 @@ oom_score = 0
             BinaryName = "runc"
             Root = ""
             CriuPath = ""
-            SystemdCgroup = false
+            SystemdCgroup = <%= @cgroup_v2_enabled %>
         [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
           runtime_type = "io.containerd.kata.v2"
         [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.katacli]
@@ -67,7 +67,7 @@ oom_score = 0
             BinaryName = "/usr/bin/kata-runtime"
             Root = ""
             CriuPath = ""
-            SystemdCgroup = false
+            SystemdCgroup = <%= @cgroup_v2_enabled %>
         [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.untrusted]
           runtime_type = "io.containerd.kata.v2"
           runtime_engine = ""

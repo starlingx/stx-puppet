@@ -135,6 +135,8 @@ class platform::containerd::config
 
   $registry_local = 'registry.local:9001'
 
+  $cgroup_v2_enabled = str2bool($platform::params::cgroup_v2_enabled)
+
   file { '/etc/containerd':
     ensure => 'directory',
     owner  => 'root',

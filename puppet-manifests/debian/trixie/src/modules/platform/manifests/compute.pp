@@ -366,24 +366,35 @@ class platform::compute::resctrl {
 # - systemd automatically mounts cgroups and controllers, so don't need
 #   to do that here.
 class platform::compute::machine {
-  $parent_dir = '/sys/fs/cgroup/cpuset'
-  $parent_mems = "${parent_dir}/cpuset.mems"
-  $parent_cpus = "${parent_dir}/cpuset.cpus"
-  $machine_dir = "${parent_dir}/machine.slice"
-  $machine_mems = "${machine_dir}/cpuset.mems"
-  $machine_cpus = "${machine_dir}/cpuset.cpus"
-  notice("Create ${machine_dir}")
-  file { $machine_dir :
-    ensure => directory,
-    owner  => 'root',
-    group  => 'root',
-    mode   => '0700',
-  }
-  -> exec { "Create ${machine_mems}" :
-    command => "/bin/cat ${parent_mems} > ${machine_mems}",
-  }
-  -> exec { "Create ${machine_cpus}" :
-    command => "/bin/cat ${parent_cpus} > ${machine_cpus}",
+  include ::platform::params
+
+  $cgroup_v2 = str2bool($platform::params::cgroup_v2_enabled)
+
+  if $cgroup_v2 {
+    # cgroup v2 uses a unified hierarchy at /sys/fs/cgroup/ (cgroup2fs).
+    # /sys/fs/cgroup/cpuset/ does not exist — systemd manages machine.slice
+    # natively, so manual cpuset setup is not needed.
+    notice('cgroup v2: skipping manual machine.slice cpuset setup (systemd manages cgroups)')
+  } else {
+    $parent_dir = '/sys/fs/cgroup/cpuset'
+    $parent_mems = "${parent_dir}/cpuset.mems"
+    $parent_cpus = "${parent_dir}/cpuset.cpus"
+    $machine_dir = "${parent_dir}/machine.slice"
+    $machine_mems = "${machine_dir}/cpuset.mems"
+    $machine_cpus = "${machine_dir}/cpuset.cpus"
+    notice("Create ${machine_dir}")
+    file { $machine_dir :
+      ensure => directory,
+      owner  => 'root',
+      group  => 'root',
+      mode   => '0700',
+    }
+    -> exec { "Create ${machine_mems}" :
+      command => "/bin/cat ${parent_mems} > ${machine_mems}",
+    }
+    -> exec { "Create ${machine_cpus}" :
+      command => "/bin/cat ${parent_cpus} > ${machine_cpus}",
+    }
   }
 }
 
