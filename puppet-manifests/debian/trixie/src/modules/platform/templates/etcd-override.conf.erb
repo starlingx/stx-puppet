@@ -21,7 +21,11 @@ SystemCallErrorNumber=EPERM
 # cgroup performance engineering
 # - etcdserver has critical latency requirements for CPU and disk IO
 Slice=<%= scope['platform::k8splatform::params::slice'] %>
+# CPUShares for v1
 CPUShares=<%= scope['platform::k8splatform::params::etcd_shares'] %>
+# CPUWeight for v2
+CPUWeight=<%= 1 + ((scope['platform::k8splatform::params::etcd_shares'] - 2) * 9999) / 262142 %>
 Nice=-19
 IOSchedulingClass=best-effort
+IOWeight=1000
 IOSchedulingPriority=0

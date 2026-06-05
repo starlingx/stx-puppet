@@ -1,5 +1,8 @@
 [Service]
 Slice=<%= scope['platform::k8splatform::params::slice'] %>
+# CPUShares for v1
 CPUShares=<%= scope['platform::k8splatform::params::containerd_shares'] %>
+# CPUWeight for v2
+CPUWeight=<%= 1 + ((scope['platform::k8splatform::params::containerd_shares'] - 2) * 9999) / 262142 %>
 CPUQuota=<%= Integer(scope['platform::k8splatform::params::containerd_quota_scale']) * Integer(scope['platform::params::platform_cpu_count']) %>%
 CPUQuotaPeriodSec=10ms

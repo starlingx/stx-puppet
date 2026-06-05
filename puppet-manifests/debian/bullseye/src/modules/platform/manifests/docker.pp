@@ -134,6 +134,7 @@ class platform::docker::cpusharesconfig
     $disable_cpu = @("DISABLECPU"/L)
       [Service]
       CPUShares=1024
+      CPUWeight=100
       CPUQuota=
       CPUQuotaPeriodSec=
       Slice=system.slice

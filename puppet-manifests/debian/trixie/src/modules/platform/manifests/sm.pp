@@ -1235,6 +1235,7 @@ class platform::sm
     $disable_cpu = @("DISABLECPU"/L)
       [Service]
       CPUShares=1024
+      CPUWeight=100
       CPUQuota=
       CPUQuotaPeriodSec=
       | DISABLECPU
