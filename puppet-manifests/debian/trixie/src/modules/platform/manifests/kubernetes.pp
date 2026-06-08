@@ -653,7 +653,7 @@ class platform::kubernetes::master::init
     }
 
     $resource_title = 'pre pull k8s images'
-    $command = "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${version} | xargs -i crictl pull --creds ${creds_command} registry.local:9001/{}" # lint:ignore:140chars
+    $command = "kubeadm --kubeconfig=/etc/kubernetes/admin.conf config images list --kubernetes-version ${version} | grep -v '/etcd:' | xargs -i crictl pull --creds ${creds_command} registry.local:9001/{}" # lint:ignore:140chars
 
     platform::kubernetes::pull_images_from_registry { 'pull images from private registry':
       resource_title      => $resource_title,
