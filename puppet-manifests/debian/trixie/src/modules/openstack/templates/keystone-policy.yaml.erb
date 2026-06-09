@@ -10,14 +10,18 @@ protected_domains: '!'
 protected_projects: '''admin'':%(target.project.name)s or ''services'':%(target.project.name)s'
 protected_admins: '''admin'':%(target.user.name)s or ''dcmanager'':%(target.user.name)s'
 protected_roles: '''admin'':%(target.role.name)s'
-protected_services:
+protected_users:
 <% @protected_services.each do |svc| -%>
   - - "'<%= svc %>':%(target.user.name)s"
+<% end -%>
+protected_services:
+<% @protected_services.each do |svc| -%>
+  - - "'<%= svc %>':%(target.service.name)s"
 <% end -%>
 'identity:delete_service': 'rule:admin_required and not rule:protected_services'
 'identity:delete_domain': 'rule:admin_required and system_scope:all and not rule:protected_domains'
 'identity:delete_project': 'rule:admin_required and not rule:protected_projects'
-'identity:delete_user': 'rule:admin_required and not (rule:protected_admins or rule:protected_services)'
+'identity:delete_user': 'rule:admin_required and not (rule:protected_admins or rule:protected_users)'
 'identity:delete_role': 'rule:admin_required and not rule:protected_roles'
 'identity:list_services': 'rule:admin_required or role:reader'
 'identity:list_endpoints': 'rule:admin_required or role:reader'

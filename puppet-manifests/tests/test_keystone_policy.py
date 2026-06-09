@@ -30,19 +30,24 @@ PROTECTED_SERVICES = [
 
 
 def render_policy_template():
-    """Render the ERB policy template with test values."""
+    """Turn the ERB template into valid YAML without needing Ruby.
+
+    Expands all @protected_services loops with the test service list.
+    """
     with open(TEMPLATE_PATH) as f:
         content = f.read()
 
-    # Render the protected_services ERB loop
-    # Parse line-by-line, otherwise we need ruby to be present in test env
+    # Find and replace each ERB loop with its expanded form
     loop_re = re.compile(
         r'<%\s*@protected_services\.each\s+do\s+\|svc\|\s*-%>\s*\n'
         r'(.*?)\n'
         r'<%\s*end\s*-%>\s*\n',
         re.DOTALL)
-    match = loop_re.search(content)
-    if match:
+
+    while True:
+        match = loop_re.search(content)
+        if not match:
+            break
         line_tpl = match.group(1)
         rendered = ''.join(
             line_tpl.replace('<%= svc %>', svc) + '\n'
@@ -93,7 +98,7 @@ class TestKeystoneDeleteServicePolicy(PolicyTestBase):
 
     def test_admin_can_delete_non_protected_service(self):
         creds = {"roles": ["admin"]}
-        target = {"target.user.name": "nova"}
+        target = {"target.service.name": "nova"}
         result = self.enforcer.enforce(
             "identity:delete_service", target, creds, do_raise=False)
         self.assertTrue(
@@ -101,7 +106,7 @@ class TestKeystoneDeleteServicePolicy(PolicyTestBase):
 
     def test_admin_cannot_delete_protected_service(self):
         creds = {"roles": ["admin"]}
-        target = {"target.user.name": random.choice(PROTECTED_SERVICES)}
+        target = {"target.service.name": random.choice(PROTECTED_SERVICES)}
         result = self.enforcer.enforce(
             "identity:delete_service", target, creds, do_raise=False)
         self.assertFalse(
@@ -109,7 +114,7 @@ class TestKeystoneDeleteServicePolicy(PolicyTestBase):
 
     def test_non_admin_cannot_delete_service(self):
         creds = {"roles": ["member"]}
-        target = {"target.user.name": "nova"}
+        target = {"target.service.name": "nova"}
         result = self.enforcer.enforce(
             "identity:delete_service", target, creds, do_raise=False)
         self.assertFalse(
