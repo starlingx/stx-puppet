@@ -249,8 +249,8 @@ class openstack::keystone::federation
     'platform::kubernetes::kube_apiserver::params::oidc-issuer-url',
     Optional[String], 'first', undef
   )
-  $horizon_https_port = $::openstack::horizon::params::https_port
-  $oam_address = $::platform::network::oam::params::controller_address
+  $horizon_https_port = $openstack::horizon::params::https_port
+  $oam_address = $platform::network::oam::params::controller_address
   $trusted_dashboard_url = "https://${oam_address}:${horizon_https_port}/auth/websso/"
   $rc_file = '/etc/platform/openrc'
   # Check variable for Keystone readiness
