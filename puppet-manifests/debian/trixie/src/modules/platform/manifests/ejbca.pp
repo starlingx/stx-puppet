@@ -2,7 +2,7 @@ class platform::ejbca::params (
   $enabled = false,
   $public_url = undef,
   $public_port = 7443,
-  $private_url = 'ejbca-httpd.ejbca.svc.cluster.local:443',
+  $private_url = 'ejbca-httpd.ejbca.svc.cluster.local',
   $private_port = 443,
 ) {}
 
