@@ -617,6 +617,24 @@ class openstack::keystone::upgrade (
 
 }
 
+class openstack::keystone::lockout
+  inherits ::openstack::keystone::params {
+
+  # Update keystone user lockout configuration
+  class { '::keystone::security_compliance':
+    lockout_duration         => $lockout_period,
+    lockout_failure_attempts => $lockout_retries,
+  }
+}
+
+class openstack::keystone::lockout::runtime {
+  include ::openstack::keystone::lockout
+
+  class {'::openstack::keystone::reload':
+    stage => post
+  }
+}
+
 class openstack::keystone::password::runtime {
 
   if $::platform::params::distributed_cloud_role == 'systemcontroller' {
