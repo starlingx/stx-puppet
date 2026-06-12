@@ -92,12 +92,22 @@ class platform::ntp::server {
     include ::platform::ntp
 
     include ::platform::params
-    include ::platform::network::mgmt::params
-    include ::platform::network::oam::params
+    include ::platform::network::mgmt::ipv4::params
+    include ::platform::network::mgmt::ipv6::params
+    include ::platform::network::oam::ipv4::params
+    include ::platform::network::oam::ipv6::params
     $peer_server = $::platform::params::mate_hostname
     $system_mode = $::platform::params::system_mode
-    $mgmt_ip = $::platform::network::mgmt::params::interface_address
-    $oam_ip = $::platform::network::oam::params::interface_address
+
+    # Build list of unique mgmt listen IPs (dual-stack support)
+    $mgmt_ip_v4 = pick_default($::platform::network::mgmt::ipv4::params::interface_address, '')
+    $mgmt_ip_v6 = pick_default($::platform::network::mgmt::ipv6::params::interface_address, '')
+    $mgmt_ips = unique(reject([$mgmt_ip_v4, $mgmt_ip_v6], '^\s*$'))
+
+    # Build list of unique oam listen IPs (dual-stack support)
+    $oam_ip_v4 = pick_default($::platform::network::oam::ipv4::params::interface_address, '')
+    $oam_ip_v6 = pick_default($::platform::network::oam::ipv6::params::interface_address, '')
+    $oam_ips = unique(reject([$oam_ip_v4, $oam_ip_v6], '^\s*$'))
 
     file { 'ntp_config':
       ensure  => file,
@@ -126,8 +136,13 @@ class platform::ntp::client {
   if $::personality != 'controller' {
     include ::platform::ntp
 
-    include ::platform::network::mgmt::params
-    $mgmt_ip = $::platform::network::mgmt::params::interface_address
+    include ::platform::network::mgmt::ipv4::params
+    include ::platform::network::mgmt::ipv6::params
+
+    # Build list of unique mgmt listen IPs (dual-stack support)
+    $mgmt_ip_v4 = pick_default($::platform::network::mgmt::ipv4::params::interface_address, '')
+    $mgmt_ip_v6 = pick_default($::platform::network::mgmt::ipv6::params::interface_address, '')
+    $mgmt_ips = unique(reject([$mgmt_ip_v4, $mgmt_ip_v6], '^\s*$'))
 
     file { 'ntp_config':
       ensure  => file,

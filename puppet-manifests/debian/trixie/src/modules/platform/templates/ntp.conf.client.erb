@@ -4,7 +4,9 @@ driftfile /var/lib/ntpsec/ntp.drift
 interface ignore wildcard
 interface listen 127.0.0.1
 interface listen ::1
-interface listen <%= @mgmt_ip %>
+<%- @mgmt_ips.each do |ip| -%>
+interface listen <%= ip %>
+<%- end -%>
 
 # Permit time synchronization with our time source, but do not
 # permit the source to query or modify the service on this system.
