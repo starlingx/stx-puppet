@@ -16,13 +16,24 @@ define platform::ptpinstance::ptp_config_files(
   $device_parameters = '',
   $gnss_uart_disable = '',
   $external_source = '',
+  $config_json = {},
 ) {
-  file { $_name:
-    ensure  => file,
-    notify  => Exec["instance-${_name}"],
-    path    => "${ptp_conf_dir}/ptpinstance/${service}-${_name}.conf",
-    mode    => '0644',
-    content => template('platform/ptpinstance.conf.erb'),
+  if $service == 'dpll-mgr' {
+    file { $_name:
+      ensure  => file,
+      notify  => Exec["instance-${_name}"],
+      path    => "${ptp_conf_dir}/ptpinstance/${service}-${_name}.json",
+      mode    => '0644',
+      content => template('platform/dpll-mgr-instance.json.erb'),
+    }
+  } else {
+    file { $_name:
+      ensure  => file,
+      notify  => Exec["instance-${_name}"],
+      path    => "${ptp_conf_dir}/ptpinstance/${service}-${_name}.conf",
+      mode    => '0644',
+      content => template('platform/ptpinstance.conf.erb'),
+    }
   }
   -> file { "${_name}-sysconfig":
     ensure  => file,
@@ -161,6 +172,7 @@ define platform::ptpinstance::set_ptp4l_pmc_parameters(
   $device_parameters = '',
   $gnss_uart_disable = '',
   $external_source = '',
+  $config_json = {},
 ) {
   if ($service == 'ptp4l') and ($pmc_gm_settings != '') {
     exec { "${_name}_set_initial_pmc_paramters":
@@ -275,6 +287,12 @@ class platform::ptpinstance::nic_clock (
   tidy { 'purge_conf':
     path    => "${ptp_conf_dir}/ptpinstance",
     matches => ['[^clock]*.conf'],
+    recurse => true,
+    rmdirs  => false,
+  }
+  tidy { 'purge_json_conf':
+    path    => "${ptp_conf_dir}/ptpinstance",
+    matches => ['*.json'],
     recurse => true,
     rmdirs  => false,
   }
@@ -405,6 +423,7 @@ define platform::ptpinstance::disable_e810_gnss_uart_interfaces (
   $device_parameters = '',
   $gnss_uart_disable = '',
   $external_source = '',
+  $config_json = {},
 ) {
   $gnss_device_ori = $global_parameters['ts2phc.nmea_serialport']
 
@@ -515,6 +534,12 @@ class platform::ptpinstance (
     mode    => '0644',
     content => template('platform/synce4l-instance.service.erb'),
   }
+  -> file { 'dpll-mgr_service_instance':
+    ensure  => file,
+    path    => '/etc/systemd/system/dpll-mgr@.service',
+    mode    => '0644',
+    content => template('platform/dpll-mgr-instance.service.erb'),
+  }
   -> exec { 'stop-ptp4l-instances':
     command => '/usr/bin/systemctl stop ptp4l*',
   }
@@ -539,6 +564,13 @@ class platform::ptpinstance (
   }
   -> exec { 'stop-ts2phc-instance':
     command => '/usr/bin/systemctl stop ts2phc@*',
+  }
+  -> exec { 'stop-dpll-mgr-instances':
+    command => '/usr/bin/systemctl stop dpll-mgr@* || true',
+  }
+  -> exec { 'disable-dpll-mgr-instances':
+    command => '/usr/bin/systemctl disable dpll-mgr@*',
+    onlyif  => 'test -f /etc/systemd/system/dpll-mgr@.service',
   }
 
   # once ts2phc stopped, change previous monitored devices to nmea mode
