@@ -25,6 +25,10 @@ class platform::ldap::server
 
   if ! $ldapserver_remote {
     include ::platform::ldap::server::local
+    include ::platform::ldap::syncrepl
+
+    Class['platform::ldap::server::local']
+    -> Class['platform::ldap::syncrepl']
   }
 }
 
@@ -63,9 +67,17 @@ class platform::ldap::server::local
     onlyif  => ["test -e ${slapd_etc_path}/certs/openldap-cert.crt", "test -e ${slapd_etc_path}/certs/openldap-cert.key"]
   }
 
+  # On simplex (provider_uri empty), strip the syncrepl block and
+  # mirrormode from slapd.conf so slapd can parse it.
+  if $provider_uri and $provider_uri != '' {
+    $syncrepl_sed = "-e 's#provider=ldap.*#provider=${provider_uri}#'"
+  } else {
+    $syncrepl_sed = "-e '/^syncrepl /,/^$/d' -e '/^mirrormode /d'"
+  }
+
   exec { 'update-slapd-conf':
     command => "/bin/sed -i \\
-                          -e 's#provider=ldap.*#provider=${provider_uri}#' \\
+                          ${syncrepl_sed} \\
                           -e 's:serverID.*:serverID ${server_id}:' \\
                           -e 's:credentials.*:credentials=${admin_pw}:' \\
                           -e 's:^rootpw .*:rootpw ${admin_hashed_pw}:' \\
@@ -272,4 +284,58 @@ class platform::ldap::tls::runtime
       command => 'sm-restart-safe service open-ldap',
     }
   }
+}
+
+class platform::ldap::syncrepl
+  inherits ::platform::ldap::params {
+  # lint:ignore:140chars
+
+  if ! $ldapserver_remote {
+    $mdb_dn = 'olcDatabase={1}mdb,cn=config'
+    $ldap_cmd = "ldapmodify -D cn=config -w \$(cat /etc/ldapscripts/ldapscripts.passwd) -xH ldap:///"
+    $search_cmd = "ldapsearch -D cn=config -w \$(cat /etc/ldapscripts/ldapscripts.passwd) -xH ldap:/// -b"
+
+    if $provider_uri and $provider_uri != '' {
+      # Duplex: ensure syncrepl is enabled with correct provider.
+      # Re-add if missing (e.g. after SX-to-DX conversion).
+      $enable_syncrepl_ldif = @("LDIF")
+        dn: ${mdb_dn}
+        changetype: modify
+        replace: olcSyncrepl
+        olcSyncrepl: rid=001 provider=${provider_uri} type=refreshAndPersist retry="5 5 300 +" searchbase="dc=cgcs,dc=local" attrs="*,+" bindmethod=simple binddn="cn=ldapadmin,dc=cgcs,dc=local" credentials=${admin_pw} tls_cert="/etc/ldap/certs/openldap-cert.crt" tls_key="/etc/ldap/certs/openldap-cert.key" tls_cacert="/etc/ssl/certs/ca-certificates.crt" tls_reqsan=demand
+        -
+        replace: olcMirrorMode
+        olcMirrorMode: TRUE
+        | LDIF
+
+      file { "${slapd_etc_path}/syncrepl-enable.ldif":
+        ensure  => present,
+        content => $enable_syncrepl_ldif,
+      }
+      -> exec { 'ensure-syncrepl-cnconfig':
+        command => "${ldap_cmd} -f ${slapd_etc_path}/syncrepl-enable.ldif",
+        unless  => "${search_cmd} \"${mdb_dn}\" -s base olcSyncrepl 2>/dev/null | grep -q '^olcSyncrepl:'",
+      }
+    } else {
+      # Simplex: remove syncrepl from cn=config. This prevents a slapd issue
+      # where syncrepl thread sometimes crashes during shutdown (ITS#8901).
+      $disable_syncrepl_ldif = @("LDIF")
+        dn: ${mdb_dn}
+        changetype: modify
+        delete: olcSyncrepl
+        -
+        delete: olcMirrorMode
+        | LDIF
+
+      file { "${slapd_etc_path}/syncrepl-disable.ldif":
+        ensure  => present,
+        content => $disable_syncrepl_ldif,
+      }
+      -> exec { 'disable-syncrepl-cnconfig':
+        command => "${ldap_cmd} -f ${slapd_etc_path}/syncrepl-disable.ldif",
+        onlyif  => "${search_cmd} \"${mdb_dn}\" -s base olcSyncrepl 2>/dev/null | grep -q '^olcSyncrepl:'",
+      }
+    }
+  }
+  # lint:endignore
 }
