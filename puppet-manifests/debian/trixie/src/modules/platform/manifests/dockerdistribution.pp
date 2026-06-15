@@ -104,10 +104,10 @@ class platform::dockerdistribution::config
     $docker_registry_host = $platform::network::mgmt::params::controller_address_url
   }
 
-  if $platform::params::distributed_cloud_role == 'subcloud' {
-    $docker_realm_host = 'registry.local'
+  if $platform::params::distributed_cloud_role == 'systemcontroller' {
+    $docker_realm_host = 'registry.central'
   } else {
-    $docker_realm_host = $platform::haproxy::params::public_address_url
+    $docker_realm_host = 'registry.local'
   }
   $runtime_config = '/etc/docker-distribution/registry/runtime_config.yml'
   $used_config = '/etc/docker-distribution/registry/config.yml'
