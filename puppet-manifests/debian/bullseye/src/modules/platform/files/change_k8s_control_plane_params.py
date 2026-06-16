@@ -1650,6 +1650,33 @@ def main():
     # -----------------------------------------------------------------------------
     LOG.debug("Updating backup files with latest configuration ...")
 
+    # NOTE(ajaiswal): Remove this block once all systems have migrated
+    # to /k8sinfra and N-2 upgrade from releases with /k8s-infra is no
+    # longer supported.
+    # Fix cgroupRoot in config.yaml before pushing to the ConfigMap.
+    #
+    # During k8s upgrade, kubeadm upgrade apply creates a new versioned
+    # kubelet-config ConfigMap from its defaults and regenerates
+    # config.yaml from it. If the previous ConfigMap had the old cgroup
+    # name (/k8s-infra), the regenerated config.yaml inherits it.
+    #
+    # Since this function pushes config.yaml to the ConfigMap, fixing
+    # it here ensures the ConfigMap gets the correct value (/k8sinfra).
+    # This prevents future kubeadm operations from reverting the name.
+    try:
+        with open(kubelet_latest_config_file, 'r') as f:
+            content = f.read()
+        if '/k8s-infra' in content:
+            content = content.replace('cgroupRoot: /k8s-infra',
+                                      'cgroupRoot: /k8sinfra')
+            with open(kubelet_latest_config_file, 'w') as f:
+                f.write(content)
+            LOG.info("Fixed cgroupRoot /k8s-infra -> /k8sinfra in %s",
+                     kubelet_latest_config_file)
+    except Exception as e:
+        LOG.warning("Failed to fix cgroupRoot in %s: %s",
+                    kubelet_latest_config_file, e)
+
     # Update kubelet configmap and backup config file
     update_kubelet_bak_config_files(
         kubeadm_kubelet_config_file, kubeadm_kubelet_config_bak_file,
