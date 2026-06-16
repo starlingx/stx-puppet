@@ -26,17 +26,21 @@ class platform::etcd::params (
 
 class platform::etcd::symlinks {
   include ::platform::etcd::params
+  include ::platform::kubernetes::params
 
-  # List etcd binary versions in natural sort order, get minimum value.
-  # Getting this fall-back for paranoia reasons.
+  # Determine the supported etcd version by querying kubeadm for the etcd
+  # image associated with the currently installed kubernetes version, then
+  # selecting the highest installed version whose major.minor does not
+  # exceed the kubernetes-expected major.minor. Falls back to max installed.
   $etcd_version = $::platform::etcd::params::etcd_version
-  $etcd_min_version = strip(
-    generate('/bin/bash', '-c', '/bin/ls -v /usr/local/etcd | /bin/head -1')
+  $kubeadm_version = $::platform::kubernetes::params::kubeadm_version
+  $etcd_supported_version = strip(
+    generate('/bin/bash', '-c', template('platform/etcd_supported_version.erb'))
   )
 
   if $etcd_version == undef {
-    notice("Falling back to etcd_version ${etcd_min_version} min installed version")
-    $version = $etcd_min_version.strip
+    notice("Falling back to etcd_version ${etcd_supported_version} supported version")
+    $version = $etcd_supported_version.strip
   } else {
     $version = $etcd_version
   }
