@@ -154,7 +154,7 @@ class platform::ceph
           }
         }
         $defaults = { 'path' => $ceph_config_file }
-        create_ini_settings($mon_settings, $defaults)
+        inifile::create_ini_settings($mon_settings, $defaults)
 
         # Remove section header
         Ini_setting["${ceph_config_file} [mon.${monitor}] public_addr",
