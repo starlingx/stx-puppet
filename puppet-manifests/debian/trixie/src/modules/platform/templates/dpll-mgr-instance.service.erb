@@ -1,0 +1,14 @@
+[Unit]
+Description=DPLL Manager service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-<%= @ptp_options_dir %>/ptpinstance/dpll-mgr-instance-%i
+ExecStart=/usr/bin/dpll-mgr -c <%= @ptp_conf_dir %>/ptpinstance/dpll-mgr-%i.json $OPTIONS
+Restart=on-failure
+RestartPreventExitStatus=SIGTERM SIGINT SIGKILL SIGABRT 255
+
+[Install]
+WantedBy=multi-user.target
