@@ -20,8 +20,8 @@ protected_services:
 <% end -%>
 'identity:delete_service': 'rule:admin_required and not rule:protected_services'
 'identity:delete_domain': 'rule:admin_required and system_scope:all and not rule:protected_domains'
-'identity:delete_project': 'rule:admin_required and not rule:protected_projects'
-'identity:delete_user': 'rule:admin_required and not (rule:protected_admins or rule:protected_users)'
+'identity:delete_project': '(rule:admin_required or (role:manager and domain_id:%(target.project.domain_id)s)) and not rule:protected_projects'
+'identity:delete_user': '(rule:admin_required or (role:manager and token.domain.id:%(target.user.domain_id)s)) and not (rule:protected_admins or rule:protected_users)'
 'identity:delete_role': 'rule:admin_required and not rule:protected_roles'
 'identity:list_services': 'rule:admin_required or role:reader'
 'identity:list_endpoints': 'rule:admin_required or role:reader'
