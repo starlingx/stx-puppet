@@ -47,6 +47,7 @@ define platform::ptpinstance::ptp_config_files(
     before   => Exec['set-ice-gnss-thread-niceness'],
     command  => "/usr/bin/systemctl start ${service}@${_name} || true",
     provider => shell,
+    tag      => "${service}-start",
   }
   -> exec { "enable-${_name}":
     command => "/usr/bin/systemctl enable \
@@ -518,6 +519,12 @@ class platform::ptpinstance (
     mode    => '0644',
     content => template('platform/ptp4l-instance.service.erb')
   }
+  -> file { 'ptp_instance_notify_wrapper':
+    ensure => file,
+    path   => '/usr/local/bin/ptp-instance-notify.sh',
+    mode   => '0755',
+    source => 'puppet:///modules/platform/ptp-instance-notify.sh',
+  }
   -> file { 'phc2sys_service_instance':
     ensure  => file,
     path    => '/etc/systemd/system/phc2sys@.service',
@@ -541,6 +548,24 @@ class platform::ptpinstance (
     path    => '/etc/systemd/system/dpll-mgr@.service',
     mode    => '0644',
     content => template('platform/dpll-mgr-instance.service.erb'),
+  }
+  -> file { 'ptp4l-instances-target':
+    ensure  => file,
+    path    => '/etc/systemd/system/ptp4l-instances.target',
+    mode    => '0644',
+    content => template('platform/ptp4l-instances.target.erb'),
+  }
+  -> file { 'ts2phc-instances-target':
+    ensure  => file,
+    path    => '/etc/systemd/system/ts2phc-instances.target',
+    mode    => '0644',
+    content => template('platform/ts2phc-instances.target.erb'),
+  }
+  -> file { 'synce4l-instances-target':
+    ensure  => file,
+    path    => '/etc/systemd/system/synce4l-instances.target',
+    mode    => '0644',
+    content => template('platform/synce4l-instances.target.erb'),
   }
   -> exec { 'stop-ptp4l-instances':
     command => '/usr/bin/systemctl stop ptp4l*',
@@ -619,6 +644,15 @@ class platform::ptpinstance (
   -> exec { 'ptpinstance-systemctl-reset-failed-synce4l':
     command => '/usr/bin/systemctl reset-failed synce4l*',
   }
+  -> exec { 'enable-ptp4l-instances-target':
+    command => '/usr/bin/systemctl enable ptp4l-instances.target',
+  }
+  -> exec { 'enable-ts2phc-instances-target':
+    command => '/usr/bin/systemctl enable ts2phc-instances.target',
+  }
+  -> exec { 'enable-synce4l-instances-target':
+    command => '/usr/bin/systemctl enable synce4l-instances.target',
+  }
 
   if $enabled {
     # Create PTP services configuration files
@@ -635,6 +669,11 @@ class platform::ptpinstance (
 
     # Create PTP interfaces configuration
     class { 'platform::ptpinstance::ptp_interfaces_conf': }
+
+    # Service startup ordering: ptp4l first, then dependents
+    Exec <| tag == 'ptp4l-start' |> -> Exec <| tag == 'ts2phc-start' |>
+    Exec <| tag == 'ptp4l-start' |> -> Exec <| tag == 'phc2sys-start' |>
+    Exec <| tag == 'ts2phc-start' |> -> Exec <| tag == 'dpll-mgr-start' |>
   }
 
   exec { 'set-ice-gnss-thread-niceness':

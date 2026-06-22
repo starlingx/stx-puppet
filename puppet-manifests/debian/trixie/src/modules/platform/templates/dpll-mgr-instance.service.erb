@@ -1,6 +1,6 @@
 [Unit]
 Description=DPLL Manager service
-After=network-online.target
+After=network-online.target ptp4l-instances.target ts2phc-instances.target
 Wants=network-online.target
 
 [Service]

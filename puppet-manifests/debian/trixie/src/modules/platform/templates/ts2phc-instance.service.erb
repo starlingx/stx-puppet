@@ -1,18 +1,20 @@
 [Unit]
 Description=ts2phc service
-After=network-online.target
+After=network-online.target ptp4l-instances.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=all
 EnvironmentFile=-<%= @ptp_options_dir %>/ptpinstance/ts2phc-instance-%i
-ExecStart=/usr/sbin/ts2phc -f <%= @ptp_conf_dir %>/ptpinstance/ts2phc-%i.conf $OPTIONS
-ExecStartPost=/bin/bash -c 'echo $MAINPID > /var/run/ts2phc-%i.pid'
+ExecStart=/usr/local/bin/ptp-instance-notify.sh ts2phc %i <%= @ptp_conf_dir %>
 ExecStopPost=/bin/rm -f /var/run/ts2phc-%i.pid
 Restart=on-failure
 RestartPreventExitStatus=SIGTERM SIGINT SIGKILL SIGABRT 255
+TimeoutStartSec=10
 CPUSchedulingPolicy=fifo
 CPUSchedulingPriority=70
 
 [Install]
 WantedBy=multi-user.target
+WantedBy=ts2phc-instances.target

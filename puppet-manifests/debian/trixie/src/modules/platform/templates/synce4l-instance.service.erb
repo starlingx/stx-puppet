@@ -1,6 +1,7 @@
 [Unit]
 Description=Synchronous Ethernet (SynceE) service
-After=ptp4l.service
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -15,3 +16,4 @@ CPUSchedulingPriority=70
 
 [Install]
 WantedBy=multi-user.target
+WantedBy=synce4l-instances.target

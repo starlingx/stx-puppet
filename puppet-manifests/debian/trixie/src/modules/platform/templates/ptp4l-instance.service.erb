@@ -4,15 +4,17 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=all
 EnvironmentFile=-<%= @ptp_options_dir %>/ptpinstance/ptp4l-instance-%i
-ExecStart=/usr/sbin/ptp4l -f <%= @ptp_conf_dir %>/ptpinstance/ptp4l-%i.conf $OPTIONS
-ExecStartPost=/bin/bash -c 'echo $MAINPID > /var/run/ptp4l-%i.pid'
+ExecStart=/usr/local/bin/ptp-instance-notify.sh ptp4l %i <%= @ptp_conf_dir %>
 ExecStopPost=/bin/rm -f /var/run/ptp4l-%i.pid
 Restart=on-failure
 RestartPreventExitStatus=SIGTERM SIGINT SIGKILL SIGABRT 255
+TimeoutStartSec=10
 CPUSchedulingPolicy=fifo
 CPUSchedulingPriority=70
 
 [Install]
 WantedBy=multi-user.target
+WantedBy=ptp4l-instances.target
