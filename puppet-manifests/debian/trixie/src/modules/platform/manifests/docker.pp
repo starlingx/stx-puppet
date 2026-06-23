@@ -41,7 +41,7 @@ class platform::docker::params (
 
   if $platform::params::system_mode == 'simplex' {
     $no_proxy_unfiltered_list = @("EOL"/L)
-      localhost,${localhost_address},registry.local,\
+      localhost,${localhost_address},registry.local,registry.central,\
       ${platform::network::oam::params::gateway_address},\
       ${platform::network::oam::params::controller_address},\
       ${platform::network::oam::params::controller0_address},\
@@ -57,7 +57,7 @@ class platform::docker::params (
       | -EOL
   } else {
     $no_proxy_unfiltered_list = @("EOL"/L)
-      localhost,${localhost_address},registry.local,\
+      localhost,${localhost_address},registry.local,registry.central,\
       ${platform::network::oam::params::gateway_address},\
       ${platform::network::oam::params::controller_address},\
       ${platform::network::oam::params::controller0_address},\
