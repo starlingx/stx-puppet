@@ -53,12 +53,22 @@ class platform::config::file {
 
   $platform_conf = '/etc/platform/platform.conf'
 
-  # Scope permissions to users requiring access.
+  # Enforce secure permissions on platform.conf. The group is applied via a
+  # separate chained exec (not the file resource) to avoid an autorequire edge
+  # to Group['sys_protected'] (declared in the main stage) while this file
+  # resource runs in the pre stage -- that combination causes a dependency
+  # cycle. The onlyif also guards on group existence so the exec is safe in the
+  # pre stage and converges on a later Puppet run if the group is not yet present.
   file { $platform_conf:
     ensure => present,
     owner  => 'root',
     group  => 'root',
     mode   => '0640',
+  }
+  -> exec { 'change group ownership for platform.conf':
+    command => "chgrp sys_protected ${platform_conf}",
+    onlyif  => "/usr/bin/test -e ${platform_conf} && /usr/bin/getent group sys_protected",
+    path    => ['/usr/bin', '/usr/sbin', '/bin', '/sbin'],
   }
 
   file_line { "${platform_conf} sw_version":
