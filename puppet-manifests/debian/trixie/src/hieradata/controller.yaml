@@ -242,5 +242,7 @@ barbican::db::sync::user: 'root'
 barbican::db::database_connection_recycle_time: 60
 barbican::db::database_max_pool_size: 1
 barbican::keystone-listener::enabled: false
+barbican::policy::enforce_scope: true
+barbican::policy::enforce_new_defaults: true
 barbican::policy::policy_path: '/etc/barbican/policy.yaml'
 barbican::worker::enabled: false
