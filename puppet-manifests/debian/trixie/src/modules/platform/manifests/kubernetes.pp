@@ -498,9 +498,11 @@ class platform::kubernetes::haproxy {
       $ipv4_cluster_host_ip = $platform::network::cluster_host::ipv4::params::controller0_address
       $ipv6_cluster_host_ip = $platform::network::cluster_host::ipv6::params::controller0_address
       if $platform::params::system_mode == 'simplex' {
-        $primary_cluster_host_ip = $platform::network::cluster_host::params::controller_address
+        $controller_0_cluster_host_ip = $platform::network::cluster_host::params::controller_address
+        $controller_1_cluster_host_ip = undef
       } else {
-        $primary_cluster_host_ip = $platform::network::cluster_host::params::controller0_address
+        $controller_0_cluster_host_ip = $platform::network::cluster_host::params::controller0_address
+        $controller_1_cluster_host_ip = $platform::network::cluster_host::params::controller1_address
       }
     }
     $controller_1_hostname: {
@@ -512,7 +514,8 @@ class platform::kubernetes::haproxy {
       $ipv6_admin_host_ip = $platform::network::admin::ipv6::params::controller1_address
       $ipv4_cluster_host_ip = $platform::network::cluster_host::ipv4::params::controller1_address
       $ipv6_cluster_host_ip = $platform::network::cluster_host::ipv6::params::controller1_address
-      $primary_cluster_host_ip = $platform::network::cluster_host::params::controller1_address
+      $controller_0_cluster_host_ip = $platform::network::cluster_host::params::controller0_address
+      $controller_1_cluster_host_ip = $platform::network::cluster_host::params::controller1_address
     }
     default: {
       fail("Hostname must be either ${controller_0_hostname} or ${controller_1_hostname}")
@@ -572,26 +575,55 @@ class platform::kubernetes::haproxy {
     options          => $http_frontend_options,
   }
 
-  # In OAM, we need two backends: one for requests with tokens (default) and one for
-  # requests with client certificates (only admin credentials)
+  # TODO: consider moving to platform::kubernetes::params
+  $kube_apiserver_port = '16443'
+
+  # OAM external backends: load-balance across both kube-apiserver instances.
+  # HAProxy terminates TLS on the frontend (port 6443) and connects directly
+  # to kube-apiserver on each controller's cluster-host unit address (port
+  # 16443). The /readyz health check removes an unhealthy apiserver from
+  # rotation within ~9s (3 failed checks x 3s interval).
+  if $::platform::params::system_mode != 'simplex' {
+    $oam_backend_options = {
+      'balance'    => 'roundrobin',
+      'option'     => 'httpchk',
+      'http-check' => 'send meth GET uri /readyz',
+      'server'     => [
+        "s-k8s-controller-0 ${controller_0_cluster_host_ip}:${kube_apiserver_port} ${ssl_client_option_auth_token} check check-ssl verify none inter 3s fall 3 rise 1", # lint:ignore:140chars
+        "s-k8s-controller-1 ${controller_1_cluster_host_ip}:${kube_apiserver_port} ${ssl_client_option_auth_token} check check-ssl verify none inter 3s fall 3 rise 1", # lint:ignore:140chars
+      ],
+    }
+    $oam_backend_crt_options = {
+      'balance'    => 'roundrobin',
+      'option'     => 'httpchk',
+      'http-check' => 'send meth GET uri /readyz',
+      'server'     => [
+        "s-k8s-controller-0 ${controller_0_cluster_host_ip}:${kube_apiserver_port} ${ssl_client_option_auth_crt} check check-ssl verify none inter 3s fall 3 rise 1", # lint:ignore:140chars
+        "s-k8s-controller-1 ${controller_1_cluster_host_ip}:${kube_apiserver_port} ${ssl_client_option_auth_crt} check check-ssl verify none inter 3s fall 3 rise 1", # lint:ignore:140chars
+      ],
+    }
+  } else {
+    $oam_backend_options = {
+      'server' => "s-k8s-controller-0 ${controller_0_cluster_host_ip}:${kube_apiserver_port} ${ssl_client_option_auth_token}",
+    }
+    $oam_backend_crt_options = {
+      'server' => "s-k8s-controller-0 ${controller_0_cluster_host_ip}:${kube_apiserver_port} ${ssl_client_option_auth_crt}",
+    }
+  }
+
   haproxy::backend { 'k8s-backend':
     collect_exported => false,
     name             => 'k8s-backend',
-    options          => {
-      'server' => "s-k8s ${primary_cluster_floating_ip}:${haproxy_port} ${ssl_client_option_auth_token}",
-    },
+    options          => $oam_backend_options,
   }
 
   haproxy::backend { 'k8s-backend-client-crt':
     collect_exported => false,
     name             => 'k8s-backend-client-crt',
-    options          => {
-      'server' => "s-k8s ${primary_cluster_floating_ip}:${haproxy_port} ${ssl_client_option_auth_crt}",
-    },
+    options          => $oam_backend_crt_options,
   }
 
   # SSL Passtrough (Cluster Host/Management -> kube-apiserver)
-  $kube_apiserver_port = '16443'
 
   $tcp_ssl_hello = 'content accept if { req_ssl_hello_type 1 }'
   $tcp_req_delay = 'inspect-delay 5s'
@@ -628,13 +660,34 @@ class platform::kubernetes::haproxy {
     options          => $tcp_frontend_options,
   }
 
+  # In duplex systems, load-balance the internal kube-apiserver backend
+  # across both controllers using round-robin. Each server is health-checked
+  # at the application layer via /readyz over TLS (without certificate
+  # verification). A server failing the readyz check is removed from rotation,
+  # allowing internal cluster traffic (kubelets, controller-manager, scheduler)
+  # to continue through the remaining healthy apiserver during failover.
+  if $::platform::params::system_mode != 'simplex' {
+    $internal_backend_options = {
+      'mode'       => 'tcp',
+      'balance'    => 'roundrobin',
+      'option'     => 'httpchk',
+      'http-check' => 'send meth GET uri /readyz',
+      'server'     => [
+        "s-k8s-internal-controller-0 ${controller_0_cluster_host_ip}:${kube_apiserver_port} check check-ssl verify none inter 2s fall 2 rise 1", # lint:ignore:140chars
+        "s-k8s-internal-controller-1 ${controller_1_cluster_host_ip}:${kube_apiserver_port} check check-ssl verify none inter 2s fall 2 rise 1", # lint:ignore:140chars
+      ],
+    }
+  } else {
+    $internal_backend_options = {
+      'mode'   => 'tcp',
+      'server' => "s-k8s-internal-controller-0 ${controller_0_cluster_host_ip}:${kube_apiserver_port} check",
+    }
+  }
+
   haproxy::backend { 'k8s-backend-internal':
     collect_exported => false,
     name             => 'k8s-backend-internal',
-    options          => {
-      'mode'   => 'tcp',
-      'server' => "s-k8s-internal ${primary_cluster_host_ip}:${kube_apiserver_port} check",
-    },
+    options          => $internal_backend_options,
   }
 }
 
@@ -2867,4 +2920,27 @@ class platform::kubernetes::dual_stack::ipv6::runtime {
     logoutput => true,
   }
   # lint:endignore:140chars
+}
+
+# -----------------------------------------------------------------------
+# platform::kubernetes::controlplane_endpoint::runtime
+#
+# Applied by puppet as a runtime manifest, triggered by sysinv-conductor once
+# a controller reports available, which is after Service Manager has started
+# HAProxy. Bootstrap points the control plane at
+# kube-apiserver directly because HAProxy is not running that early; this
+# moves it onto the load balancer.
+#
+# The script verifies the endpoint serves the API before changing anything and
+# is idempotent, so re-applying it on an already-migrated controller, after an
+# upgrade or rollback, or after a restore, is a no-op. It returns early on
+# simplex, which has no floating HAProxy instance to balance across.
+# -----------------------------------------------------------------------
+class platform::kubernetes::controlplane_endpoint::runtime {
+
+  exec { 'move kube control plane onto the load balancer':
+    command   => '/usr/local/bin/kube-controlplane-endpoint.sh',
+    logoutput => true,
+    timeout   => 300,
+  }
 }
