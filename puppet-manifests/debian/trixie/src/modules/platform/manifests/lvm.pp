@@ -276,6 +276,11 @@ class platform::lvm::csi::thick::resources
         ensure           => present,
         physical_volumes => $physical_volumes,
       }
+      -> exec { "vgchange ${vg_name}":
+        command => "vgchange --addtag lvm-csi ${vg_name}",
+        path    => ['/usr/sbin', '/sbin'],
+        onlyif  => "vgs ${vg_name}",
+      }
     }
 }
 
@@ -312,6 +317,11 @@ class platform::lvm::csi::thin::resources
         vg_name       => $vg_name,
         pool_size     => $pool_size,
         metadata_size => $metadata_size,
+      }
+      -> exec { "vgchange ${vg_name}":
+        command => "vgchange --addtag lvm-csi ${vg_name}",
+        path    => ['/usr/sbin', '/sbin'],
+        onlyif  => "vgs ${vg_name}",
       }
     }
 }
@@ -365,4 +375,21 @@ class platform::lvm::csi::flag
     mode    => '0640',
   }
 
+}
+
+class platform::lvm::csi::params::clean_restore (
+  $kube_pvs = [],
+) {}
+
+class platform::lvm::csi::clean_restore::runtime
+  inherits ::platform::lvm::csi::params::clean_restore {
+
+  if !empty($kube_pvs) {
+    $args = join($kube_pvs, ',')
+    exec { 'Clean LVM resources':
+      command   => "/usr/share/puppet/modules/platform/files/clean_lvm_resources.sh ${args}",
+      path      => ['/usr/sbin', '/usr/bin', '/sbin', '/bin'],
+      logoutput => true,
+    }
+  }
 }
