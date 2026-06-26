@@ -155,10 +155,36 @@ class openstack::keystone::haproxy
   include ::platform::params
   include ::platform::haproxy::params
 
+  # oauth2-proxy sits behind HAProxy on the Keystone port.
+  # The websso and /oauth2/* paths are routed to the oauth2-proxy
+  # backend (NodePort on the management network).
+  $oauth2_proxy_port = 30180
+  $mgmt_ip = $::platform::haproxy::params::private_ip_address
+
+  $oauth2_acl = {
+    'acl'         => [
+      'is_websso path_beg /v3/auth/OS-FEDERATION/identity_providers/dex/protocols/openid/websso',
+      'is_oauth2 path_beg /oauth2/',
+    ],
+    'use_backend' => [
+      'keystone-oauth2-proxy if is_websso',
+      'keystone-oauth2-proxy if is_oauth2',
+    ],
+  }
+
   platform::haproxy::proxy { 'keystone-restapi':
     server_name  => 's-keystone',
     public_port  => $api_port,
     private_port => $api_port,
+    acl_option   => $oauth2_acl,
+  }
+
+  platform::haproxy::alt_backend { 'keystone-oauth2-proxy':
+    backend_name       => 'keystone-oauth2-proxy',
+    server_name        => 's-oauth2-proxy',
+    private_ip_address => $mgmt_ip,
+    alt_private_port   => $oauth2_proxy_port,
+    server_timeout     => '600s',
   }
 
   # Configure rules for DC https enabled admin endpoint.
