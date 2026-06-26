@@ -26,31 +26,46 @@ class platform::etcd::params (
 
 class platform::etcd::symlinks {
   include ::platform::etcd::params
+  include ::platform::kubernetes::params
 
-  # List etcd binary versions in natural sort order, get minimum value.
-  # Getting this fall-back for paranoia reasons.
+  # Determine the supported etcd version by querying kubeadm for the etcd
+  # image associated with the currently installed kubernetes version, then
+  # selecting the highest installed version whose major.minor does not
+  # exceed the kubernetes-expected major.minor. Falls back to max installed.
   $etcd_version = $platform::etcd::params::etcd_version
-  $etcd_min_version = strip(
-    generate('/bin/bash', '-c', '/bin/ls -v /usr/local/etcd | /bin/head -1')
-  )
+  $kubeadm_version = $platform::kubernetes::params::kubeadm_version
+  $symlink_path = '/var/lib/etcd/stage0'
 
-  if $etcd_version == undef {
-    notice("Falling back to etcd_version ${etcd_min_version} min installed version")
-    $version = $etcd_min_version.strip
-  } else {
+  if $etcd_version != undef {
+    # Enforce the hieradata version explicitly.
     $version = $etcd_version
+  } elsif str2bool(inline_template('<%= File.symlink?(@symlink_path) && File.exist?(@symlink_path) %>')) {
+    # Leave existing symlink as-is.
+    notice('etcd stage0 symlink already exists and no hieradata defined, skipping')
+    $version = undef
+  } else {
+    # Use supported version fallback mechanism.
+    $etcd_supported_version = strip(
+      generate('/bin/bash', '-c', template('platform/etcd_supported_version.erb'))
+    )
+    notice("Falling back to etcd_version ${etcd_supported_version} supported version")
+    $version = $etcd_supported_version
   }
 
-  notice("setting stage0 symlink, etcd_version is ${version}")
   file { '/var/lib/etcd':
       ensure => 'directory',
       owner  => 'root',
       group  => 'root',
       mode   => '0755',
   }
-  -> file { '/var/lib/etcd/stage0':
-    ensure => link,
-    target => "/usr/local/etcd/${version}/stage0",
+
+  if defined($version) {
+    notice("setting stage0 symlink, etcd_version is ${version}")
+    file { $symlink_path:
+      ensure  => link,
+      target  => "/usr/local/etcd/${version}/stage0",
+      require => File['/var/lib/etcd'],
+    }
   }
 }
 
