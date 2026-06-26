@@ -557,12 +557,12 @@ define platform::network::network_address (
                     'test ! -f /var/run/.network_upgrade_bootstrap'],
     }
     -> exec { "Send Unsolicited Advertisement for IPv6: ${ip_address}/${ip_prefix} on interface: ${name},${ifname}":
-      command   => "/usr/lib/heartbeat/send_ua ${ip_address} ${ip_prefix} ${ifname}",
+      command   => "/usr/libexec/heartbeat/send_ua ${ip_address} ${ip_prefix} ${ifname}",
       logoutput => 'on_failure',
       onlyif    => ["test ${ifname} != 'lo'",
                     "test ${ip_prefix} != ''",
                     "test ${protocol} == 'ipv6'",
-                    'test -x /usr/lib/heartbeat/send_ua',
+                    'test -x /usr/libexec/heartbeat/send_ua',
                     'test -f /etc/platform/simplex',
                     'test ! -f /var/run/.network_upgrade_bootstrap'],
     }
