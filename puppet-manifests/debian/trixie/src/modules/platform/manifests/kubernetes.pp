@@ -610,8 +610,14 @@ class platform::kubernetes::haproxy {
 }
 
 class platform::kubernetes::cleanup_kubeadm_stale {
-    exec { 'cleanup stale kubeadm files and wait until node reset':
-      command   => 'kubeadm reset -f && sleep 30',
+
+    include ::platform::etcd::symlinks
+
+    # Run kubeadm reset to clean stale files from a previous
+    # incomplete kubeadm join. This wipes /var/lib/etcd/ including the
+    # stage0 symlink that puppet had previously created.
+    exec { 'cleanup stale kubeadm files':
+      command   => 'kubeadm reset -f',
       logoutput => true,
       onlyif    => 'test -f /etc/kubernetes/kubelet.conf || test -f /etc/kubernetes/bootstrap-kubelet.conf || test -e /etc/kubernetes/manifests/*.yaml', # lint:ignore:140chars
       # During USM upgrade, this class removes kubeadm-related files,
@@ -622,6 +628,24 @@ class platform::kubernetes::cleanup_kubeadm_stale {
       # prevents this class from executing during that time.
       unless    => 'test -f /etc/platform/.usm_upgrade_in_progress',
     }
+
+    # Recreate /var/lib/etcd directory and stage0 symlink that
+    # kubeadm reset removed. This uses hieradata etcd_version as the
+    # source of truth with a supported version fallback.
+
+    # Wait for kubelet and container runtime processes terminated by
+    # kubeadm reset to fully stop before puppet continues. Poll every
+    # 5 seconds and break out early once processes are gone, up to a
+    # maximum of 30 seconds.
+    exec { 'wait after kubeadm reset':
+      command     => 'for i in $(seq 1 6); do pgrep -x kubelet > /dev/null 2>&1 || exit 0; sleep 5; done; exit 0',
+      logoutput   => true,
+      refreshonly => true,
+    }
+
+    Exec['cleanup stale kubeadm files']
+    ~> Exec['wait after kubeadm reset']
+    -> Class['::platform::etcd::symlinks']
 }
 
 class platform::kubernetes::master::init
