@@ -106,7 +106,7 @@ define platform::drbd::filesystem (
       onlyif  => "drbdadm status ${resource_name}",
     }
     -> exec { "drbdadm wipe-md ${resource_name}":
-      command => "echo 'yes' | drbdadm wipe-md ${resource_name}",
+      command => "drbdadm -- --force wipe-md ${resource_name}",
       onlyif  => "test -e /etc/drbd.d/${resource_name}.res",
     }
     -> file { "/etc/drbd.d/${resource_name}.res":
