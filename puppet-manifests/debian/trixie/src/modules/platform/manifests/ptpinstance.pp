@@ -519,12 +519,6 @@ class platform::ptpinstance (
     mode    => '0644',
     content => template('platform/ptp4l-instance.service.erb')
   }
-  -> file { 'ptp_instance_notify_wrapper':
-    ensure => file,
-    path   => '/usr/local/bin/ptp-instance-notify.sh',
-    mode   => '0755',
-    source => 'puppet:///modules/platform/ptp-instance-notify.sh',
-  }
   -> file { 'phc2sys_service_instance':
     ensure  => file,
     path    => '/etc/systemd/system/phc2sys@.service',
