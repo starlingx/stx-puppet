@@ -485,6 +485,79 @@ def get_sriov_entries(sriov_configs):
         return False, ([], [])
 
 
+def _get_configured_pci_addrs(sriov_configs):
+    """
+    Extract the set of PCI addresses of PFs that are configured in sriov_config.
+    """
+    addrs = set()
+    if not sriov_configs or not isinstance(sriov_configs, dict):
+        return addrs
+    for _name, cfg in sriov_configs.items():
+        if isinstance(cfg, dict):
+            addr = cfg.get("addr", "")
+            if addr:
+                addrs.add(addr.strip().strip("'\""))
+    return addrs
+
+
+def reset_orphaned_sriov_vfs(sriov_configs):
+    """
+    Detect PFs that have sriov_numvfs > 0 but are NOT in the current
+    sriov_config, and reset them to 0.
+
+    This handles the case where SR-IOV was removed from an interface
+    but VFs still exist because the old ifupdown config ran at boot
+    before puppet could reconfigure.
+
+    Args:
+        sriov_configs (dict): Current SR-IOV configuration from hieradata.
+
+    Returns:
+        bool: True if all resets succeeded (or nothing to reset), False on error.
+    """
+    configured_addrs = _get_configured_pci_addrs(sriov_configs)
+    net_base = "/sys/class/net"
+    result = True
+
+    try:
+        if not os.path.isdir(net_base):
+            return True
+
+        for ifname in os.listdir(net_base):
+            numvfs_path = os.path.join(net_base, ifname, "device",
+                                       SRIOV_NUMVFS_FILE)
+            if not os.path.isfile(numvfs_path):
+                continue
+
+            current_vfs = _read_int_from_file(numvfs_path)
+            if current_vfs is None or current_vfs <= 0:
+                continue
+
+            # Resolve the PCI address for this interface
+            device_link = os.path.join(net_base, ifname, "device")
+            try:
+                pci_addr = os.path.basename(os.readlink(device_link))
+            except OSError:
+                continue
+
+            if pci_addr in configured_addrs:
+                continue
+
+            # This PF has VFs but is not in the config - reset it
+            print(f"Resetting orphaned SR-IOV VFs on PF {pci_addr} "
+                  f"({ifname}): sriov_numvfs was {current_vfs}")
+            if not _write_int_to_file(numvfs_path, 0):
+                print(f"ERROR: Failed to reset sriov_numvfs for "
+                      f"PF {pci_addr} ({ifname})")
+                result = False
+
+    except OSError as e:
+        print(f"ERROR: reset_orphaned_sriov_vfs: {e}")
+        result = False
+
+    return result
+
+
 def parse_and_process_sriov_config(data):
     """
     Parses and applies SR-IOV VF configuration from provided data.
@@ -501,6 +574,7 @@ def parse_and_process_sriov_config(data):
     try:
         # empty is valid
         if not data:
+            reset_orphaned_sriov_vfs({})
             return True, []
 
         if not isinstance(data, dict):
@@ -508,6 +582,9 @@ def parse_and_process_sriov_config(data):
             return False, []
 
         sriov_configs = data.get('platform::network::interfaces::sriov::sriov_config', {})
+
+        # Reset orphaned VFs before processing the new config
+        reset_orphaned_sriov_vfs(sriov_configs)
 
         # empty is valid
         if not sriov_configs:

@@ -880,5 +880,162 @@ class TestEnableSriovSkipWhenAlreadyConfigured(unittest.TestCase):
         )
 
 
+#####################################################################
+# Tests for reset_orphaned_sriov_vfs
+class TestResetOrphanedSriovVfs(unittest.TestCase):
+
+    @patch('sys.stdout', new_callable=io.StringIO)
+    @patch('debian.bullseye.src.bin.parse_sriov.os.path.isdir', return_value=True)
+    @patch('debian.bullseye.src.bin.parse_sriov.os.listdir',
+           return_value=['enp13s0f0', 'enp13s0f2', 'lo'])
+    @patch('debian.bullseye.src.bin.parse_sriov.os.path.isfile')
+    @patch('debian.bullseye.src.bin.parse_sriov._read_int_from_file')
+    @patch('debian.bullseye.src.bin.parse_sriov.os.readlink')
+    @patch('debian.bullseye.src.bin.parse_sriov._write_int_to_file',
+           return_value=True)
+    def test_resets_orphaned_vfs(  # pylint: disable=too-many-arguments
+            self, mock_write, mock_readlink,
+            mock_read, mock_isfile,
+            _mock_listdir, _mock_isdir,
+            mock_stdout):
+        """VFs on a PF not in config should be reset to 0."""
+        def isfile_side_effect(path):
+            return 'sriov_numvfs' in path and 'lo' not in path
+
+        def read_side_effect(path):
+            if 'enp13s0f0' in path:
+                return 1
+            if 'enp13s0f2' in path:
+                return 0
+            return None
+
+        def readlink_side_effect(path):
+            if 'enp13s0f0' in path:
+                return '../../../0000:0d:00.0'
+            if 'enp13s0f2' in path:
+                return '../../../0000:0d:00.2'
+            return ''
+
+        mock_isfile.side_effect = isfile_side_effect
+        mock_read.side_effect = read_side_effect
+        mock_readlink.side_effect = readlink_side_effect
+
+        result = parse_sriov.reset_orphaned_sriov_vfs({})
+
+        self.assertTrue(result)
+        # Only enp13s0f0 has VFs > 0 and is not in config
+        mock_write.assert_called_once_with(
+            '/sys/class/net/enp13s0f0/device/sriov_numvfs', 0)
+        self.assertIn("Resetting orphaned SR-IOV VFs on PF 0000:0d:00.0",
+                      mock_stdout.getvalue())
+
+    @patch('sys.stdout', new_callable=io.StringIO)
+    @patch('debian.bullseye.src.bin.parse_sriov.os.path.isdir', return_value=True)
+    @patch('debian.bullseye.src.bin.parse_sriov.os.listdir',
+           return_value=['enp13s0f0'])
+    @patch('debian.bullseye.src.bin.parse_sriov.os.path.isfile',
+           return_value=True)
+    @patch('debian.bullseye.src.bin.parse_sriov._read_int_from_file',
+           return_value=32)
+    @patch('debian.bullseye.src.bin.parse_sriov.os.readlink',
+           return_value='../../../0000:0d:00.0')
+    @patch('debian.bullseye.src.bin.parse_sriov._write_int_to_file',
+           return_value=True)
+    def test_skips_configured_pf(  # pylint: disable=too-many-arguments
+            self, mock_write, _mock_readlink,
+            _mock_read, _mock_isfile,
+            _mock_listdir, _mock_isdir,
+            mock_stdout):
+        """PFs that are in the config should NOT be reset."""
+        sriov_configs = {
+            'sriov0': {
+                'addr': '0000:0d:00.0',
+                'num_vfs': 32,
+                'port_name': 'enp13s0f0',
+                'up_requirement': False,
+                'vf_config': {}
+            }
+        }
+
+        result = parse_sriov.reset_orphaned_sriov_vfs(sriov_configs)
+
+        self.assertTrue(result)
+        mock_write.assert_not_called()
+        self.assertEqual(mock_stdout.getvalue(), "")
+
+    @patch('sys.stdout', new_callable=io.StringIO)
+    @patch('debian.bullseye.src.bin.parse_sriov.os.path.isdir',
+           return_value=False)
+    def test_no_sysfs_net_dir(self, _mock_isdir, mock_stdout):
+        """When /sys/class/net doesn't exist, return True (no-op)."""
+        result = parse_sriov.reset_orphaned_sriov_vfs({})
+
+        self.assertTrue(result)
+        self.assertEqual(mock_stdout.getvalue(), "")
+
+    @patch('sys.stdout', new_callable=io.StringIO)
+    @patch('debian.bullseye.src.bin.parse_sriov.os.path.isdir', return_value=True)
+    @patch('debian.bullseye.src.bin.parse_sriov.os.listdir',
+           return_value=['enp13s0f0'])
+    @patch('debian.bullseye.src.bin.parse_sriov.os.path.isfile',
+           return_value=True)
+    @patch('debian.bullseye.src.bin.parse_sriov._read_int_from_file',
+           return_value=1)
+    @patch('debian.bullseye.src.bin.parse_sriov.os.readlink',
+           return_value='../../../0000:0d:00.0')
+    @patch('debian.bullseye.src.bin.parse_sriov._write_int_to_file',
+           return_value=False)
+    def test_write_failure_returns_false(  # pylint: disable=too-many-arguments
+            self, _mock_write,
+            _mock_readlink, _mock_read,
+            _mock_isfile, _mock_listdir,
+            _mock_isdir, mock_stdout):
+        """When writing 0 to sriov_numvfs fails, return False."""
+        result = parse_sriov.reset_orphaned_sriov_vfs({})
+
+        self.assertFalse(result)
+        self.assertIn("ERROR: Failed to reset sriov_numvfs",
+                      mock_stdout.getvalue())
+
+
+class TestParseAndProcessWithOrphanReset(unittest.TestCase):
+
+    @patch('debian.bullseye.src.bin.parse_sriov.reset_orphaned_sriov_vfs',
+           return_value=True)
+    def test_empty_config_calls_orphan_reset(self, mock_reset):
+        """Empty config should still trigger orphaned VF reset."""
+        data = {'platform::network::interfaces::sriov::sriov_config': {}}
+
+        result, _ = parse_sriov.parse_and_process_sriov_config(data)
+
+        self.assertTrue(result)
+        mock_reset.assert_called_once_with({})
+
+    @patch('debian.bullseye.src.bin.parse_sriov.reset_orphaned_sriov_vfs',
+           return_value=True)
+    def test_none_data_calls_orphan_reset(self, mock_reset):
+        """None/empty data should trigger orphaned VF reset."""
+        result, _ = parse_sriov.parse_and_process_sriov_config("")
+
+        self.assertTrue(result)
+        mock_reset.assert_called_once_with({})
+
+    @patch('debian.bullseye.src.bin.parse_sriov.subprocess.run')
+    @patch('debian.bullseye.src.bin.parse_sriov.reset_orphaned_sriov_vfs',
+           return_value=True)
+    def test_valid_config_calls_orphan_reset_with_config(self, mock_reset,
+                                                         mock_run):
+        """Valid config should pass sriov_configs to orphan reset."""
+        mock_run.return_value = MagicMock(returncode=0, stdout='', stderr='')
+        data = valid_python_format_config()
+        expected_configs = data[
+            'platform::network::interfaces::sriov::sriov_config']
+
+        result, _ = parse_sriov.parse_and_process_sriov_config(data)
+
+        self.assertTrue(result)
+        mock_reset.assert_called_once_with(expected_configs)
+
+
 if __name__ == '__main__':
     unittest.main()
