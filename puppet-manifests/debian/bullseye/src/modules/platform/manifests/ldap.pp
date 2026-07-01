@@ -101,6 +101,16 @@ class platform::ldap::server::local
   -> class { '::platform::ldap::secure::config': }
   -> Exec['configure-ldaps']
   -> Exec['slapd-conf-move-backup']
+
+  # TODO: Remove when upgrades from stx 12 are no longer supported.
+  # Sync ppolicy lockout with faillock defaults on upgrade.
+  if str2bool($::usm_upgrade_in_progress) {
+    include platform::ldap::ppolicy_lockout
+
+    Exec['restart-openldap']
+    -> Class['platform::ldap::ppolicy_lockout']
+    -> Class['platform::ldap::secure::config']
+  }
 }
 
 
@@ -338,4 +348,34 @@ class platform::ldap::syncrepl
     }
   }
   # lint:endignore
+}
+
+class platform::ldap::ppolicy_lockout (
+  $lockout_duration = 900,
+  $max_failure      = 5,
+) {
+  $ldapserver_remote = lookup('platform::ldap::params::ldapserver_remote', Boolean, 'first', false)
+  $suspended_timeout = lookup('platform::faillock::params::suspended_timeout', Integer, 'first', $lockout_duration)
+  $failed_login_attempts = lookup('platform::faillock::params::failed_login_attempts', Integer, 'first', $max_failure)
+
+  if ! $ldapserver_remote {
+    $ppolicy_ldif = @("LDIF")
+      dn: cn=default,ou=policies,dc=cgcs,dc=local
+      changetype: modify
+      replace: pwdLockoutDuration
+      pwdLockoutDuration: ${suspended_timeout}
+      -
+      replace: pwdMaxFailure
+      pwdMaxFailure: ${failed_login_attempts}
+      | LDIF
+
+    file { '/tmp/ldap-ppolicy-lockout.ldif':
+      content => $ppolicy_ldif,
+    }
+
+    -> exec { 'update-ldap-ppolicy-lockout':
+      command => "ldapmodify -x -H ldap:/// -D cn=ldapadmin,dc=cgcs,dc=local -w \"\$(cat /etc/ldapscripts/ldapscripts.passwd)\" -f /tmp/ldap-ppolicy-lockout.ldif",
+      onlyif  => 'systemctl is-active slapd',
+    }
+  }
 }

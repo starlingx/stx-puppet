@@ -34,6 +34,8 @@ class platform::faillock::config
     line  => "unlock_time = ${suspended_timeout}",
     match => '^\s*unlock_time\s*=',
   }
+
+  include platform::ldap::ppolicy_lockout
 }
 
 class platform::faillock::runtime {
