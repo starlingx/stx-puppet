@@ -7,6 +7,7 @@
 BINDIR ?= /usr/local/bin
 CONFIGDIR ?= /etc/puppet
 MODULEDIR ?= /usr/share/puppet/modules
+PMONDIR ?= /usr/share/starlingx/pmon.d
 
 install:
 ifdef ignore_puppet_warnings
@@ -42,3 +43,7 @@ endif
 	install -d -m 0755 $(MODULEDIR)
 	cp -R modules/platform $(MODULEDIR)/
 	cp -R modules/openstack $(MODULEDIR)/
+
+	# strongswan pmon config - installed here so usm-initialize can symlink it
+	install -d -m 0755 $(PMONDIR)
+	install -m 644 usm/etc/pmon.d/strongswan.conf $(PMONDIR)/strongswan.conf

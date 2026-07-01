@@ -1,3 +1,4 @@
 etc/puppet/*
 usr/share/puppet/*
 usr/local/bin/*
+usr/share/starlingx/pmon.d/*
