@@ -264,6 +264,10 @@ class openstack::keystone::federation
     'platform::kubernetes::kube_apiserver::params::oidc-issuer-url',
     Optional[String], 'first', undef
   )
+  $oidc_role_binding = lookup(
+    'platform::params::oidc_role_binding',
+    Optional[String], 'first', ''
+  )
   $horizon_https_port = $::openstack::horizon::params::https_port
   $oam_address = $::platform::network::oam::params::controller_address
   $trusted_dashboard_url = "https://${oam_address}:${horizon_https_port}/auth/websso/"
@@ -306,7 +310,7 @@ class openstack::keystone::federation
     # Ordering: group -> project -> role -> IdP -> mapping -> protocol
     # Each exec uses 'unless' to ensure idempotency.
 
-    -> exec { 'create federated_users group':
+    exec { 'create federated_users group':
       command   => "source ${rc_file} && openstack group create federated_users",
       unless    => "source ${rc_file} && openstack group show federated_users",
       onlyif    => $ks_ready,
@@ -316,31 +320,41 @@ class openstack::keystone::federation
       provider  => shell,
     }
 
-    -> exec { 'create federated_project':
-      command   => "source ${rc_file} && openstack project create federated_project",
+    # Role assignments for federated users.
+    # Reconciliation script handles create/update/delete of groups
+    # and role assignments based on the role-bindings parameter.
+    # When bindings are modified or removed, stale Keystone resources
+    # are automatically cleaned up.
+
+    # Reconcile role bindings (handles create + update + remove)
+    exec { 'reconcile-oidc-role-bindings':
+      command   => "/usr/local/bin/reconcile_oidc_role_bindings.py '${oidc_role_binding}'",
       onlyif    => $ks_ready,
       tries     => 3,
       try_sleep => 10,
-      unless    => "source ${rc_file} && openstack project show federated_project",
       logoutput => true,
       provider  => shell,
+      require   => Exec['create federated_users group'],
     }
 
-    # Grant member role so federated users can access federated_project
-    -> exec { 'assign member role to federated_users':
-      command   => "source ${rc_file} && openstack role add --group federated_users --project federated_project member",
+    # Fallback: ensure federated_users always has reader role
+    # for basic access regardless of role-bindings configuration
+    exec { 'assign reader role to federated_users':
+      command   => "source ${rc_file} && openstack role add \
+--group federated_users --project admin reader",
       unless    => "source ${rc_file} && openstack role assignment list \
-                    --group federated_users --project federated_project --names | grep member",
+--group federated_users --project admin --names | grep reader",
       onlyif    => $ks_ready,
       tries     => 3,
       try_sleep => 10,
       logoutput => true,
       provider  => shell,
+      require   => Exec['create federated_users group'],
     }
 
     # Register DEX as an Identity Provider in Keystone.
     # The remote-id must match the 'iss' claim in DEX's JWT tokens.
-    -> exec { 'create dex identity provider':
+    exec { 'create dex identity provider':
       command   => "source ${rc_file} && openstack identity provider create --remote-id ${oidc_issuer_url} dex",
       unless    => "source ${rc_file} && openstack identity provider show dex",
       onlyif    => $ks_ready,
@@ -351,7 +365,7 @@ class openstack::keystone::federation
     }
 
     # Create the mapping that links OIDC claims to local resources
-    -> exec { 'create dex_mapping':
+    exec { 'create dex_mapping':
       command   => "source ${rc_file} && openstack mapping create --rules /etc/keystone/dex_mapping.json dex_mapping",
       unless    => "source ${rc_file} && openstack mapping show dex_mapping",
       onlyif    => $ks_ready,
@@ -359,22 +373,24 @@ class openstack::keystone::federation
       try_sleep => 10,
       logoutput => true,
       provider  => shell,
+      require   => [Exec['create dex identity provider'], File['/etc/keystone/dex_mapping.json']],
     }
 
     # Update mapping if dex_mapping.json changes
-    -> exec { 'update dex_mapping':
+    exec { 'update dex_mapping':
       command     => "source ${rc_file} && openstack mapping set --rules /etc/keystone/dex_mapping.json dex_mapping",
       subscribe   => File['/etc/keystone/dex_mapping.json'],
       refreshonly => true,
       onlyif      => $ks_ready,
       logoutput   => true,
       provider    => shell,
+      require     => Exec['create dex_mapping'],
     }
 
     # Register the openid protocol, linking the dex IdP to the mapping.
     # This is the final piece that enables the federation endpoint:
     # /v3/OS-FEDERATION/identity_providers/dex/protocols/openid/auth
-    -> exec { 'create openid protocol':
+    exec { 'create openid protocol':
       command   => "source ${rc_file} && openstack federation protocol create --identity-provider dex --mapping dex_mapping openid",
       unless    => "source ${rc_file} && openstack federation protocol show --identity-provider dex openid",
       onlyif    => $ks_ready,
@@ -382,6 +398,7 @@ class openstack::keystone::federation
       try_sleep => 10,
       logoutput => true,
       provider  => shell,
+      require   => [Exec['create dex identity provider'], Exec['create dex_mapping']],
     }
   } else {
     # Clean up federation settings when OIDC is removed
@@ -408,12 +425,11 @@ class openstack::keystone::federation
       onlyif   => "source ${rc_file} && openstack identity provider show dex",
       provider => shell,
     }
-    # The federated_users group, federated_project, and role assignment
+    # The federated_users group and role assignment
     # are not removed automatically as they may contain user data or
     # active resources. The role assignment is removed implicitly when
     # the group or project is deleted. Manual cleanup if desired:
     #   openstack group delete federated_users
-    #   openstack project delete federated_project
   }
 }
 
