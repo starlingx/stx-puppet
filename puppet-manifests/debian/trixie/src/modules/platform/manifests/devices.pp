@@ -244,7 +244,7 @@ class platform::devices::qat::qat_4xxx {
 }
 
 class platform::devices {
-  include ::platform::devices::qat
-  include ::platform::devices::qat::qat_4xxx
+  # include ::platform::devices::qat
+  # include ::platform::devices::qat::qat_4xxx
   include ::platform::devices::fpga::fec
 }
