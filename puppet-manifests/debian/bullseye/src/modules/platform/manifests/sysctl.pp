@@ -57,6 +57,18 @@ class platform::sysctl inherits platform::sysctl::params {
     target => $default_config,
   }
 
+  # Increase inotify instances limit from kernel default (128).
+  # Kubernetes nodes require many inotify instances for kubelet,
+  # containerd-shim, kube-apiserver, calico, and other file watchers.
+  # With cgroup v2, containerd-shim uses additional inotify FDs for
+  # per-container memory event monitoring, making exhaustion more likely.
+  # Reference: https://github.com/containerd/containerd/issues/5670
+  #            https://bugzilla.redhat.com/show_bug.cgi?id=1605153
+  -> sysctl::value { 'fs.inotify.max_user_instances':
+    value  => '8192',
+    target => $default_config,
+  }
+
   # Tuning options for low latency compute
   if $low_latency {
     # Increase VM stat interval
