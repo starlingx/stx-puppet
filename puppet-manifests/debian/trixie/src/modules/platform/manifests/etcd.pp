@@ -59,7 +59,7 @@ class platform::etcd::symlinks {
       mode   => '0755',
   }
 
-  if defined($version) {
+  if $version {
     notice("setting stage0 symlink, etcd_version is ${version}")
     file { $symlink_path:
       ensure  => link,
