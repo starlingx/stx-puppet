@@ -1451,7 +1451,9 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
                          "        netmask 255.255.255.0\n"
                          "    Modified properties:\n"
                          "        'iface' went from 'enp0s8 inet manual' to 'enp0s8 inet static'\n"
-                         "        'mtu' went from '1500' to '9000'",
+                         "        'mtu' went from '1500' to '9000'\n"
+                         "        'stx-description' went from 'ifname:etc0,net:None'"
+                         " to 'ifname:data0,net:None'",
                          self._log.get_history()[-1][1])
 
     def test_is_iface_modified_false(self):
@@ -1466,12 +1468,68 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
                "mtu": "1500",
                "post-up": "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/autoconf",
                "down": "ip addr flush dev enp0s8",
-               "stx-description": "ifname:data0,net:None",
+               "stx-description": "ifname:etc0,net:None",
                "random-property": "banana"}
 
         modified = anc.is_iface_modified("enp0s8", new, current)
 
         self.assertEqual(False, modified)
+
+    def test_is_iface_modified_stx_description_change(self):
+        self._add_logger_mock()
+
+        current = {"iface": "enp0s8 inet manual",
+                   "mtu": "1500",
+                   "post-up": "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/autoconf",
+                   "stx-description": "ifname:eth0,net:oam"}
+
+        new = {"iface": "enp0s8 inet manual",
+               "mtu": "1500",
+               "post-up": "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/autoconf",
+               "stx-description": "ifname:eth0,net:oam,ovs-access=eth0"}
+
+        modified = self._mocked_call([self._mock_logger],
+                                     anc.is_iface_modified, "enp0s8", new, current)
+
+        self.assertEqual(True, modified)
+        self.assertEqual(LoggerMock.INFO, self._log.get_history()[-1][0])
+        self.assertIn("stx-description", self._log.get_history()[-1][1])
+        self.assertIn("ifname:eth0,net:oam,ovs-access=eth0",
+                      self._log.get_history()[-1][1])
+
+    def test_is_iface_modified_stx_description_added(self):
+        self._add_logger_mock()
+
+        current = {"iface": "enp0s8 inet manual",
+                   "mtu": "1500",
+                   "post-up": "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/autoconf"}
+
+        new = {"iface": "enp0s8 inet manual",
+               "mtu": "1500",
+               "post-up": "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/autoconf",
+               "stx-description": "ifname:eth0,net:oam"}
+
+        modified = self._mocked_call([self._mock_logger],
+                                     anc.is_iface_modified, "enp0s8", new, current)
+
+        self.assertEqual(True, modified)
+
+    def test_is_iface_modified_stx_description_removed(self):
+        self._add_logger_mock()
+
+        current = {"iface": "enp0s8 inet manual",
+                   "mtu": "1500",
+                   "post-up": "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/autoconf",
+                   "stx-description": "ifname:eth0,net:oam"}
+
+        new = {"iface": "enp0s8 inet manual",
+               "mtu": "1500",
+               "post-up": "echo 0 > /proc/sys/net/ipv6/conf/enp0s8/autoconf"}
+
+        modified = self._mocked_call([self._mock_logger],
+                                     anc.is_iface_modified, "enp0s8", new, current)
+
+        self.assertEqual(True, modified)
 
     def test_get_dependent_list(self):
         config = {"auto": {"lo", "lo:1-2", "lo:5-14", "enp0s3", "enp0s3:3-7", "enp0s4",
@@ -1715,6 +1773,13 @@ class GeneralTests(BaseTestCase):  # pylint: disable=too-many-public-methods
         sorted_props = anc.sort_properties(props)
         self.assertEqual(["iface", "gateway", "bond-miimon", "mtu",
                           "other1", "other2", "other3", "allow-"], sorted_props)
+
+    def test_sort_properties_stx_description_position(self):
+        """Validate stx-description sorts after post-down and before allow-."""
+        props = ["allow-", "stx-description", "post-down", "iface", "mtu"]
+        sorted_props = anc.sort_properties(props)
+        self.assertEqual(["iface", "mtu", "post-down", "stx-description", "allow-"],
+                         sorted_props)
 
     def test_get_route_entries(self):
         self._add_fs_mock(

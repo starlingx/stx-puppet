@@ -85,13 +85,14 @@ PROPERTY_SORT_POS = {
     "pre-down": 15,
     "down": 16,
     "post-down": 17,
-    "allow-": 19,
+    "stx-description": 18,
+    "allow-": 20,
     # Position DEFAULT_POS holds properties that are not in the list, allow- is put last to not
     # break ifupdown parsing, see https://review.opendev.org/c/starlingx/stx-puppet/+/839620
 }
 
 # Default sort position for properties
-DEFAULT_POS = 18
+DEFAULT_POS = 19
 
 
 class InvalidNetmaskError(BaseException):
