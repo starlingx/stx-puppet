@@ -30,7 +30,8 @@ def valid_python_format_config():
                         'addr': '0000:07:02.0',
                         'driver': 'iavf',
                         'max_tx_rate': 1001,
-                        'vfnumber': 0
+                        'vfnumber': 0,
+                        'vf_channels': 4
                     },
                     '0000:07:02.1': {
                         'addr': '0000:07:02.1',
@@ -40,7 +41,8 @@ def valid_python_format_config():
                         'addr': '0000:07:02.2',
                         'driver': 'vfio-pci',
                         'max_tx_rate': 1002,
-                        'vfnumber': 2
+                        'vfnumber': 2,
+                        'vf_channels': 4
                     },
                     '0000:07:02.3': {
                         'addr': '0000:07:02.3',
@@ -99,7 +101,8 @@ def valid_python_format_config():
                         'addr': '0000:05:02.5',
                         'driver': 'ixgbevf',
                         'max_tx_rate': 1006,
-                        'vfnumber': 5
+                        'vfnumber': 5,
+                        'vf_channels': 2
                     }
                 }
             }
@@ -166,7 +169,9 @@ class MockHelper:
 # Tests for parse_and_process_sriov_config
 class TestParseAndProcessSriovConfig(unittest.TestCase):
 
-    def test_valid_sriov_vf_config(self):
+    @patch('debian.bullseye.src.bin.parse_sriov._get_vf_netdev',
+           side_effect=lambda addr: f'vf_{addr.replace(":", "_").replace(".", "_")}')
+    def test_valid_sriov_vf_config(self, _mock_get_vf_netdev):
         data = valid_python_format_config()
         expected_entries = {
             'iavf': [
@@ -201,7 +206,9 @@ class TestParseAndProcessSriovConfig(unittest.TestCase):
             ['ip', 'link', 'set', 'enp0s3', 'vf', '6', 'max_tx_rate', '1030'],
             ['ip', 'link', 'set', 'enp0s8', 'vf', '1', 'max_tx_rate', '1004'],
             ['ip', 'link', 'set', 'enp0s8', 'vf', '3', 'max_tx_rate', '1005'],
-            ['ip', 'link', 'set', 'enp0s8', 'vf', '5', 'max_tx_rate', '1006']]
+            ['ip', 'link', 'set', 'enp0s8', 'vf', '5', 'max_tx_rate', '1006'],
+            ['/usr/sbin/ethtool', '-L', 'vf_0000_07_02_0', 'combined', '4'],
+            ['/usr/sbin/ethtool', '-L', 'vf_0000_05_02_5', 'combined', '2']]
 
         expected_outputs = [
             'Driver bound: iavf',
@@ -220,7 +227,9 @@ class TestParseAndProcessSriovConfig(unittest.TestCase):
             'sriov_vf_ratelimit: 1030 port: enp0s3 vf: 6',
             'sriov_vf_ratelimit: 1004 port: enp0s8 vf: 1',
             'sriov_vf_ratelimit: 1005 port: enp0s8 vf: 3',
-            'sriov_vf_ratelimit: 1006 port: enp0s8 vf: 5']
+            'sriov_vf_ratelimit: 1006 port: enp0s8 vf: 5',
+            'sriov_vf_channels: 4 vf_addr: 0000:07:02.0 netdev: vf_0000_07_02_0',
+            'sriov_vf_channels: 2 vf_addr: 0000:05:02.5 netdev: vf_0000_05_02_5']
 
         with MockHelper(stdout="") as mock_helper:
             result, entries = parse_sriov.parse_and_process_sriov_config(data)
@@ -348,8 +357,13 @@ class TestGetSriovEntries(unittest.TestCase):
                 {'port': 'enp0s8', 'vfnumber': 3, 'max_tx_rate': 1005},
                 {'port': 'enp0s8', 'vfnumber': 5, 'max_tx_rate': 1006}]
 
+        # vf_channels only applies to netdevice drivers (not vfio-pci or NONE)
+        expected_channels_entries = [
+                {'vf_addr': '0000:05:02.5', 'vf_channels': 2},
+                {'vf_addr': '0000:07:02.0', 'vf_channels': 4}]
+
         with MockHelper(stdout="") as mock_helper:
-            result, (entries, rates) = parse_sriov.get_sriov_entries(sriov_configs)
+            result, (entries, rates, channels) = parse_sriov.get_sriov_entries(sriov_configs)
 
         # check entries
         for driver in expected_sriov_entries:
@@ -366,6 +380,13 @@ class TestGetSriovEntries(unittest.TestCase):
             expected_rate_entries,
             msg="Rate list is different")
 
+        # check channels list
+        channels_sorted = sorted(channels, key=lambda x: x['vf_addr'])
+        self.assertEqual(
+            channels_sorted,
+            expected_channels_entries,
+            msg="Channels list is different")
+
         # Function will return True
         self.assertTrue(result)
         self.assertEqual(mock_helper.get_output(), [])
@@ -374,36 +395,39 @@ class TestGetSriovEntries(unittest.TestCase):
     def test_get_sriov_entries_non_dict_input_prints_error(self):
         data = "should-be-a-dict"
         with MockHelper(stdout="") as mock_helper:
-            result, (entries, rates) = parse_sriov.get_sriov_entries(data)
+            result, (entries, rates, channels) = parse_sriov.get_sriov_entries(data)
 
         # Function will return False
         self.assertFalse(result)
         self.assertEqual(entries, [])
         self.assertEqual(rates, [])
+        self.assertEqual(channels, [])
         self.assertIn("Error: get_sriov_entries: sriov_configs must be a dictionary",
                        mock_helper.get_output_str())
 
     def test_get_sriov_entries_invalid_config_detail_type(self):
         config = {'sriov0': "should-be-a-dict"}
         with MockHelper(stdout="") as mock_helper:
-            result, (entries, rates) = parse_sriov.get_sriov_entries(config)
+            result, (entries, rates, channels) = parse_sriov.get_sriov_entries(config)
 
         # Function will return False
         self.assertFalse(result)
         self.assertEqual(entries, [])
         self.assertEqual(rates, [])
+        self.assertEqual(channels, [])
         self.assertIn("Error: get_sriov_entries: config_details for sriov0 must be a dictionary",
                       mock_helper.get_output_str())
 
     def test_get_sriov_entries_missing_port_name(self):
         config = {'sriov0': {'vf_config': ["should-be-a-dict"]}}
         with MockHelper(stdout="") as mock_helper:
-            result, (entries, rates) = parse_sriov.get_sriov_entries(config)
+            result, (entries, rates, channels) = parse_sriov.get_sriov_entries(config)
 
         # Function will return False
         self.assertFalse(result)
         self.assertEqual(entries, [])
         self.assertEqual(rates, [])
+        self.assertEqual(channels, [])
         self.assertIn("Error: get_sriov_entries: port_name for sriov0 must not be empty",
                        mock_helper.get_output_str())
 
@@ -415,12 +439,13 @@ class TestGetSriovEntries(unittest.TestCase):
             }
         }
         with MockHelper(stdout="") as mock_helper:
-            result, (entries, rates) = parse_sriov.get_sriov_entries(config)
+            result, (entries, rates, channels) = parse_sriov.get_sriov_entries(config)
 
         # Function will return False
         self.assertFalse(result)
         self.assertEqual(entries, [])
         self.assertEqual(rates, [])
+        self.assertEqual(channels, [])
         self.assertIn("Error: get_sriov_entries: vf_details for sriov0 must be a dictionary",
                       mock_helper.get_output_str())
 
@@ -497,6 +522,8 @@ class TestMainFunction(unittest.TestCase):
 
         try:
             with patch.object(sys, 'argv', ['parse_sriov', temp_filename]), \
+                 patch('debian.bullseye.src.bin.parse_sriov._get_vf_netdev',
+                       side_effect=lambda addr: f'vf_{addr.replace(":", "_").replace(".", "_")}'), \
                  MockHelper(stdout="") as mock_helper, \
                  self.assertRaises(SystemExit) as cm:
                 parse_sriov.main()
@@ -504,8 +531,8 @@ class TestMainFunction(unittest.TestCase):
             # entries were already validated in test_valid_sriov_vf_config
             output_lines = mock_helper.get_output()
             commands = mock_helper.get_called_commands()
-            self.assertEqual(len(output_lines), 20)
-            self.assertEqual(len(commands), 16)
+            self.assertEqual(len(output_lines), 22)
+            self.assertEqual(len(commands), 18)
 
             self.assertEqual(cm.exception.code, 0)
 
@@ -521,6 +548,8 @@ class TestMainFunction(unittest.TestCase):
 
         try:
             with patch.object(sys, 'argv', ['parse_sriov', temp_filename]), \
+                 patch('debian.bullseye.src.bin.parse_sriov._get_vf_netdev',
+                       side_effect=lambda addr: f'vf_{addr.replace(":", "_").replace(".", "_")}'), \
                  MockHelper(stdout="") as mock_helper, \
                  self.assertRaises(SystemExit) as cm:
                 parse_sriov.main()
@@ -530,8 +559,8 @@ class TestMainFunction(unittest.TestCase):
             # entries were already validated in test_valid_sriov_vf_config
             output_lines = mock_helper.get_output()
             commands = mock_helper.get_called_commands()
-            self.assertEqual(len(output_lines), 20)
-            self.assertEqual(len(commands), 16)
+            self.assertEqual(len(output_lines), 22)
+            self.assertEqual(len(commands), 18)
         finally:
             os.remove(temp_filename)
 
@@ -1020,11 +1049,14 @@ class TestParseAndProcessWithOrphanReset(unittest.TestCase):
         self.assertTrue(result)
         mock_reset.assert_called_once_with({})
 
+    @patch('debian.bullseye.src.bin.parse_sriov._get_vf_netdev',
+           side_effect=lambda addr: f'vf_{addr.replace(":", "_").replace(".", "_")}')
     @patch('debian.bullseye.src.bin.parse_sriov.subprocess.run')
     @patch('debian.bullseye.src.bin.parse_sriov.reset_orphaned_sriov_vfs',
            return_value=True)
     def test_valid_config_calls_orphan_reset_with_config(self, mock_reset,
-                                                         mock_run):
+                                                         mock_run,
+                                                         _mock_get_vf_netdev):
         """Valid config should pass sriov_configs to orphan reset."""
         mock_run.return_value = MagicMock(returncode=0, stdout='', stderr='')
         data = valid_python_format_config()

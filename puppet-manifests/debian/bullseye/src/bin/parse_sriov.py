@@ -64,6 +64,10 @@ def execute_command(command_to_run):
         error_message = f"Exception: {type(e).__name__}: {e}"
         return False, error_message
 
+    except OSError as e:
+        error_message = f"OSError (command not found?): {type(e).__name__}: {e}"
+        return False, error_message
+
 
 def chunk_list(addresses, size):
     """
@@ -211,6 +215,72 @@ def set_max_tx_rate(port, vfnumber, max_tx_rate):
     if not res:
         print(f'ERROR: sriov_vf_ratelimit: {max_tx_rate} port: {port}'
               f' vf: {vfnumber} msg: {message}')
+
+    return res
+
+
+def _get_vf_netdev(vf_addr):
+    """
+    Get the network device name for a VF given its PCI address.
+
+    Looks up /sys/bus/pci/devices/<vf_addr>/net/ to find the netdev.
+
+    Args:
+        vf_addr (str): PCI address of the VF (e.g., "0000:0d:02.0").
+
+    Returns:
+        str or None: The netdev name (e.g., "enp13s0f2v0"), or None if not found.
+    """
+    net_dir = f"/sys/bus/pci/devices/{vf_addr}/net"
+    if not os.path.isdir(net_dir):
+        return None
+
+    try:
+        entries = os.listdir(net_dir)
+        if entries:
+            return entries[0]
+    except OSError:
+        pass
+
+    return None
+
+
+def set_vf_channels(vf_addr, vf_channels):
+    """
+    Sets the number of combined channels (queues) for a VF using ethtool.
+
+    Uses 'ethtool -L <vf_netdev> combined <channels>' to configure
+    the channel count on the VF's own network device.
+
+    Args:
+        vf_addr (str): PCI address of the VF (e.g., "0000:0d:02.0").
+        vf_channels (int): Number of combined channels to set.
+
+    Returns:
+        bool: True if successful, False otherwise.
+    """
+    vf_netdev = _get_vf_netdev(vf_addr)
+    if not vf_netdev:
+        print(f'ERROR: set_vf_channels: no netdev found for VF {vf_addr}')
+        return False
+
+    res = True
+    message = ""
+    for _ in range(5):
+        command = ["/usr/sbin/ethtool", "-L", vf_netdev,
+                   "combined", str(vf_channels)]
+        sys.stdout.flush()
+        res, message = execute_command(command)
+        sys.stdout.flush()
+        if res:
+            print(f'sriov_vf_channels: {vf_channels} vf_addr: {vf_addr}'
+                  f' netdev: {vf_netdev}')
+            break
+        time.sleep(1)
+
+    if not res:
+        print(f'ERROR: set_vf_channels: {vf_channels} vf_addr: {vf_addr}'
+              f' netdev: {vf_netdev} msg: {message}')
 
     return res
 
@@ -413,9 +483,34 @@ def enable_sriov_from_data(data):
     return enable_sriov_from_configs(sriov_configs)
 
 
+def _collect_max_tx_rate(vf_details, port_name):
+    """Return a max_tx_rate entry list (empty or single) for the given VF."""
+    vfnumber = vf_details.get('vfnumber', None)
+    max_tx_rate = vf_details.get('max_tx_rate', None)
+    if vfnumber is not None and max_tx_rate is not None:
+        return [{
+            'port': port_name,
+            'vfnumber': vfnumber,
+            'max_tx_rate': max_tx_rate}]
+    return []
+
+
+def _collect_vf_channels(vf_details, vf_addr, driver):
+    """Return a vf_channels entry list (empty or single) for the given VF."""
+    vf_channels = vf_details.get('vf_channels', None)
+    if vf_channels is not None:
+        # Only set channels on VFs with a netdevice driver.
+        # vfio-pci and unbound VFs don't expose a netdev.
+        if driver not in (DRIVER_VFIO, DRIVER_NONE):
+            return [{
+                'vf_addr': vf_addr,
+                'vf_channels': vf_channels}]
+    return []
+
+
 def get_sriov_entries(sriov_configs):
     """
-    Extracts VF addresses and max_tx_rate settings from SR-IOV config.
+    Extracts VF addresses, max_tx_rate, and vf_channels settings from SR-IOV config.
     the VF addresses are grouped by driver, so each driver is loaded just once.
 
     Args:
@@ -426,11 +521,13 @@ def get_sriov_entries(sriov_configs):
 
     Returns:
         tuple: (bool success/fail,
-                (dict driver_to_addresses, list rate_limit_settings))
+                (dict driver_to_addresses, list rate_limit_settings,
+                 list vf_channels_settings))
     """
     try:
         sriov_entries = defaultdict(list)
         max_tx_rate_list = []
+        vf_channels_list = []
 
         if not isinstance(sriov_configs, dict):
             raise TypeError("sriov_configs must be a dictionary")
@@ -469,20 +566,16 @@ def get_sriov_entries(sriov_configs):
 
                     sriov_entries[driver].append(vf_addr)
 
-                    vfnumber = vf_details.get('vfnumber', None)
-                    max_tx_rate = vf_details.get('max_tx_rate', None)
+                    max_tx_rate_list.extend(
+                        _collect_max_tx_rate(vf_details, port_name))
+                    vf_channels_list.extend(
+                        _collect_vf_channels(vf_details, vf_addr, driver))
 
-                    if vfnumber is not None and max_tx_rate is not None:
-                        max_tx_rate_list.append({
-                            'port': port_name,
-                            'vfnumber': vfnumber,
-                            'max_tx_rate': max_tx_rate})
-
-        return True, (sriov_entries, max_tx_rate_list)
+        return True, (sriov_entries, max_tx_rate_list, vf_channels_list)
 
     except (TypeError, ValueError) as e:
         print(f"Error: get_sriov_entries: {e}")
-        return False, ([], [])
+        return False, ([], [], [])
 
 
 def _get_configured_pci_addrs(sriov_configs):
@@ -590,7 +683,8 @@ def parse_and_process_sriov_config(data):
         if not sriov_configs:
             return True, []
 
-        ret, (sriov_entries, max_tx_rate_list) = get_sriov_entries(sriov_configs)
+        ret, (sriov_entries, max_tx_rate_list, vf_channels_list) = \
+            get_sriov_entries(sriov_configs)
         if not ret:
             return False, []
 
@@ -603,6 +697,11 @@ def parse_and_process_sriov_config(data):
             if set_max_tx_rate(item['port'],
                                item['vfnumber'],
                                item['max_tx_rate']) is False:
+                res = False
+
+        for item in vf_channels_list:
+            if set_vf_channels(item['vf_addr'],
+                               item['vf_channels']) is False:
                 res = False
 
         return res, sriov_entries
