@@ -36,7 +36,7 @@ class platform::params (
   $irq_work_priority = undef,
   $oidc_role_binding = '',
   $keyring_directory = undef,
-  $cgroup_v2_enabled = false,
+  $cgroup_v2_enabled = true,
 ) {
   $ipv4 = 4
   $ipv6 = 6
