@@ -715,9 +715,23 @@ define platform::ptpinstance::net_tspll_cfg (
   $clk_src,
 ) {
   unless defined(Exec["${iface}_tspll_cfg_${tspll_freq}_${clk_src}"]) {
+    # tspll_cfg sysfs is only present on the primary E825 NIC that owns the CGU.
+    # If the sysfs does not exist (secondary NIC): emit a warning and exit cleanly.
+    # If it exists but the write fails, fall back to local oscillator (4 0 = osc_156.25)
+    # and emit a warning so ptp.py monitoring can detect the mismatch.
     exec { "${iface}_tspll_cfg_${tspll_freq}_${clk_src}":
-      command  => "echo ${tspll_freq} ${clk_src} > /sys/class/net/${iface}/device/tspll_cfg",
-      provider => shell,
+      command   => "TSPLL=/sys/class/net/${iface}/device/tspll_cfg; \
+        if [ ! -e \$TSPLL ]; then \
+          echo \"WARNING: tspll_cfg not available for ${iface} (secondary NIC or unsupported), configured value not applied\"; \
+          exit 0; \
+        fi; \
+        if ! err=$(echo ${tspll_freq} ${clk_src} 2>&1 > \$TSPLL); then \
+          echo \"tspll_cfg write error: \$err\"; \
+          echo \"WARNING: tspll_cfg write failed for ${iface}, falling back to local oscillator (4 0)\"; \
+          echo 4 0 > \$TSPLL || true; \
+        fi",
+      logoutput => true,
+      provider  => shell,
     }
   }
 }
