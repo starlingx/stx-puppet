@@ -4,7 +4,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-''' This script updates the multus config to handle single or dual-stack
+''' This script updates the multus config to handle single or dual-stack.
+
+In thick plugin mode, Calico manages assign_ipv4/assign_ipv6 in its own
+10-calico.conflist which the Multus daemon auto-discovers. The old
+multus-cni-config.v1 ConfigMap is not used. This script detects thick
+mode and exits successfully as a no-op since Calico handles dual-stack
+configuration directly.
 '''
 
 import sys
@@ -15,6 +21,18 @@ from datetime import datetime
 
 multus_config_map_file = "/tmp/multus-configmap.yaml"
 kubectl_config = "--kubeconfig=/etc/kubernetes/admin.conf"
+
+
+def is_thick_plugin_mode():
+    """Detect if Multus is running in thick plugin mode.
+
+    Thick mode uses the multus-daemon-config ConfigMap and does not
+    require multus-cni-config.v1 for delegate configuration.
+    """
+    cmd = ["kubectl", kubectl_config, "-n", "kube-system",
+           "get", "cm", "multus-daemon-config", "--no-headers"]
+    res = subprocess.run(cmd, check=False, capture_output=True)
+    return res.returncode == 0
 
 
 def prepend_timestamp_line(file_name):
@@ -68,6 +86,16 @@ if __name__ == "__main__":
 
     print(f"dual-stack-multus {protocol} {state} {wait}")
 
+    # In thick plugin mode, Calico manages assign_ipv4/assign_ipv6
+    # directly in 10-calico.conflist. The Multus daemon auto-discovers
+    # this config. No Multus ConfigMap modification is needed.
+    if is_thick_plugin_mode():
+        print("Multus thick plugin mode detected. Dual-stack configuration "
+              "is managed by Calico directly. No Multus ConfigMap update "
+              "needed.")
+        sys.exit(0)
+
+    # Thin plugin mode: modify multus-cni-config.v1 ConfigMap
     print("execute: kubectl get cm -n kube-system multus-cni-config.v1 -o yaml")
     command = ["kubectl", kubectl_config, "-n", "kube-system",
                "get", "cm", "multus-cni-config.v1", "-o", "yaml"]
@@ -107,6 +135,6 @@ if __name__ == "__main__":
     if result.returncode != 0:
         sys.exit(1)
 
-print(f"wait {wait} seconds for the restarts")
-time.sleep(wait)
-sys.exit(0)
+    print(f"wait {wait} seconds for the restarts")
+    time.sleep(wait)
+    sys.exit(0)
