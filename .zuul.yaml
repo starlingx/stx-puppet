@@ -8,6 +8,18 @@
         - stx-puppet-tox-pep8
         - stx-puppet-tox-pylint
         - puppet-manifests-tox-py39
+        - puppet-manifests-tox-coverage-trixie:
+            voting: false
+        - puppet-manifests-tox-coverage:
+            voting: false
+        - stx-puppet-tox-pep8-trixie:
+            voting: false
+        - stx-puppet-tox-pylint-trixie:
+            voting: false
+        - puppet-manifests-tox-py313:
+            voting: false
+        - stx-puppet-tox-bandit-trixie:
+            voting: false
     gate:
       jobs:
         - stx-puppet-linters
@@ -54,6 +66,19 @@
     vars:
       tox_envlist: py39
       python_version: 3.9
+      tox_extra_args: -c puppet-manifests/tox.ini
+
+- job:
+    name: puppet-manifests-tox-coverage-trixie
+    parent: tox
+    description: |
+      Run coverage for puppet-manifests against trixie source
+    nodeset: debian-trixie-8GB
+    files:
+      - puppet-manifests/*
+    vars:
+      tox_envlist: coverage-trixie
+      python_version: 3.13
       tox_extra_args: -c puppet-manifests/tox.ini
 
 - job:
@@ -147,3 +172,59 @@
           ZHeDtmjHdce94Lb3oyOVrxs60pumxZSffEiGEyc0KQbZTu49Mo5pfQ4pH1decqgwlXKQr
           ImuzJRD0d+uObqzxCdFq7JTHrZC97dRzr2EgIRmE4ufFTtpW1WQbDH5ta3xOuT8HwUZvj
           n1iUQml8sC4Ebz2naBHWvZaMWfGWVB6Xo6FqF779Ng5gyc+d7avcEz3iHQ2LUA=
+
+- job:
+    name: puppet-manifests-tox-coverage
+    parent: tox
+    description: |
+      Run all tests with coverage analysis for puppet-manifests
+    nodeset: debian-bullseye
+    files:
+      - puppet-manifests/*
+    vars:
+      tox_envlist: coverage
+      python_version: 3.9
+      tox_extra_args: -c puppet-manifests/tox.ini
+    post-run: puppet-manifests/tests/upload-coverage-reports.yaml
+- job:
+    name: stx-puppet-tox-pep8-trixie
+    parent: tox
+    description: |
+      Run pep8 checks for stx-puppet (trixie)
+    nodeset: debian-trixie-8GB
+    vars:
+      tox_envlist: pep8-trixie
+      python_version: 3.13
+
+- job:
+    name: stx-puppet-tox-pylint-trixie
+    parent: tox
+    description: |
+      Run pylint checks for stx-puppet (trixie)
+    nodeset: debian-trixie-8GB
+    vars:
+      tox_envlist: pylint-trixie
+      python_version: 3.13
+
+- job:
+    name: puppet-manifests-tox-py313
+    parent: tox
+    description: |
+      Run py313 test for puppet-manifests (trixie)
+    nodeset: debian-trixie-8GB
+    files:
+      - puppet-manifests/*
+    vars:
+      tox_envlist: py313
+      python_version: 3.13
+      tox_extra_args: -c puppet-manifests/tox.ini
+
+- job:
+    name: stx-puppet-tox-bandit-trixie
+    parent: tox
+    description: |
+      Run bandit code scan for stx-puppet (trixie)
+    nodeset: debian-trixie-8GB
+    vars:
+      tox_envlist: bandit-trixie
+      python_version: 3.13
