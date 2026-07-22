@@ -261,6 +261,34 @@ define platform::lvm::csi::wipe_and_add_pv {
   }
 }
 
+define platform::lvm::csi::create_extend_vg(
+  $vg_name,
+  $physical_volumes,
+) {
+
+  platform::lvm::csi::wipe_and_add_pv { $physical_volumes:
+  }
+
+  exec { "create vg ${vg_name} if absent [${name}]":
+    command => "vgcreate ${vg_name} ${physical_volumes[0]}",
+    path    => ['/usr/sbin', '/sbin', '/usr/bin', '/bin'],
+    unless  => "vgs ${vg_name}",
+    require => Platform::Lvm::Csi::Wipe_and_add_pv[$physical_volumes],
+  }
+
+  $physical_volumes.each |String $pv| {
+    # lint:ignore:140chars
+    exec { "vgextend ${vg_name} with ${pv} [${name}]":
+      command => "vgextend ${vg_name} ${pv}",
+      path    => ['/usr/sbin', '/sbin', '/usr/bin', '/bin'],
+      unless  => "pvs --noheadings -o vg_name ${pv} 2>/dev/null | grep -qw ${vg_name}",
+      onlyif  => "vgs ${vg_name}",
+      require => Platform::Lvm::Csi::Wipe_and_add_pv[$pv],
+    }
+    # lint:endignore:140chars
+  }
+}
+
 class platform::lvm::csi::params::thick (
   $vg_name = '',
   $physical_volumes = [],
@@ -270,10 +298,8 @@ class platform::lvm::csi::thick::resources
   inherits ::platform::lvm::csi::params::thick {
 
     if $vg_name != '' {
-      platform::lvm::csi::wipe_and_add_pv { $physical_volumes:
-      }
-      -> volume_group { $vg_name:
-        ensure           => present,
+      platform::lvm::csi::create_extend_vg { $vg_name:
+        vg_name          => $vg_name,
         physical_volumes => $physical_volumes,
       }
       -> exec { "vgchange ${vg_name}":
@@ -306,10 +332,8 @@ class platform::lvm::csi::thin::resources
   inherits ::platform::lvm::csi::params::thin {
 
     if $vg_name != '' {
-      platform::lvm::csi::wipe_and_add_pv { $physical_volumes:
-      }
-      -> volume_group { $vg_name:
-        ensure           => present,
+      platform::lvm::csi::create_extend_vg { $vg_name:
+        vg_name          => $vg_name,
         physical_volumes => $physical_volumes,
       }
       -> platform::lvm::csi::create_thinpool { $pool_name:
