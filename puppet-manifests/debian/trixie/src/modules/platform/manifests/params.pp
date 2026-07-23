@@ -119,6 +119,7 @@ class platform::params::config_oidc_role_binding::runtime
 {
   include ::platform::params
   $oidc_role_binding = $platform::params::oidc_role_binding
+
   file { '/etc/platform/.rolebindings.conf':
     ensure  => present,
     owner   => 'root',

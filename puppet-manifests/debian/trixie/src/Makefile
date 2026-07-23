@@ -35,6 +35,7 @@ endif
 	install -m 755 -D bin/verify-systemd-running.sh $(BINDIR)/verify-systemd-running.sh
 	install -m 755 -D bin/parse_sriov.py $(BINDIR)/parse_sriov.py
 	install -m 755 -D bin/ptp-instance-notify.sh $(BINDIR)/ptp-instance-notify.sh
+	install -m 755 -D bin/reconcile_oidc_role_bindings.py $(BINDIR)/reconcile_oidc_role_bindings.py
 
 	install -d -m 0755 $(CONFIGDIR)
 	install -m 640 etc/hiera.yaml $(CONFIGDIR)

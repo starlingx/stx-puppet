@@ -1,16 +1,60 @@
+<%
+  # Parse role-bindings to extract group names for mapping rules
+  groups = []
+  users = []
+  if @oidc_role_binding && !@oidc_role_binding.empty?
+    @oidc_role_binding.split(';').each do |entry|
+      parts = entry.split(':', 2)
+      if parts[0].start_with?('%')
+        groups << parts[0][1..]
+      else
+        users << parts[0]
+      end
+    end
+  end
+  groups.uniq!
+  users.uniq!
+-%>
 [
   {
     "local": [
       {
         "user": { "name": "{0}" },
-        "group": {
-          "domain": { "name": "Default" },
-          "name": "federated_users"
-        }
+        "group": { "domain": { "name": "Default" }, "name": "federated_users" }
       }
     ],
     "remote": [
       { "type": "HTTP_OIDC_EMAIL" }
     ]
   }
+<% groups.each do |grp| -%>
+  ,
+  {
+    "local": [
+      {
+        "user": { "name": "{0}" },
+        "group": { "domain": { "name": "Default" }, "name": "<%= grp %>" }
+      }
+    ],
+    "remote": [
+      { "type": "HTTP_OIDC_EMAIL" },
+      { "type": "HTTP_OIDC_GROUPS", "any_one_of": ["(^|;)<%= grp %>(;|$)"], "regex": true }
+    ]
+  }
+<% end -%>
+<% users.each do |user| -%>
+  ,
+  {
+    "local": [
+      {
+        "user": { "name": "{0}" },
+        "group": { "domain": { "name": "Default" }, "name": "user_<%= user %>" }
+      }
+    ],
+    "remote": [
+      { "type": "HTTP_OIDC_EMAIL" },
+      { "type": "HTTP_OIDC_PREFERRED_USERNAME", "any_one_of": ["(^|;)<%= user %>(;|$)"], "regex": true }
+    ]
+  }
+<% end -%>
 ]
