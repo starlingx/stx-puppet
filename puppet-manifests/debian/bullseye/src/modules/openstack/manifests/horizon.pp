@@ -61,6 +61,7 @@ class openstack::horizon
   include ::openstack::keystone::params
 
   include ::openstack::horizon::config
+  include ::platform::network::oam::params
 
   $controller_address       = $::platform::network::mgmt::params::controller_address
   $mgmt_subnet_network      = $::platform::network::mgmt::params::subnet_network
@@ -195,6 +196,27 @@ class openstack::horizon
       },
       configure_apache      => false,
       compress_offline      => false,
+    }
+
+    # WebSSO URL settings — must use OAM address for browser accessibility
+    $oam_floating_ip = $platform::network::oam::params::controller_address_url
+    $oidc_issuer_url = lookup(
+      'platform::kubernetes::kube_apiserver::params::oidc-issuer-url',
+      Optional[String], 'first', undef
+    )
+
+    if $oidc_issuer_url {
+      file { '/etc/openstack-dashboard/local_settings.d/_31_websso_settings.py':
+        ensure  => present,
+        content => template('openstack/horizon-websso.erb'),
+        owner   => 'root',
+        group   => 'root',
+        mode    => '0644',
+      }
+    } else {
+      file { '/etc/openstack-dashboard/local_settings.d/_31_websso_settings.py':
+        ensure => absent,
+      }
     }
 
     # hack for memcached, for now we bind to localhost on ipv6
