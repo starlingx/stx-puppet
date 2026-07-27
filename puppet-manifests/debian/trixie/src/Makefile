@@ -38,6 +38,8 @@ endif
 	install -m 755 -D bin/ptp-instance-notify.sh $(BINDIR)/ptp-instance-notify.sh
 	install -m 755 -D bin/reconcile_oidc_role_bindings.py $(BINDIR)/reconcile_oidc_role_bindings.py
 	install -m 755 -D bin/configure_sriov_numvfs.py $(BINDIR)/configure_sriov_numvfs.py
+	install -m 755 -D bin/etcd_fixed_membership.py $(BINDIR)/etcd_fixed_membership.py
+	install -m 755 -D bin/ensure-etcd-floating-ip.sh $(BINDIR)/ensure-etcd-floating-ip.sh
 
 	install -d -m 0755 $(CONFIGDIR)
 	install -m 640 etc/hiera.yaml $(CONFIGDIR)

@@ -937,14 +937,31 @@ class platform::sm
   }
 
   # Configure ETCD for Kubernetes
-  exec { 'Provision etcd-fs (service-group-member)':
-    command => 'sm-provision service-group-member controller-services etcd-fs',
-  }
-  -> exec { 'Provision drbd-etcd (service-group-member)':
-    command => 'sm-provision service-group-member controller-services drbd-etcd',
-  }
-  -> exec { 'Provision ETCD (service-group-member)':
-      command => 'sm-provision service-group-member controller-services etcd',
+  # The SM-managed floating DRBD etcd member is only used in duplex and
+  # standard modes. It is not provisioned for:
+  # - simplex: no floating member at all; etcd runs as etcd-fixed.service
+  # - post-transition: once the floating member has been removed
+  # The else branch deprovisions (idempotent) to ensure SM state is clean.
+  if ($system_mode != 'simplex') {
+    exec { 'Provision etcd-fs (service-group-member)':
+      command => 'sm-provision service-group-member controller-services etcd-fs',
+    }
+    -> exec { 'Provision drbd-etcd (service-group-member)':
+      command => 'sm-provision service-group-member controller-services drbd-etcd',
+    }
+    -> exec { 'Provision ETCD (service-group-member)':
+        command => 'sm-provision service-group-member controller-services etcd',
+    }
+  } else {
+    exec { 'Deprovision ETCD (service-group-member)':
+      command => 'sm-deprovision service-group-member controller-services etcd',
+    }
+    -> exec { 'Deprovision etcd-fs (service-group-member)':
+      command => 'sm-deprovision service-group-member controller-services etcd-fs',
+    }
+    -> exec { 'Deprovision drbd-etcd (service-group-member)':
+      command => 'sm-deprovision service-group-member controller-services drbd-etcd',
+    }
   }
 
   if $stx_openstack_applied {

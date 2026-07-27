@@ -79,6 +79,14 @@ status()
         echo "$DESC is running"
         return
     else
+        if [ -e $PIDFILE ]; then
+            PIDDIR=/proc/$(cat $PIDFILE)
+            if [ -d $PIDDIR ]; then
+                RETVAL=0
+                echo "$DESC is running (learner mode)"
+                return
+            fi
+        fi
         echo "$DESC is Not running"
         RETVAL=1
     fi

@@ -126,7 +126,7 @@ class platform::kubernetes::configuration {
   # Check to ensure that this code is not executed
   # during install and reinstall.  We want to
   # only execute this block for lock and unlock
-  if ! str2bool($is_initial_k8s_config) {
+  if ! str2bool($::is_initial_k8s_config) {
     # Add kubelet service override
     file { '/etc/systemd/system/kubelet.service.d/kube-stx-override.conf':
       ensure  => file,
@@ -137,7 +137,7 @@ class platform::kubernetes::configuration {
     }
   }
 
-  if ($personality == 'controller') {
+  if ($::personality == 'controller') {
     # Cron job to cleanup stale CNI cache files that are more than
     # 1 day old and are not associated with any currently running pod.
     cron { 'k8s-cni-cache-cleanup':
@@ -154,8 +154,8 @@ class platform::kubernetes::configuration {
 class platform::kubernetes::symlinks {
   include ::platform::kubernetes::params
 
-  $kubeadm_version = $platform::kubernetes::params::kubeadm_version
-  $kubelet_version = $platform::kubernetes::params::kubelet_version
+  $kubeadm_version = $::platform::kubernetes::params::kubeadm_version
+  $kubelet_version = $::platform::kubernetes::params::kubelet_version
 
   # We are using symlinks here, we tried bind mounts originally but
   # the Puppet mount class does not deal well with bind mounts
@@ -218,9 +218,9 @@ class platform::kubernetes::cgroup
   # With cgroup v2 (unified hierarchy), per-controller directories do not
   # exist.  The kubelet cgroup root is managed via systemd slices instead.
   # Skip v1 directory creation when cgroup v2 is enabled.
-  if ! str2bool($platform::params::cgroup_v2_enabled) {
-    $k8s_cpuset = $platform::kubernetes::params::k8s_cpuset
-    $k8s_nodeset = $platform::kubernetes::params::k8s_nodeset
+  if ! str2bool($::platform::params::cgroup_v2_enabled) {
+    $k8s_cpuset = $::platform::kubernetes::params::k8s_cpuset
+    $k8s_nodeset = $::platform::kubernetes::params::k8s_nodeset
 
     # Default to float across all cpus and numa nodes
     if !defined('$k8s_cpuset') {
@@ -290,7 +290,7 @@ class platform::kubernetes::cgroup
 # Regenerate local kubelet config.yaml from the kubelet-config ConfigMap.
 # Runs after master::init so that apiserver is available.
 # Retries to handle apiserver startup delay.
-# Skips if local config already matches expected cgroupDriver and cgroupRoot.
+# Skips if local config already matches ConfigMap cgroupDriver.
 define platform::kubernetes::kube_command (
   $command,
   $logname,
@@ -326,32 +326,32 @@ class platform::kubernetes::kubeadm {
   # Update kubeadm/kubelet symlinks if needed.
   require platform::kubernetes::symlinks
 
-  $node_ip = $platform::kubernetes::params::node_ip
-  $node_ip_secondary = $platform::kubernetes::params::node_ip_secondary
-  $host_labels = $platform::kubernetes::params::host_labels
-  $k8s_platform_cpuset = $platform::kubernetes::params::k8s_platform_cpuset
-  $k8s_reserved_mem = $platform::kubernetes::params::k8s_reserved_mem
-  $k8s_all_reserved_cpuset = $platform::kubernetes::params::k8s_all_reserved_cpuset
-  $k8s_cni_bin_dir = $platform::kubernetes::params::k8s_cni_bin_dir
-  $k8s_vol_plugin_dir = $platform::kubernetes::params::k8s_vol_plugin_dir
-  $k8s_cpu_mgr_policy = $platform::kubernetes::params::k8s_cpu_mgr_policy
-  $k8s_topology_mgr_policy = $platform::kubernetes::params::k8s_topology_mgr_policy
-  $k8s_pod_max_pids = $platform::kubernetes::params::k8s_pod_max_pids
-  $k8s_memory_mgr_policy = $platform::kubernetes::params::k8s_memory_mgr_policy
-  $k8s_reserved_memory = $platform::kubernetes::params::k8s_reserved_memory
+  $node_ip = $::platform::kubernetes::params::node_ip
+  $node_ip_secondary = $::platform::kubernetes::params::node_ip_secondary
+  $host_labels = $::platform::kubernetes::params::host_labels
+  $k8s_platform_cpuset = $::platform::kubernetes::params::k8s_platform_cpuset
+  $k8s_reserved_mem = $::platform::kubernetes::params::k8s_reserved_mem
+  $k8s_all_reserved_cpuset = $::platform::kubernetes::params::k8s_all_reserved_cpuset
+  $k8s_cni_bin_dir = $::platform::kubernetes::params::k8s_cni_bin_dir
+  $k8s_vol_plugin_dir = $::platform::kubernetes::params::k8s_vol_plugin_dir
+  $k8s_cpu_mgr_policy = $::platform::kubernetes::params::k8s_cpu_mgr_policy
+  $k8s_topology_mgr_policy = $::platform::kubernetes::params::k8s_topology_mgr_policy
+  $k8s_pod_max_pids = $::platform::kubernetes::params::k8s_pod_max_pids
+  $k8s_memory_mgr_policy = $::platform::kubernetes::params::k8s_memory_mgr_policy
+  $k8s_reserved_memory = $::platform::kubernetes::params::k8s_reserved_memory
 
   # Configure kubelet cpumanager options
   $opts_sys_res = join(['--system-reserved=',
                         "memory=${k8s_reserved_mem}Mi"])
 
-  if ($personality == 'controller' and
-      $platform::params::distributed_cloud_role == 'systemcontroller') {
+  if ($::personality == 'controller' and
+      $::platform::params::distributed_cloud_role == 'systemcontroller') {
     $opts = '--cpu-manager-policy=none'
     $k8s_cpu_manager_opts = join([$opts,
                                   $opts_sys_res], ' ')
   } else {
-    if !$platform::params::virtual_system {
-      if str2bool($is_worker_subfunction)
+    if !$::platform::params::virtual_system {
+      if str2bool($::is_worker_subfunction)
         and !('openstack-compute-node=enabled' in $host_labels) {
 
         $opts = join(["--cpu-manager-policy=${k8s_cpu_mgr_policy}",
@@ -391,10 +391,7 @@ class platform::kubernetes::kubeadm {
 
   # Enable kubelet extra parameters that are node specific such as
   # cpumanager
-  $kubelet_path = $facts['os']['family'] ? {
-    'Debian' => '/etc/default/kubelet',
-    default => '/etc/sysconfig/kubelet',
-  }
+  $kubelet_path = '/etc/default/kubelet'
   file { $kubelet_path:
     ensure  => file,
     content => template('platform/kubelet.conf.erb'),
@@ -441,7 +438,7 @@ class platform::kubernetes::kubeadm {
     command => '/usr/bin/systemctl enable kubelet.service',
   }
   # Start kubelet if it is standard controller.
-  if !str2bool($is_worker_subfunction) {
+  if !str2bool($::is_worker_subfunction) {
     File['/etc/kubernetes/manifests']
     -> service { 'kubelet':
       enable => true,
@@ -473,49 +470,49 @@ class platform::kubernetes::haproxy {
   include ::platform::network::cluster_host::ipv6::params
 
   # FLOATING
-  $ipv4_oam_floating_ip = $platform::network::oam::ipv4::params::controller_address
-  $ipv6_oam_floating_ip = $platform::network::oam::ipv6::params::controller_address
-  $ipv4_mgmt_floating_ip = $platform::network::mgmt::ipv4::params::controller_address
-  $ipv6_mgmt_floating_ip = $platform::network::mgmt::ipv6::params::controller_address
-  $ipv4_admin_floating_ip = $platform::network::admin::ipv4::params::controller_address
-  $ipv6_admin_floating_ip = $platform::network::admin::ipv6::params::controller_address
-  $ipv4_cluster_floating_ip = $platform::network::cluster_host::ipv4::params::controller_address
-  $ipv6_cluster_floating_ip = $platform::network::cluster_host::ipv6::params::controller_address
-  $primary_cluster_floating_ip = $platform::network::cluster_host::params::controller_address
+  $ipv4_oam_floating_ip = $::platform::network::oam::ipv4::params::controller_address
+  $ipv6_oam_floating_ip = $::platform::network::oam::ipv6::params::controller_address
+  $ipv4_mgmt_floating_ip = $::platform::network::mgmt::ipv4::params::controller_address
+  $ipv6_mgmt_floating_ip = $::platform::network::mgmt::ipv6::params::controller_address
+  $ipv4_admin_floating_ip = $::platform::network::admin::ipv4::params::controller_address
+  $ipv6_admin_floating_ip = $::platform::network::admin::ipv6::params::controller_address
+  $ipv4_cluster_floating_ip = $::platform::network::cluster_host::ipv4::params::controller_address
+  $ipv6_cluster_floating_ip = $::platform::network::cluster_host::ipv6::params::controller_address
+  $primary_cluster_floating_ip = $::platform::network::cluster_host::params::controller_address
 
   # HOST
-  $controller_0_hostname = $platform::params::controller_0_hostname
-  $controller_1_hostname = $platform::params::controller_1_hostname
+  $controller_0_hostname = $::platform::params::controller_0_hostname
+  $controller_1_hostname = $::platform::params::controller_1_hostname
 
   case $facts['networking']['hostname'] {
     $controller_0_hostname: {
-      $ipv4_oam_host_ip = $platform::network::oam::ipv4::params::controller0_address
-      $ipv6_oam_host_ip = $platform::network::oam::ipv6::params::controller0_address
-      $ipv4_mgmt_host_ip = $platform::network::mgmt::ipv4::params::controller0_address
-      $ipv6_mgmt_host_ip = $platform::network::mgmt::ipv6::params::controller0_address
-      $ipv4_admin_host_ip = $platform::network::admin::ipv4::params::controller0_address
-      $ipv6_admin_host_ip = $platform::network::admin::ipv6::params::controller0_address
-      $ipv4_cluster_host_ip = $platform::network::cluster_host::ipv4::params::controller0_address
-      $ipv6_cluster_host_ip = $platform::network::cluster_host::ipv6::params::controller0_address
-      if $platform::params::system_mode == 'simplex' {
-        $controller_0_cluster_host_ip = $platform::network::cluster_host::params::controller_address
+      $ipv4_oam_host_ip = $::platform::network::oam::ipv4::params::controller0_address
+      $ipv6_oam_host_ip = $::platform::network::oam::ipv6::params::controller0_address
+      $ipv4_mgmt_host_ip = $::platform::network::mgmt::ipv4::params::controller0_address
+      $ipv6_mgmt_host_ip = $::platform::network::mgmt::ipv6::params::controller0_address
+      $ipv4_admin_host_ip = $::platform::network::admin::ipv4::params::controller0_address
+      $ipv6_admin_host_ip = $::platform::network::admin::ipv6::params::controller0_address
+      $ipv4_cluster_host_ip = $::platform::network::cluster_host::ipv4::params::controller0_address
+      $ipv6_cluster_host_ip = $::platform::network::cluster_host::ipv6::params::controller0_address
+      if $::platform::params::system_mode == 'simplex' {
+        $controller_0_cluster_host_ip = $::platform::network::cluster_host::params::controller_address
         $controller_1_cluster_host_ip = undef
       } else {
-        $controller_0_cluster_host_ip = $platform::network::cluster_host::params::controller0_address
-        $controller_1_cluster_host_ip = $platform::network::cluster_host::params::controller1_address
+        $controller_0_cluster_host_ip = $::platform::network::cluster_host::params::controller0_address
+        $controller_1_cluster_host_ip = $::platform::network::cluster_host::params::controller1_address
       }
     }
     $controller_1_hostname: {
-      $ipv4_oam_host_ip = $platform::network::oam::ipv4::params::controller1_address
-      $ipv6_oam_host_ip = $platform::network::oam::ipv6::params::controller1_address
-      $ipv4_mgmt_host_ip = $platform::network::mgmt::ipv4::params::controller1_address
-      $ipv6_mgmt_host_ip = $platform::network::mgmt::ipv6::params::controller1_address
-      $ipv4_admin_host_ip = $platform::network::admin::ipv4::params::controller1_address
-      $ipv6_admin_host_ip = $platform::network::admin::ipv6::params::controller1_address
-      $ipv4_cluster_host_ip = $platform::network::cluster_host::ipv4::params::controller1_address
-      $ipv6_cluster_host_ip = $platform::network::cluster_host::ipv6::params::controller1_address
-      $controller_0_cluster_host_ip = $platform::network::cluster_host::params::controller0_address
-      $controller_1_cluster_host_ip = $platform::network::cluster_host::params::controller1_address
+      $ipv4_oam_host_ip = $::platform::network::oam::ipv4::params::controller1_address
+      $ipv6_oam_host_ip = $::platform::network::oam::ipv6::params::controller1_address
+      $ipv4_mgmt_host_ip = $::platform::network::mgmt::ipv4::params::controller1_address
+      $ipv6_mgmt_host_ip = $::platform::network::mgmt::ipv6::params::controller1_address
+      $ipv4_admin_host_ip = $::platform::network::admin::ipv4::params::controller1_address
+      $ipv6_admin_host_ip = $::platform::network::admin::ipv6::params::controller1_address
+      $ipv4_cluster_host_ip = $::platform::network::cluster_host::ipv4::params::controller1_address
+      $ipv6_cluster_host_ip = $::platform::network::cluster_host::ipv6::params::controller1_address
+      $controller_0_cluster_host_ip = $::platform::network::cluster_host::params::controller0_address
+      $controller_1_cluster_host_ip = $::platform::network::cluster_host::params::controller1_address
     }
     default: {
       fail("Hostname must be either ${controller_0_hostname} or ${controller_1_hostname}")
@@ -721,6 +718,7 @@ class platform::kubernetes::cleanup_kubeadm_stale {
     # maximum of 30 seconds.
     exec { 'wait after kubeadm reset':
       command     => 'for i in $(seq 1 6); do pgrep -x kubelet > /dev/null 2>&1 || exit 0; sleep 5; done; exit 0',
+      provider    => shell,
       logoutput   => true,
       refreshonly => true,
     }
@@ -738,7 +736,7 @@ class platform::kubernetes::master::init
   include ::platform::dockerdistribution::params
   include ::platform::k8splatform::params
 
-  if str2bool($is_initial_k8s_config) {
+  if str2bool($::is_initial_k8s_config) {
     # This allows subsequent node installs
     # Notes regarding ::is_initial_k8s_config check:
     # - Ensures block is only run for new node installs (e.g. controller-1)
@@ -748,7 +746,7 @@ class platform::kubernetes::master::init
     #   This flag is created by Ansible on controller-0;
     # - Ansible replay is not impacted by flag creation.
 
-    $software_version = $platform::params::software_version
+    $software_version = $::platform::params::software_version
     $local_registry_auth = "${::platform::dockerdistribution::params::registry_username}:${::platform::dockerdistribution::params::registry_password}" # lint:ignore:140chars
     $creds_command = '$(cat /tmp/puppet/registry_credentials)'
 
@@ -943,7 +941,7 @@ class platform::kubernetes::master
   contain ::platform::haproxy::k8s_client_certificate
   contain ::platform::kubernetes::haproxy
   # Only include worker::pci on Standard machine (not All-in-one)
-  if $platform::params::system_type != 'All-in-one' {
+  if $::platform::params::system_type != 'All-in-one' {
     contain ::platform::kubernetes::worker::pci
   }
 
@@ -975,7 +973,7 @@ class platform::kubernetes::worker::init
   Class['::platform::containerd::config'] -> Class[$name]
   Class['::platform::filesystem::kubelet'] -> Class[$name]
 
-  if str2bool($is_initial_config) {
+  if str2bool($::is_initial_config) {
     contain platform::kubernetes::cleanup_kubeadm_stale
     # Pull pause image tag from kubeadm required images list for this version
     # kubeadm config images list does not use the --kubeconfig argument
@@ -1075,9 +1073,9 @@ class platform::kubernetes::worker::pci::runtime {
 class platform::kubernetes::worker::sriovdp {
   include ::platform::kubernetes::params
   include ::platform::params
-  $host_labels = $platform::kubernetes::params::host_labels
-  if ($personality == 'controller') and
-      str2bool($is_worker_subfunction)
+  $host_labels = $::platform::kubernetes::params::host_labels
+  if ($::personality == 'controller') and
+      str2bool($::is_worker_subfunction)
       and ('sriovdp=enabled' in $host_labels) {
     exec { 'Delete sriov device plugin pod if present':
       path      => '/usr/bin:/usr/sbin:/bin',
@@ -1093,7 +1091,7 @@ class platform::kubernetes::worker
 
   # Worker configuration is not required on AIO hosts, since the master
   # will already be configured and includes support for running pods.
-  if $personality != 'controller' {
+  if $::personality != 'controller' {
     contain ::platform::kubernetes::kubeadm
     contain ::platform::kubernetes::cgroup
     contain ::platform::kubernetes::worker::init
@@ -1129,8 +1127,8 @@ class platform::kubernetes::aio
   include ::platform::kubernetes::master
   include ::platform::kubernetes::worker
 
-  if $platform::params::distributed_cloud_role != 'systemcontroller' {
-    $kubelet_max_procs = $platform::params::eng_workers
+  if $::platform::params::distributed_cloud_role != 'systemcontroller' {
+    $kubelet_max_procs = $::platform::params::eng_workers
 
     # Set kubelet GOMAXPROCS environment variable
     file { '/etc/systemd/system/kubelet.service.d/kubelet-max-procs.conf':
@@ -1148,7 +1146,7 @@ class platform::kubernetes::aio
 }
 
 class platform::kubernetes::gate {
-  if $platform::params::system_type != 'All-in-one' {
+  if $::platform::params::system_type != 'All-in-one' {
     Class['::platform::kubernetes::master'] -> Class[$name]
   } else {
     Class['::platform::kubernetes::aio'] -> Class[$name]
@@ -1180,8 +1178,8 @@ class platform::kubernetes::coredns {
 
   include ::platform::params
 
-  if str2bool($is_initial_k8s_config) {
-    if $platform::params::system_mode != 'simplex' {
+  if str2bool($::is_initial_k8s_config) {
+    if $::platform::params::system_mode != 'simplex' {
       contain ::platform::kubernetes::coredns::duplex
     } else {
       contain ::platform::kubernetes::coredns::simplex
@@ -1217,16 +1215,16 @@ class platform::kubernetes::firewall
 
   # add http_proxy and https_proxy port to k8s firewall
   # in order to allow worker node access public network via proxy
-  if $platform::docker::params::http_proxy {
-    $http_proxy_str_array = split($platform::docker::params::http_proxy, ':')
+  if $::platform::docker::params::http_proxy {
+    $http_proxy_str_array = split($::platform::docker::params::http_proxy, ':')
     $http_proxy_port = $http_proxy_str_array[length($http_proxy_str_array) - 1]
     if $http_proxy_port =~ /^\d+$/ {
       $http_proxy_port_val = $http_proxy_port
     }
   }
 
-  if $platform::docker::params::https_proxy {
-    $https_proxy_str_array = split($platform::docker::params::https_proxy, ':')
+  if $::platform::docker::params::https_proxy {
+    $https_proxy_str_array = split($::platform::docker::params::https_proxy, ':')
     $https_proxy_port = $https_proxy_str_array[length($https_proxy_str_array) - 1]
     if $https_proxy_port =~ /^\d+$/ {
       $https_proxy_port_val = $https_proxy_port
@@ -1243,18 +1241,18 @@ class platform::kubernetes::firewall
     $dports = $dports << $https_proxy_port_val
   }
 
-  $system_mode = $platform::params::system_mode
+  $system_mode = $::platform::params::system_mode
 
   if $system_mode != 'simplex' {
 
-    $oam_interface = $platform::network::oam::params::interface_name
+    $oam_interface = $::platform::network::oam::params::interface_name
 
-    if ($platform::network::oam::ipv4::params::subnet_version == $platform::params::ipv4)
-      and ($platform::network::mgmt::ipv4::params::subnet_version == $platform::params::ipv4) {
+    if ($::platform::network::oam::ipv4::params::subnet_version == $::platform::params::ipv4)
+      and ($::platform::network::mgmt::ipv4::params::subnet_version == $::platform::params::ipv4) {
 
-      $oam_float_ip4 = $platform::network::oam::ipv4::params::controller_address
-      $mgmt_subnet4 = $platform::network::mgmt::ipv4::params::subnet_network
-      $mgmt_prefixlen4 = $platform::network::mgmt::ipv4::params::subnet_prefixlen
+      $oam_float_ip4 = $::platform::network::oam::ipv4::params::controller_address
+      $mgmt_subnet4 = $::platform::network::mgmt::ipv4::params::subnet_network
+      $mgmt_prefixlen4 = $::platform::network::mgmt::ipv4::params::subnet_prefixlen
 
       $s_mgmt_subnet4 = "${mgmt_subnet4}/${mgmt_prefixlen4}"
       $d_mgmt_subnet4 = "! ${s_mgmt_subnet4}"
@@ -1264,18 +1262,7 @@ class platform::kubernetes::firewall
         $multicast_prefixlen4 = $::platform::network::multicast::ipv4::params::subnet_prefixlen
         $d_multicast_subnet4 = "${multicast_subnet4}/${multicast_prefixlen4}"
 
-        # ACCEPT rule for multicast traffic from mgmt subnet.
-        platform::firewall::rule { 'kubernetes-multicast-nat4':
-          service_name => 'kubernetes',
-          table        => $table,
-          chain        => $chain,
-          proto        => $transport,
-          jump         => 'accept',
-          host         => $s_mgmt_subnet4,
-          destination  => $d_multicast_subnet4,
-          l3proto      => $platform::params::ipv4,
-          rule_order   => '499',
-        }
+
       }
 
       platform::firewall::rule { 'kubernetes-nat4':
@@ -1288,17 +1275,16 @@ class platform::kubernetes::firewall
         destination  => $d_mgmt_subnet4,
         outiface     => $oam_interface,
         tosource     => $oam_float_ip4,
-        l3proto      => $platform::params::ipv4
+        l3proto      => $::platform::params::ipv4
       }
     }
 
-    if ($platform::network::oam::ipv6::params::subnet_version == $platform::params::ipv6)
-      and ($platform::network::mgmt::ipv6::params::subnet_version == $platform::params::ipv6) {
+    if ($::platform::network::oam::ipv6::params::subnet_version == $::platform::params::ipv6)
+      and ($::platform::network::mgmt::ipv6::params::subnet_version == $::platform::params::ipv6) {
 
-      $oam_float_ip6 = $platform::network::oam::ipv6::params::controller_address
-      $mgmt_subnet6 = $platform::network::mgmt::ipv6::params::subnet_network
-      $mgmt_prefixlen6 = $platform::network::mgmt::ipv6::params::subnet_prefixlen
-
+      $oam_float_ip6 = $::platform::network::oam::ipv6::params::controller_address
+      $mgmt_subnet6 = $::platform::network::mgmt::ipv6::params::subnet_network
+      $mgmt_prefixlen6 = $::platform::network::mgmt::ipv6::params::subnet_prefixlen
       $s_mgmt_subnet6 = "${mgmt_subnet6}/${mgmt_prefixlen6}"
       $d_mgmt_subnet6 = "! ${s_mgmt_subnet6}"
 
@@ -1312,11 +1298,11 @@ class platform::kubernetes::firewall
           service_name => 'kubernetes',
           table        => $table,
           chain        => $chain,
+          action       => 'accept',
           proto        => $transport,
-          jump         => 'accept',
           host         => $s_mgmt_subnet6,
           destination  => $d_multicast_subnet6,
-          l3proto      => $platform::params::ipv6,
+          l3proto      => $::platform::params::ipv6,
           rule_order   => '499',
         }
       }
@@ -1331,7 +1317,7 @@ class platform::kubernetes::firewall
         destination  => $d_mgmt_subnet6,
         outiface     => $oam_interface,
         tosource     => $oam_float_ip6,
-        l3proto      => $platform::params::ipv6
+        l3proto      => $::platform::params::ipv6
       }
     }
   }
@@ -1391,7 +1377,7 @@ class platform::kubernetes::unmask_start_kubelet
   # Update kubelet symlink if needed.
   include platform::kubernetes::symlinks
 
-  $kubelet_version = $platform::kubernetes::params::kubelet_version
+  $kubelet_version = $::platform::kubernetes::params::kubelet_version
   $short_upgrade_to_version = regsubst($upgrade_to_version, '^v(.*)', '\1')
 
   # Reload configs since /etc/systemd/system/kubelet.service.d/kubeadm.conf
@@ -1430,18 +1416,18 @@ class platform::kubernetes::unmask_start_kubelet
 }
 
 class platform::kubernetes::master::change_apiserver_parameters (
-  $etcd_cafile = $platform::kubernetes::params::etcd_cafile,
-  $etcd_certfile = $platform::kubernetes::params::etcd_certfile,
-  $etcd_keyfile = $platform::kubernetes::params::etcd_keyfile,
-  $etcd_servers = $platform::kubernetes::params::etcd_servers,
+  $etcd_cafile = $platform::kubernetes::params::etcd_ca_cert,
+  $etcd_certfile = $platform::kubernetes::params::etcd_cert_file,
+  $etcd_keyfile = $platform::kubernetes::params::etcd_key_file,
+  $etcd_servers = $platform::kubernetes::params::etcd_endpoints,
 ) inherits ::platform::kubernetes::params {
   include ::platform::params
   include ::platform::network::cluster_host::params
 
-  if $platform::params::hostname == 'controller-0' {
-    $cluster_host_addr = $platform::network::cluster_host::params::controller0_address
+  if $::platform::params::hostname == 'controller-0' {
+    $cluster_host_addr = $::platform::network::cluster_host::params::controller0_address
   } else {
-    $cluster_host_addr = $platform::network::cluster_host::params::controller1_address
+    $cluster_host_addr = $::platform::network::cluster_host::params::controller1_address
   }
 
   # Update ownership/permissions for files.
@@ -1449,7 +1435,7 @@ class platform::kubernetes::master::change_apiserver_parameters (
   file { '/tmp/puppet/hieradata/':
     ensure  => directory,
     owner   => 'root',
-    group   => $platform::params::protected_group_name,
+    group   => $::platform::params::protected_group_name,
     mode    => '0444',
     recurse => true,
   }
@@ -1457,7 +1443,7 @@ class platform::kubernetes::master::change_apiserver_parameters (
   file { '/etc/kubernetes/backup/':
     ensure  => directory,
     owner   => 'root',
-    group   => $platform::params::protected_group_name,
+    group   => $::platform::params::protected_group_name,
     mode    => '0444',
     recurse => true,
   }
@@ -1485,7 +1471,7 @@ class platform::kubernetes::master::change_apiserver_parameters (
       timeout => 600}
   }
 
-  if str2bool($usm_upgrade_in_progress) {
+  if str2bool($::usm_upgrade_in_progress) {
     Exec['update configmap and apply changes to control plane components']
     -> exec { 'remove /etc/kubernetes/backup':
           command => '/usr/bin/rm -rf /etc/kubernetes/backup',
@@ -1513,12 +1499,12 @@ class platform::kubernetes::certsans::runtime
   include ::platform::network::admin::ipv4::params
   include ::platform::network::admin::ipv6::params
 
-  $ipv4_val = $platform::params::ipv4
-  $ipv6_val = $platform::params::ipv6
+  $ipv4_val = $::platform::params::ipv4
+  $ipv6_val = $::platform::params::ipv6
 
-  $prim_mgmt_subnet_ver = $platform::network::mgmt::params::subnet_version
-  $ipv4_mgmt_subnet_ver = $platform::network::mgmt::ipv4::params::subnet_version
-  $ipv6_mgmt_subnet_ver = $platform::network::mgmt::ipv6::params::subnet_version
+  $prim_mgmt_subnet_ver = $::platform::network::mgmt::params::subnet_version
+  $ipv4_mgmt_subnet_ver = $::platform::network::mgmt::ipv4::params::subnet_version
+  $ipv6_mgmt_subnet_ver = $::platform::network::mgmt::ipv6::params::subnet_version
   if $prim_mgmt_subnet_ver == $ipv6_val and $ipv4_mgmt_subnet_ver != undef {
     $sec_mgmt_subnet_ver = $ipv4_mgmt_subnet_ver
   } elsif $prim_mgmt_subnet_ver == $ipv4_val and $ipv6_mgmt_subnet_ver != undef {
@@ -1527,9 +1513,9 @@ class platform::kubernetes::certsans::runtime
     $sec_mgmt_subnet_ver = undef
   }
 
-  $prim_admin_subnet_ver = $platform::network::admin::params::subnet_version
-  $ipv4_admin_subnet_ver = $platform::network::admin::ipv4::params::subnet_version
-  $ipv6_admin_subnet_ver = $platform::network::admin::ipv6::params::subnet_version
+  $prim_admin_subnet_ver = $::platform::network::admin::params::subnet_version
+  $ipv4_admin_subnet_ver = $::platform::network::admin::ipv4::params::subnet_version
+  $ipv6_admin_subnet_ver = $::platform::network::admin::ipv6::params::subnet_version
   if $prim_admin_subnet_ver == $ipv6_val and $ipv4_admin_subnet_ver != undef {
     $sec_admin_subnet_ver = $ipv4_admin_subnet_ver
   } elsif $prim_admin_subnet_ver == $ipv4_val and $ipv6_admin_subnet_ver != undef {
@@ -1538,9 +1524,9 @@ class platform::kubernetes::certsans::runtime
     $sec_admin_subnet_ver = undef
   }
 
-  $prim_cluster_host_subnet_ver = $platform::network::cluster_host::params::subnet_version
-  $ipv4_cluster_host_subnet_ver = $platform::network::cluster_host::ipv4::params::subnet_version
-  $ipv6_cluster_host_subnet_ver = $platform::network::cluster_host::ipv6::params::subnet_version
+  $prim_cluster_host_subnet_ver = $::platform::network::cluster_host::params::subnet_version
+  $ipv4_cluster_host_subnet_ver = $::platform::network::cluster_host::ipv4::params::subnet_version
+  $ipv6_cluster_host_subnet_ver = $::platform::network::cluster_host::ipv6::params::subnet_version
   if $prim_cluster_host_subnet_ver == $ipv6_val and $ipv4_cluster_host_subnet_ver != undef {
     $sec_cluster_host_subnet_ver = $ipv4_cluster_host_subnet_ver
   } elsif $prim_cluster_host_subnet_ver == $ipv4_val and $ipv6_cluster_host_subnet_ver != undef {
@@ -1549,9 +1535,9 @@ class platform::kubernetes::certsans::runtime
     $sec_cluster_host_subnet_ver = undef
   }
 
-  $prim_oam_subnet_ver = $platform::network::oam::params::subnet_version
-  $ipv4_oam_subnet_ver = $platform::network::oam::ipv4::params::subnet_version
-  $ipv6_oam_subnet_ver = $platform::network::oam::ipv6::params::subnet_version
+  $prim_oam_subnet_ver = $::platform::network::oam::params::subnet_version
+  $ipv4_oam_subnet_ver = $::platform::network::oam::ipv4::params::subnet_version
+  $ipv6_oam_subnet_ver = $::platform::network::oam::ipv6::params::subnet_version
   if $prim_oam_subnet_ver == $ipv6_val and $ipv4_oam_subnet_ver != undef {
     $sec_oam_subnet_ver = $ipv4_oam_subnet_ver
   } elsif $prim_oam_subnet_ver == $ipv4_val and $ipv6_oam_subnet_ver != undef {
@@ -1560,7 +1546,7 @@ class platform::kubernetes::certsans::runtime
     $sec_oam_subnet_ver = undef
   }
 
-  if $platform::network::mgmt::params::subnet_version == $ipv6_val {
+  if $::platform::network::mgmt::params::subnet_version == $ipv6_val {
     $localhost_address = '::1'
   } else {
     $localhost_address = '127.0.0.1'
@@ -1576,28 +1562,28 @@ class platform::kubernetes::certsans::runtime
     $certsans_sec_localhost_array = []
   }
 
-  if $platform::params::system_mode == 'simplex' {
+  if $::platform::params::system_mode == 'simplex' {
 
     # primary addresses
-    $primary_floating_array = [$platform::network::cluster_host::params::controller_address,
-                                $platform::network::mgmt::params::controller_address,
-                                $platform::network::admin::params::controller_address,
-                                $platform::network::oam::params::controller_address,
+    $primary_floating_array = [$::platform::network::cluster_host::params::controller_address,
+                                $::platform::network::mgmt::params::controller_address,
+                                $::platform::network::admin::params::controller_address,
+                                $::platform::network::oam::params::controller_address,
                                 $localhost_address]
-    if ($platform::network::cluster_host::params::controller0_address != undef) {
-      $primary_unit_cluster_array = [$platform::network::cluster_host::params::controller0_address]
+    if ($::platform::network::cluster_host::params::controller0_address != undef) {
+      $primary_unit_cluster_array = [$::platform::network::cluster_host::params::controller0_address]
     } else {
       $primary_unit_cluster_array = []
     }
 
-    if ($platform::network::mgmt::params::controller0_address != undef) {
-      $primary_unit_mgmt_array = [$platform::network::mgmt::params::controller0_address]
+    if ($::platform::network::mgmt::params::controller0_address != undef) {
+      $primary_unit_mgmt_array = [$::platform::network::mgmt::params::controller0_address]
     } else {
       $primary_unit_mgmt_array = []
     }
 
-    if ($platform::network::admin::params::controller0_address != undef) {
-      $primary_unit_admin_array = [$platform::network::admin::params::controller0_address]
+    if ($::platform::network::admin::params::controller0_address != undef) {
+      $primary_unit_admin_array = [$::platform::network::admin::params::controller0_address]
     } else {
       $primary_unit_admin_array = []
     }
@@ -1607,18 +1593,18 @@ class platform::kubernetes::certsans::runtime
 
     # secondary addresses: OAM
     if $sec_oam_subnet_ver == $ipv4_val {
-      $certsans_oam_sec_array = [$platform::network::oam::ipv4::params::controller_address]
+      $certsans_oam_sec_array = [$::platform::network::oam::ipv4::params::controller_address]
     } elsif $sec_oam_subnet_ver == $ipv6_val {
-      $certsans_oam_sec_array = [$platform::network::oam::ipv6::params::controller_address]
+      $certsans_oam_sec_array = [$::platform::network::oam::ipv6::params::controller_address]
     } else {
       $certsans_oam_sec_array = []
     }
 
     if $sec_cluster_host_subnet_ver == $ipv4_val {
 
-      $sec_cluster_float_array = [$platform::network::cluster_host::ipv4::params::controller_address]
-      if ($platform::network::cluster_host::ipv4::params::controller0_address != undef) {
-        $sec_cluster_unit_array = [$platform::network::cluster_host::ipv4::params::controller0_address]
+      $sec_cluster_float_array = [$::platform::network::cluster_host::ipv4::params::controller_address]
+      if ($::platform::network::cluster_host::ipv4::params::controller0_address != undef) {
+        $sec_cluster_unit_array = [$::platform::network::cluster_host::ipv4::params::controller0_address]
       } else {
         $sec_cluster_unit_array = []
       }
@@ -1626,9 +1612,9 @@ class platform::kubernetes::certsans::runtime
 
     } elsif $sec_cluster_host_subnet_ver == $ipv6_val {
 
-      $sec_cluster_float_array = [$platform::network::cluster_host::ipv6::params::controller_address]
-      if ($platform::network::cluster_host::ipv6::params::controller0_address != undef) {
-        $sec_cluster_unit_array = [$platform::network::cluster_host::ipv6::params::controller0_address]
+      $sec_cluster_float_array = [$::platform::network::cluster_host::ipv6::params::controller_address]
+      if ($::platform::network::cluster_host::ipv6::params::controller0_address != undef) {
+        $sec_cluster_unit_array = [$::platform::network::cluster_host::ipv6::params::controller0_address]
       } else {
         $sec_cluster_unit_array = []
       }
@@ -1640,9 +1626,9 @@ class platform::kubernetes::certsans::runtime
 
     if $sec_mgmt_subnet_ver == $ipv4_val {
 
-      $sec_mgmt_float_array = [$platform::network::mgmt::ipv4::params::controller_address]
-      if ($platform::network::mgmt::ipv4::params::controller0_address != undef) {
-        $sec_mgmt_unit_array = [$platform::network::mgmt::ipv4::params::controller0_address]
+      $sec_mgmt_float_array = [$::platform::network::mgmt::ipv4::params::controller_address]
+      if ($::platform::network::mgmt::ipv4::params::controller0_address != undef) {
+        $sec_mgmt_unit_array = [$::platform::network::mgmt::ipv4::params::controller0_address]
       } else {
         $sec_mgmt_unit_array = []
       }
@@ -1650,9 +1636,9 @@ class platform::kubernetes::certsans::runtime
 
     } elsif $sec_mgmt_subnet_ver == $ipv6_val {
 
-      $sec_mgmt_float_array = [$platform::network::mgmt::ipv6::params::controller_address]
-      if ($platform::network::mgmt::ipv6::params::controller0_address != undef) {
-        $sec_mgmt_unit_array = [$platform::network::mgmt::ipv6::params::controller0_address]
+      $sec_mgmt_float_array = [$::platform::network::mgmt::ipv6::params::controller_address]
+      if ($::platform::network::mgmt::ipv6::params::controller0_address != undef) {
+        $sec_mgmt_unit_array = [$::platform::network::mgmt::ipv6::params::controller0_address]
       } else {
         $sec_mgmt_unit_array = []
       }
@@ -1664,9 +1650,9 @@ class platform::kubernetes::certsans::runtime
 
     if $sec_admin_subnet_ver == $ipv4_val {
 
-      $sec_admin_float_array = [$platform::network::admin::ipv4::params::controller_address]
-      if ($platform::network::admin::ipv4::params::controller0_address != undef) {
-        $sec_admin_unit_array = [$platform::network::admin::ipv4::params::controller0_address]
+      $sec_admin_float_array = [$::platform::network::admin::ipv4::params::controller_address]
+      if ($::platform::network::admin::ipv4::params::controller0_address != undef) {
+        $sec_admin_unit_array = [$::platform::network::admin::ipv4::params::controller0_address]
       } else {
         $sec_admin_unit_array = []
       }
@@ -1674,9 +1660,9 @@ class platform::kubernetes::certsans::runtime
 
     } elsif $sec_admin_subnet_ver == $ipv6_val {
 
-      $sec_admin_float_array = [$platform::network::admin::ipv6::params::controller_address]
-      if ($platform::network::admin::ipv6::params::controller0_address != undef) {
-        $sec_admin_unit_array = [$platform::network::admin::ipv6::params::controller0_address]
+      $sec_admin_float_array = [$::platform::network::admin::ipv6::params::controller_address]
+      if ($::platform::network::admin::ipv6::params::controller0_address != undef) {
+        $sec_admin_unit_array = [$::platform::network::admin::ipv6::params::controller0_address]
       } else {
         $sec_admin_unit_array = []
       }
@@ -1691,68 +1677,68 @@ class platform::kubernetes::certsans::runtime
                                   $certsans_sec_localhost_array)
 
   } else {
-    $primary_floating_array = [$platform::network::cluster_host::params::controller_address,
-                                $platform::network::mgmt::params::controller_address,
-                                $platform::network::admin::params::controller_address,
-                                $platform::network::oam::params::controller_address,
+    $primary_floating_array = [$::platform::network::cluster_host::params::controller_address,
+                                $::platform::network::mgmt::params::controller_address,
+                                $::platform::network::admin::params::controller_address,
+                                $::platform::network::oam::params::controller_address,
                                 $localhost_address]
 
     # primary OAM unit addresses
-    if ($platform::network::oam::params::controller0_address != undef) and
-        ($platform::network::oam::params::controller1_address != undef) {
-      $primary_unit_oam_array = [$platform::network::oam::params::controller0_address,
-                                  $platform::network::oam::params::controller1_address]
-    } elsif ($platform::network::oam::params::controller0_address != undef) and
-            ($platform::network::oam::params::controller1_address == undef) {
-      $primary_unit_oam_array = [$platform::network::oam::params::controller0_address]
-    } elsif ($platform::network::oam::params::controller0_address == undef) and
-            ($platform::network::oam::params::controller1_address != undef) {
-      $primary_unit_oam_array = [$platform::network::oam::params::controller1_address]
+    if ($::platform::network::oam::params::controller0_address != undef) and
+        ($::platform::network::oam::params::controller1_address != undef) {
+      $primary_unit_oam_array = [$::platform::network::oam::params::controller0_address,
+                                  $::platform::network::oam::params::controller1_address]
+    } elsif ($::platform::network::oam::params::controller0_address != undef) and
+            ($::platform::network::oam::params::controller1_address == undef) {
+      $primary_unit_oam_array = [$::platform::network::oam::params::controller0_address]
+    } elsif ($::platform::network::oam::params::controller0_address == undef) and
+            ($::platform::network::oam::params::controller1_address != undef) {
+      $primary_unit_oam_array = [$::platform::network::oam::params::controller1_address]
     } else {
       $primary_unit_oam_array = []
     }
 
     # primary Cluster-host unit addresses
-    if ($platform::network::cluster_host::params::controller0_address != undef) and
-        ($platform::network::cluster_host::params::controller1_address != undef) {
-      $primary_unit_cluster_array = [$platform::network::cluster_host::params::controller0_address,
-                                      $platform::network::cluster_host::params::controller1_address]
-    } elsif ($platform::network::cluster_host::params::controller0_address != undef) and
-            ($platform::network::cluster_host::params::controller1_address == undef) {
-      $primary_unit_cluster_array = [$platform::network::cluster_host::params::controller0_address]
-    } elsif ($platform::network::cluster_host::params::controller0_address == undef) and
-            ($platform::network::cluster_host::params::controller1_address != undef) {
-      $primary_unit_cluster_array = [$platform::network::cluster_host::params::controller1_address]
+    if ($::platform::network::cluster_host::params::controller0_address != undef) and
+        ($::platform::network::cluster_host::params::controller1_address != undef) {
+      $primary_unit_cluster_array = [$::platform::network::cluster_host::params::controller0_address,
+                                      $::platform::network::cluster_host::params::controller1_address]
+    } elsif ($::platform::network::cluster_host::params::controller0_address != undef) and
+            ($::platform::network::cluster_host::params::controller1_address == undef) {
+      $primary_unit_cluster_array = [$::platform::network::cluster_host::params::controller0_address]
+    } elsif ($::platform::network::cluster_host::params::controller0_address == undef) and
+            ($::platform::network::cluster_host::params::controller1_address != undef) {
+      $primary_unit_cluster_array = [$::platform::network::cluster_host::params::controller1_address]
     } else {
       $primary_unit_cluster_array = []
     }
 
     # primary management unit addresses
-    if ($platform::network::mgmt::params::controller0_address != undef) and
-        ($platform::network::mgmt::params::controller1_address != undef) {
-      $primary_unit_mgmt_array = [$platform::network::mgmt::params::controller0_address,
-                                      $platform::network::mgmt::params::controller1_address]
-    } elsif ($platform::network::mgmt::params::controller0_address != undef) and
-            ($platform::network::mgmt::params::controller1_address == undef) {
-      $primary_unit_mgmt_array = [$platform::network::mgmt::params::controller0_address]
-    } elsif ($platform::network::mgmt::params::controller0_address == undef) and
-            ($platform::network::mgmt::params::controller1_address != undef) {
-      $primary_unit_mgmt_array = [$platform::network::mgmt::params::controller1_address]
+    if ($::platform::network::mgmt::params::controller0_address != undef) and
+        ($::platform::network::mgmt::params::controller1_address != undef) {
+      $primary_unit_mgmt_array = [$::platform::network::mgmt::params::controller0_address,
+                                      $::platform::network::mgmt::params::controller1_address]
+    } elsif ($::platform::network::mgmt::params::controller0_address != undef) and
+            ($::platform::network::mgmt::params::controller1_address == undef) {
+      $primary_unit_mgmt_array = [$::platform::network::mgmt::params::controller0_address]
+    } elsif ($::platform::network::mgmt::params::controller0_address == undef) and
+            ($::platform::network::mgmt::params::controller1_address != undef) {
+      $primary_unit_mgmt_array = [$::platform::network::mgmt::params::controller1_address]
     } else {
       $primary_unit_mgmt_array = []
     }
 
     # primary admin unit addresses
-    if ($platform::network::admin::params::controller0_address != undef) and
-        ($platform::network::admin::params::controller1_address != undef) {
-      $primary_unit_admin_array = [$platform::network::admin::params::controller0_address,
-                                      $platform::network::admin::params::controller1_address]
-    } elsif ($platform::network::admin::params::controller0_address != undef) and
-            ($platform::network::admin::params::controller1_address == undef) {
-      $primary_unit_admin_array = [$platform::network::admin::params::controller0_address]
-    } elsif ($platform::network::admin::params::controller0_address == undef) and
-            ($platform::network::admin::params::controller1_address != undef) {
-      $primary_unit_admin_array = [$platform::network::admin::params::controller1_address]
+    if ($::platform::network::admin::params::controller0_address != undef) and
+        ($::platform::network::admin::params::controller1_address != undef) {
+      $primary_unit_admin_array = [$::platform::network::admin::params::controller0_address,
+                                      $::platform::network::admin::params::controller1_address]
+    } elsif ($::platform::network::admin::params::controller0_address != undef) and
+            ($::platform::network::admin::params::controller1_address == undef) {
+      $primary_unit_admin_array = [$::platform::network::admin::params::controller0_address]
+    } elsif ($::platform::network::admin::params::controller0_address == undef) and
+            ($::platform::network::admin::params::controller1_address != undef) {
+      $primary_unit_admin_array = [$::platform::network::admin::params::controller1_address]
     } else {
       $primary_unit_admin_array = []
     }
@@ -1763,36 +1749,36 @@ class platform::kubernetes::certsans::runtime
 
     # secondary OAM addresses
     if $sec_oam_subnet_ver == $ipv4_val {
-      $secondary_oam_floating_array = [$platform::network::oam::ipv4::params::controller_address]
+      $secondary_oam_floating_array = [$::platform::network::oam::ipv4::params::controller_address]
 
-      if ($platform::network::oam::ipv4::params::controller0_address != undef) and
-          ($platform::network::oam::ipv4::params::controller1_address != undef) {
-        $secondary_unit_oam_array = [$platform::network::oam::ipv4::params::controller0_address,
-                                      $platform::network::oam::ipv4::params::controller1_address]
-      } elsif ($platform::network::oam::ipv4::params::controller0_address != undef) and
-              ($platform::network::oam::ipv4::params::controller1_address == undef) {
-        $secondary_unit_oam_array = [$platform::network::oam::ipv4::params::controller0_address]
-      } elsif ($platform::network::oam::ipv4::params::controller0_address == undef) and
-              ($platform::network::oam::ipv4::params::controller1_address != undef) {
-        $secondary_unit_oam_array = [$platform::network::oam::ipv4::params::controller1_address]
+      if ($::platform::network::oam::ipv4::params::controller0_address != undef) and
+          ($::platform::network::oam::ipv4::params::controller1_address != undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv4::params::controller0_address,
+                                      $::platform::network::oam::ipv4::params::controller1_address]
+      } elsif ($::platform::network::oam::ipv4::params::controller0_address != undef) and
+              ($::platform::network::oam::ipv4::params::controller1_address == undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv4::params::controller0_address]
+      } elsif ($::platform::network::oam::ipv4::params::controller0_address == undef) and
+              ($::platform::network::oam::ipv4::params::controller1_address != undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv4::params::controller1_address]
       } else {
         $secondary_unit_oam_array = []
       }
       $certsans_oam_sec_array = $secondary_oam_floating_array + $secondary_unit_oam_array
 
     } elsif $sec_oam_subnet_ver == $ipv6_val {
-      $secondary_oam_floating_array = [$platform::network::oam::ipv6::params::controller_address]
+      $secondary_oam_floating_array = [$::platform::network::oam::ipv6::params::controller_address]
 
-      if ($platform::network::oam::ipv6::params::controller0_address != undef) and
-          ($platform::network::oam::ipv6::params::controller1_address != undef) {
-        $secondary_unit_oam_array = [$platform::network::oam::ipv6::params::controller0_address,
-                                      $platform::network::oam::ipv6::params::controller1_address]
-      } elsif ($platform::network::oam::ipv6::params::controller0_address != undef) and
-              ($platform::network::oam::ipv6::params::controller1_address == undef) {
-        $secondary_unit_oam_array = [$platform::network::oam::ipv6::params::controller0_address]
-      } elsif ($platform::network::oam::ipv6::params::controller0_address == undef) and
-              ($platform::network::oam::ipv6::params::controller1_address != undef) {
-        $secondary_unit_oam_array = [$platform::network::oam::ipv6::params::controller1_address]
+      if ($::platform::network::oam::ipv6::params::controller0_address != undef) and
+          ($::platform::network::oam::ipv6::params::controller1_address != undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv6::params::controller0_address,
+                                      $::platform::network::oam::ipv6::params::controller1_address]
+      } elsif ($::platform::network::oam::ipv6::params::controller0_address != undef) and
+              ($::platform::network::oam::ipv6::params::controller1_address == undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv6::params::controller0_address]
+      } elsif ($::platform::network::oam::ipv6::params::controller0_address == undef) and
+              ($::platform::network::oam::ipv6::params::controller1_address != undef) {
+        $secondary_unit_oam_array = [$::platform::network::oam::ipv6::params::controller1_address]
       } else {
         $secondary_unit_oam_array = []
       }
@@ -1805,18 +1791,18 @@ class platform::kubernetes::certsans::runtime
     # secondary Cluster-host addresses
     if $sec_cluster_host_subnet_ver == $ipv4_val {
 
-      $sec_cluster_host_floating_array = [$platform::network::cluster_host::ipv4::params::controller_address]
+      $sec_cluster_host_floating_array = [$::platform::network::cluster_host::ipv4::params::controller_address]
 
-      if ($platform::network::cluster_host::ipv4::params::controller0_address != undef) and
-          ($platform::network::cluster_host::ipv4::params::controller1_address != undef) {
-        $sec_unit_cluster_host_array = [$platform::network::cluster_host::ipv4::params::controller0_address,
-                                        $platform::network::cluster_host::ipv4::params::controller1_address]
-      } elsif ($platform::network::cluster_host::ipv4::params::controller0_address != undef) and
-              ($platform::network::cluster_host::ipv4::params::controller1_address == undef) {
-        $sec_unit_cluster_host_array = [$platform::network::cluster_host::ipv4::params::controller0_address]
-      } elsif ($platform::network::cluster_host::ipv4::params::controller0_address == undef) and
-              ($platform::network::cluster_host::ipv4::params::controller1_address != undef) {
-        $sec_unit_cluster_host_array = [$platform::network::cluster_host::ipv4::params::controller1_address]
+      if ($::platform::network::cluster_host::ipv4::params::controller0_address != undef) and
+          ($::platform::network::cluster_host::ipv4::params::controller1_address != undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv4::params::controller0_address,
+                                        $::platform::network::cluster_host::ipv4::params::controller1_address]
+      } elsif ($::platform::network::cluster_host::ipv4::params::controller0_address != undef) and
+              ($::platform::network::cluster_host::ipv4::params::controller1_address == undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv4::params::controller0_address]
+      } elsif ($::platform::network::cluster_host::ipv4::params::controller0_address == undef) and
+              ($::platform::network::cluster_host::ipv4::params::controller1_address != undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv4::params::controller1_address]
       } else {
         $sec_unit_cluster_host_array = []
       }
@@ -1824,18 +1810,18 @@ class platform::kubernetes::certsans::runtime
 
     } elsif $sec_cluster_host_subnet_ver == $ipv6_val {
 
-      $sec_cluster_host_floating_array = [$platform::network::cluster_host::ipv6::params::controller_address]
+      $sec_cluster_host_floating_array = [$::platform::network::cluster_host::ipv6::params::controller_address]
 
-      if ($platform::network::cluster_host::ipv6::params::controller0_address != undef) and
-          ($platform::network::cluster_host::ipv6::params::controller1_address != undef) {
-        $sec_unit_cluster_host_array = [$platform::network::cluster_host::ipv6::params::controller0_address,
-                                        $platform::network::cluster_host::ipv6::params::controller1_address]
-      } elsif ($platform::network::cluster_host::ipv6::params::controller0_address != undef) and
-              ($platform::network::cluster_host::ipv6::params::controller1_address == undef) {
-        $sec_unit_cluster_host_array = [$platform::network::cluster_host::ipv6::params::controller0_address]
-      } elsif ($platform::network::cluster_host::ipv6::params::controller0_address == undef) and
-              ($platform::network::cluster_host::ipv6::params::controller1_address != undef) {
-        $sec_unit_cluster_host_array = [$platform::network::cluster_host::ipv6::params::controller1_address]
+      if ($::platform::network::cluster_host::ipv6::params::controller0_address != undef) and
+          ($::platform::network::cluster_host::ipv6::params::controller1_address != undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv6::params::controller0_address,
+                                        $::platform::network::cluster_host::ipv6::params::controller1_address]
+      } elsif ($::platform::network::cluster_host::ipv6::params::controller0_address != undef) and
+              ($::platform::network::cluster_host::ipv6::params::controller1_address == undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv6::params::controller0_address]
+      } elsif ($::platform::network::cluster_host::ipv6::params::controller0_address == undef) and
+              ($::platform::network::cluster_host::ipv6::params::controller1_address != undef) {
+        $sec_unit_cluster_host_array = [$::platform::network::cluster_host::ipv6::params::controller1_address]
       } else {
         $sec_unit_cluster_host_array = []
       }
@@ -1848,18 +1834,18 @@ class platform::kubernetes::certsans::runtime
     # secondary management addresses
     if $sec_mgmt_subnet_ver == $ipv4_val {
 
-      $sec_mgmt_floating_array = [$platform::network::mgmt::ipv4::params::controller_address]
+      $sec_mgmt_floating_array = [$::platform::network::mgmt::ipv4::params::controller_address]
 
-      if ($platform::network::mgmt::ipv4::params::controller0_address != undef) and
-          ($platform::network::mgmt::ipv4::params::controller1_address != undef) {
-        $sec_unit_mgmt_array = [$platform::network::mgmt::ipv4::params::controller0_address,
-                                        $platform::network::mgmt::ipv4::params::controller1_address]
-      } elsif ($platform::network::mgmt::ipv4::params::controller0_address != undef) and
-              ($platform::network::mgmt::ipv4::params::controller1_address == undef) {
-        $sec_unit_mgmt_array = [$platform::network::mgmt::ipv4::params::controller0_address]
-      } elsif ($platform::network::mgmt::ipv4::params::controller0_address == undef) and
-              ($platform::network::mgmt::ipv4::params::controller1_address != undef) {
-        $sec_unit_mgmt_array = [$platform::network::mgmt::ipv4::params::controller1_address]
+      if ($::platform::network::mgmt::ipv4::params::controller0_address != undef) and
+          ($::platform::network::mgmt::ipv4::params::controller1_address != undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv4::params::controller0_address,
+                                        $::platform::network::mgmt::ipv4::params::controller1_address]
+      } elsif ($::platform::network::mgmt::ipv4::params::controller0_address != undef) and
+              ($::platform::network::mgmt::ipv4::params::controller1_address == undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv4::params::controller0_address]
+      } elsif ($::platform::network::mgmt::ipv4::params::controller0_address == undef) and
+              ($::platform::network::mgmt::ipv4::params::controller1_address != undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv4::params::controller1_address]
       } else {
         $sec_unit_mgmt_array = []
       }
@@ -1867,18 +1853,18 @@ class platform::kubernetes::certsans::runtime
 
     } elsif $sec_mgmt_subnet_ver == $ipv6_val {
 
-      $sec_mgmt_floating_array = [$platform::network::mgmt::ipv6::params::controller_address]
+      $sec_mgmt_floating_array = [$::platform::network::mgmt::ipv6::params::controller_address]
 
-      if ($platform::network::mgmt::ipv6::params::controller0_address != undef) and
-          ($platform::network::mgmt::ipv6::params::controller1_address != undef) {
-        $sec_unit_mgmt_array = [$platform::network::mgmt::ipv6::params::controller0_address,
-                                        $platform::network::mgmt::ipv6::params::controller1_address]
-      } elsif ($platform::network::mgmt::ipv6::params::controller0_address != undef) and
-              ($platform::network::mgmt::ipv6::params::controller1_address == undef) {
-        $sec_unit_mgmt_array = [$platform::network::mgmt::ipv6::params::controller0_address]
-      } elsif ($platform::network::mgmt::ipv6::params::controller0_address == undef) and
-              ($platform::network::mgmt::ipv6::params::controller1_address != undef) {
-        $sec_unit_mgmt_array = [$platform::network::mgmt::ipv6::params::controller1_address]
+      if ($::platform::network::mgmt::ipv6::params::controller0_address != undef) and
+          ($::platform::network::mgmt::ipv6::params::controller1_address != undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv6::params::controller0_address,
+                                        $::platform::network::mgmt::ipv6::params::controller1_address]
+      } elsif ($::platform::network::mgmt::ipv6::params::controller0_address != undef) and
+              ($::platform::network::mgmt::ipv6::params::controller1_address == undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv6::params::controller0_address]
+      } elsif ($::platform::network::mgmt::ipv6::params::controller0_address == undef) and
+              ($::platform::network::mgmt::ipv6::params::controller1_address != undef) {
+        $sec_unit_mgmt_array = [$::platform::network::mgmt::ipv6::params::controller1_address]
       } else {
         $sec_unit_mgmt_array = []
       }
@@ -1891,18 +1877,18 @@ class platform::kubernetes::certsans::runtime
     # secondary admin addresses
     if $sec_admin_subnet_ver == $ipv4_val {
 
-      $sec_admin_floating_array = [$platform::network::admin::ipv4::params::controller_address]
+      $sec_admin_floating_array = [$::platform::network::admin::ipv4::params::controller_address]
 
-      if ($platform::network::admin::ipv4::params::controller0_address != undef) and
-          ($platform::network::admin::ipv4::params::controller1_address != undef) {
-        $sec_unit_admin_array = [$platform::network::admin::ipv4::params::controller0_address,
-                                        $platform::network::admin::ipv4::params::controller1_address]
-      } elsif ($platform::network::admin::ipv4::params::controller0_address != undef) and
-              ($platform::network::admin::ipv4::params::controller1_address == undef) {
-        $sec_unit_admin_array = [$platform::network::admin::ipv4::params::controller0_address]
-      } elsif ($platform::network::admin::ipv4::params::controller0_address == undef) and
-              ($platform::network::admin::ipv4::params::controller1_address != undef) {
-        $sec_unit_admin_array = [$platform::network::admin::ipv4::params::controller1_address]
+      if ($::platform::network::admin::ipv4::params::controller0_address != undef) and
+          ($::platform::network::admin::ipv4::params::controller1_address != undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv4::params::controller0_address,
+                                        $::platform::network::admin::ipv4::params::controller1_address]
+      } elsif ($::platform::network::admin::ipv4::params::controller0_address != undef) and
+              ($::platform::network::admin::ipv4::params::controller1_address == undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv4::params::controller0_address]
+      } elsif ($::platform::network::admin::ipv4::params::controller0_address == undef) and
+              ($::platform::network::admin::ipv4::params::controller1_address != undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv4::params::controller1_address]
       } else {
         $sec_unit_admin_array = []
       }
@@ -1910,18 +1896,18 @@ class platform::kubernetes::certsans::runtime
 
     } elsif $sec_admin_subnet_ver == $ipv6_val {
 
-      $sec_admin_floating_array = [$platform::network::admin::ipv6::params::controller_address]
+      $sec_admin_floating_array = [$::platform::network::admin::ipv6::params::controller_address]
 
-      if ($platform::network::admin::ipv6::params::controller0_address != undef) and
-          ($platform::network::admin::ipv6::params::controller1_address != undef) {
-        $sec_unit_admin_array = [$platform::network::admin::ipv6::params::controller0_address,
-                                        $platform::network::admin::ipv6::params::controller1_address]
-      } elsif ($platform::network::admin::ipv6::params::controller0_address != undef) and
-              ($platform::network::admin::ipv6::params::controller1_address == undef) {
-        $sec_unit_admin_array = [$platform::network::admin::ipv6::params::controller0_address]
-      } elsif ($platform::network::admin::ipv6::params::controller0_address == undef) and
-              ($platform::network::admin::ipv6::params::controller1_address != undef) {
-        $sec_unit_admin_array = [$platform::network::admin::ipv6::params::controller1_address]
+      if ($::platform::network::admin::ipv6::params::controller0_address != undef) and
+          ($::platform::network::admin::ipv6::params::controller1_address != undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv6::params::controller0_address,
+                                        $::platform::network::admin::ipv6::params::controller1_address]
+      } elsif ($::platform::network::admin::ipv6::params::controller0_address != undef) and
+              ($::platform::network::admin::ipv6::params::controller1_address == undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv6::params::controller0_address]
+      } elsif ($::platform::network::admin::ipv6::params::controller0_address == undef) and
+              ($::platform::network::admin::ipv6::params::controller1_address != undef) {
+        $sec_unit_admin_array = [$::platform::network::admin::ipv6::params::controller1_address]
       } else {
         $sec_unit_admin_array = []
       }
@@ -2545,14 +2531,14 @@ class platform::kubernetes::master::update_kubelet_params::runtime
   # Ensure kubectl symlink is up to date.  May not actually be needed.
   require platform::kubernetes::symlinks
   # Cgroup driver: set by cgroup_v2_enabled service parameter toggle
-  $cgroup_driver = str2bool($platform::params::cgroup_v2_enabled) ? {
+  $cgroup_driver = str2bool($::platform::params::cgroup_v2_enabled) ? {
     true    => 'systemd',
     default => 'cgroupfs',
   }
 
-  $kubelet_image_gc_low_threshold_percent = $platform::kubernetes::params::kubelet_image_gc_low_threshold_percent
-  $kubelet_image_gc_high_threshold_percent = $platform::kubernetes::params::kubelet_image_gc_high_threshold_percent
-  $kubelet_eviction_hard_imagefs_available = $platform::kubernetes::params::kubelet_eviction_hard_imagefs_available
+  $kubelet_image_gc_low_threshold_percent = $::platform::kubernetes::params::kubelet_image_gc_low_threshold_percent
+  $kubelet_image_gc_high_threshold_percent = $::platform::kubernetes::params::kubelet_image_gc_high_threshold_percent
+  $kubelet_eviction_hard_imagefs_available = $::platform::kubernetes::params::kubelet_eviction_hard_imagefs_available
 
   # Update kubelet parameters in kubelet-config Configmap.
   exec { 'update kubelet config parameters':
@@ -2637,19 +2623,19 @@ class platform::kubernetes::unmask_start_services
 class platform::kubernetes::kubelet::update_node_ip::runtime
   inherits ::platform::kubernetes::params {
   # lint:ignore:140chars
-  if $personality == 'worker' or $personality == 'controller' {
+  if $::personality == 'worker' or $::personality == 'controller' {
 
-    $node_ip = $platform::kubernetes::params::node_ip
-    if $platform::kubernetes::params::node_ip_secondary {
-      $node_ip_secondary = $platform::kubernetes::params::node_ip_secondary
+    $node_ip = $::platform::kubernetes::params::node_ip
+    if $::platform::kubernetes::params::node_ip_secondary {
+      $node_ip_secondary = $::platform::kubernetes::params::node_ip_secondary
     } else {
       $node_ip_secondary = 'undef'
     }
     $restart_wait = '5'
 
-    if $personality == 'worker' {
+    if $::personality == 'worker' {
       $cfgf = '/etc/kubernetes/kubelet.conf'
-    } elsif $personality == 'controller' {
+    } elsif $::personality == 'controller' {
       $cfgf = '/etc/kubernetes/admin.conf'
     }
 
@@ -2669,37 +2655,37 @@ class platform::kubernetes::kubeadm::dual_stack::ipv4::runtime {
   include ::platform::network::cluster_service::params
   include ::platform::network::cluster_service::ipv4::params
   include ::platform::network::cluster_host::ipv4::params
-  if $personality == 'controller' {
+  if $::personality == 'controller' {
     $restart_wait = '5'
 
-    $pod_prim_network = $platform::network::cluster_pod::params::subnet_network
-    $pod_prim_prefixlen = $platform::network::cluster_pod::params::subnet_prefixlen
+    $pod_prim_network = $::platform::network::cluster_pod::params::subnet_network
+    $pod_prim_prefixlen = $::platform::network::cluster_pod::params::subnet_prefixlen
     $pod_prim_subnet = "${pod_prim_network}/${pod_prim_prefixlen}"
 
-    if $platform::network::cluster_pod::ipv4::params::subnet_version == $platform::params::ipv4  {
-      $pod_sec_network = $platform::network::cluster_pod::ipv4::params::subnet_network
-      $pod_sec_prefixlen = $platform::network::cluster_pod::ipv4::params::subnet_prefixlen
+    if $platform::network::cluster_pod::ipv4::params::subnet_version == $::platform::params::ipv4  {
+      $pod_sec_network = $::platform::network::cluster_pod::ipv4::params::subnet_network
+      $pod_sec_prefixlen = $::platform::network::cluster_pod::ipv4::params::subnet_prefixlen
       $pod_sec_subnet = "${pod_sec_network}/${pod_sec_prefixlen}"
     } else {
       $pod_sec_subnet = 'undef'
     }
 
-    $svc_prim_network = $platform::network::cluster_service::params::subnet_network
-    $svc_prim_prefixlen = $platform::network::cluster_service::params::subnet_prefixlen
+    $svc_prim_network = $::platform::network::cluster_service::params::subnet_network
+    $svc_prim_prefixlen = $::platform::network::cluster_service::params::subnet_prefixlen
     $svc_prim_subnet = "${svc_prim_network}/${svc_prim_prefixlen}"
 
-    if $platform::network::cluster_service::ipv4::params::subnet_version == $platform::params::ipv4 {
-      $svc_sec_network = $platform::network::cluster_service::ipv4::params::subnet_network
-      $svc_sec_prefixlen = $platform::network::cluster_service::ipv4::params::subnet_prefixlen
+    if $platform::network::cluster_service::ipv4::params::subnet_version == $::platform::params::ipv4 {
+      $svc_sec_network = $::platform::network::cluster_service::ipv4::params::subnet_network
+      $svc_sec_prefixlen = $::platform::network::cluster_service::ipv4::params::subnet_prefixlen
       $svc_sec_subnet = "${svc_sec_network}/${svc_sec_prefixlen}"
     } else {
       $svc_sec_subnet = 'undef'
     }
 
-    if $platform::params::hostname == 'controller-0' {
-      $cluster_host_addr = $platform::network::cluster_host::params::controller0_address
+    if $::platform::params::hostname == 'controller-0' {
+      $cluster_host_addr = $::platform::network::cluster_host::params::controller0_address
     } else {
-      $cluster_host_addr = $platform::network::cluster_host::params::controller1_address
+      $cluster_host_addr = $::platform::network::cluster_host::params::controller1_address
     }
 
     exec { 'update kubeadm pod and service secondary IPv6 subnets':
@@ -2718,37 +2704,37 @@ class platform::kubernetes::kubeadm::dual_stack::ipv6::runtime {
   include ::platform::network::cluster_service::params
   include ::platform::network::cluster_service::ipv6::params
   include ::platform::network::cluster_host::ipv6::params
-  if $personality == 'controller' {
+  if $::personality == 'controller' {
     $restart_wait = '5'
 
-    $pod_prim_network = $platform::network::cluster_pod::params::subnet_network
-    $pod_prim_prefixlen = $platform::network::cluster_pod::params::subnet_prefixlen
+    $pod_prim_network = $::platform::network::cluster_pod::params::subnet_network
+    $pod_prim_prefixlen = $::platform::network::cluster_pod::params::subnet_prefixlen
     $pod_prim_subnet = "${pod_prim_network}/${pod_prim_prefixlen}"
 
-    if $platform::network::cluster_pod::ipv6::params::subnet_version == $platform::params::ipv6  {
-      $pod_sec_network = $platform::network::cluster_pod::ipv6::params::subnet_network
-      $pod_sec_prefixlen = $platform::network::cluster_pod::ipv6::params::subnet_prefixlen
+    if $platform::network::cluster_pod::ipv6::params::subnet_version == $::platform::params::ipv6  {
+      $pod_sec_network = $::platform::network::cluster_pod::ipv6::params::subnet_network
+      $pod_sec_prefixlen = $::platform::network::cluster_pod::ipv6::params::subnet_prefixlen
       $pod_sec_subnet = "${pod_sec_network}/${pod_sec_prefixlen}"
     } else {
       $pod_sec_subnet = 'undef'
     }
 
-    $svc_prim_network = $platform::network::cluster_service::params::subnet_network
-    $svc_prim_prefixlen = $platform::network::cluster_service::params::subnet_prefixlen
+    $svc_prim_network = $::platform::network::cluster_service::params::subnet_network
+    $svc_prim_prefixlen = $::platform::network::cluster_service::params::subnet_prefixlen
     $svc_prim_subnet = "${svc_prim_network}/${svc_prim_prefixlen}"
 
-    if $platform::network::cluster_service::ipv6::params::subnet_version == $platform::params::ipv6 {
-      $svc_sec_network = $platform::network::cluster_service::ipv6::params::subnet_network
-      $svc_sec_prefixlen = $platform::network::cluster_service::ipv6::params::subnet_prefixlen
+    if $platform::network::cluster_service::ipv6::params::subnet_version == $::platform::params::ipv6 {
+      $svc_sec_network = $::platform::network::cluster_service::ipv6::params::subnet_network
+      $svc_sec_prefixlen = $::platform::network::cluster_service::ipv6::params::subnet_prefixlen
       $svc_sec_subnet = "${svc_sec_network}/${svc_sec_prefixlen}"
     } else {
       $svc_sec_subnet = 'undef'
     }
 
-    if $platform::params::hostname == 'controller-0' {
-      $cluster_host_addr = $platform::network::cluster_host::params::controller0_address
+    if $::platform::params::hostname == 'controller-0' {
+      $cluster_host_addr = $::platform::network::cluster_host::params::controller0_address
     } else {
-      $cluster_host_addr = $platform::network::cluster_host::params::controller1_address
+      $cluster_host_addr = $::platform::network::cluster_host::params::controller1_address
     }
 
     exec { 'update kubeadm pod and service secondary IPv6 subnets':
@@ -2774,15 +2760,15 @@ class platform::kubernetes::dual_stack::ipv4::runtime {
   $kubeconfig = '--kubeconfig=/etc/kubernetes/admin.conf'
   $restart_wait = '5'
 
-  $pod_prim_network = $platform::network::cluster_pod::params::subnet_network
-  $pod_prim_prefixlen = $platform::network::cluster_pod::params::subnet_prefixlen
+  $pod_prim_network = $::platform::network::cluster_pod::params::subnet_network
+  $pod_prim_prefixlen = $::platform::network::cluster_pod::params::subnet_prefixlen
   $pod_prim_subnet = "${pod_prim_network}/${pod_prim_prefixlen}"
 
-  if $platform::network::cluster_pod::ipv4::params::subnet_version == $platform::params::ipv4  {
-    $pod_sec_network = $platform::network::cluster_pod::ipv4::params::subnet_network
-    $pod_sec_prefixlen = $platform::network::cluster_pod::ipv4::params::subnet_prefixlen
+  if $platform::network::cluster_pod::ipv4::params::subnet_version == $::platform::params::ipv4  {
+    $pod_sec_network = $::platform::network::cluster_pod::ipv4::params::subnet_network
+    $pod_sec_prefixlen = $::platform::network::cluster_pod::ipv4::params::subnet_prefixlen
     $pod_sec_subnet = "${pod_sec_network}/${pod_sec_prefixlen}"
-    $c0_addr = $platform::network::cluster_host::ipv4::params::controller0_address
+    $c0_addr = $::platform::network::cluster_host::ipv4::params::controller0_address
     $state = true
   } else {
     $pod_sec_subnet = 'undef'
@@ -2790,13 +2776,13 @@ class platform::kubernetes::dual_stack::ipv4::runtime {
     $c0_addr = '::'
   }
 
-  $svc_prim_network = $platform::network::cluster_service::params::subnet_network
-  $svc_prim_prefixlen = $platform::network::cluster_service::params::subnet_prefixlen
+  $svc_prim_network = $::platform::network::cluster_service::params::subnet_network
+  $svc_prim_prefixlen = $::platform::network::cluster_service::params::subnet_prefixlen
   $svc_prim_subnet = "${svc_prim_network}/${svc_prim_prefixlen}"
 
-  if $platform::network::cluster_service::ipv4::params::subnet_version == $platform::params::ipv4 {
-    $svc_sec_network = $platform::network::cluster_service::ipv4::params::subnet_network
-    $svc_sec_prefixlen = $platform::network::cluster_service::ipv4::params::subnet_prefixlen
+  if $platform::network::cluster_service::ipv4::params::subnet_version == $::platform::params::ipv4 {
+    $svc_sec_network = $::platform::network::cluster_service::ipv4::params::subnet_network
+    $svc_sec_prefixlen = $::platform::network::cluster_service::ipv4::params::subnet_prefixlen
     $svc_sec_subnet = "${svc_sec_network}/${svc_sec_prefixlen}"
   } else {
     $svc_sec_subnet = 'undef'
@@ -2855,15 +2841,15 @@ class platform::kubernetes::dual_stack::ipv6::runtime {
   $kubeconfig = '--kubeconfig=/etc/kubernetes/admin.conf'
   $restart_wait = '10'
 
-  $pod_prim_network = $platform::network::cluster_pod::params::subnet_network
-  $pod_prim_prefixlen = $platform::network::cluster_pod::params::subnet_prefixlen
+  $pod_prim_network = $::platform::network::cluster_pod::params::subnet_network
+  $pod_prim_prefixlen = $::platform::network::cluster_pod::params::subnet_prefixlen
   $pod_prim_subnet = "${pod_prim_network}/${pod_prim_prefixlen}"
 
-  if $platform::network::cluster_pod::ipv6::params::subnet_version == $platform::params::ipv6  {
-    $pod_sec_network = $platform::network::cluster_pod::ipv6::params::subnet_network
-    $pod_sec_prefixlen = $platform::network::cluster_pod::ipv6::params::subnet_prefixlen
+  if $platform::network::cluster_pod::ipv6::params::subnet_version == $::platform::params::ipv6  {
+    $pod_sec_network = $::platform::network::cluster_pod::ipv6::params::subnet_network
+    $pod_sec_prefixlen = $::platform::network::cluster_pod::ipv6::params::subnet_prefixlen
     $pod_sec_subnet = "${pod_sec_network}/${pod_sec_prefixlen}"
-    $c0_addr = $platform::network::cluster_host::ipv6::params::controller0_address
+    $c0_addr = $::platform::network::cluster_host::ipv6::params::controller0_address
     $state = true
   } else {
     $pod_sec_subnet = 'undef'
@@ -2871,13 +2857,13 @@ class platform::kubernetes::dual_stack::ipv6::runtime {
     $c0_addr = '::'
   }
 
-  $svc_prim_network = $platform::network::cluster_service::params::subnet_network
-  $svc_prim_prefixlen = $platform::network::cluster_service::params::subnet_prefixlen
+  $svc_prim_network = $::platform::network::cluster_service::params::subnet_network
+  $svc_prim_prefixlen = $::platform::network::cluster_service::params::subnet_prefixlen
   $svc_prim_subnet = "${svc_prim_network}/${svc_prim_prefixlen}"
 
-  if $platform::network::cluster_service::ipv6::params::subnet_version == $platform::params::ipv6 {
-    $svc_sec_network = $platform::network::cluster_service::ipv6::params::subnet_network
-    $svc_sec_prefixlen = $platform::network::cluster_service::ipv6::params::subnet_prefixlen
+  if $platform::network::cluster_service::ipv6::params::subnet_version == $::platform::params::ipv6 {
+    $svc_sec_network = $::platform::network::cluster_service::ipv6::params::subnet_network
+    $svc_sec_prefixlen = $::platform::network::cluster_service::ipv6::params::subnet_prefixlen
     $svc_sec_subnet = "${svc_sec_network}/${svc_sec_prefixlen}"
   } else {
     $svc_sec_subnet = 'undef'

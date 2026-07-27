@@ -1,0 +1,36 @@
+[Unit]
+Description=etcd fixed per-controller member
+Documentation=https://etcd.io/docs
+Documentation=man:etcd
+After=network-online.target
+Wants=network-online.target
+Before=containerd.service kubelet.service
+
+[Service]
+EnvironmentFile=/etc/default/etcd-fixed
+Environment=GOMAXPROCS=<%= @etcd_max_procs %>
+User=root
+NotifyAccess=all
+Type=notify
+TimeoutStartSec=300
+ExecStartPre=/usr/local/bin/etcd_fixed_membership.py --pre-start
+ExecStart=/usr/bin/etcd
+ExecStartPost=/usr/local/bin/etcd_fixed_membership.py --post-start
+Restart=on-failure
+RestartSec=10
+
+# syscall filtering
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# cgroup performance engineering
+Slice=<%= scope['platform::k8splatform::params::slice'] %>
+CPUShares=<%= scope['platform::k8splatform::params::etcd_shares'] %>
+CPUWeight=<%= 1 + ((scope['platform::k8splatform::params::etcd_shares'] - 2) * 9999) / 262142 %>
+Nice=-19
+IOSchedulingClass=best-effort
+IOWeight=1000
+IOSchedulingPriority=0
+
+[Install]
+WantedBy=multi-user.target

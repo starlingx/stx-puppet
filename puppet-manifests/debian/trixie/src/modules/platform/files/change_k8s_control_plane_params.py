@@ -1197,10 +1197,10 @@ def main():
     etcd_schema = {
         'root': {},
         'external': {
-            'etcd_cafile': 'caFile',
-            'etcd_certfile': 'certFile',
-            'etcd_keyfile': 'keyFile',
-            'etcd_servers': 'endpoints'
+            'etcd_ca_cert': 'caFile',
+            'etcd_cert_file': 'certFile',
+            'etcd_key_file': 'keyFile',
+            'etcd_endpoints': 'endpoints'
         }
     }
 
@@ -1465,6 +1465,17 @@ def main():
             # by default params are saved like strings
             else:
                 cluster_cfg['etcd']['external'][param] = value
+
+    # Apply CLI arguments directly when hieradata has no etcd params
+    # (e.g., runtime manifest puts etcd data in host.yaml, not system.yaml)
+    if etcd_servers:
+        cluster_cfg['etcd']['external']['endpoints'] = etcd_servers.split(',')
+    if etcd_cafile:
+        cluster_cfg['etcd']['external']['caFile'] = etcd_cafile
+    if etcd_certfile:
+        cluster_cfg['etcd']['external']['certFile'] = etcd_certfile
+    if etcd_keyfile:
+        cluster_cfg['etcd']['external']['keyFile'] = etcd_keyfile
 
     # Export the updated k8s cluster configuration
     if export_k8s_cluster_configuration(cluster_config_file, cluster_cfg) != 0:

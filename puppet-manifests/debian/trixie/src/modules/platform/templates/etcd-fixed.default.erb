@@ -1,0 +1,67 @@
+<%- # Determine the local fixed member name and addresses based on hostname -%>
+<%- if scope['platform::params::hostname'] == 'controller-0' -%>
+<%- fixed_name = "#{@fixed_name_prefix}-0" -%>
+<%- ctrl_addr = @cluster_host_controller0_address -%>
+<%- else -%>
+<%- fixed_name = "#{@fixed_name_prefix}-1" -%>
+<%- ctrl_addr = @cluster_host_controller1_address -%>
+<%- end -%>
+<%- if @bind_address_version.to_i == scope['platform::params::ipv6'].to_i -%>
+<%- fixed_client_url = "https://[#{ctrl_addr}]:#{@port}" -%>
+<%- fixed_peer_url = "https://[#{ctrl_addr}]:#{@peer_port}" -%>
+<%- else -%>
+<%- fixed_client_url = "https://#{ctrl_addr}:#{@port}" -%>
+<%- fixed_peer_url = "https://#{ctrl_addr}:#{@peer_port}" -%>
+<%- end -%>
+<%- # For bootstrap (single-node seed), initial_cluster is just this node.
+    # For controller-1, include fixed-0 so the membership helper can find it.
+    # During a USM upgrade, fixed members JOIN the existing cluster (the
+    # running floating member), so STATE must be "existing" and INITIAL_CLUSTER
+    # must include the floating member.
+-%>
+<%- floating_addr = scope['platform::network::cluster_host::params::controller_address'] -%>
+<%- if @bind_address_version.to_i == scope['platform::params::ipv6'].to_i -%>
+<%- floating_peer = "https://[#{floating_addr}]:#{@peer_port}" -%>
+<%- else -%>
+<%- floating_peer = "https://#{floating_addr}:#{@peer_port}" -%>
+<%- end -%>
+<%- # Convert the fact to a string for comparison; the facter returns a Ruby
+    # boolean from File.exist?(...).
+-%>
+<%- usm_upgrade = scope['::usm_upgrade_in_progress'].to_s == 'true' -%>
+<%- if usm_upgrade -%>
+<%- # Upgrade: join the running floating member's cluster
+-%>
+<%- initial_cluster = "controller=#{floating_peer},#{fixed_name}=#{fixed_peer_url}" -%>
+<%- initial_cluster_state = "existing" -%>
+<%- elsif scope['platform::params::hostname'] == 'controller-0' -%>
+<%- initial_cluster = "#{fixed_name}=#{fixed_peer_url}" -%>
+<%- initial_cluster_state = "new" -%>
+<%- else -%>
+<%- fixed0_addr = @cluster_host_controller0_address -%>
+<%- if @bind_address_version.to_i == scope['platform::params::ipv6'].to_i -%>
+<%- fixed0_peer = "https://[#{fixed0_addr}]:#{@peer_port}" -%>
+<%- else -%>
+<%- fixed0_peer = "https://#{fixed0_addr}:#{@peer_port}" -%>
+<%- end -%>
+<%- initial_cluster = "fixed-0=#{fixed0_peer},#{fixed_name}=#{fixed_peer_url}" -%>
+<%- initial_cluster_state = "existing" -%>
+<%- end -%>
+ETCD_NAME="<%= fixed_name %>"
+ETCD_DATA_DIR="<%= @fixed_basedir %>/db/<%= fixed_name %>.etcd"
+ETCD_LISTEN_CLIENT_URLS="<%= fixed_client_url %>,https://127.0.0.1:<%= @port %>"
+ETCD_ADVERTISE_CLIENT_URLS="<%= fixed_client_url %>"
+ETCD_LISTEN_PEER_URLS="<%= fixed_peer_url %>"
+ETCD_INITIAL_ADVERTISE_PEER_URLS="<%= fixed_peer_url %>"
+ETCD_INITIAL_CLUSTER="<%= initial_cluster %>"
+ETCD_INITIAL_CLUSTER_STATE="<%= initial_cluster_state %>"
+ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster"
+ETCD_QUOTA_BACKEND_BYTES="<%= @quota_backend_bytes %>"
+ETCD_CLIENT_CERT_AUTH="true"
+ETCD_CERT_FILE="/etc/etcd/etcd-server.crt"
+ETCD_KEY_FILE="/etc/etcd/etcd-server.key"
+ETCD_TRUSTED_CA_FILE="/etc/etcd/ca.crt"
+ETCD_PEER_CLIENT_CERT_AUTH="true"
+ETCD_PEER_CERT_FILE="/etc/etcd/etcd-server.crt"
+ETCD_PEER_KEY_FILE="/etc/etcd/etcd-server.key"
+ETCD_PEER_TRUSTED_CA_FILE="/etc/etcd/ca.crt"

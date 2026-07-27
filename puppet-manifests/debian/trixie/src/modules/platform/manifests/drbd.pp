@@ -27,9 +27,9 @@ class platform::drbd::params (
 
   if $system_mode == 'simplex' {
     if $platform::network::mgmt::params::controller0_address =~ Stdlib::IP::Address::V6 {
-      $ip2 = $platform::network::blackhole::ipv6_host
+      $ip2 = pick($platform::network::blackhole::ipv6_host, '100::1')
     } else {
-      $ip2 = $platform::network::blackhole::ipv4_host
+      $ip2 = pick($platform::network::blackhole::ipv4_host, '169.254.254.254')
     }
   }
   else {
@@ -349,10 +349,35 @@ class platform::drbd::etcd::params (
 class platform::drbd::etcd (
 ) inherits ::platform::drbd::etcd::params {
 
-  $drbd_primary = undef
-  $drbd_initial = undef
-  $drbd_automount = undef
-  $drbd_manage = undef
+  # The etcd DRBD LV is kept present in all system modes (even simplex) for the
+  # duplex-conversion path, and the controllerfs resize during host-unlock
+  # operates on it. On a standalone controller (simplex, or controller-0 before
+  # controller-1 is provisioned) the resource must therefore be promoted to
+  # primary and its filesystem created here, even though the floating etcd
+  # member is not SM-managed in simplex. Without this the etcd DRBD device stays
+  # Secondary/Inconsistent and unformatted, and the unlock hangs on the etcd
+  # filesystem resize ("Wrong medium type"). In non-standalone (duplex) the
+  # resource is left SM-managed (undef), matching dc_vault/cephmon/rook.
+  # initial_setup promotes the resource and formats the filesystem. It is
+  # needed on a fresh simplex install -- without it the device stays
+  # Secondary/Inconsistent and unformatted, and the unlock fails the etcd
+  # filesystem resize with "Wrong medium type". It must NOT run during an
+  # upgrade: the volume already holds the incumbent keyspace, and
+  # formatting it destroys the cluster with nothing reporting a failure.
+  if str2bool($::is_standalone_controller) and $platform::params::system_mode == 'simplex' {
+    $drbd_primary = true
+    $drbd_initial = str2bool($::usm_upgrade_in_progress) ? {
+      true    => undef,
+      default => true,
+    }
+    $drbd_automount = undef
+    $drbd_manage = true
+  } else {
+    $drbd_primary = undef
+    $drbd_initial = undef
+    $drbd_automount = undef
+    $drbd_manage = undef
+  }
 
   platform::drbd::filesystem { $resource_name:
     vg_name                => $vg_name,

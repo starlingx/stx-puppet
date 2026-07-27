@@ -6,8 +6,8 @@ Documentation=man:etcd
 [Service]
 EnvironmentFile=-/etc/default/etcd
 User=root
-NotifyAccess=all
-Type=notify
+NotifyAccess=none
+Type=simple
 ExecStart=
 ExecStart=-/bin/bash -c "GOMAXPROCS=<%= @etcd_max_procs %> /usr/bin/etcd"
 ExecStartPost=/bin/bash -c 'echo $MAINPID >/var/run/etcd.pid'

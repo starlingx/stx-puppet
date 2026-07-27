@@ -1,7 +1,7 @@
 [Unit]
 # Add a dependency to kubelet on config so it doesn't enter a bad state on subsequent boots
 After=config.service
-After=containerd.service etcd.service
+After=containerd.service etcd.service etcd-fixed.service
 After=syslog.service
 
 [Service]
