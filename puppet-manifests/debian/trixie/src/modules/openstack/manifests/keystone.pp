@@ -281,7 +281,7 @@ class openstack::keystone::federation
     Optional[String], 'first', ''
   )
   $horizon_https_port = $openstack::horizon::params::https_port
-  $oam_address = $platform::network::oam::params::controller_address
+  $oam_address = $platform::network::oam::params::controller_address_url
   $trusted_dashboard_url = "https://${oam_address}:${horizon_https_port}/auth/websso/"
   $rc_file = '/etc/platform/openrc'
   # Check variable for Keystone readiness
