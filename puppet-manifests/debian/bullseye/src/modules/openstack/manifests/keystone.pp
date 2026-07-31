@@ -185,6 +185,7 @@ class openstack::keystone::haproxy
     private_ip_address => $mgmt_ip,
     alt_private_port   => $oauth2_proxy_port,
     server_timeout     => '600s',
+    check              => 'check inter 5s fall 3 rise 2',
   }
 
   # Configure rules for DC https enabled admin endpoint.

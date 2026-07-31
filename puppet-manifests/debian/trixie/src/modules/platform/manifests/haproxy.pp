@@ -191,6 +191,7 @@ define platform::haproxy::alt_backend (
   $server_timeout = undef,
   $retry_on = undef,
   $mode_option = undef,
+  $check = undef,
 ) {
 
   if $private_ip_address {
@@ -205,9 +206,15 @@ define platform::haproxy::alt_backend (
     $timeout_option = undef
   }
 
+  if $check {
+    $server_line = "${server_name} ${private_ip}:${alt_private_port} ${check}"
+  } else {
+    $server_line = "${server_name} ${private_ip}:${alt_private_port}"
+  }
+
   # Filter out undef and empty values for puppet-haproxy 8.x compatibility
   $backend_options = {
-    'server'   => "${server_name} ${private_ip}:${alt_private_port}",
+    'server'   => $server_line,
     'timeout'  => $timeout_option,
     'mode'     => $mode_option,
     'retry-on' => $retry_on
