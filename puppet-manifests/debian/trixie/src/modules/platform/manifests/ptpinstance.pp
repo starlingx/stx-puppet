@@ -459,6 +459,52 @@ define platform::ptpinstance::disable_e810_gnss_uart_interfaces (
   }
 }
 
+class platform::ptpinstance::leapfile_copy (
+  $config = {},
+) {
+  $leapfile_default = '/usr/share/zoneinfo/leap-seconds.list'
+
+  # Find the leapfile source path from the first ts2phc instance that has
+  # a leapfile parameter configured.
+  $ts2phc_instances = $config.filter |$key, $value| {
+    $value['service'] == 'ts2phc' and $value['global_parameters']['leapfile']
+  }
+
+  if !empty($ts2phc_instances) {
+    $first_instance = $ts2phc_instances.values[0]
+    $leapfile_source = $first_instance['global_parameters']['leapfile']
+  } else {
+    $leapfile_source = undef
+  }
+
+  if $leapfile_source and find_file($leapfile_source) {
+    # Create a one-time backup of the original leapfile before overwriting it.
+    exec { 'backup_leapfile_original':
+      command => "/bin/cp ${leapfile_default} ${leapfile_default}_original",
+      creates => "${leapfile_default}_original",
+      onlyif  => "/usr/bin/test -f ${leapfile_default} -a ! -L ${leapfile_default}",
+    }
+
+    # Copy the leapfile from the ts2phc source path directly to
+    # /usr/share/zoneinfo/leap-seconds.list so the ptp-notification
+    # container can access it via the mounted /usr/share/zoneinfo/ directory.
+    exec { 'copy_leapfile_to_zoneinfo':
+      command => "/bin/cp -f ${leapfile_source} ${leapfile_default}",
+      require => Exec['backup_leapfile_original'],
+      unless  => "/usr/bin/test -f ${leapfile_default} && /usr/bin/diff -q ${leapfile_source} ${leapfile_default}",
+    }
+  } else {
+    # No valid ts2phc leapfile source available. If a previous run
+    # replaced the original file, restore it and remove the backup.
+    if find_file("${leapfile_default}_original") {
+      exec { 'restore_leapfile_original':
+        command => "/bin/mv -f ${leapfile_default}_original ${leapfile_default}",
+        onlyif  => "/usr/bin/test -f ${leapfile_default}_original",
+      }
+    }
+  }
+}
+
 class platform::ptpinstance (
   $enabled = false,
   $runtime = false,
@@ -663,6 +709,13 @@ class platform::ptpinstance (
 
     # Create PTP interfaces configuration
     class { 'platform::ptpinstance::ptp_interfaces_conf': }
+
+    # Copy the ts2phc leapfile to /usr/share/zoneinfo/ for ptp-notification
+    # container access. The DaemonSet mounts /usr/share/zoneinfo/ from the
+    # host, so we copy the sysadmin-configured leapfile there directly.
+    class { 'platform::ptpinstance::leapfile_copy':
+      config => $config,
+    }
 
     # Service startup ordering: ptp4l first, then dependents
     Exec <| tag == 'ptp4l-start' |> -> Exec <| tag == 'ts2phc-start' |>
