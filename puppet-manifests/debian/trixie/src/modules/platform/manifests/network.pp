@@ -981,6 +981,31 @@ define platform::network::interfaces::sriov_ratelimit (
 }
 
 
+define platform::network::interfaces::channels::channel_config (
+  Optional[Integer] $channels = undef,
+  Optional[Integer] $sriov_vf_channels = undef,
+) {
+  if $channels {
+    exec { "channels: ${title}":
+      command   => "/usr/sbin/ethtool -L ${title} combined ${channels}",
+      onlyif    => "/usr/sbin/ethtool -l ${title}",
+      logoutput => true,
+    }
+  }
+}
+
+
+class platform::network::interfaces::channels::runtime {
+  include platform::network::interfaces::channels
+}
+
+class platform::network::interfaces::channels (
+    $channel_config = {}
+) {
+  create_resources('platform::network::interfaces::channels::channel_config', $channel_config, {})
+}
+
+
 class platform::network::interfaces::sriov (
   $sriov_config = {}
 ) {
@@ -1102,6 +1127,7 @@ class platform::network::apply {
   include ::platform::network::addresses
   include ::platform::network::routes
   include ::platform::network::interfaces::rate_limit
+  include ::platform::network::interfaces::channels
   include ::platform::network::blackhole
 
   Exec['cleanup-interfaces-file']
