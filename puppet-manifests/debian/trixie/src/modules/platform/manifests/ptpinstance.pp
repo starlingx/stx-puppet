@@ -462,7 +462,10 @@ define platform::ptpinstance::disable_e810_gnss_uart_interfaces (
 class platform::ptpinstance::leapfile_copy (
   $config = {},
 ) {
-  $leapfile_default = '/usr/share/zoneinfo/leap-seconds.list'
+  include ::platform::ptpinstance::params
+  $ptp_conf_dir = $::platform::ptpinstance::params::ptp_conf_dir
+  $leapfile_system = '/usr/share/zoneinfo/leap-seconds.list'
+  $leapfile_ptpdir = "${ptp_conf_dir}/ptpinstance/leap-seconds.list"
 
   # Find the leapfile source path from the first ts2phc instance that has
   # a leapfile parameter configured.
@@ -478,29 +481,23 @@ class platform::ptpinstance::leapfile_copy (
   }
 
   if $leapfile_source and find_file($leapfile_source) {
-    # Create a one-time backup of the original leapfile before overwriting it.
-    exec { 'backup_leapfile_original':
-      command => "/bin/cp ${leapfile_default} ${leapfile_default}_original",
-      creates => "${leapfile_default}_original",
-      onlyif  => "/usr/bin/test -f ${leapfile_default} -a ! -L ${leapfile_default}",
-    }
-
-    # Copy the leapfile from the ts2phc source path directly to
-    # /usr/share/zoneinfo/leap-seconds.list so the ptp-notification
-    # container can access it via the mounted /usr/share/zoneinfo/ directory.
-    exec { 'copy_leapfile_to_zoneinfo':
-      command => "/bin/cp -f ${leapfile_source} ${leapfile_default}",
-      require => Exec['backup_leapfile_original'],
-      unless  => "/usr/bin/test -f ${leapfile_default} && /usr/bin/diff -q ${leapfile_source} ${leapfile_default}",
+    # Copy the custom leapfile to the writable PTP config directory.
+    # The ptp-notification container mounts host /etc/ at /ptp/, so the
+    # file is accessible at /ptp/linuxptp/ptpinstance/leap-seconds.list
+    # without needing to write to /usr/share/zoneinfo/ (read-only on ostree).
+    exec { 'copy_leapfile_to_ptpinstance':
+      command => "/bin/cp -f ${leapfile_source} ${leapfile_ptpdir}",
+      unless  => "/usr/bin/test -f ${leapfile_ptpdir} && /usr/bin/diff -q ${leapfile_source} ${leapfile_ptpdir}",
+      require => File["${ptp_conf_dir}/ptpinstance"],
     }
   } else {
-    # No valid ts2phc leapfile source available. If a previous run
-    # replaced the original file, restore it and remove the backup.
-    if find_file("${leapfile_default}_original") {
-      exec { 'restore_leapfile_original':
-        command => "/bin/mv -f ${leapfile_default}_original ${leapfile_default}",
-        onlyif  => "/usr/bin/test -f ${leapfile_default}_original",
-      }
+    # No custom leapfile configured — copy the system default so
+    # ptp-notification always has a leapfile available.
+    exec { 'copy_system_leapfile_to_ptpinstance':
+      command => "/bin/cp -f ${leapfile_system} ${leapfile_ptpdir}",
+      unless  => "/usr/bin/test -f ${leapfile_ptpdir} && /usr/bin/diff -q ${leapfile_system} ${leapfile_ptpdir}",
+      onlyif  => "/usr/bin/test -f ${leapfile_system}",
+      require => File["${ptp_conf_dir}/ptpinstance"],
     }
   }
 }
