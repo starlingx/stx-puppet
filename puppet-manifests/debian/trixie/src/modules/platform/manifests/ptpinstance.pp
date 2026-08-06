@@ -752,6 +752,7 @@ class platform::ptpinstance::runtime {
   -> class { 'platform::ptpinstance::gnss_monitor_read_devices': }
   -> class { 'platform::ptpinstance::nic_clock': }
   -> class { 'platform::ptpinstance::gnss_state': }
+  -> class { 'platform::ptpinstance::dpll_pin_config': }
   -> class { 'platform::ptpinstance::gnss_monitor': }
   -> class { 'platform::ptpinstance': runtime => true,
               previous_gpsd_monitored_devices =>
@@ -931,6 +932,32 @@ class platform::ptpinstance::gnss_state (
         --pin_package_label ${pin_package_label} --state ${state}",
       logoutput => 'on_failure',
       timeout   => 30,
+    }
+  }
+}
+
+class platform::ptpinstance::dpll_pin_config (
+  $configs = [],
+) {
+  require ::platform::ptpinstance::gnss_state
+
+  if length($configs) > 0 {
+    $config_json = to_json($configs)
+    $config_file = '/tmp/dpll_pin_config.json'
+
+    file { $config_file:
+      ensure  => file,
+      content => $config_json,
+      mode    => '0644',
+    }
+    -> exec { 'apply-dpll-pin-config':
+      command   => "python /usr/share/puppet/modules/platform/files/change_network_card_pin_config.py --config ${config_file}",
+      logoutput => 'on_failure',
+      timeout   => 30,
+    }
+    -> file { 'cleanup-dpll-pin-config':
+      ensure => absent,
+      path   => $config_file,
     }
   }
 }
