@@ -17,7 +17,7 @@ def read_all_config_files(ptp_conf_dir):
     # Create a list of PTP configuration files
     config_files = []
     for service in ['ptp4l', 'phc2sys', 'ts2phc']:
-        pattern = f"{ptp_conf_dir}{service}-*.conf"
+        pattern = os.path.join(ptp_conf_dir, f"{service}-*.conf")
         config_files += glob(pattern)
 
     # Create a list of unique port names from all
@@ -40,7 +40,7 @@ def read_phc2sys_cmdlines(ptp_opt_dir):
     all configured interface names.
     """
     # Create a list of phc2sys command line files
-    pattern = f"{ptp_opt_dir}phc2sys-instance-*"
+    pattern = os.path.join(ptp_opt_dir, "phc2sys-instance-*")
     files = glob(pattern)
 
     # Create a list of unique port names from all
@@ -72,7 +72,8 @@ def get_ports_phc_index(port_name):
     ])
     data = data.decode()
     for line in data.split(os.linesep):
-        if 'PTP Hardware Clock:' in line:
+        if 'PTP Hardware Clock:' in line or \
+           'Hardware timestamp provider index:' in line:
             split_line = line.split(':')
             if len(split_line) > 0:
                 phc_index = split_line[1]
@@ -163,7 +164,7 @@ def main():
     try:
         ports = read_all_config_files(ptp_conf_dir)
         ports.update(read_phc2sys_cmdlines(ptp_opt_dir))
-        filename = ptp_conf_dir + 'ptp-interfaces.conf'
+        filename = os.path.join(ptp_conf_dir, 'ptp-interfaces.conf')
         with open(filename, 'w', encoding='utf-8') as outfile:
             for port in ports:
                 # Write port name
