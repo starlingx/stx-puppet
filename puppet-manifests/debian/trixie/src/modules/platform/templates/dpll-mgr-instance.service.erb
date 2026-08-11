@@ -4,11 +4,15 @@ After=network-online.target ptp4l-instances.target ts2phc-instances.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
+TimeoutStartSec=60
+WatchdogSec=30
+RestartSec=5
 EnvironmentFile=-<%= @ptp_options_dir %>/ptpinstance/dpll-mgr-instance-%i
 ExecStart=/usr/bin/dpll-mgr -c <%= @ptp_conf_dir %>/ptpinstance/dpll-mgr-%i.json $OPTIONS
 Restart=on-failure
-RestartPreventExitStatus=SIGTERM SIGINT SIGKILL SIGABRT 255
+RestartPreventExitStatus=SIGTERM SIGINT SIGKILL 255
 
 [Install]
 WantedBy=multi-user.target
