@@ -1,45 +1,3 @@
-define platform::devices::qat_device_files(
-  $qat_idx,
-  $device_id,
-) {
-  if $device_id == 'dh895xcc'{
-      file { "/etc/dh895xcc_dev${qat_idx}.conf":
-        ensure => 'present',
-        owner  => 'root',
-        group  => 'root',
-        mode   => '0640',
-        notify => Service['qat_service'],
-      }
-  }
-
-  if $device_id == 'c62x'{
-      file { "/etc/c62x_dev${qat_idx}.conf":
-        ensure => 'present',
-        owner  => 'root',
-        group  => 'root',
-        mode   => '0640',
-        notify => Service['qat_service'],
-      }
-  }
-}
-
-class platform::devices::qat (
-  $device_config = {},
-  $service_enabled = false
-)
-{
-  if $service_enabled {
-    create_resources('platform::devices::qat_device_files', $device_config)
-
-    service { 'qat_service':
-      ensure     => 'running',
-      enable     => true,
-      hasrestart => true,
-      notify     => Service['sysinv-agent'],
-    }
-  }
-}
-
 define platform::devices::sriov_enable (
   $num_vfs,
   $addr,
@@ -213,33 +171,12 @@ class platform::devices::qat::qat_4xxx {
       command   => 'echo 1 > /sys/module/vfio_pci/parameters/disable_idle_d3',
       logoutput => true,
     }
-
-    exec { 'config_qat':
-      command   => 'bash /usr/share/puppet/modules/platform/files/config_qat.sh',
-      logoutput => true,
-      timeout   => 5,
-      notify    => Service['qat_service'],
-    }
-
-    service { 'qat_service':
-      ensure     => 'running',
-      enable     => true,
-      hasrestart => true,
-      notify     => Service['sysinv-agent'],
-      require    => Exec['Load vfio-pci driver with sriov enabled for QAT device'],
-    }
-
-    exec { 'qat_systemctl_enable':
-        command => 'systemctl enable qat_service.service',
-        unless  => 'systemctl is-enabled qat_service.service'
-    }
   } else {
     notice('QAT device not found.')
   }
 }
 
 class platform::devices {
-  # include ::platform::devices::qat
-  # include ::platform::devices::qat::qat_4xxx
+  include ::platform::devices::qat::qat_4xxx
   include ::platform::devices::fpga::fec
 }
