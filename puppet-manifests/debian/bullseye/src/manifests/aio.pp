@@ -29,6 +29,8 @@ include ::platform::password
 include ::platform::ldap::server
 include ::platform::ldap::client
 include ::platform::sssd
+include ::platform::customsh::config
+include ::platform::faillock::config
 include ::platform::ntp::server
 include ::platform::ptpinstance
 include ::platform::ptpinstance::nic_clock

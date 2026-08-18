@@ -26,6 +26,8 @@ include ::platform::fstab
 include ::platform::password
 include ::platform::ldap::client
 include ::platform::sssd
+include ::platform::customsh::config
+include ::platform::faillock::config
 include ::platform::users
 include ::platform::ntp::client
 include ::platform::ptpinstance
