@@ -952,9 +952,8 @@ class platform::ptpinstance::dpll_pin_config (
       logoutput => 'on_failure',
       timeout   => 30,
     }
-    -> file { 'cleanup-dpll-pin-config':
-      ensure => absent,
-      path   => $config_file,
+    -> exec { 'cleanup-dpll-pin-config':
+      command => "/bin/rm -f ${config_file}",
     }
   }
 }
