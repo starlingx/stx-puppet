@@ -1498,6 +1498,12 @@ def main():
     # Run mandatory tasks after the update proccess has finished
     post_k8s_updating_tasks(post_k8s_tasks)
 
+    # Wait for kube-apiserver to be up after post tasks (securityContext
+    # removal modifies the manifest and triggers an apiserver restart)
+    k8s_health_check(
+        timeout=timeout, try_sleep=try_sleep, tries=tries,
+        healthz_endpoint=get_api_server_readyz_endpoint())
+
     # -----------------------------------------------------------------------------
     # Update k8s kube-controller-manager
     # -----------------------------------------------------------------------------
