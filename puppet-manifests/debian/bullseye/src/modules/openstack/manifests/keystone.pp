@@ -401,6 +401,14 @@ class openstack::keystone::federation
       provider  => shell,
       require   => [Exec['create dex identity provider'], Exec['create dex_mapping']],
     }
+
+    -> exec { 'clear federation deferred flag':
+      command  => "rm -f /opt/platform/config/${platform::params::software_version}/.federation_config_required",
+      onlyif   => "test -f /opt/platform/config/${platform::params::software_version}/.federation_config_required",
+      provider => shell,
+      require  => [Exec['assign reader role to federated_users'],
+                    Exec['reconcile-oidc-role-bindings']],
+    }
   } else {
     # Clean up federation settings when OIDC is removed
     keystone_config {
@@ -424,6 +432,12 @@ class openstack::keystone::federation
     -> exec { 'delete dex identity provider':
       command  => "source ${rc_file} && openstack identity provider delete dex",
       onlyif   => "source ${rc_file} && openstack identity provider show dex",
+      provider => shell,
+    }
+
+    -> exec { 'clear federation deferred flag':
+      command  => "rm -f /opt/platform/config/${platform::params::software_version}/.federation_config_required",
+      onlyif   => "test -f /opt/platform/config/${platform::params::software_version}/.federation_config_required",
       provider => shell,
     }
     # The federated_users group and role assignment
