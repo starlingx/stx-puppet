@@ -15,7 +15,7 @@ define platform::ptpinstance::ptp_config_files(
   $pmc_gm_settings = '',
   $device_parameters = '',
   $gnss_uart_disable = '',
-  $external_source = '',
+  $external_sources = [],
   $config_json = {},
 ) {
   if $service == 'dpll-mgr' {
@@ -172,7 +172,7 @@ define platform::ptpinstance::set_ptp4l_pmc_parameters(
   $pmc_gm_settings = '',
   $device_parameters = '',
   $gnss_uart_disable = '',
-  $external_source = '',
+  $external_sources = [],
   $config_json = {},
 ) {
   if ($service == 'ptp4l') and ($pmc_gm_settings != '') {
@@ -423,7 +423,7 @@ define platform::ptpinstance::disable_e810_gnss_uart_interfaces (
   $pmc_gm_settings = '',
   $device_parameters = '',
   $gnss_uart_disable = '',
-  $external_source = '',
+  $external_sources = [],
   $config_json = {},
 ) {
   $gnss_device_ori = $global_parameters['ts2phc.nmea_serialport']

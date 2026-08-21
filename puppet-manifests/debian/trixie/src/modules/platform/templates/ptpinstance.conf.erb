@@ -55,11 +55,14 @@
 <%- end -%>
 
 <%- if @service == 'synce4l' -%>
-<%- if !@external_source.empty? -%>
-[{<%= @external_source['name'] %>}]
-<%- if @external_source['params'] -%>
-<%- @external_source['params'].each do |key,value| -%>
+<%- if @external_sources.is_a?(Array) && !@external_sources.empty? -%>
+<%- @external_sources.each do |ext_src| -%>
+
+[{<%= ext_src['name'] %>}]
+<%- if ext_src['params'] -%>
+<%- ext_src['params'].each do |key,value| -%>
 <%= key %> <%= value %>
+<%- end -%>
 <%- end -%>
 <%- end -%>
 <%- end -%>
