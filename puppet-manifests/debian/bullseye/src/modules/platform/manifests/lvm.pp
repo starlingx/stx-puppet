@@ -11,6 +11,7 @@ class platform::lvm::params (
 
 class platform::lvm
   inherits platform::lvm::params {
+  include ::platform::lvm::csi::flag
 }
 
 
