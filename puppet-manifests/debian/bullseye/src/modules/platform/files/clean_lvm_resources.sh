@@ -6,7 +6,7 @@
 #
 
 # List all lvs with lvm-csi tag
-LVS=$(lvs --config 'devices { filter=["a|.*|"] global_filter=["a|.*|"] }' --select 'vg_tags=lvm-csi' --noheading -o lv_path)
+LVS=$(lvs --config 'devices { filter=["a|.*|"] global_filter=["a|.*|"] }' --select 'vg_tags=lvm-csi || lv_tags=lvm-csi || lv_tags=topolvm' --noheading -o lv_path)
 
 if [ -z "$LVS" ]; then
     echo "No LV found for lvm-csi purpose"
