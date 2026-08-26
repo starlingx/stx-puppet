@@ -566,36 +566,40 @@ class platform::firewall::dc::nat::ldap (
     $controller_1_hostname = $::platform::params::controller_1_hostname
     $admin_interface = $::platform::network::admin::params::interface_name
     $mgmt_interface = $::platform::network::mgmt::params::interface_name
-
     $hostname = $::platform::params::hostname
-    case $::hostname {
-      $controller_0_hostname: {
-        $mgmt_unit_ip  = $::platform::network::mgmt::params::controller0_address
-        $admin_unit_ip = $::platform::network::admin::params::controller0_address
-      }
-      $controller_1_hostname: {
-        $mgmt_unit_ip  = $::platform::network::mgmt::params::controller1_address
-        $admin_unit_ip = $::platform::network::admin::params::controller1_address
-      }
-      default: {
-        fail("Hostname must be either ${controller_0_hostname} or ${controller_1_hostname}")
-      }
-    }
 
-    if ($admin_interface and $admin_unit_ip) {
-      $outiface = $admin_interface
-      $tosource = $admin_unit_ip
-    } else {
-      $outiface = $mgmt_interface
-      $tosource = $mgmt_unit_ip
-    }
+    if ($hostname == $controller_0_hostname or $hostname == $controller_1_hostname) {
 
-    # Worker/Storage LDAP traffic from the subcloud management network
-    # is SNAT to the system controller.
-    class { '::platform::firewall::dc::nat::ldap::rule':
-        enabled  => $enabled,
-        outiface => $outiface,
-        tosource => $tosource
+      case $::hostname {
+        $controller_0_hostname: {
+          $mgmt_unit_ip  = $::platform::network::mgmt::params::controller0_address
+          $admin_unit_ip = $::platform::network::admin::params::controller0_address
+        }
+        $controller_1_hostname: {
+          $mgmt_unit_ip  = $::platform::network::mgmt::params::controller1_address
+          $admin_unit_ip = $::platform::network::admin::params::controller1_address
+        }
+        default: {
+          fail("Hostname must be either ${controller_0_hostname} or ${controller_1_hostname}")
+        }
+      }
+
+      if ($admin_interface and $admin_unit_ip) {
+        $outiface = $admin_interface
+        $tosource = $admin_unit_ip
+      } else {
+        $outiface = $mgmt_interface
+        $tosource = $mgmt_unit_ip
+      }
+
+      # Worker/Storage LDAP traffic from the subcloud management network
+      # is SNAT to the system controller.
+      class { '::platform::firewall::dc::nat::ldap::rule':
+          enabled  => $enabled,
+          outiface => $outiface,
+          tosource => $tosource
+      }
+
     }
   }
 }
