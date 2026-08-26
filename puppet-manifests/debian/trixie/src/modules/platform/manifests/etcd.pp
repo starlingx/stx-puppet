@@ -36,9 +36,24 @@ class platform::etcd::symlinks {
   $kubeadm_version = $platform::kubernetes::params::kubeadm_version
   $symlink_path = '/var/lib/etcd/stage0'
 
+  # Guard against downgrading symlinks when puppet is applied with stale
+  # cached hieradata during boot (e.g., when NFS is unreachable and the
+  # host falls back to local cache after an etcd upgrade).
+  # Use the higher of hieradata version and current symlink version.
+  $current_etcd = strip(generate('/bin/bash', '-c',
+    'if [ -L /var/lib/etcd/stage0 ]; then
+       basename "$(dirname "$(readlink /var/lib/etcd/stage0)")";
+     fi'))
+
   if $etcd_version != undef {
-    # Enforce the hieradata version explicitly.
-    $version = $etcd_version
+    # Only update symlink if hieradata version >= current symlink version.
+    if $current_etcd != '' and versioncmp($current_etcd, $etcd_version) > 0 {
+      $version = $current_etcd
+      notice("stage0 symlink: keeping current version ${current_etcd} (hieradata has older ${etcd_version})")
+    } else {
+      $version = $etcd_version
+      notice("setting stage0 symlink, etcd_version is ${etcd_version}")
+    }
   } elsif str2bool(inline_template('<%= File.symlink?(@symlink_path) && File.exist?(@symlink_path) %>')) {
     # Leave existing symlink as-is.
     notice('etcd stage0 symlink already exists and no hieradata defined, skipping')

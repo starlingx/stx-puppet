@@ -162,16 +162,45 @@ class platform::kubernetes::symlinks {
   # and it was causing robustness issues if there was anything
   # running in one of the mounts when we wanted to change it.
 
-  notice("setting stage1 symlink, kubeadm_version is ${kubeadm_version}")
-  file { '/var/lib/kubernetes/stage1':
-    ensure => link,
-    target => "/usr/local/kubernetes/${kubeadm_version}/stage1",
+  # Guard against downgrading symlinks when puppet is applied with stale
+  # cached hieradata during boot (e.g., when NFS is unreachable and the
+  # host falls back to local cache after a K8s kubelet upgrade).
+  # Use the higher of hieradata version and current symlink version.
+
+  $current_kubeadm = strip(generate('/bin/bash', '-c',
+    'if [ -L /var/lib/kubernetes/stage1 ]; then
+       basename "$(dirname "$(readlink /var/lib/kubernetes/stage1)")";
+     fi'))
+  $current_kubelet = strip(generate('/bin/bash', '-c',
+    'if [ -L /var/lib/kubernetes/stage2 ]; then
+       basename "$(dirname "$(readlink /var/lib/kubernetes/stage2)")";
+     fi'))
+
+  # Only update symlinks if hieradata version >= current symlink version.
+  if $current_kubeadm != '' and versioncmp($current_kubeadm, $kubeadm_version) > 0 {
+    $effective_kubeadm = $current_kubeadm
+    notice("stage1 symlink: keeping current version ${current_kubeadm} (hieradata has older ${kubeadm_version})")
+  } else {
+    $effective_kubeadm = $kubeadm_version
+    notice("setting stage1 symlink, kubeadm_version is ${kubeadm_version}")
   }
 
-  notice("setting stage2 symlink, kubelet_version is ${kubelet_version}")
+  if $current_kubelet != '' and versioncmp($current_kubelet, $kubelet_version) > 0 {
+    $effective_kubelet = $current_kubelet
+    notice("stage2 symlink: keeping current version ${current_kubelet} (hieradata has older ${kubelet_version})")
+  } else {
+    $effective_kubelet = $kubelet_version
+    notice("setting stage2 symlink, kubelet_version is ${kubelet_version}")
+  }
+
+  file { '/var/lib/kubernetes/stage1':
+    ensure => link,
+    target => "/usr/local/kubernetes/${effective_kubeadm}/stage1",
+  }
+
   file { '/var/lib/kubernetes/stage2':
     ensure => link,
-    target => "/usr/local/kubernetes/${kubelet_version}/stage2",
+    target => "/usr/local/kubernetes/${effective_kubelet}/stage2",
   }
 }
 
