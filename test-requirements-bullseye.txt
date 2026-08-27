@@ -6,3 +6,4 @@ shellcheck-py;python_version>="3.0" # MIT
 netaddr >= 0.7.19
 mock>=2.0.0
 testtools>=1.4.0
+pytest>=7.0.0
