@@ -38,6 +38,8 @@ include ::platform::password
 include ::platform::ldap::server
 include ::platform::ldap::client
 include ::platform::sssd
+include ::platform::customsh::config
+include ::platform::faillock::config
 include ::platform::users
 include ::platform::ntp::server
 include ::platform::ptpinstance
