@@ -570,7 +570,7 @@ class platform::firewall::dc::nat::ldap (
 
     if ($hostname == $controller_0_hostname or $hostname == $controller_1_hostname) {
 
-      case $::hostname {
+      case $hostname {
         $controller_0_hostname: {
           $mgmt_unit_ip  = $::platform::network::mgmt::params::controller0_address
           $admin_unit_ip = $::platform::network::admin::params::controller0_address
