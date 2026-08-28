@@ -18,6 +18,7 @@ define platform::ptpinstance::ptp_config_files(
   $external_sources = [],
   $config_json = {},
 ) {
+  $synce4l_conf = "${ptp_conf_dir}/ptpinstance/${service}-${_name}.conf"
   if $service == 'dpll-mgr' {
     file { $_name:
       ensure  => file,
@@ -34,6 +35,17 @@ define platform::ptpinstance::ptp_config_files(
       mode    => '0644',
       content => template('platform/ptpinstance.conf.erb'),
     }
+  }
+  # On GNR-D (E825/zl3073x), the DPLL clock_id is a random value
+  # assigned at kernel module probe time (get_random_u64) and changes
+  # on every reboot. Networking.py skips setting clock_id for GNR-D,
+  # so if the line is absent it means no user override exists and we
+  # must add the current local sysfs value before starting synce4l.
+  -> exec { "fix-synce4l-clock-id-${_name}":
+    command  => "sed -i \"/^\\[<${_name}>\\]/a clock_id \$(cat /sys/module/zl3073x/parameters/clock_id)\" ${synce4l_conf}",
+    onlyif   => "test ${service} = synce4l && grep -q '^module_name zl3073x' ${synce4l_conf}",
+    unless   => "grep -q '^clock_id ' ${synce4l_conf}",
+    provider => shell,
   }
   -> file { "${_name}-sysconfig":
     ensure  => file,
