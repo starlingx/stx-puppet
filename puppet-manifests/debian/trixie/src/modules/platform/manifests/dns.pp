@@ -44,6 +44,8 @@ class platform::dns::dnsmasq
   $mgmt_controller_address = $platform::network::mgmt::params::controller_address
   $mgmt_network_mtu = $platform::network::mgmt::params::mtu
 
+  $pxeboot_network_mtu = pick($platform::network::pxeboot::params::mtu, $mgmt_network_mtu)
+
   if $mgmt_subnet_version == 4 {
     $mgmt_subnet_netmask = $platform::network::mgmt::params::subnet_netmask
   } else {

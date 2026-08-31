@@ -51,7 +51,7 @@ class platform::network::pxeboot::params(
   $controller_address_url = undef,  # controller floating url address
   $controller0_address = undef, # controller unit0
   $controller1_address = undef, # controller unit1
-  $mtu = 1500,
+  $mtu = undef,
 ) { }
 
 class platform::network::mgmt::ipv4::params(
