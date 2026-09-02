@@ -28,7 +28,7 @@ dhcp-option=tag:mgmt,option:router,<%= @mgmt_controller_address %>
 
 # Provide DNS services on the pxecontroller address
 dhcp-option=tag:pxeboot,option:dns-server,<%= @pxeboot_controller_address %>
-dhcp-option=tag:pxeboot,option:mtu,<%= @mgmt_network_mtu %>
+dhcp-option=tag:pxeboot,option:mtu,<%= @pxeboot_network_mtu %>
 
 <%- if @mgmt_subnet_version == 4 -%>
 # Provide DNS services on the floating management address
