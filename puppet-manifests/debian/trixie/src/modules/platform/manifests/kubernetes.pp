@@ -1298,7 +1298,9 @@ class platform::kubernetes::firewall
           service_name => 'kubernetes',
           table        => $table,
           chain        => $chain,
-          action       => 'accept',
+          # jump, not action: platform::firewall::rule routes a nat-table
+          # accept on $jump, and puppetlabs-firewall v8 renamed the parameter.
+          jump         => 'accept',
           proto        => $transport,
           host         => $s_mgmt_subnet6,
           destination  => $d_multicast_subnet6,

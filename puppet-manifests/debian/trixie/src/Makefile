@@ -27,6 +27,7 @@ endif
 	install -m 755 -D bin/kube-controlplane-endpoint.sh $(BINDIR)/kube-controlplane-endpoint.sh
 	install -m 755 -D bin/kubelet-cleanup-orphaned-volumes.sh $(BINDIR)/kubelet-cleanup-orphaned-volumes.sh
 	install -m 755 -D bin/check_ipv6_tentative_addresses.py $(BINDIR)/check_ipv6_tentative_addresses.py
+	install -m 755 -D bin/etcd_cert_sans.py $(BINDIR)/etcd_cert_sans.py
 	install -m 755 -D bin/manage_partitions_pre_script.sh $(BINDIR)/manage_partitions_pre_script.sh
 	install -m 755 -D bin/dual-stack-kubelet.py $(BINDIR)/dual-stack-kubelet.py
 	install -m 755 -D bin/dual-stack-kubeadm.py $(BINDIR)/dual-stack-kubeadm.py

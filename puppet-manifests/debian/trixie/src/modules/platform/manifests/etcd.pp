@@ -240,8 +240,13 @@ class platform::etcd::init (
     $cluster_enabled = true
     $listen_peer_urls = $floating_peer_url
     $initial_advertise_peer_urls = $floating_peer_url
-    # Initial cluster includes the seed (fixed-0) and this floating member.
-    $initial_cluster = "${fixed_name_prefix}-0=${fixed0_peer_url},${floating_name}=${floating_peer_url}"
+    # The seed and this floating member, except during a platform upgrade,
+    # where the fixed instances are not started until deploy activate.
+    if str2bool($::usm_upgrade_in_progress) {
+      $initial_cluster = "${floating_name}=${floating_peer_url}"
+    } else {
+      $initial_cluster = "${fixed_name_prefix}-0=${fixed0_peer_url},${floating_name}=${floating_peer_url}"
+    }
     $initial_cluster_state = 'existing'
     $listen_client_urls = $floating_client_url
     $advertise_client_urls = $floating_client_url
@@ -682,7 +687,7 @@ class platform::etcd::membership
   # At bootstrap, fixed-0 advertises bind_address (floating IP).
   # At unlock, we change it to the real controller-0 unit address.
   # This must happen BEFORE the service restarts with the new config.
-  if $::platform::params::hostname == 'controller-0' {
+  if $::platform::params::hostname == 'controller-0' and !str2bool($::usm_upgrade_in_progress) {
     exec { 'etcdctl member update fixed-0 peer url':
       command     => "${etcdctl_local} member list -w simple | /usr/bin/awk -F', ' '/${fixed_name_prefix}-0/{print \$1}' | /usr/bin/xargs -I{} ${etcdctl_local} member update {} --peer-urls=${fixed0_peer_url}", # lint:ignore:140chars
       environment => ['ETCDCTL_API=3'],
@@ -718,7 +723,7 @@ class platform::etcd::membership
   # After etcd-fixed is running with real IPs, add the floating member
   # to the cluster. This must happen before floating etcd starts.
   # Only controller-0 needs to do this (controller-1 doesn't manage floating).
-  if $::platform::params::hostname == 'controller-0' {
+  if $::platform::params::hostname == 'controller-0' and !str2bool($::usm_upgrade_in_progress) {
     exec { 'etcdctl member add floating':
       command     => "${etcdctl_local} member add ${floating_name} --learner --peer-urls=${floating_peer_url}",
       environment => ['ETCDCTL_API=3'],
@@ -733,6 +738,40 @@ class platform::etcd::membership
 #
 # Runtime class applied by the conductor to start/restart the etcd-fixed
 # service on a controller after it has been added to the cluster.
+# -----------------------------------------------------------------------
+# platform::etcd::certs::runtime
+#
+# Ensures the etcd certificates on this controller name the addresses its
+# own instances bind, and regenerates them when they do not.
+#
+# Applied by the sysinv conductor on each controller during an upgrade
+# activate, before the fixed member on that controller is started. A system
+# upgraded from a single-instance release carries a certificate naming only
+# the floating and loopback addresses.
+# -----------------------------------------------------------------------
+class platform::etcd::certs::runtime
+  inherits ::platform::etcd::params {
+
+  include ::platform::network::cluster_host::params
+
+  $script = '/usr/local/bin/etcd_cert_sans.py'
+
+  # Only this host's own address is passed; the script unions it with the
+  # SANs the certificate already carries. Selected on hostname, as
+  # platform::params carries no address for the catalog's own controller.
+  if $::platform::params::hostname == $::platform::params::controller_1_hostname {
+    $this_addr = $::platform::network::cluster_host::params::controller1_address
+  } else {
+    $this_addr = $::platform::network::cluster_host::params::controller0_address
+  }
+
+  exec { 'ensure etcd certificate SANs for the local member':
+    command   => "${script} ${this_addr}",
+    logoutput => true,
+  }
+}
+
+
 # -----------------------------------------------------------------------
 class platform::etcd::fixed::runtime
   inherits ::platform::etcd::params {
@@ -749,4 +788,48 @@ class platform::etcd::fixed::runtime
 # update kube-apiserver etcd endpoints after the etcd cluster is formed.
 class platform::etcd::runtime {
   include ::platform::kubernetes::master::change_apiserver_parameters
+}
+
+# platform::etcd::fixed::disable
+#
+# Stops and disables the fixed etcd instance on this controller.
+#
+# Applied by the sysinv conductor after 'etcdctl member remove' has taken
+# the fixed member out of the cluster, during an upgrade activate-rollback.
+# A removed member cannot rejoin the cluster it was removed from; this
+# also prevents the fixed etcd from starting on the next boot. Removal
+# and disable are therefore a pair.
+#
+# The service is named literally rather than taken from
+# platform::etcd::params so that this class carries no dependency on the
+# fixed-instance parameters.
+# -----------------------------------------------------------------------
+class platform::etcd::fixed::disable {
+
+  service { 'etcd-fixed':
+    ensure => 'stopped',
+    enable => false,
+  }
+
+  # etcd records its own removal in the write-ahead log. A data directory
+  # left behind here is therefore not reusable: the next time a fixed
+  # member is added on this host, etcd replays that record, reports
+  #
+  #   the data-dir used by this member must be removed
+  #
+  # and exits before it can adopt the new member id. The member stays
+  # unstarted, the audit will not promote it, and because etcd permits
+  # only one learner at a time the remaining member can never be added
+  # either -- so the cluster never re-forms and stays short of quorum.
+  #
+  # Removing the directory is what makes the disable safe to repeat: it
+  # leaves the host in the same state a never-deployed controller is in.
+  # The path is written literally for the same reason the service name
+  # is, so this class stays free of the fixed-instance parameters.
+  exec { 'remove-etcd-fixed-datadir':
+    provider => shell,
+    command  => 'rm -rf /opt/etcd-fixed/db/*.etcd',
+    onlyif   => 'ls -d /opt/etcd-fixed/db/*.etcd 2>/dev/null',
+    require  => Service['etcd-fixed'],
+  }
 }

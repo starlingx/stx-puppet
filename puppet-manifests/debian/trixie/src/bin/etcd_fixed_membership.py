@@ -28,6 +28,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -253,8 +254,22 @@ def find_member(members, name, peer_url=None):
 
 
 def add_member(name, peer_url, endpoint):
-    """Add a new member to the cluster. Idempotent."""
-    args = ["member", "add", name, "--peer-urls", peer_url]
+    """Add a new member to the cluster, as a learner. Idempotent.
+
+    Registration changes the quorum requirement at the moment it happens,
+    not when the member starts. Registering a voter against the single
+    running member an upgrade starts from takes the requirement from
+    1-of-1 to 2-of-2 while this member is still stopped, so the incumbent
+    loses leadership immediately and every read fails with "context
+    deadline exceeded", with no way back: member remove needs the quorum
+    that was just lost, and the new member cannot supply it because
+    ETCD_INITIAL_CLUSTER_STATE=existing makes it fetch cluster info from
+    the wedged incumbent before it will serve. A learner does not vote, so
+    the requirement is unchanged until it is serving and promoted -- see
+    the promotion in handle_pre_start(), which makes the same argument in
+    reverse.
+    """
+    args = ["member", "add", name, "--learner", "--peer-urls", peer_url]
     proc = run_etcdctl(args, endpoint=endpoint, check=False)
     if proc.returncode != 0:
         if "already exists" in proc.stderr or "Peer URLs already exists" in proc.stderr:
@@ -295,11 +310,84 @@ def build_initial_cluster(endpoint, local_name, local_peer_url):
     return ",".join(sorted(cluster))
 
 
+def initial_cluster_has_unreachable_peer(env):
+    """Return True when ETCD_INITIAL_CLUSTER names another member on loopback.
+
+    A loopback peer URL resolves only on the controller running that member.
+    A member registered but never started leaves a data directory behind, so
+    data_dir_initialized() alone does not distinguish it from a restart.
+    """
+    local_peer = env.get("ETCD_INITIAL_ADVERTISE_PEER_URLS", "").strip()
+    for entry in env.get("ETCD_INITIAL_CLUSTER", "").split(","):
+        _, _, peer = entry.partition("=")
+        peer = peer.strip()
+        if not peer or peer == local_peer:
+            continue
+        match = re.match(r'https?://\[?([0-9a-fA-F:.]+|localhost)\]?:', peer)
+        if match and match.group(1) in ("localhost", "127.0.0.1", "::1"):
+            return True
+    return False
+
+
 def data_dir_initialized(env):
     """Return True when this fixed member already has persistent state."""
     data_dir = env.get("ETCD_DATA_DIR", "")
     member_db = os.path.join(data_dir, "member", "snap", "db")
     return bool(data_dir and os.path.isfile(member_db))
+
+
+def data_dir_is_stale(env):
+    """Return True when the cluster shows our peer URL as a member we have
+    never run as.
+
+    A fixed member that is removed from the cluster leaves its data
+    directory behind, and etcd records that removal in the write-ahead
+    log. Replaying it on the next start produces
+
+      the data-dir used by this member must be removed
+
+    and etcd exits before adopting the member id that was just added for
+    us, so the directory has to go before the member can join.
+
+    Best effort by design: the lookup is one bounded etcdctl call, and any
+    failure returns False so the caller keeps the existing restart
+    behaviour rather than blocking the boot on an unreachable peer.
+    """
+    peer_url = env.get("ETCD_INITIAL_ADVERTISE_PEER_URLS", "").strip()
+    if not peer_url:
+        return False
+
+    try:
+        endpoint = get_cluster_endpoint()
+        proc = run_etcdctl(["member", "list", "-w", "json"],
+                           endpoint=endpoint, check=False)
+    except (RuntimeError, OSError) as exc:
+        LOG.info("could not check membership for a stale data directory "
+                 "(%s); treating this as a restart", exc)
+        return False
+    if proc.returncode != 0:
+        LOG.info("could not check membership for a stale data directory; "
+                 "treating this as a restart")
+        return False
+
+    try:
+        members = json.loads(proc.stdout).get("members", [])
+    except ValueError:
+        LOG.info("could not parse the etcd member list; treating this as "
+                 "a restart")
+        return False
+
+    for member in members:
+        if peer_url not in member.get("peerURLs", []):
+            continue
+        # etcd learns a member's name only when that member first
+        # introduces itself, which is why etcdctl reports a member with no
+        # name as "unstarted". An empty name therefore means the id was
+        # registered for us but nothing has ever run under it, so whatever
+        # is on disk belongs to an older member.
+        return not member.get("name")
+
+    return False
 
 
 def handle_pre_start():  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
@@ -341,8 +429,19 @@ def handle_pre_start():  # pylint: disable=too-many-locals,too-many-branches,too
     # boot). Skip membership operations to avoid boot-time deadlocks -- etcd
     # ignores --initial-cluster* on subsequent starts anyway.
     if data_dir_initialized(env):
-        LOG.info("data directory initialized; starting directly (restart scenario)")
-        return 0
+        if data_dir_is_stale(env):
+            data_dir = env.get("ETCD_DATA_DIR", "")
+            LOG.warning("data directory %s belongs to a member that is no "
+                        "longer in the cluster; removing it so this member "
+                        "can join", data_dir)
+            shutil.rmtree(data_dir, ignore_errors=True)
+        elif initial_cluster_has_unreachable_peer(env):
+            # Registered but never started; rebuild from live membership.
+            LOG.warning("data directory is initialized but ETCD_INITIAL_CLUSTER "
+                        "names a loopback peer for another member; rebuilding it")
+        else:
+            LOG.info("data directory initialized; starting directly (restart scenario)")
+            return 0
 
     # For the bootstrap seed (fixed-0 with state=new), just start normally.
     initial_state = env.get("ETCD_INITIAL_CLUSTER_STATE", "new")
