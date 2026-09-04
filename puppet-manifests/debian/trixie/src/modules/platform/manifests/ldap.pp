@@ -424,9 +424,12 @@ class platform::ldap::ppolicy_lockout (
       content => $ppolicy_ldif,
     }
 
+    # Only apply when the target ppolicy entry already exists in the local
+    # DIT. The search also fails if slapd is down, so no separate service
+    # check is needed.
     -> exec { 'update-ldap-ppolicy-lockout':
       command => "ldapmodify -x -H ldap:/// -D cn=ldapadmin,dc=cgcs,dc=local -w \"\$(cat /etc/ldapscripts/ldapscripts.passwd)\" -f /tmp/ldap-ppolicy-lockout.ldif",
-      onlyif  => 'systemctl is-active slapd',
+      onlyif  => "ldapsearch -x -H ldap:/// -D cn=ldapadmin,dc=cgcs,dc=local -w \"\$(cat /etc/ldapscripts/ldapscripts.passwd)\" -b cn=default,ou=policies,dc=cgcs,dc=local -s base dn 2>/dev/null | grep -q '^dn:'",
     }
   }
 }
