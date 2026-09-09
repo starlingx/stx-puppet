@@ -782,6 +782,19 @@ define platform::ptpinstance::net_tspll_cfg (
     # If the sysfs does not exist (secondary NIC): emit a warning and exit cleanly.
     # If it exists but the write fails, fall back to local oscillator (4 0 = osc_156.25)
     # and emit a warning so ptp.py monitoring can detect the mismatch.
+    #
+    # Writing tspll_cfg re-initializes the NIC PHC and reseeds it from the system
+    # clock (CLOCK_REALTIME), which runs on the UTC timescale. Because the PHC
+    # must run on TAI (TAI - UTC = 37 s), the reseed effectively knocks the PHC
+    # back by 37 seconds onto UTC. Without correction, services like ptp4l can
+    # only slew (no step) at +/-100 ppm, so they take ~10 min to recover a 37 s
+    # offset. The "phc_ctl ${iface} adj 37" re-applies the TAI offset atomically
+    # right after the tspll_cfg write so the PHC stays on TAI.
+    #
+    # Note that 37 is the current TAI - UTC offset and can change over time as
+    # future leap seconds are announced, so this value may need to be updated.
+    # Even so, adjusting by the current offset is preferable to leaving the PHC
+    # on UTC, since a smaller offset lets the PTP service slew back faster.
     exec { "${iface}_tspll_cfg_${tspll_freq}_${clk_src}":
       command   => "TSPLL=/sys/class/net/${iface}/device/tspll_cfg; \
         if [ ! -e \$TSPLL ]; then \
@@ -792,6 +805,8 @@ define platform::ptpinstance::net_tspll_cfg (
           echo \"tspll_cfg write error: \$err\"; \
           echo \"WARNING: tspll_cfg write failed for ${iface}, falling back to local oscillator (4 0)\"; \
           echo 4 0 > \$TSPLL || true; \
+        else \
+          phc_ctl ${iface} adj 37; \
         fi",
       logoutput => true,
       provider  => shell,
