@@ -1296,6 +1296,19 @@ class platform::sm::update_oam_config::runtime {
     -> exec { 'pmon-stop-sm':
       command => 'pmon-stop sm'
     }
+    # 'pmon-stop sm' returns before sm has exited; deleting the runtime DB while
+    # sm is alive can leave a stale empty /var/run/sm/sm.db. Wait for sm to exit;
+    # if it does not, warn and proceed anyway rather than skip the reconfig.
+    -> exec { 'wait-for-sm-to-stop':
+      command   => 'for i in $(seq 1 20); do \
+          [ -z "$(pidof sm)" ] && exit 0; \
+          sleep 1; \
+        done; \
+        echo "WARNING: sm did not stop within 20s before runtime DB delete; proceeding anyway (sm pids: $(pidof sm))"; \
+        exit 0',
+      logoutput => true,
+      provider  => shell,
+    }
     # remove previous active DB and its journaling files
     -> file { '/var/run/sm/sm.db':
       ensure => absent
