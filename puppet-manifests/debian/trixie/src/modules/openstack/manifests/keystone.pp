@@ -413,6 +413,18 @@ class openstack::keystone::federation
       require   => [Exec['create dex identity provider'], Exec['create dex_mapping']],
     }
 
+    # Completion sentinel is created only AFTER the keystone-gated federation execs above have
+    # succeeded, making sure all federation resources are properly created.
+    -> exec { 'set federation configured sentinel':
+      command   => 'touch /etc/keystone/.federation_configured',
+      onlyif    => $ks_ready,
+      logoutput => true,
+      provider  => shell,
+      require   => [Exec['assign reader role to federated_users'],
+                    Exec['reconcile-oidc-role-bindings'],
+                    Exec['create openid protocol']],
+    }
+
     -> exec { 'clear federation deferred flag':
       command  => "rm -f /opt/platform/config/${platform::params::software_version}/.federation_config_required",
       onlyif   => "test -f /opt/platform/config/${platform::params::software_version}/.federation_config_required",
@@ -429,6 +441,9 @@ class openstack::keystone::federation
     }
     file { '/etc/keystone/sso_callback_template.html': ensure => absent; }
     file { '/etc/keystone/dex_mapping.json': ensure => absent; }
+    # Remove the federation completion sentinel so that a subsequent
+    # re-enable of OIDC correctly re-arms federation via post_apply.
+    file { '/etc/keystone/.federation_configured': ensure => absent; }
 
     exec { 'delete openid protocol':
       command  => "source ${rc_file} && openstack federation protocol delete --identity-provider dex openid",
