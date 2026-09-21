@@ -349,21 +349,6 @@ class openstack::keystone::federation
       require   => Exec['create federated_users group'],
     }
 
-    # Fallback: ensure federated_users always has reader role
-    # for basic access regardless of role-bindings configuration
-    exec { 'assign reader role to federated_users':
-      command   => "source ${rc_file} && openstack role add \
---group federated_users --project admin reader",
-      unless    => "source ${rc_file} && openstack role assignment list \
---group federated_users --project admin --names | grep reader",
-      onlyif    => $ks_ready,
-      tries     => 3,
-      try_sleep => 10,
-      logoutput => true,
-      provider  => shell,
-      require   => Exec['create federated_users group'],
-    }
-
     # Register DEX as an Identity Provider in Keystone.
     # The remote-id must match the 'iss' claim in DEX's JWT tokens.
     exec { 'create dex identity provider':
@@ -420,8 +405,7 @@ class openstack::keystone::federation
       onlyif    => $ks_ready,
       logoutput => true,
       provider  => shell,
-      require   => [Exec['assign reader role to federated_users'],
-                    Exec['reconcile-oidc-role-bindings'],
+      require   => [Exec['reconcile-oidc-role-bindings'],
                     Exec['create openid protocol']],
     }
 
@@ -429,8 +413,8 @@ class openstack::keystone::federation
       command  => "rm -f /opt/platform/config/${platform::params::software_version}/.federation_config_required",
       onlyif   => "test -f /opt/platform/config/${platform::params::software_version}/.federation_config_required",
       provider => shell,
-      require  => [Exec['assign reader role to federated_users'],
-                    Exec['reconcile-oidc-role-bindings']],
+      require  => [Exec['reconcile-oidc-role-bindings'],
+                    Exec['create openid protocol']],
     }
   } else {
     # Clean up federation settings when OIDC is removed
