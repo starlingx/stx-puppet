@@ -166,10 +166,13 @@ class openstack::keystone::haproxy
   include ::platform::params
   include ::platform::haproxy::params
 
-  # oauth2-proxy sits behind HAProxy on the Keystone port.
-  # The websso and /oauth2/* paths are routed to the oauth2-proxy
-  # backend (NodePort on the management network).
-  $oauth2_proxy_port = 30180
+  # oauth2-proxy sits behind HAProxy on the Keystone port. websso and
+  # /oauth2/* paths are routed to its hostPort (4180) on the management
+  # floating address, not its NodePort (30180): the NodePort lets kube-proxy
+  # load-balance to the standby controller's replica, which must cross the
+  # IPsec-encrypted management network and hits an MTU blackhole (502). The
+  # hostPort keeps the request on the active controller, over loopback.
+  $oauth2_proxy_port = 4180
   $mgmt_ip = $::platform::haproxy::params::private_ip_address
 
   $oauth2_acl = {
