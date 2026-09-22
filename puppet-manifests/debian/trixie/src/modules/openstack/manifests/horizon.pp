@@ -248,7 +248,22 @@ class openstack::horizon::reload {
   }
 
   platform::sm::restart {'horizon': }
-  platform::sm::restart {'lighttpd': }
+
+  # Previously set unconditional restart downed listening socket and every in-flight connection,
+  # so restart lighttpd only when its config actually changed. Change detection using checksum
+  # sentinel rather than Puppet refresh (notify/subscribe) due to restart running on 'post'
+  # stage while config files are declared in the 'main' stage. Checksum is recorded only if
+  # restart succeeds and failed restart is retried on next apply.
+  $lighttpd_config_files = '/etc/lighttpd/lighttpd.conf /etc/lighttpd/lighttpd-inc.conf'
+  $lighttpd_checksum     = '/etc/platform/.lighttpd_config.md5'
+
+  exec { 'restart lighttpd if config changed':
+    path      => ['/bin', '/usr/bin', '/usr/local/bin', '/usr/sbin'],
+    provider  => shell,
+    unless    => "test -f ${lighttpd_checksum} && md5sum --status -c ${lighttpd_checksum}",
+    command   => "sm-restart-safe service lighttpd && md5sum ${lighttpd_config_files} > ${lighttpd_checksum}",
+    logoutput => true,
+  }
 }
 
 
