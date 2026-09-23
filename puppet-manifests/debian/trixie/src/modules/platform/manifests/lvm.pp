@@ -103,6 +103,7 @@ class platform::lvm::vg::nova_local(
 class platform::lvm::controller::vgs {
   include ::platform::lvm::vg::cgts_vg
   include ::platform::lvm::vg::nova_local
+  include ::platform::lvm::csi::allresources
 }
 
 class platform::lvm::controller
@@ -134,6 +135,7 @@ class platform::lvm::controller::runtime {
 class platform::lvm::compute::vgs {
   include ::platform::lvm::vg::cgts_vg
   include ::platform::lvm::vg::nova_local
+  include ::platform::lvm::csi::allresources
 }
 
 class platform::lvm::compute
@@ -226,13 +228,13 @@ define platform::lvm::csi::create_thinpool(
     # lint:endignore:only_variable_string
     # lint:endignore:140chars
 
-    exec { "resizing thin pool ${pool_name}":
+    exec { "resizing thin pool ${vg_name}/${pool_name}":
       command => "lvresize ${npool_size} ${vg_name}/${pool_name}",
       path    => ['/usr/sbin', '/sbin', '/usr/bin', '/bin'],
       onlyif  => "lvs ${vg_name}/${pool_name}",
       unless  => $unless_resize,
     }
-    exec { "create thin pool ${pool_name}":
+    exec { "create thin pool ${vg_name}/${pool_name}":
       command => "lvcreate -T ${npool_size} ${metadata_param} ${vg_name}/${pool_name}",
       path    => ['/usr/sbin', '/sbin'],
       unless  => "lvs ${vg_name}/${pool_name}",
@@ -240,7 +242,7 @@ define platform::lvm::csi::create_thinpool(
     }
 
   } elsif $ensure == 'absent' {
-    exec { "remove thin pool ${pool_name}":
+    exec { "remove thin pool ${vg_name}/${pool_name}":
       command => "lvremove -f ${vg_name}/${pool_name}",
       path    => ['/usr/sbin', '/sbin'],
       onlyif  => "lvs ${vg_name}/${pool_name}",
@@ -417,4 +419,63 @@ class platform::lvm::csi::clean_restore::runtime
       logoutput => true,
     }
   }
+}
+
+
+##############################
+# Unlock volume group creation
+##############################
+
+define platform::lvm::csi::create_vg(
+  $provisioning,
+  $physical_volumes,
+  $vg_name       = $title,
+  $pool_name     = 'lvmcsi-pool',
+  $pool_size     = '+99%FREE',
+  $metadata_size = undef,
+) {
+
+  if $provisioning != 'thin' and $provisioning != 'thick' {
+    fail("Provisioning mode not recognized (got: '${provisioning}')")
+  }
+
+  if empty($physical_volumes) {
+    fail("VG '${vg_name}': 'physical_volumes' cannot be empty")
+  }
+
+  notice("Configuring ${provisioning} volume group ${vg_name} with PVs ${physical_volumes}")
+
+  platform::lvm::csi::create_extend_vg { $vg_name:
+    vg_name          => $vg_name,
+    physical_volumes => $physical_volumes,
+  }
+
+  if $provisioning == 'thin' {
+    platform::lvm::csi::create_thinpool { "${vg_name}-${pool_name}":
+      ensure        => present,
+      vg_name       => $vg_name,
+      pool_name     => $pool_name,
+      pool_size     => $pool_size,
+      metadata_size => $metadata_size,
+      require       => Platform::Lvm::Csi::Create_extend_vg[$vg_name],
+      before        => Exec["vgchange addtag lvm-csi ${vg_name}"],
+    }
+  }
+
+  exec { "vgchange addtag lvm-csi ${vg_name}":
+    command => "vgchange --addtag lvm-csi ${vg_name}",
+    path    => ['/usr/sbin', '/sbin'],
+    onlyif  => "vgs ${vg_name}",
+    require => Platform::Lvm::Csi::Create_extend_vg[$vg_name],
+  }
+}
+
+class platform::lvm::csi::params::allresources (
+  $volume_groups = {},
+) {}
+
+class platform::lvm::csi::allresources
+  inherits ::platform::lvm::csi::params::allresources {
+
+  create_resources('platform::lvm::csi::create_vg', $volume_groups)
 }
