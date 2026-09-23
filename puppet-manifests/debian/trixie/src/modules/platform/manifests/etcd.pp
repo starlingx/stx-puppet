@@ -124,6 +124,15 @@ class platform::etcd::setup {
     $etcd_max_procs = '$(nproc)'
   }
 
+  # pmon severity for the fixed etcd member. On simplex etcd-fixed is the
+  # sole etcd instance, so its loss is management-affecting (critical). On
+  # duplex/standard the cluster keeps quorum with one member down (major).
+  if $::platform::params::system_mode == 'simplex' {
+    $etcd_fixed_pmon_severity = 'critical'
+  } else {
+    $etcd_fixed_pmon_severity = 'major'
+  }
+
   file {'etcd_override_dir':
     ensure => directory,
     path   => '/etc/systemd/system/etcd.service.d',
@@ -153,6 +162,18 @@ class platform::etcd::setup {
     group   => 'root',
     mode    => '0644',
     content => template('platform/etcd-fixed.service.erb'),
+  }
+  # Install the process monitor (pmon) config for the fixed etcd member so
+  # pmon detects a crashed etcd-fixed process, recovers it via systemd, and
+  # raises an alarm. The floating (SM-managed) instance is monitored by
+  # Service Manager; the fixed per-controller instance is a plain systemd
+  # process, so it is monitored by pmon.
+  -> file { '/etc/pmon.d/etcd-fixed.conf':
+    ensure  => file,
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+    content => template('platform/etcd-fixed-pmond-conf.erb'),
   }
   -> exec { 'systemd-reload-daemon':
     command     => '/usr/bin/systemctl daemon-reload',

@@ -16,6 +16,8 @@ TimeoutStartSec=300
 ExecStartPre=/usr/local/bin/etcd_fixed_membership.py --pre-start
 ExecStart=/usr/bin/etcd
 ExecStartPost=/usr/local/bin/etcd_fixed_membership.py --post-start
+ExecStartPost=/bin/bash -c 'echo $MAINPID > /var/run/etcd-fixed.pid'
+ExecStopPost=/bin/rm -f /var/run/etcd-fixed.pid
 Restart=on-failure
 RestartSec=10
 
