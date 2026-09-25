@@ -78,7 +78,8 @@ class sysinv (
                                     k8s_cluster_health => 180 },
   $periodic_interval_agent     = {  default => 60,
                                     inventory_audit => 60,
-                                    lldp_audit => 300 }
+                                    lldp_audit => 300,
+                                    port_audit => 300 }
 ) {
 
   include sysinv::params
@@ -244,6 +245,8 @@ class sysinv (
         value => $periodic_interval_agent[inventory_audit];
     'agent_periodic_task_intervals/lldp_audit':
         value => $periodic_interval_agent[lldp_audit];
+    'agent_periodic_task_intervals/port_audit':
+        value => $periodic_interval_agent[port_audit];
   }
 
   sysinv_api_paste_ini {
