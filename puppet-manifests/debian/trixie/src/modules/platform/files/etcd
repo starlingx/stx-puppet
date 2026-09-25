@@ -43,6 +43,13 @@ ETCD_LISTEN_CLIENT_URL="${URLS[-1]}"
 
 status()
 {
+    # Special case where we are upgrading binary and service still running
+    if pidof etcd >/dev/null 2>&1 && ! command -v etcdctl >/dev/null 2>&1; then
+        RETVAL=0
+        echo "$DESC is running, etcdctl not found"
+        return
+    fi
+
     if [[ $ETCD_LISTEN_CLIENT_URL =~ "https" ]]; then
         etcd_health="$(etcdctl --command-timeout=5s --cacert=/etc/etcd/ca.crt --cert=/etc/etcd/etcd-server.crt --key=/etc/etcd/etcd-server.key --endpoints="$ETCD_LISTEN_CLIENT_URL" endpoint health 2>&1)"
     else
