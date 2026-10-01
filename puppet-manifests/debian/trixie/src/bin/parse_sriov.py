@@ -19,6 +19,14 @@ SRIOV_NUMVFS_FILE = "sriov_numvfs"
 MAX_UP_RETRIES = 10
 UP_RETRY_INTERVAL = 0.2
 
+SYS_BUS_PCI_DEVICES = "/sys/bus/pci/devices"
+DEV_VFIO = "/dev/vfio"
+
+# Max seconds to wait for a single sriov_numvfs write before giving up. A
+# healthy teardown/create completes in well under a second; anything longer
+# means the write is blocked on a VF still held by userspace.
+SRIOV_WRITE_TIMEOUT = 10
+
 
 def execute_command(command_to_run):
     """
@@ -307,6 +315,185 @@ def _write_int_to_file(path, value):
         return False
 
 
+def _resolve_basename_of_symlink(path):
+    """Return os.path.basename(os.path.realpath(path)) or None if missing."""
+    if not os.path.exists(path) and not os.path.islink(path):
+        return None
+    try:
+        return os.path.basename(os.path.realpath(path))
+    except OSError:
+        return None
+
+
+def _list_vf_pci_addrs(pci_addr):
+    """Return the VF PCI addresses of a PF, enumerated from sysfs virtfnN links."""
+    base_path = os.path.join(SYS_BUS_PCI_DEVICES, pci_addr)
+    try:
+        entries = os.listdir(base_path)
+    except OSError:
+        return []
+    vfs = []
+    for entry in entries:
+        if not entry.startswith("virtfn"):
+            continue
+        bdf = _resolve_basename_of_symlink(os.path.join(base_path, entry))
+        if bdf:
+            vfs.append(bdf)
+    return vfs
+
+
+def _driver_of_pci(bdf):
+    """Return the driver bound to a PCI device, or None if unbound."""
+    return _resolve_basename_of_symlink(
+        os.path.join(SYS_BUS_PCI_DEVICES, bdf, "driver"))
+
+
+def _iommu_group_of_pci(bdf):
+    """Return the IOMMU group number (str) for a PCI device, or None."""
+    return _resolve_basename_of_symlink(
+        os.path.join(SYS_BUS_PCI_DEVICES, bdf, "iommu_group"))
+
+
+def _vfio_node_in_use(group):
+    """Return a short description of who holds /dev/vfio/<group> open, else None.
+
+    Scans /proc/<pid>/fd for an open fd resolving to the vfio group node. Uses
+    procfs only; no container-runtime or kubernetes calls.
+    """
+    node = os.path.join(DEV_VFIO, str(group))
+    if not os.path.exists(node):
+        return None
+    try:
+        node_real = os.path.realpath(node)
+    except OSError:
+        node_real = node
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        fd_dir = os.path.join("/proc", pid, "fd")
+        try:
+            fds = os.listdir(fd_dir)
+        except OSError:
+            continue
+        for fd in fds:
+            fpath = os.path.join(fd_dir, fd)
+            try:
+                dest = os.readlink(fpath)
+            except OSError:
+                continue
+            if dest == node or os.path.realpath(fpath) == node_real:
+                comm = ""
+                try:
+                    with open(os.path.join("/proc", pid, "comm"),
+                              "r", encoding="utf-8") as f:
+                        comm = f.read().strip()
+                except OSError:
+                    pass
+                return f"pid={pid} comm={comm} fd={node}"
+    return None
+
+
+def _vfs_in_use(pci_addr):
+    """Return a list of 'VF <bdf> (group N) held by ...' strings for VFs that are
+    bound to vfio-pci AND currently held open. A non-empty list means resetting
+    sriov_numvfs on this PF would block in the kernel.
+    """
+    in_use = []
+    for bdf in _list_vf_pci_addrs(pci_addr):
+        if _driver_of_pci(bdf) != DRIVER_VFIO:
+            continue
+        group = _iommu_group_of_pci(bdf)
+        if group is None:
+            continue
+        holder = _vfio_node_in_use(group)
+        if holder:
+            in_use.append(f"VF {bdf} (group {group}) held by [{holder}]")
+    return in_use
+
+
+def _write_int_to_file_timed(path, value, timeout=SRIOV_WRITE_TIMEOUT):
+    """Write an integer to a sysfs file with a hard timeout.
+
+    The write runs in a forked child so a kernel block on sriov_numvfs cannot
+    hang the manifest: if the child does not finish within 'timeout' seconds it
+    is killed and the function returns False (fail fast). Returns True only when
+    the child completed the write successfully.
+    """
+    try:
+        pid = os.fork()
+    except OSError as e:
+        # Cannot fork: fall back to the plain write (best effort).
+        print(f"WARNING: fork failed ({e}); writing '{path}' without timeout")
+        return _write_int_to_file(path, value)
+
+    if pid == 0:  # child
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(str(value))
+            os._exit(0)
+        except OSError:
+            os._exit(1)
+
+    # parent: poll for the child up to 'timeout' seconds.
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        wpid, status = os.waitpid(pid, os.WNOHANG)
+        if wpid == pid:
+            if os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0:
+                return True
+            print(f"Error writing '{path}': child exited status {status}")
+            return False
+        time.sleep(0.05)
+
+    # Timed out: the write is blocked (VF still held). Kill the child and fail.
+    print(f"ERROR: timeout after {timeout}s writing {value} to '{path}'; "
+          "the write is blocked (a VF is likely still held by userspace)")
+    try:
+        os.kill(pid, 9)
+        os.waitpid(pid, 0)
+    except OSError:
+        pass
+    return False
+
+
+def _write_sriov_numvfs_safe(numvfs_path, num_vfs, pci_addr, label=None):
+    """Safely set sriov_numvfs for a PF, failing fast instead of hanging.
+
+    - If the current value already equals num_vfs, do nothing (success).
+    - Otherwise refuse up front if any VF is bound to vfio-pci and held open.
+    - Perform the required 0 -> num_vfs transition using time-bounded writes so
+      a blocked write can never hang the manifest.
+
+    Returns True on success (including no-op), False on refusal/timeout/error.
+    """
+    tag = label or pci_addr
+    current = _read_int_from_file(numvfs_path)
+    if current == num_vfs:
+        print(f"PF {tag}: sriov_numvfs already set to {num_vfs}, skipping")
+        return True
+
+    in_use = _vfs_in_use(pci_addr)
+    if in_use:
+        print(f"ERROR: PF {tag}: refusing to change sriov_numvfs "
+              f"{current} -> {num_vfs}; {len(in_use)} VF(s) in use by vfio-pci: " +
+              "; ".join(in_use))
+        return False
+
+    # Kernel requires a reset to 0 before setting a new non-zero count. Both
+    # writes are time-bounded; the teardown is the one that could block, but we
+    # only reach it after confirming no VF is held open.
+    if current not in (None, 0):
+        if not _write_int_to_file_timed(numvfs_path, 0):
+            print(f"ERROR: Failed to write 0 to '{numvfs_path}' for PF {tag}")
+            return False
+    if num_vfs > 0:
+        if not _write_int_to_file_timed(numvfs_path, num_vfs):
+            print(f"ERROR: Failed to write {num_vfs} to '{numvfs_path}' "
+                  f"for PF {tag}")
+            return False
+    return True
+
+
 def _get_pf_netdevs(pci_addr):
     """
     Return a list of net device names associated with a PCI function.
@@ -408,18 +595,13 @@ def _enable_sriov_for_pf(pci_addr, num_vfs, up_requirement, sriov_name=None):
         if not _ensure_pf_netdevs_up(pci_addr, up_requirement):
             print(f"ERROR: failed to ensure PF {pci_addr} netdevs are up")
 
-    if not _write_int_to_file(vf_path, 0):
-        print(f"ERROR: Failed to write 0 to '{vf_path}' for PF {pci_addr}")
-        return False
-
-    if not _write_int_to_file(vf_path, num_vfs):
-        print(f"ERROR: Failed to write {num_vfs} to '{vf_path}' "
-              f"for PF {pci_addr}")
-        return False
-
     label = pci_addr
     if sriov_name:
         label = f"{pci_addr} ({sriov_name})"
+
+    # Fail fast (and never hang) if a VF is bound to vfio-pci and held open.
+    if not _write_sriov_numvfs_safe(vf_path, num_vfs, pci_addr, label=label):
+        return False
 
     print(f"PF {label}: configured sriov_numvfs={num_vfs}")
     return True
@@ -636,10 +818,13 @@ def reset_orphaned_sriov_vfs(sriov_configs):
             if pci_addr in configured_addrs:
                 continue
 
-            # This PF has VFs but is not in the config - reset it
+            # This PF has VFs but is not in the config - reset it.
+            # Fail fast (and never hang) if a VF is bound to vfio-pci and
+            # held open by userspace.
             print(f"Resetting orphaned SR-IOV VFs on PF {pci_addr} "
                   f"({ifname}): sriov_numvfs was {current_vfs}")
-            if not _write_int_to_file(numvfs_path, 0):
+            if not _write_sriov_numvfs_safe(numvfs_path, 0, pci_addr,
+                                            label=f"{pci_addr} ({ifname})"):
                 print(f"ERROR: Failed to reset sriov_numvfs for "
                       f"PF {pci_addr} ({ifname})")
                 result = False

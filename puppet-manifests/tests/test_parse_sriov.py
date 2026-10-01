@@ -7,13 +7,26 @@
 import io
 import json
 import os
+import shutil
 import debian.bullseye.src.bin.parse_sriov as parse_sriov
 import sys
 import tempfile
+import time
 import unittest
 import yaml
+from unittest.mock import call
 from unittest.mock import patch
 from unittest.mock import MagicMock
+
+
+# The sriov_numvfs fail-fast guard (CGTS-107733) only exists in the trixie
+# source. bullseye is discontinued and lacks these helpers, so guard-specific
+# tests are skipped there. Detection is by attribute presence rather than
+# distro name so it stays correct regardless of how the source is selected.
+HAS_SRIOV_GUARD = hasattr(parse_sriov, '_write_sriov_numvfs_safe')
+requires_sriov_guard = unittest.skipUnless(
+    HAS_SRIOV_GUARD,
+    'sriov_numvfs fail-fast guard not present in this source (bullseye)')
 
 
 def valid_python_format_config():
@@ -913,6 +926,7 @@ class TestEnableSriovSkipWhenAlreadyConfigured(unittest.TestCase):
 # Tests for reset_orphaned_sriov_vfs
 class TestResetOrphanedSriovVfs(unittest.TestCase):
 
+    @requires_sriov_guard
     @patch('sys.stdout', new_callable=io.StringIO)
     @patch('debian.bullseye.src.bin.parse_sriov.os.path.isdir', return_value=True)
     @patch('debian.bullseye.src.bin.parse_sriov.os.listdir',
@@ -920,7 +934,7 @@ class TestResetOrphanedSriovVfs(unittest.TestCase):
     @patch('debian.bullseye.src.bin.parse_sriov.os.path.isfile')
     @patch('debian.bullseye.src.bin.parse_sriov._read_int_from_file')
     @patch('debian.bullseye.src.bin.parse_sriov.os.readlink')
-    @patch('debian.bullseye.src.bin.parse_sriov._write_int_to_file',
+    @patch('debian.bullseye.src.bin.parse_sriov._write_sriov_numvfs_safe',
            return_value=True)
     def test_resets_orphaned_vfs(  # pylint: disable=too-many-arguments
             self, mock_write, mock_readlink,
@@ -952,12 +966,15 @@ class TestResetOrphanedSriovVfs(unittest.TestCase):
         result = parse_sriov.reset_orphaned_sriov_vfs({})
 
         self.assertTrue(result)
-        # Only enp13s0f0 has VFs > 0 and is not in config
+        # Only enp13s0f0 has VFs > 0 and is not in config. The reset now goes
+        # through the fail-fast guard _write_sriov_numvfs_safe(path, 0, pci).
         mock_write.assert_called_once_with(
-            '/sys/class/net/enp13s0f0/device/sriov_numvfs', 0)
+            '/sys/class/net/enp13s0f0/device/sriov_numvfs', 0,
+            '0000:0d:00.0', label='0000:0d:00.0 (enp13s0f0)')
         self.assertIn("Resetting orphaned SR-IOV VFs on PF 0000:0d:00.0",
                       mock_stdout.getvalue())
 
+    @requires_sriov_guard
     @patch('sys.stdout', new_callable=io.StringIO)
     @patch('debian.bullseye.src.bin.parse_sriov.os.path.isdir', return_value=True)
     @patch('debian.bullseye.src.bin.parse_sriov.os.listdir',
@@ -968,7 +985,7 @@ class TestResetOrphanedSriovVfs(unittest.TestCase):
            return_value=32)
     @patch('debian.bullseye.src.bin.parse_sriov.os.readlink',
            return_value='../../../0000:0d:00.0')
-    @patch('debian.bullseye.src.bin.parse_sriov._write_int_to_file',
+    @patch('debian.bullseye.src.bin.parse_sriov._write_sriov_numvfs_safe',
            return_value=True)
     def test_skips_configured_pf(  # pylint: disable=too-many-arguments
             self, mock_write, _mock_readlink,
@@ -1002,6 +1019,7 @@ class TestResetOrphanedSriovVfs(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(mock_stdout.getvalue(), "")
 
+    @requires_sriov_guard
     @patch('sys.stdout', new_callable=io.StringIO)
     @patch('debian.bullseye.src.bin.parse_sriov.os.path.isdir', return_value=True)
     @patch('debian.bullseye.src.bin.parse_sriov.os.listdir',
@@ -1012,7 +1030,7 @@ class TestResetOrphanedSriovVfs(unittest.TestCase):
            return_value=1)
     @patch('debian.bullseye.src.bin.parse_sriov.os.readlink',
            return_value='../../../0000:0d:00.0')
-    @patch('debian.bullseye.src.bin.parse_sriov._write_int_to_file',
+    @patch('debian.bullseye.src.bin.parse_sriov._write_sriov_numvfs_safe',
            return_value=False)
     def test_write_failure_returns_false(  # pylint: disable=too-many-arguments
             self, _mock_write,
@@ -1067,6 +1085,265 @@ class TestParseAndProcessWithOrphanReset(unittest.TestCase):
 
         self.assertTrue(result)
         mock_reset.assert_called_once_with(expected_configs)
+
+
+#####################################################################
+# Tests for the sriov_numvfs fail-fast guard (CGTS-107733, trixie only)
+#
+# These cover the helpers that prevent `echo N > sriov_numvfs` from hanging
+# when a VF is bound to vfio-pci and still held open by a userspace process
+# (e.g. a DPDK dataplane). The whole group is skipped on sources that lack the
+# guard (bullseye) via @requires_sriov_guard at the class level.
+
+
+@requires_sriov_guard
+class TestVfsInUse(unittest.TestCase):
+    """_vfs_in_use: detect VFs bound to vfio-pci and held open."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        # Redirect the module's sysfs/devfs roots into the temp tree.
+        self._orig_pci = parse_sriov.SYS_BUS_PCI_DEVICES
+        self._orig_vfio = parse_sriov.DEV_VFIO
+        parse_sriov.SYS_BUS_PCI_DEVICES = os.path.join(self.root, 'pci')
+        parse_sriov.DEV_VFIO = os.path.join(self.root, 'vfio')
+        os.makedirs(parse_sriov.SYS_BUS_PCI_DEVICES)
+        os.makedirs(parse_sriov.DEV_VFIO)
+
+    def tearDown(self):
+        parse_sriov.SYS_BUS_PCI_DEVICES = self._orig_pci
+        parse_sriov.DEV_VFIO = self._orig_vfio
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def _make_pf(self, pf, vf_specs):
+        """Create a fake PF with VFs. vf_specs: list of (driver, group)."""
+        pcidir = parse_sriov.SYS_BUS_PCI_DEVICES
+        pfdir = os.path.join(pcidir, pf)
+        os.makedirs(pfdir)
+        for i, (driver, group) in enumerate(vf_specs):
+            bdf = '%s-vf%d' % (pf, i)
+            vfdir = os.path.join(pcidir, bdf)
+            os.makedirs(vfdir)
+            os.symlink(vfdir, os.path.join(pfdir, 'virtfn%d' % i))
+            if driver:
+                drvdir = os.path.join(self.root, 'drivers', driver)
+                os.makedirs(drvdir, exist_ok=True)
+                os.symlink(drvdir, os.path.join(vfdir, 'driver'))
+            grpdir = os.path.join(self.root, 'groups', str(group))
+            os.makedirs(grpdir, exist_ok=True)
+            os.symlink(grpdir, os.path.join(vfdir, 'iommu_group'))
+            node = os.path.join(parse_sriov.DEV_VFIO, str(group))
+            if not os.path.exists(node):
+                open(node, 'w').close()
+
+    def test_no_vfs_returns_empty(self):
+        self._make_pf('0000:aa:00.0', [])
+        self.assertEqual(parse_sriov._vfs_in_use('0000:aa:00.0'), [])
+
+    def test_vfio_vf_not_held_returns_empty(self):
+        self._make_pf('0000:bb:00.0', [('vfio-pci', 11), ('vfio-pci', 12)])
+        with patch('debian.bullseye.src.bin.parse_sriov._vfio_node_in_use',
+                   return_value=None):
+            self.assertEqual(parse_sriov._vfs_in_use('0000:bb:00.0'), [])
+
+    def test_non_vfio_driver_ignored(self):
+        self._make_pf('0000:cc:00.0', [('iavf', 21), ('ixgbevf', 22)])
+        # Even if a holder existed, non-vfio VFs are never considered in use.
+        with patch('debian.bullseye.src.bin.parse_sriov._vfio_node_in_use',
+                   return_value='pid=1 comm=x fd=y'):
+            self.assertEqual(parse_sriov._vfs_in_use('0000:cc:00.0'), [])
+
+    def test_vfio_vf_held_is_reported(self):
+        self._make_pf('0000:dd:00.0', [('vfio-pci', 31), ('iavf', 32)])
+
+        def holder(group):
+            return 'pid=999 comm=dpdk fd=/x' if str(group) == '31' else None
+
+        with patch('debian.bullseye.src.bin.parse_sriov._vfio_node_in_use',
+                   side_effect=holder):
+            in_use = parse_sriov._vfs_in_use('0000:dd:00.0')
+        self.assertEqual(len(in_use), 1)
+        self.assertIn('0000:dd:00.0-vf0', in_use[0])
+        self.assertIn('group 31', in_use[0])
+        self.assertIn('pid=999', in_use[0])
+
+    def test_missing_pf_returns_empty(self):
+        self.assertEqual(parse_sriov._vfs_in_use('0000:ee:00.0'), [])
+
+
+@requires_sriov_guard
+class TestWriteIntToFileTimed(unittest.TestCase):
+    """_write_int_to_file_timed: never block; fail fast on timeout."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def test_successful_write(self):
+        path = os.path.join(self.root, 'numvfs')
+        with open(path, 'w') as f:
+            f.write('0')
+        with MockHelper(stdout=''):
+            ok = parse_sriov._write_int_to_file_timed(path, 8, timeout=5)
+        self.assertTrue(ok)
+        with open(path) as f:
+            self.assertEqual(f.read().strip(), '8')
+
+    def test_write_to_bad_path_fails(self):
+        bad = os.path.join(self.root, 'nope', 'numvfs')
+        with MockHelper(stdout=''):
+            ok = parse_sriov._write_int_to_file_timed(bad, 8, timeout=5)
+        self.assertFalse(ok)
+
+    def test_timeout_backstop(self):
+        """A write that blocks (FIFO with no reader) must time out, not hang."""
+        fifo = os.path.join(self.root, 'blocking_fifo')
+        os.mkfifo(fifo)
+        start = time.time()
+        with MockHelper(stdout='') as mock_helper:
+            ok = parse_sriov._write_int_to_file_timed(fifo, 0, timeout=2)
+        elapsed = time.time() - start
+        self.assertFalse(ok)
+        # Should give up near the timeout, not block indefinitely.
+        self.assertLess(elapsed, 10)
+        self.assertGreaterEqual(elapsed, 2)
+        self.assertIn('timeout', mock_helper.get_output_str().lower())
+
+    def test_fork_failure_falls_back_to_plain_write(self):
+        path = os.path.join(self.root, 'numvfs')
+        with patch('debian.bullseye.src.bin.parse_sriov.os.fork',
+                   side_effect=OSError('no fork')), \
+             patch('debian.bullseye.src.bin.parse_sriov._write_int_to_file',
+                   return_value=True) as mock_plain, \
+             MockHelper(stdout='') as mock_helper:
+            ok = parse_sriov._write_int_to_file_timed(path, 4, timeout=5)
+        self.assertTrue(ok)
+        mock_plain.assert_called_once_with(path, 4)
+        self.assertIn('fork failed', mock_helper.get_output_str())
+
+
+@requires_sriov_guard
+class TestWriteSriovNumvfsSafe(unittest.TestCase):
+    """_write_sriov_numvfs_safe: skip/apply/refuse decision logic."""
+
+    def test_no_change_is_noop(self):
+        with patch('debian.bullseye.src.bin.parse_sriov._read_int_from_file',
+                   return_value=8), \
+             patch('debian.bullseye.src.bin.parse_sriov._vfs_in_use') as mock_inuse, \
+             patch('debian.bullseye.src.bin.parse_sriov._write_int_to_file_timed') \
+                as mock_timed, \
+             MockHelper(stdout='') as mock_helper:
+            ok = parse_sriov._write_sriov_numvfs_safe('/x/numvfs', 8, '0000:07:00.0')
+        self.assertTrue(ok)
+        mock_inuse.assert_not_called()
+        mock_timed.assert_not_called()
+        self.assertIn('already set to 8', mock_helper.get_output_str())
+
+    def test_refuse_when_vf_in_use(self):
+        with patch('debian.bullseye.src.bin.parse_sriov._read_int_from_file',
+                   return_value=4), \
+             patch('debian.bullseye.src.bin.parse_sriov._vfs_in_use',
+                   return_value=['VF 0000:07:02.6 (group 31) held by [pid=999 comm=dpdk]']), \
+             patch('debian.bullseye.src.bin.parse_sriov._write_int_to_file_timed') \
+                as mock_timed, \
+             MockHelper(stdout='') as mock_helper:
+            ok = parse_sriov._write_sriov_numvfs_safe(
+                '/x/numvfs', 8, '0000:07:00.0', label='0000:07:00.0 (pf0)')
+        self.assertFalse(ok)
+        # Must NOT attempt any sysfs write when a VF is in use.
+        mock_timed.assert_not_called()
+        out = mock_helper.get_output_str()
+        self.assertIn('refusing to change sriov_numvfs', out)
+        self.assertIn('pid=999', out)
+
+    def test_safe_change_applies_teardown_then_set(self):
+        with patch('debian.bullseye.src.bin.parse_sriov._read_int_from_file',
+                   return_value=4), \
+             patch('debian.bullseye.src.bin.parse_sriov._vfs_in_use',
+                   return_value=[]), \
+             patch('debian.bullseye.src.bin.parse_sriov._write_int_to_file_timed',
+                   return_value=True) as mock_timed, \
+             MockHelper(stdout=''):
+            ok = parse_sriov._write_sriov_numvfs_safe('/x/numvfs', 8, '0000:07:00.0')
+        self.assertTrue(ok)
+        # current!=0 and target!=0 -> write 0 first, then the new count.
+        self.assertEqual(
+            mock_timed.call_args_list,
+            [call('/x/numvfs', 0), call('/x/numvfs', 8)])
+
+    def test_set_from_zero_skips_teardown(self):
+        with patch('debian.bullseye.src.bin.parse_sriov._read_int_from_file',
+                   return_value=0), \
+             patch('debian.bullseye.src.bin.parse_sriov._vfs_in_use',
+                   return_value=[]), \
+             patch('debian.bullseye.src.bin.parse_sriov._write_int_to_file_timed',
+                   return_value=True) as mock_timed, \
+             MockHelper(stdout=''):
+            ok = parse_sriov._write_sriov_numvfs_safe('/x/numvfs', 8, '0000:07:00.0')
+        self.assertTrue(ok)
+        # current==0 -> no teardown write, only the set.
+        mock_timed.assert_called_once_with('/x/numvfs', 8)
+
+    def test_reset_to_zero_only_tears_down(self):
+        with patch('debian.bullseye.src.bin.parse_sriov._read_int_from_file',
+                   return_value=8), \
+             patch('debian.bullseye.src.bin.parse_sriov._vfs_in_use',
+                   return_value=[]), \
+             patch('debian.bullseye.src.bin.parse_sriov._write_int_to_file_timed',
+                   return_value=True) as mock_timed, \
+             MockHelper(stdout=''):
+            ok = parse_sriov._write_sriov_numvfs_safe('/x/numvfs', 0, '0000:07:00.0')
+        self.assertTrue(ok)
+        # target 0 -> only the teardown write, no set.
+        mock_timed.assert_called_once_with('/x/numvfs', 0)
+
+    def test_teardown_write_failure_returns_false(self):
+        with patch('debian.bullseye.src.bin.parse_sriov._read_int_from_file',
+                   return_value=4), \
+             patch('debian.bullseye.src.bin.parse_sriov._vfs_in_use',
+                   return_value=[]), \
+             patch('debian.bullseye.src.bin.parse_sriov._write_int_to_file_timed',
+                   return_value=False), \
+             MockHelper(stdout='') as mock_helper:
+            ok = parse_sriov._write_sriov_numvfs_safe('/x/numvfs', 8, '0000:07:00.0')
+        self.assertFalse(ok)
+        self.assertIn("Failed to write 0", mock_helper.get_output_str())
+
+
+@requires_sriov_guard
+class TestEnableSriovForPfGuard(unittest.TestCase):
+    """_enable_sriov_for_pf must fail fast (return False) when the guard refuses."""
+
+    def test_enable_refuses_when_vf_in_use(self):
+        with patch('debian.bullseye.src.bin.parse_sriov._read_int_from_file',
+                   return_value=4), \
+             patch('debian.bullseye.src.bin.parse_sriov._ensure_pf_netdevs_up',
+                   return_value=True), \
+             patch('debian.bullseye.src.bin.parse_sriov._write_sriov_numvfs_safe',
+                   return_value=False) as mock_safe, \
+             MockHelper(stdout=''):
+            ok = parse_sriov._enable_sriov_for_pf(
+                '0000:07:00.0', 8, up_requirement=False, sriov_name='pf0')
+        self.assertFalse(ok)
+        mock_safe.assert_called_once_with(
+            '/sys/bus/pci/devices/0000:07:00.0/sriov_numvfs', 8,
+            '0000:07:00.0', label='0000:07:00.0 (pf0)')
+
+    def test_enable_succeeds_when_guard_allows(self):
+        with patch('debian.bullseye.src.bin.parse_sriov._read_int_from_file',
+                   return_value=0), \
+             patch('debian.bullseye.src.bin.parse_sriov._ensure_pf_netdevs_up',
+                   return_value=True), \
+             patch('debian.bullseye.src.bin.parse_sriov._write_sriov_numvfs_safe',
+                   return_value=True) as mock_safe, \
+             MockHelper(stdout='') as mock_helper:
+            ok = parse_sriov._enable_sriov_for_pf(
+                '0000:07:00.0', 8, up_requirement=False, sriov_name='pf0')
+        self.assertTrue(ok)
+        mock_safe.assert_called_once()
+        self.assertIn('configured sriov_numvfs=8', mock_helper.get_output_str())
 
 
 if __name__ == '__main__':
