@@ -56,7 +56,7 @@ class platform::params (
   $sys_reader_group_name = 'sys_reader'
   $sys_reader_group_id = '503'
   $deny_ssh_group_name = 'denyssh'
-  $deny_ssh_group_id = '10000'
+  $deny_ssh_group_id = '510'
 
   $phys_core_count = Integer($physical_core_count)
   $plat_res_mem = Integer($platform_res_mem)
