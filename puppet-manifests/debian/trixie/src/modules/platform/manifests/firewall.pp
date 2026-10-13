@@ -105,6 +105,7 @@ class platform::firewall::calico::controller {
   contain ::platform::firewall::calico::oam
   contain ::platform::firewall::calico::mgmt
   contain ::platform::firewall::calico::cluster_host
+  contain ::platform::firewall::calico::openbao
   contain ::platform::firewall::calico::pxeboot
   contain ::platform::firewall::calico::storage
   contain ::platform::firewall::calico::admin
@@ -121,6 +122,7 @@ class platform::firewall::calico::controller {
   -> Class['::platform::firewall::calico::oam']
   -> Class['::platform::firewall::calico::mgmt']
   -> Class['::platform::firewall::calico::cluster_host']
+  -> Class['::platform::firewall::calico::openbao']
   -> Class['::platform::firewall::calico::pxeboot']
   -> Class['::platform::firewall::calico::storage']
   -> Class['::platform::firewall::calico::admin']
@@ -156,6 +158,7 @@ class platform::firewall::runtime {
   include ::platform::firewall::calico::oam
   include ::platform::firewall::calico::mgmt
   include ::platform::firewall::calico::cluster_host
+  include ::platform::firewall::calico::openbao
   include ::platform::firewall::calico::pxeboot
   include ::platform::firewall::calico::storage
   include ::platform::firewall::calico::admin
@@ -169,6 +172,7 @@ class platform::firewall::runtime {
   Class['::platform::firewall::calico::oam']
   -> Class['::platform::firewall::calico::mgmt']
   -> Class['::platform::firewall::calico::cluster_host']
+  -> Class['::platform::firewall::calico::openbao']
   -> Class['::platform::firewall::calico::pxeboot']
   -> Class['::platform::firewall::calico::storage']
   -> Class['::platform::firewall::calico::admin']
@@ -232,6 +236,32 @@ class platform::firewall::calico::mgmt (
     }
     $yaml_config = hash2yaml($config)
     $gnp_name = "${::personality}-mgmt-if-gnp"
+    $file_name_gnp = "/tmp/gnp_${gnp_name}.yaml"
+    file { $file_name_gnp:
+      ensure  => file,
+      content => template('platform/calico_platform_network_if_gnp.yaml.erb'),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0640',
+    }
+    -> exec { "apply globalnetworkpolicies ${gnp_name} with ${file_name_gnp}":
+      path      => '/usr/bin:/usr/sbin:/bin:/usr/local/bin',
+      command   => "${apply_script} ${gnp_name} ${file_name_gnp} ${cfgf}",
+      logoutput => true
+    }
+  }
+}
+
+class platform::firewall::calico::openbao (
+  $config = {}
+) {
+  # Cluster-wide GlobalNetworkPolicy denying pod egress
+  # to the platform openBAO host instance across the platform networks.
+  if $config != {} and $::personality == 'controller' {
+    $apply_script = 'calico_firewall_apply_policy.sh'
+    $cfgf = '/etc/kubernetes/admin.conf'
+    $yaml_config = hash2yaml($config)
+    $gnp_name = 'stx-openbao-host-isolation'
     $file_name_gnp = "/tmp/gnp_${gnp_name}.yaml"
     file { $file_name_gnp:
       ensure  => file,
