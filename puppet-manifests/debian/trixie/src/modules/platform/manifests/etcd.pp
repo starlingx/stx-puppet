@@ -542,12 +542,12 @@ ETCD_INITIAL_CLUSTER_STATE="new"
 ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster"
 ETCD_QUOTA_BACKEND_BYTES="${quota_backend_bytes}"
 ETCD_CLIENT_CERT_AUTH="true"
-ETCD_CERT_FILE="/etc/etcd/etcd-server.crt"
-ETCD_KEY_FILE="/etc/etcd/etcd-server.key"
+ETCD_CERT_FILE="/etc/etcd/etcd-${fixed_name_prefix}-0.crt"
+ETCD_KEY_FILE="/etc/etcd/etcd-${fixed_name_prefix}-0.key"
 ETCD_TRUSTED_CA_FILE="/etc/etcd/ca.crt"
 ETCD_PEER_CLIENT_CERT_AUTH="true"
-ETCD_PEER_CERT_FILE="/etc/etcd/etcd-server.crt"
-ETCD_PEER_KEY_FILE="/etc/etcd/etcd-server.key"
+ETCD_PEER_CERT_FILE="/etc/etcd/etcd-${fixed_name_prefix}-0.crt"
+ETCD_PEER_KEY_FILE="/etc/etcd/etcd-${fixed_name_prefix}-0.key"
 ETCD_PEER_TRUSTED_CA_FILE="/etc/etcd/ca.crt"
 EOF
 
@@ -653,11 +653,47 @@ class platform::etcd::membership
 
   if $::platform::params::hostname == 'controller-0' {
     $local_fixed_name = "${fixed_name_prefix}-0"
+    $local_fixed_addr = $cluster_host_controller0_address
     $etcdctl_endpoint = $fixed0_endpoint
   } else {
     $local_fixed_name = "${fixed_name_prefix}-1"
+    $local_fixed_addr = $cluster_host_controller1_address
     # Controller-1 connects to fixed-0 (the seed) to add itself
     $etcdctl_endpoint = $fixed0_endpoint
+  }
+
+  # Issue this member's certificate locally if it does not already exist.
+  #
+  # controller-0's pair is created during bootstrap by the create-etcd-certs
+  # ansible role, so this is a no-op there. controller-1 has no pair until its
+  # first unlock, and generating it here keeps the private key on the host that
+  # uses it.
+  #
+  # Signing is local: /etc/etcd/ca.key is present on both controllers.
+  $member_cert = "/etc/etcd/etcd-${local_fixed_name}.crt"
+  $member_key = "/etc/etcd/etcd-${local_fixed_name}.key"
+  $member_csr = "/etc/etcd/etcd-${local_fixed_name}.csr"
+  $member_ext = "/tmp/etcd-${local_fixed_name}.ext"
+
+  # The key size, one-year validity, key usage and extended key usage below
+  # are the canonical per-member certificate parameters. The two other paths
+  # that issue a member certificate -- etcd_cert_sans.py and the renewal block
+  # in kube-cert-rotation.sh -- must stay in agreement with these values.
+  exec { "issue per-member etcd certificate ${local_fixed_name}":
+    command  => "/bin/sh -c '\
+set -e; \
+/usr/bin/openssl genrsa -out ${member_key} 4096; \
+/bin/chmod 0600 ${member_key}; \
+/usr/bin/openssl req -new -key ${member_key} -subj \"/CN=${local_fixed_name}\" -out ${member_csr}; \
+/usr/bin/printf \"subjectAltName=IP:${local_fixed_addr},IP:127.0.0.1,IP:::1\\n\" > ${member_ext}; \
+/usr/bin/printf \"keyUsage=digitalSignature,keyEncipherment\\n\" >> ${member_ext}; \
+/usr/bin/printf \"extendedKeyUsage=serverAuth,clientAuth\\n\" >> ${member_ext}; \
+/usr/bin/openssl x509 -req -in ${member_csr} -CA /etc/etcd/ca.crt -CAkey /etc/etcd/ca.key \
+-CAcreateserial -out ${member_cert} -days 365 -extfile ${member_ext}; \
+/bin/rm -f ${member_ext}'",
+    creates  => $member_cert,
+    provider => shell,
+    before   => File['/etc/default/etcd-fixed'],
   }
 
   # Write the etcd-fixed env file (idempotent — uses the template).
@@ -750,11 +786,16 @@ class platform::etcd::membership
 class platform::etcd::certificates
   inherits ::platform::etcd::params {
 
+  include ::platform::params
   include ::platform::network::cluster_host::params
   $floating_address = $::platform::network::cluster_host::params::controller_address
-  $controller0_address = $::platform::network::cluster_host::params::controller0_address
 
   $script = '/usr/local/bin/etcd_duplex_migration.py'
+
+  # The script unions the unit addresses into the SAN set the certificate
+  # already carries and returns without reissuing when none are missing,
+  # comparing addresses canonically rather than as text. That decision has one
+  # owner, so this exec carries no unless of its own.
 
   exec { 'etcd reissue certificates with unit addresses':
     command   => "${script} --certificates --floating-address ${floating_address}",
