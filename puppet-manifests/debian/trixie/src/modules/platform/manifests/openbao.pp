@@ -297,7 +297,22 @@ class platform::openbao::certs::perms
 class platform::openbao::config (
   # initial_start is an explicit parameter so callers can force the
   # value for their phase: the bootstrap path passes true.
+  #
+  # initial_start gates the loopback-only listener [::] for bootstrap
+  # and restore
   $initial_start = $platform::openbao::params::initial_start,
+
+  # init_bao_identity gates the HCL 'initialize' stanzas that bring up
+  # userpass auth and admin user/policy creation
+  #
+  # init_bao_identity defaults to initial_start
+  $init_bao_identity = $initial_start,
+
+  # init_bao_kvv2 gates the HCL 'initialize' stanza for kv-v2
+  # secrets engine.
+  #
+  # init_bao_kvv2 defaults to initial_start
+  $init_bao_kvv2 = $initial_start,
 ) inherits ::platform::openbao::params {
 
   require ::platform::openbao::dirs
@@ -447,6 +462,34 @@ class platform::openbao::reload::runtime
       ensure => absent,
     }
   }
+}
+
+# Restore class for controller-0 restore . Mirrors ::bootstrap but does
+# not generate LUKS secrets and does not enable the kv-v2 engine.
+#
+# Restore initializes a vault so that a snapshot restore can be
+# peformed. Requires: initialized, unsealed, admin/superuser access
+class platform::openbao::restore
+  inherits ::platform::openbao::params {
+
+  include ::platform::openbao::dirs
+  include ::platform::openbao::initcert
+
+  # Loopback-first listener. Seed policy + identity,
+  # but NOT kv-v2 (the snapshot carries that state).
+  class { '::platform::openbao::config':
+    initial_start     => true,
+    init_bao_identity => true,
+    init_bao_kvv2     => false,
+  }
+
+  # init reads service_enabled from inherited params
+  include ::platform::openbao::init
+
+  Class['::platform::openbao::dirs']
+  -> Class['::platform::openbao::initcert']
+  -> Class['::platform::openbao::config']
+  -> Class['::platform::openbao::init']
 }
 
 # Bootstrap class for initial controller-0 setup (bao-first phase). This

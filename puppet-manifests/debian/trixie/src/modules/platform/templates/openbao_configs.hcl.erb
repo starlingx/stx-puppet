@@ -76,7 +76,7 @@ seal "static" {
   current_key    = "file://<%= @luks_fs_mount %>/<%= @unseal_key_dir %>/<%= @unseal_key_file %>"
 }
 
-<% if @initial_start -%>
+<% if @init_bao_identity -%>
 initialize "policy" {
   request "update-policy" {
     operation = "update"
@@ -113,7 +113,9 @@ initialize "identity" {
     }
   }
 }
+<% end -%>
 
+<% if @init_bao_kvv2 -%>
 initialize "secret" {
   request "enable-kv-v2" {
     operation = "update"
