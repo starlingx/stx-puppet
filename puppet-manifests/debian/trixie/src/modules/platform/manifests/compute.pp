@@ -2,7 +2,6 @@ class platform::compute::params (
   $worker_cpu_list = '',
   $platform_cpu_list = '',
   $reserved_vswitch_cores = '',
-  $reserved_platform_cores = '',
   $worker_base_reserved = '',
   $compute_vswitch_reserved = '',
   $max_cpu_mhz_configured = undef
