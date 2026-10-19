@@ -214,31 +214,33 @@ define platform::lvm::csi::create_thinpool(
       ''      => '',
       default => "--poolmetadatasize ${metadata_size}",
     }
-    # unless_resize avoids class execution if there are not different between
-    # pool_size and the real pool size on VG
+    notice("create_thinpool: vg=${vg_name} pool=${pool_name} pool_size=${pool_size}")
+    # resize_onlyif gates the pool grow.
     # lint:ignore:only_variable_string
     # lint:ignore:140chars
     if "${pool_size}" =~ /%/ {
       $npool_size = "-l ${pool_size}"
-      $unless_resize = "test $(vgs --noheadings --nosuffix --units m -o vg_free ${vg_name} | tr -d ' ' | cut -d. -f1) -le 0"
+      $resize_onlyif = "test $(vgs --noheadings --nosuffix --units b -o vg_free ${vg_name} | tr -d ' ') -gt 0"
     } else {
       $npool_size = "-L ${pool_size}G"
-      $unless_resize = "test $(lvs --noheadings --nosuffix --units g -o lv_size ${vg_name}/${pool_name} | tr -d ' ' | cut -d. -f1) -ge ${pool_size}"
+      $resize_onlyif = "test $(lvs --noheadings --nosuffix --units g -o lv_size ${vg_name}/${pool_name} | tr -d ' ' | cut -d. -f1) -lt ${pool_size}"
     }
     # lint:endignore:only_variable_string
     # lint:endignore:140chars
 
-    exec { "resizing thin pool ${vg_name}/${pool_name}":
-      command => "lvresize ${npool_size} ${vg_name}/${pool_name}",
-      path    => ['/usr/sbin', '/sbin', '/usr/bin', '/bin'],
-      onlyif  => "lvs ${vg_name}/${pool_name}",
-      unless  => $unless_resize,
-    }
+    # Create the pool, then grow it.
     exec { "create thin pool ${vg_name}/${pool_name}":
       command => "lvcreate -T ${npool_size} ${metadata_param} ${vg_name}/${pool_name}",
       path    => ['/usr/sbin', '/sbin'],
       unless  => "lvs ${vg_name}/${pool_name}",
       onlyif  => "vgs ${vg_name}",
+    }
+    # Resizing operation is contingent upon the new size being larger than the
+    # of the existing lvm-thin pool size.
+    -> exec { "resizing thin pool ${vg_name}/${pool_name}":
+      command => "lvresize ${npool_size} ${vg_name}/${pool_name}",
+      path    => ['/usr/sbin', '/sbin', '/usr/bin', '/bin'],
+      onlyif  => ["lvs ${vg_name}/${pool_name}", $resize_onlyif],
     }
 
   } elsif $ensure == 'absent' {
@@ -262,6 +264,16 @@ define platform::lvm::csi::wipe_and_add_pv {
     path    => ['/usr/sbin', '/sbin'],
     unless  => "pvdisplay ${name}",
   }
+  # Resize PV only when the device has more than one free extent beyond the PV,
+  # since ~1 PE of metadata/alignment overhead always makes dev_size > pv_size.
+  # lint:ignore:140chars
+  -> exec { "pvresize ${name}":
+    command => "pvresize ${name}",
+    path    => ['/usr/sbin', '/sbin', '/usr/bin', '/bin'],
+    onlyif  => "pvdisplay ${name}",
+    unless  => "test $(( $(pvs --noheadings --nosuffix --units b -o dev_size ${name} | tr -d ' ') - $(pvs --noheadings --nosuffix --units b -o pv_size ${name} | tr -d ' ') )) -le $(pvs --noheadings --nosuffix --units b -o vg_extent_size ${name} | tr -d ' ')",
+  }
+  # lint:endignore:140chars
 }
 
 define platform::lvm::csi::create_extend_vg(
