@@ -50,9 +50,13 @@ class platform::users
 
   # Create a 'denyssh' group for ldap users
   # without ssh access
-  -> group { $platform::params::deny_ssh_group_name:
-    ensure => 'present',
-    gid    => $platform::params::deny_ssh_group_id,
+  # The group is created only if it does not exist
+  -> exec { "create_group_${platform::params::deny_ssh_group_name}":
+    command => [
+      '/usr/sbin/groupadd', '--system',
+      '--gid', $platform::params::deny_ssh_group_id,
+      $platform::params::deny_ssh_group_name],
+    unless  => ["/bin/grep -q '^${platform::params::deny_ssh_group_name}:' /etc/group"],
   }
 
   # Create the 'sys_admin' group. This group grants full administrative
@@ -136,9 +140,13 @@ class platform::users::bootstrap
 
   # Create a 'denyssh' group for ldap users
   # without ssh access
-  -> group { $platform::params::deny_ssh_group_name:
-    ensure => 'present',
-    gid    => $platform::params::deny_ssh_group_id,
+  # The group is created only if it does not exist
+  -> exec { "create_${platform::params::deny_ssh_group_name}":
+    command => [
+      '/usr/sbin/groupadd', '--system',
+      '--gid', $platform::params::deny_ssh_group_id,
+      $platform::params::deny_ssh_group_name],
+    unless  => ["/bin/grep -q '^${platform::params::deny_ssh_group_name}:' /etc/group"],
   }
 
   # Create the 'sys_admin' group
