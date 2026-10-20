@@ -1,0 +1,26 @@
+#
+# Copyright (c) 2026 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Managed by puppet - do not edit
+#
+[Unit]
+ConditionFileNotEmpty=
+ConditionFileNotEmpty=<%= @config_path %>/stx_openbao_configs.hcl
+ConditionFileNotEmpty=<%= @luks_fs_mount %>/<%= @unseal_key_dir %>/<%= @unseal_key_file %>
+ConditionFileNotEmpty=<%= @cert_path %>/openbao-cert.crt
+Before=sm.service
+After=luks-fs-mgr.service
+
+[Service]
+UMask=0066
+ExecStart=
+ExecStart=/usr/bin/bao server -config=<%= @config_path %>/stx_openbao_configs.hcl
+# Bao reloads Certificates with SIGHUP; no restart needed
+ExecReload=
+ExecReload=/bin/kill -HUP $MAINPID
+# Bao logs to stdout by default; and the hcl omits log-file directive
+StandardOutput=append:/var/log/openbao.log
+StandardError=append:/var/log/openbao.log
+
