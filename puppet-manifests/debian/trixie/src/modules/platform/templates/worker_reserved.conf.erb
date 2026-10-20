@@ -61,14 +61,3 @@ COMPUTE_VSWITCH_MEMORY=<%= @compute_vswitch_reserved %>
 #
 ################################################################################
 COMPUTE_VSWITCH_CORES=<%= @reserved_vswitch_cores %>
-
-################################################################################
-#
-# List of platform physical cores reserved for platform applications.
-#
-# Example: To reserve 1 core on NUMA node0, the variable must be specified
-# as follows.
-#   WORKER_PLATFORM_CORES=("node0:0")
-#
-################################################################################
-WORKER_PLATFORM_CORES=<%= @reserved_platform_cores %>
