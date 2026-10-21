@@ -33,6 +33,7 @@ class platform::openbao::params (
   # NOTE: levels debug/trace may expose secrets
   $log_level = 'info',
   $log_format = 'standard',
+  $disable_standby_reads = true,
   # NOTE: Go only applies tls_cipher_suites to TLS 1.2; TLS 1.3 uses
   # fixed ciphers and cannot be restricted
   $tls_min_version = 'tls12',
