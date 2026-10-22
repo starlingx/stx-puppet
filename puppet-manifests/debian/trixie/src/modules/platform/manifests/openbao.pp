@@ -322,6 +322,15 @@ class platform::openbao::config (
     require => File[$config_path],
   }
 
+  # Validate the rendered HCL before attempting service start.  Failed
+  # initialization is non-retrying since bao 2.5.3, compounding a
+  # condition requiring also deleting the vault.db/raft.db
+  File["${config_path}/stx_openbao_configs.hcl"]
+  -> exec { 'validate-openbao-config':
+    command => "bao operator validate-config -config=${config_path}/stx_openbao_configs.hcl",
+    path    => ['/usr/bin', '/bin'],
+  }
+
   # Generate per-host systemd override so openbao finds the correct
   # config path on both controller-0 and controller-1
   file { '/etc/systemd/system/openbao.service.d':
