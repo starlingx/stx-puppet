@@ -5,7 +5,6 @@
 #
 
 class platform::openbao::params (
-  # service_enabled is a temporary developer gate
   $service_enabled = false,
   $data_path = '/var/lib/openbao/data',
   $luks_fs_mount = undef,
@@ -363,7 +362,6 @@ class platform::openbao::early_cert
 class platform::openbao
   inherits ::platform::openbao::params {
 
-  # openbao's service_enabled is a temporary developer gate
   if $service_enabled {
     include ::platform::openbao::dirs
     include ::platform::openbao::early_cert
@@ -396,21 +394,25 @@ class platform::openbao
 class platform::openbao::reload::runtime
   inherits ::platform::openbao::params {
 
-  # reassert file permissions and have bao relead the cert files
-  class { '::platform::openbao::certs::perms': }
-  -> exec { 'reload-openbao':
-    command => '/usr/bin/systemctl reload openbao',
-    onlyif  => '/usr/bin/systemctl is-active --quiet openbao',
-  }
-  -> file { "${cert_path}/openbao-cert-initial.crt":
-    ensure => absent,
-  }
-  -> file { "${cert_path}/openbao-cert-initial.key":
-    ensure => absent,
-  }
-  # and also the world readable copy of self-signed cert
-  -> file { "${config_path}/openbao-cert-initial.crt":
-    ensure => absent,
+  # Skip the cert reload unless bao is enabled
+  # disabled during a platform upgrade (service_enabled from sysinv)
+  if $service_enabled {
+    # reassert file permissions and have bao relead the cert files
+    class { '::platform::openbao::certs::perms': }
+    -> exec { 'reload-openbao':
+      command => '/usr/bin/systemctl reload openbao',
+      onlyif  => '/usr/bin/systemctl is-active --quiet openbao',
+    }
+    -> file { "${cert_path}/openbao-cert-initial.crt":
+      ensure => absent,
+    }
+    -> file { "${cert_path}/openbao-cert-initial.key":
+      ensure => absent,
+    }
+    # and also the world readable copy of self-signed cert
+    -> file { "${config_path}/openbao-cert-initial.crt":
+      ensure => absent,
+    }
   }
 }
 
@@ -443,11 +445,16 @@ class platform::openbao::bootstrap
 class platform::openbao::runtime
   inherits ::platform::openbao::params {
 
-  include ::platform::openbao::config
+  # Skip runtime config regeneration/restart unless bao is enabled
+  # bao is disabled during a platform upgrade (service_enabled
+  # from sysinv)
+  if $service_enabled {
+    include ::platform::openbao::config
 
-  Class['::platform::openbao::config']
-  ~> exec { 'restart-openbao':
-    command     => '/usr/bin/systemctl restart openbao',
-    refreshonly => true,
+    Class['::platform::openbao::config']
+    ~> exec { 'restart-openbao':
+      command     => '/usr/bin/systemctl restart openbao',
+      refreshonly => true,
+    }
   }
 }
