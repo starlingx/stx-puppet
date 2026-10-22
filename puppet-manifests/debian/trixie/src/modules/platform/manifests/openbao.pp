@@ -7,6 +7,8 @@
 class platform::openbao::params (
   $service_enabled = false,
   $data_path = '/var/lib/openbao/data',
+  $openbao_uid = 196,
+  $openbao_gid = 196,
   $luks_fs_mount = undef,
   $unseal_key_dir = 'controller/.openbao/auto-unseal',
   $unseal_key_file = 'stx-initial.key',
@@ -48,11 +50,38 @@ class platform::openbao::params (
   }
 }
 
+# Create the openbao system user and group.
+# See also entry in pkg base-passwd
+# The uid/gid are fixed params (see ::params) so ownership is
+# consistent across controllers, supporting the rsync'd LUKS content.
+class platform::openbao::user
+  inherits ::platform::openbao::params {
+
+  group { 'openbao':
+    ensure => 'present',
+    gid    => $openbao_gid,
+  }
+  -> user { 'openbao':
+    ensure     => 'present',
+    comment    => 'openbao',
+    gid        => $openbao_gid,
+    home       => '/var/lib/openbao',
+    managehome => false,
+    shell      => '/sbin/nologin',
+    uid        => $openbao_uid,
+  }
+  # NOTE: the password field is intentionally not managed here to
+  # avoid invoking sssd, since bao config runs before sssd
+  # These settings match base-passwd
+}
+
 # Create required directories.
 # Contains directory existence, ownership and modes, plus the LUKS-mount
 # guard.
 class platform::openbao::dirs
   inherits ::platform::openbao::params {
+
+  require ::platform::openbao::user
 
   # Data directory (mkdir -p handles parent creation)
   exec { 'create-openbao-data-dir':
@@ -247,6 +276,8 @@ class platform::openbao::initcert
 # as root:root 0644
 class platform::openbao::certs::perms
   inherits ::platform::openbao::params {
+
+  require ::platform::openbao::user
 
   file { "${cert_path}/openbao-cert.crt":
     ensure => file,
