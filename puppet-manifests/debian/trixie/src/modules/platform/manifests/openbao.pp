@@ -362,7 +362,8 @@ class platform::openbao::early_cert
 class platform::openbao
   inherits ::platform::openbao::params {
 
-  if $service_enabled {
+  # openbao_disabled is a developer gate
+  if $service_enabled and ! str2bool($::openbao_disabled) {
     include ::platform::openbao::dirs
     include ::platform::openbao::early_cert
     include ::platform::openbao::config
@@ -396,7 +397,8 @@ class platform::openbao::reload::runtime
 
   # Skip the cert reload unless bao is enabled
   # disabled during a platform upgrade (service_enabled from sysinv)
-  if $service_enabled {
+  # openbao_disabled is a developer gate
+  if $service_enabled and ! str2bool($::openbao_disabled) {
     # reassert file permissions and have bao relead the cert files
     class { '::platform::openbao::certs::perms': }
     -> exec { 'reload-openbao':
@@ -421,24 +423,27 @@ class platform::openbao::reload::runtime
 class platform::openbao::bootstrap
   inherits ::platform::openbao::params {
 
-  include ::platform::openbao::dirs
-  include ::platform::openbao::secrets
-  include ::platform::openbao::initcert
+  # openbao_disabled is a developer gate
+  if ! str2bool($::openbao_disabled) {
+    include ::platform::openbao::dirs
+    include ::platform::openbao::secrets
+    include ::platform::openbao::initcert
 
-  # initial_start is consumed by config (the HCL template), not by init
-  # (which reads service_enabled). Set it true here.
-  class { '::platform::openbao::config':
-    initial_start => true,
+    # initial_start is consumed by config (the HCL template), not by init
+    # (which reads service_enabled). Set it true here.
+    class { '::platform::openbao::config':
+      initial_start => true,
+    }
+
+    # init reads service_enabled from inherited params
+    include ::platform::openbao::init
+
+    Class['::platform::openbao::dirs']
+    -> Class['::platform::openbao::secrets']
+    -> Class['::platform::openbao::initcert']
+    -> Class['::platform::openbao::config']
+    -> Class['::platform::openbao::init']
   }
-
-  # init reads service_enabled from inherited params
-  include ::platform::openbao::init
-
-  Class['::platform::openbao::dirs']
-  -> Class['::platform::openbao::secrets']
-  -> Class['::platform::openbao::initcert']
-  -> Class['::platform::openbao::config']
-  -> Class['::platform::openbao::init']
 }
 
 # Runtime class for config changes after deployment
@@ -448,7 +453,8 @@ class platform::openbao::runtime
   # Skip runtime config regeneration/restart unless bao is enabled
   # bao is disabled during a platform upgrade (service_enabled
   # from sysinv)
-  if $service_enabled {
+  # openbao_disabled is a developer gate
+  if $service_enabled and ! str2bool($::openbao_disabled) {
     include ::platform::openbao::config
 
     Class['::platform::openbao::config']
