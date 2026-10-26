@@ -398,30 +398,6 @@ class platform::compute::machine {
   }
 }
 
-# Controls, based on the openstack_compute node label
-# the conditional loading of the non-open-source NVIDIA vGPU
-# drivers for commercial scenarios where they are built into
-# the StarlingX ISO.
-class platform::compute::nvidia_vgpu_drivers(
-  $openstack_enabled = false,
-  $install_script = '/usr/share/nvidia/install.sh',
-  $uninstall_script = '/usr/share/nvidia/uninstall.sh'
-) {
-  if $openstack_enabled {
-    exec { 'Install nvidia vgpu driver':
-      command => $install_script,
-      path    => ['/usr/share/nvidia', '/bin', '/usr/bin', '/usr/sbin'],
-      onlyif  => "test -e ${install_script}",
-    }
-  } else {
-    exec { 'Uninstall nvidia vgpu driver':
-      command => $uninstall_script,
-      path    => ['/usr/share/nvidia', '/bin', '/usr/bin', '/usr/sbin'],
-      onlyif  => "test -e ${uninstall_script}",
-    }
-  }
-}
-
 class platform::compute::iscsi_setup
   inherits ::platform::compute::params {
 
@@ -457,6 +433,5 @@ class platform::compute {
   require ::platform::compute::resctrl
   require ::platform::compute::machine
   require ::platform::compute::config
-  require ::platform::compute::nvidia_vgpu_drivers
   require ::platform::compute::iscsi_setup
 }
