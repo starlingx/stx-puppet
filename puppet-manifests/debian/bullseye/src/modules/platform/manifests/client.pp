@@ -35,15 +35,6 @@ class platform::client
     content => generate('/usr/bin/openstack', 'complete', '-q'),
   }
 
-  if $::personality == 'controller' {
-    file {'/etc/ssl/private/openstack':
-      ensure => 'directory',
-      owner  => 'root',
-      group  => 'root',
-      mode   => '0755',
-    }
-  }
-
   exec { 'change permission for /etc/apparmor.d/':
     command => 'setfacl -m g:sys_protected:rwx /etc/apparmor.d/',
     onlyif  => '/usr/bin/test -d /etc/apparmor.d/'
