@@ -2153,6 +2153,19 @@ class platform::kubernetes::master::rootca::trustnewca::runtime
     try_sleep => 5,
   }
 
+  # Refresh the kube-public/cluster-info ConfigMap so its advertised CA matches
+  # the newly rotated root CA. The rootca update replaces pki/ca.crt and all
+  # local kubeconfigs but does not touch cluster-info, which is written once at
+  # bootstrap. A stale cluster-info makes the first kubeadm join after a CA
+  # rotation (e.g. a worker reinstall + unlock) fail TLS-bootstrap discovery,
+  # because --discovery-token-ca-cert-hash (derived from the live CA) no longer
+  # matches the CA embedded in cluster-info. 'kubeadm init phase bootstrap-token'
+  # is idempotent and rewrites cluster-info with the current pki/ca.crt.
+  -> exec { 'refresh_cluster_info_configmap':
+    environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf' ],
+    command     => 'kubeadm init phase bootstrap-token',
+  }
+
   # Update kubelet.conf with the new cert
   $cluster = generate('/bin/bash', '-c', "/bin/sed -e '/- cluster/,/name:/!d' /etc/kubernetes/kubelet.conf \
                       | grep 'name:' | awk '{printf \"%s\", \$2}'")
