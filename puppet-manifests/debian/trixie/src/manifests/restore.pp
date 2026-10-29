@@ -28,3 +28,4 @@ include ::platform::filesystem::docker
 include ::platform::filesystem::scratch
 include ::platform::filesystem::backup
 include ::platform::filesystem::kubelet
+include ::platform::filesystem::root::resize
