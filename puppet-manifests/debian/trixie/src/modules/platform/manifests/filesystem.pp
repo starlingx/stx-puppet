@@ -406,6 +406,7 @@ class platform::filesystem::controller {
   include ::platform::filesystem::luks
   include ::platform::filesystem::ceph
   include ::platform::filesystem::kdump
+  include ::platform::filesystem::root::resize
 }
 
 class platform::filesystem::log_bind {
@@ -620,7 +621,11 @@ class platform::filesystem::root
   }
 }
 
-class platform::filesystem::root::runtime {
+# Shared resize-only class. Grows root-lv in place (lvextend) without the
+# create-LV / mkfs / mount path of the base ::root class, which must never run
+# against the already-mounted root filesystem (/). Referenced by both the
+# static controller class and the runtime class.
+class platform::filesystem::root::resize {
 
   include ::platform::filesystem::root::params
   $lv_name = $platform::filesystem::root::params::lv_name
@@ -632,6 +637,10 @@ class platform::filesystem::root::runtime {
       lv_size   => $lv_size,
       devmapper => $devmapper,
   }
+}
+
+class platform::filesystem::root::runtime {
+  include ::platform::filesystem::root::resize
 }
 
 class platform::filesystem::luks {
