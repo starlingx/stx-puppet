@@ -997,6 +997,9 @@ define platform::network::interfaces::channels::channel_config (
 
 class platform::network::interfaces::channels::runtime {
   include platform::network::interfaces::channels
+  # Changing PF channels re-requests the PF IRQs; re-run the SR-IOV config
+  # to restore PF/VF IRQ affinity.
+  include platform::network::interfaces::sriov::config
 }
 
 class platform::network::interfaces::channels (
@@ -1016,6 +1019,8 @@ class platform::network::interfaces::sriov::enable
   inherits platform::network::interfaces::sriov {
 
   Anchor['platform::networking'] -> Class[$name]
+
+  Platform::Network::Interfaces::Channels::Channel_config <| |> -> Class[$name]
 
   $now       = Timestamp()
   $timestamp = $now.strftime('%Y_%m_%d_%H_%M_%S')
@@ -1047,6 +1052,8 @@ class platform::network::interfaces::sriov::enable
 class platform::network::interfaces::sriov::config
   inherits platform::network::interfaces::sriov {
   Anchor['platform::networking'] -> Class[$name]
+
+  Platform::Network::Interfaces::Channels::Channel_config <| |> -> Class[$name]
 
   $now = Timestamp()
   $timestamp = $now.strftime('%Y_%m_%d_%H_%M_%S')

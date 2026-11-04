@@ -566,6 +566,188 @@ def _ensure_pf_netdevs_up(pci_addr, up_requirement):
     return True
 
 
+def _get_app_cpu_list(cfg):
+    """
+    Return the sriov_config entry's 'application_cpu_list' as a cpulist
+    string, or None if missing or invalid.
+    """
+    cpu_list = cfg.get('application_cpu_list')
+    if cpu_list is None or cpu_list == '':
+        return None
+    if not isinstance(cpu_list, str):
+        return None
+    return cpu_list.strip().strip("'\"") or None
+
+
+def _get_pf_affinity_list(sriov_configs):
+    """
+    Return [{'pf_addr': str, 'cpu_list': str}] for each PF configured in
+    sriov_config, using its 'addr' and 'application_cpu_list'.
+    """
+    pf_list = []
+    if not sriov_configs or not isinstance(sriov_configs, dict):
+        return pf_list
+    for _name, cfg in sriov_configs.items():
+        if not isinstance(cfg, dict):
+            continue
+        addr = (cfg.get("addr") or "").strip().strip("'\"")
+        if addr:
+            pf_list.append({'pf_addr': addr,
+                            'cpu_list': _get_app_cpu_list(cfg)})
+    return sorted(pf_list, key=lambda x: x['pf_addr'])
+
+
+def affine_pci_irqs(pci_addr, cpu_list):
+    """
+    Affine every IRQ assigned to a PCI device to the given CPU list.
+    """
+    device_path = f"/sys/bus/pci/devices/{pci_addr}"
+    if not os.path.isdir(device_path):
+        raise FileNotFoundError(f"PCI device not found: {device_path}")
+
+    irqs = _collect_irqs(device_path)
+    results = {}
+
+    for irq in sorted(irqs):
+        affinity_path = f"/proc/irq/{irq}/smp_affinity_list"
+
+        # Skip vectors that aren't actually wired up in /proc/irq.
+        if not os.path.exists(affinity_path):
+            continue
+
+        try:
+            with open(affinity_path, "w") as f:
+                f.write(cpu_list)
+            results[irq] = True
+        except (OSError, IOError) as e:
+            results[irq] = f"failed: {e}"
+
+    return results
+
+
+def _collect_irqs(device_path):
+    """Gather all IRQs (legacy + MSI/MSI-X) used by a PCI device."""
+    irqs = set()
+
+    # Legacy / primary IRQ line.
+    irq_file = os.path.join(device_path, "irq")
+    if os.path.exists(irq_file):
+        with open(irq_file) as f:
+            irq = int(f.read().strip())
+            if irq != 0:  # 0 means no legacy IRQ assigned
+                irqs.add(irq)
+
+    # MSI / MSI-X vectors.
+    msi_dir = os.path.join(device_path, "msi_irqs")
+    if os.path.isdir(msi_dir):
+        for entry in os.listdir(msi_dir):
+            if entry.isdigit():
+                irqs.add(int(entry))
+
+    return irqs
+
+
+def affine_vf_irqs(vf_addr, cpu_list):
+    """
+    Affine the IRQs of a host-bound (iavf/ixgbevf/...) VF to cpu_list.
+
+    VFs that are unbound or bound to vfio-pci (VM / DPDK) have no host
+    netdev IRQs; their affinity is handled by the pci-irq-affinity-agent, so
+    they are skipped. All other VF IRQs, including the mailbox vector, are
+    affined to cpu_list.
+
+    Must run AFTER the VF driver is bound and AFTER any 'ethtool -L', since
+    changing the channel count frees and re-requests the IRQs (resetting
+    their affinity).
+
+    Returns:
+        dict mapping irq -> True / error string, or None if the VF was
+        skipped.
+    """
+    driver = _driver_of_pci(vf_addr)
+    if driver in (None, DRIVER_VFIO):
+        print(f"VF {vf_addr}: driver={driver}, no host IRQs to affine, skipping")
+        return None
+
+    device_path = f"{SYS_BUS_PCI_DEVICES}/{vf_addr}"
+    if not os.path.isdir(device_path):
+        print(f"ERROR: VF PCI device not found: {device_path}")
+        return {}
+
+    results = {}
+    for irq in sorted(_collect_irqs(device_path)):
+        affinity_path = f"/proc/irq/{irq}/smp_affinity_list"
+        if not os.path.exists(affinity_path):
+            continue
+        try:
+            with open(affinity_path, "w", encoding="utf-8") as f:
+                f.write(cpu_list)
+            results[irq] = True
+        except OSError as e:
+            results[irq] = f"failed: {e}"
+
+    return results
+
+
+def affine_vfs(vf_affinity_list):
+    """
+    Affine IRQs for each VF to its PF's application cpu list.
+
+    Args:
+        vf_affinity_list: list of {'vf_addr': str, 'cpu_list': str}.
+
+    Returns False if any write failed. VFs with no cpu_list are skipped
+    with a warning (not a failure).
+    """
+    ok = True
+    for item in vf_affinity_list:
+        vf_addr = item['vf_addr']
+        cpu_list = item.get('cpu_list')
+        if not cpu_list:
+            print(f"WARNING: VF {vf_addr}: no application_cpu_list, "
+                  "skipping IRQ affinity")
+            continue
+        results = affine_vf_irqs(vf_addr, cpu_list)
+        if not results:
+            continue
+        for _irq, status in sorted(results.items()):
+            if isinstance(status, str) and status.startswith("failed"):
+                ok = False
+    return ok
+
+
+def affine_pfs(pf_affinity_list):
+    """
+    Affine IRQs for each PF to its application cpu list.
+
+    Args:
+        pf_affinity_list: list of {'pf_addr': str, 'cpu_list': str}.
+
+    Returns False if any PF is missing or any write failed. PFs with no
+    cpu_list are skipped with a warning (not a failure).
+    """
+    ok = True
+    for item in pf_affinity_list:
+        pci_addr = item['pf_addr']
+        cpu_list = item.get('cpu_list')
+        if not cpu_list:
+            print(f"WARNING: PF {pci_addr}: no application_cpu_list, "
+                  "skipping IRQ affinity")
+            continue
+        try:
+            results = affine_pci_irqs(pci_addr, cpu_list)
+        except FileNotFoundError as e:
+            print(f"ERROR: PF {pci_addr}: {e}")
+            ok = False
+            continue
+        for irq, status in sorted(results.items()):
+            print(f"PF {pci_addr} IRQ {irq}: "
+                  f"{'OK' if status is True else status}")
+            if isinstance(status, str) and status.startswith("failed"):
+                ok = False
+    return ok
+
+
 def _enable_sriov_for_pf(pci_addr, num_vfs, up_requirement, sriov_name=None):
     """
     Enable SR-IOV
@@ -683,10 +865,18 @@ def _collect_vf_channels(vf_details, vf_addr, driver):
     if vf_channels is not None:
         # Only set channels on VFs with a netdevice driver.
         # vfio-pci and unbound VFs don't expose a netdev.
-        if driver not in (DRIVER_VFIO, DRIVER_NONE):
+        if driver != DRIVER_VFIO:
             return [{
                 'vf_addr': vf_addr,
-                'vf_channels': vf_channels}]
+                'vf_channels': vf_channels,
+                'driver': driver}]
+    return []
+
+
+def _collect_vf_affinity(vf_addr, driver, cpu_list):
+    """Return a vf_affinity entry list (empty or single) for the given VF."""
+    if driver != DRIVER_VFIO:
+        return [{'vf_addr': vf_addr, 'cpu_list': cpu_list}]
     return []
 
 
@@ -704,12 +894,13 @@ def get_sriov_entries(sriov_configs):
     Returns:
         tuple: (bool success/fail,
                 (dict driver_to_addresses, list rate_limit_settings,
-                 list vf_channels_settings))
+                 list vf_channels_settings, list vf_affinity_settings))
     """
     try:
         sriov_entries = defaultdict(list)
         max_tx_rate_list = []
         vf_channels_list = []
+        vf_affinity_list = []
 
         if not isinstance(sriov_configs, dict):
             raise TypeError("sriov_configs must be a dictionary")
@@ -729,6 +920,8 @@ def get_sriov_entries(sriov_configs):
 
             if not port_name:
                 raise TypeError(f'port_name for {sriov_name} must not be empty')
+
+            app_cpu_list = _get_app_cpu_list(config_details)
 
             if vf_config:
                 if not isinstance(vf_config, dict):
@@ -752,12 +945,15 @@ def get_sriov_entries(sriov_configs):
                         _collect_max_tx_rate(vf_details, port_name))
                     vf_channels_list.extend(
                         _collect_vf_channels(vf_details, vf_addr, driver))
+                    vf_affinity_list.extend(
+                        _collect_vf_affinity(vf_addr, driver, app_cpu_list))
 
-        return True, (sriov_entries, max_tx_rate_list, vf_channels_list)
+        return True, (sriov_entries, max_tx_rate_list, vf_channels_list,
+                      vf_affinity_list)
 
     except (TypeError, ValueError) as e:
         print(f"Error: get_sriov_entries: {e}")
-        return False, ([], [], [])
+        return False, ([], [], [], [])
 
 
 def _get_configured_pci_addrs(sriov_configs):
@@ -868,32 +1064,53 @@ def parse_and_process_sriov_config(data):
         if not sriov_configs:
             return True, []
 
-        ret, (sriov_entries, max_tx_rate_list, vf_channels_list) = \
+        ret, (sriov_entries, max_tx_rate_list, vf_channels_list,
+              vf_affinity_list) = \
             get_sriov_entries(sriov_configs)
         if not ret:
             return False, []
 
-        res = True
-        for driver_name, addresses in sriov_entries.items():
-            if sriov_bind(driver_name, addresses) is False:
-                res = False
-
-        for item in max_tx_rate_list:
-            if set_max_tx_rate(item['port'],
-                               item['vfnumber'],
-                               item['max_tx_rate']) is False:
-                res = False
-
-        for item in vf_channels_list:
-            if set_vf_channels(item['vf_addr'],
-                               item['vf_channels']) is False:
-                res = False
-
+        res = _apply_sriov_entries(sriov_configs, sriov_entries,
+                                   max_tx_rate_list, vf_channels_list,
+                                   vf_affinity_list)
         return res, sriov_entries
 
     except (KeyError, TypeError, ValueError) as e:
         print(f"Error: parsing SRIOV: {type(e).__name__}: {e}")
         return False, []
+
+
+def _apply_sriov_entries(sriov_configs, sriov_entries, max_tx_rate_list,
+                         vf_channels_list, vf_affinity_list):
+    """
+    Apply the SR-IOV settings extracted by get_sriov_entries().
+
+    Returns:
+        bool: True if all steps succeeded, False otherwise.
+    """
+    res = True
+    for driver_name, addresses in sriov_entries.items():
+        if sriov_bind(driver_name, addresses) is False:
+            res = False
+
+    for item in max_tx_rate_list:
+        if set_max_tx_rate(item['port'],
+                           item['vfnumber'],
+                           item['max_tx_rate']) is False:
+            res = False
+
+    for item in vf_channels_list:
+        if set_vf_channels(item['vf_addr'],
+                           item['vf_channels']) is False:
+            res = False
+
+    if not affine_pfs(_get_pf_affinity_list(sriov_configs)):
+        res = False
+
+    if not affine_vfs(vf_affinity_list):
+        res = False
+
+    return res
 
 
 def _load_config_file(config_file):

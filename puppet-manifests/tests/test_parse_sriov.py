@@ -15,6 +15,7 @@ import time
 import unittest
 import yaml
 from unittest.mock import call
+from unittest.mock import mock_open
 from unittest.mock import patch
 from unittest.mock import MagicMock
 
@@ -27,6 +28,14 @@ HAS_SRIOV_GUARD = hasattr(parse_sriov, '_write_sriov_numvfs_safe')
 requires_sriov_guard = unittest.skipUnless(
     HAS_SRIOV_GUARD,
     'sriov_numvfs fail-fast guard not present in this source (bullseye)')
+
+
+# PF/VF IRQ affinity. Detected by attribute presence so the
+# shared tests stay correct regardless of which distro source is selected.
+HAS_IRQ_AFFINITY = hasattr(parse_sriov, '_get_app_cpu_list')
+requires_irq_affinity = unittest.skipUnless(
+    HAS_IRQ_AFFINITY,
+    'SR-IOV IRQ affinity not present in this source (bullseye)')
 
 
 def valid_python_format_config():
@@ -1344,6 +1353,270 @@ class TestEnableSriovForPfGuard(unittest.TestCase):
         self.assertTrue(ok)
         mock_safe.assert_called_once()
         self.assertIn('configured sriov_numvfs=8', mock_helper.get_output_str())
+
+
+###########################################
+# Tests for SR-IOV PF/VF IRQ affinity (Trixie only)
+#
+PREFIX = 'debian.bullseye.src.bin.parse_sriov'
+
+
+@requires_irq_affinity
+class TestAffinityHelpers(unittest.TestCase):
+    """helpers: cpulist parsing and affinity-list assembly."""
+
+    def test_returns_cpu_list_string(self):
+        """A valid 'application_cpu_list' is returned unchanged."""
+        cfg = {'addr': '0000:07:00.0', 'port_name': 'enp0s3',
+               'application_cpu_list': '23,87'}
+        self.assertEqual(parse_sriov._get_app_cpu_list(cfg), '23,87')
+
+    def test_returns_range_cpu_list_string(self):
+        self.assertEqual(
+            parse_sriov._get_app_cpu_list(
+                {'application_cpu_list': '2-15,34-47'}),
+            '2-15,34-47')
+
+    def test_app_cpu_list_strips_quotes_and_whitespace(self):
+        self.assertEqual(
+            parse_sriov._get_app_cpu_list(
+                {'application_cpu_list': " '23,87' "}),
+            '23,87')
+
+    def test_app_cpu_list_missing_is_none(self):
+        self.assertIsNone(parse_sriov._get_app_cpu_list({}))
+
+    def test_app_cpu_list_empty_is_none(self):
+        self.assertIsNone(
+            parse_sriov._get_app_cpu_list({'application_cpu_list': ''}))
+
+    def test_app_cpu_list_non_string_rejected(self):
+        # An unquoted cpulist (23,87) is read by puppet's YAML as int 2387.
+        self.assertIsNone(
+            parse_sriov._get_app_cpu_list({'application_cpu_list': 2387}))
+
+    def test_pf_affinity_list_skips_entries_without_addr(self):
+        cfgs = {'pf0': {'application_cpu_list': '23,87'},
+                'pf1': {'addr': '0000:05:00.0',
+                        'application_cpu_list': '1,2'}}
+        self.assertEqual(
+            parse_sriov._get_pf_affinity_list(cfgs),
+            [{'pf_addr': '0000:05:00.0', 'cpu_list': '1,2'}])
+
+    def test_pf_affinity_list_bad_input(self):
+        self.assertEqual(parse_sriov._get_pf_affinity_list({}), [])
+        self.assertEqual(parse_sriov._get_pf_affinity_list(None), [])
+
+    def test_collect_vf_affinity_netdevice_included(self):
+        self.assertEqual(
+            parse_sriov._collect_vf_affinity('0000:07:02.0', 'iavf', '23,87'),
+            [{'vf_addr': '0000:07:02.0', 'cpu_list': '23,87'}])
+
+    def test_collect_vf_affinity_none_driver_included(self):
+        self.assertEqual(
+            parse_sriov._collect_vf_affinity(
+                '0000:07:02.6', parse_sriov.DRIVER_NONE, '23,87'),
+            [{'vf_addr': '0000:07:02.6', 'cpu_list': '23,87'}])
+
+    def test_collect_vf_affinity_vfio_excluded(self):
+        self.assertEqual(
+            parse_sriov._collect_vf_affinity(
+                '0000:07:02.2', parse_sriov.DRIVER_VFIO, '23,87'),
+            [])
+
+
+@requires_irq_affinity
+class TestAffinityMocked(unittest.TestCase):
+    """Affinity against mocked filesystem calls (no real files).
+
+    The sysfs/procfs layout is simulated by patching os.path.isdir,
+    os.path.exists, os.listdir and open() to return canned values:
+      /sys/bus/pci/devices/<bdf>/{irq,msi_irqs/*}
+      /proc/irq/<n>/smp_affinity_list
+    open() is patched with mock_open so writes can be asserted on the
+    mock's handle rather than read back from disk.
+    """
+
+    def test_collect_irqs_legacy_and_msi(self):
+        devdir = '/sys/bus/pci/devices/0000:07:00.0'
+
+        def fake_exists(path):
+            return path == os.path.join(devdir, 'irq')
+
+        def fake_isdir(path):
+            return path == os.path.join(devdir, 'msi_irqs')
+
+        m = mock_open(read_data='11\n')
+        with patch(f'{PREFIX}.os.path.exists', side_effect=fake_exists), \
+             patch(f'{PREFIX}.os.path.isdir', side_effect=fake_isdir), \
+             patch(f'{PREFIX}.os.listdir',
+                   return_value=['30', '31', 'name']), \
+             patch(f'{PREFIX}.open', m, create=True):
+            self.assertEqual(parse_sriov._collect_irqs(devdir), {11, 30, 31})
+
+    def test_collect_irqs_legacy_zero_ignored(self):
+        devdir = '/sys/bus/pci/devices/0000:07:00.0'
+        m = mock_open(read_data='0\n')
+        with patch(f'{PREFIX}.os.path.exists',
+                   side_effect=lambda p: p.endswith('/irq')), \
+             patch(f'{PREFIX}.os.path.isdir', return_value=False), \
+             patch(f'{PREFIX}.open', m, create=True):
+            self.assertEqual(parse_sriov._collect_irqs(devdir), set())
+
+    def test_collect_irqs_msi_only(self):
+        devdir = '/sys/bus/pci/devices/0000:07:00.0'
+        with patch(f'{PREFIX}.os.path.exists', return_value=False), \
+             patch(f'{PREFIX}.os.path.isdir', return_value=True), \
+             patch(f'{PREFIX}.os.listdir', return_value=['5', '6', '7']):
+            self.assertEqual(parse_sriov._collect_irqs(devdir), {5, 6, 7})
+
+    def test_affine_pci_irqs_writes_each_irq(self):
+        m = mock_open()
+        with patch(f'{PREFIX}.os.path.isdir', return_value=True), \
+             patch(f'{PREFIX}._collect_irqs', return_value={11, 12}), \
+             patch(f'{PREFIX}.os.path.exists', return_value=True), \
+             patch(f'{PREFIX}.open', m, create=True):
+            results = parse_sriov.affine_pci_irqs('0000:07:00.0', '23,87')
+        self.assertEqual(results, {11: True, 12: True})
+        # Both IRQs were written with the requested cpulist.
+        m().write.assert_has_calls([call('23,87'), call('23,87')])
+        self.assertEqual(m().write.call_count, 2)
+
+    def test_affine_pci_irqs_skips_inactive_vector(self):
+        # irq 11 has a /proc/irq node; irq 12 does not (inactive vector).
+        def fake_exists(path):
+            return path == '/proc/irq/11/smp_affinity_list'
+
+        m = mock_open()
+        with patch(f'{PREFIX}.os.path.isdir', return_value=True), \
+             patch(f'{PREFIX}._collect_irqs', return_value={11, 12}), \
+             patch(f'{PREFIX}.os.path.exists', side_effect=fake_exists), \
+             patch(f'{PREFIX}.open', m, create=True):
+            results = parse_sriov.affine_pci_irqs('0000:07:00.0', '23,87')
+        self.assertIs(results[11], True)
+        # silently skipped.
+        self.assertNotIn(12, results)
+        m().write.assert_called_once_with('23,87')
+
+    def test_affine_pci_irqs_write_oserror_reported(self):
+        m = mock_open()
+        m().write.side_effect = OSError('denied')
+        with patch(f'{PREFIX}.os.path.isdir', return_value=True), \
+             patch(f'{PREFIX}._collect_irqs', return_value={11}), \
+             patch(f'{PREFIX}.os.path.exists', return_value=True), \
+             patch(f'{PREFIX}.open', m, create=True):
+            results = parse_sriov.affine_pci_irqs('0000:07:00.0', '23,87')
+        self.assertTrue(results[11].startswith('failed'))
+
+    def test_affine_pci_irqs_raises_when_device_missing(self):
+        with patch(f'{PREFIX}.os.path.isdir', return_value=False):
+            with self.assertRaises(FileNotFoundError):
+                parse_sriov.affine_pci_irqs('0000:99:00.0', '23,87')
+
+    def test_affine_vf_irqs_writes_bound_vf(self):
+        m = mock_open()
+        with patch(f'{PREFIX}._driver_of_pci', return_value='iavf'), \
+             patch(f'{PREFIX}.os.path.isdir', return_value=True), \
+             patch(f'{PREFIX}._collect_irqs', return_value={5225}), \
+             patch(f'{PREFIX}.os.path.exists', return_value=True), \
+             patch(f'{PREFIX}.open', m, create=True):
+            results = parse_sriov.affine_vf_irqs('0000:07:02.0', '23,87')
+        self.assertEqual(results, {5225: True})
+        m().write.assert_called_once_with('23,87')
+
+    def test_affine_vf_irqs_skips_vfio(self):
+        with patch(f'{PREFIX}._driver_of_pci',
+                   return_value=parse_sriov.DRIVER_VFIO), \
+             MockHelper(stdout=''):
+            self.assertIsNone(
+                parse_sriov.affine_vf_irqs('0000:07:02.2', '23,87'))
+
+    def test_affine_vf_irqs_skips_unbound(self):
+        with patch(f'{PREFIX}._driver_of_pci', return_value=None), \
+             MockHelper(stdout=''):
+            self.assertIsNone(
+                parse_sriov.affine_vf_irqs('0000:07:02.9', '23,87'))
+
+    def test_affine_vf_irqs_missing_device_returns_empty(self):
+        with patch(f'{PREFIX}._driver_of_pci', return_value='iavf'), \
+             patch(f'{PREFIX}.os.path.isdir', return_value=False), \
+             MockHelper(stdout=''):
+            self.assertEqual(
+                parse_sriov.affine_vf_irqs('0000:07:02.0', '23,87'), {})
+
+
+@requires_irq_affinity
+class TestAffineListFunctions(unittest.TestCase):
+    """affine_pfs / affine_vfs orchestration (inner helpers mocked)."""
+
+    def test_affine_pfs_all_ok(self):
+        with patch(f'{PREFIX}.affine_pci_irqs',
+                   return_value={1: True, 2: True}) as mock_aff, \
+             MockHelper(stdout=''):
+            ok = parse_sriov.affine_pfs(
+                [{'pf_addr': '0000:07:00.0', 'cpu_list': '23,87'}])
+        self.assertTrue(ok)
+        mock_aff.assert_called_once_with('0000:07:00.0', '23,87')
+
+    def test_affine_pfs_missing_cpu_list_warns_not_fail(self):
+        with patch(f'{PREFIX}.affine_pci_irqs') as mock_aff, \
+             MockHelper(stdout='') as mock_helper:
+            ok = parse_sriov.affine_pfs(
+                [{'pf_addr': '0000:07:00.0', 'cpu_list': None}])
+        self.assertTrue(ok)
+        mock_aff.assert_not_called()
+        self.assertIn('no application_cpu_list', mock_helper.get_output_str())
+
+    def test_affine_pfs_missing_pci_device_fails(self):
+        with patch(f'{PREFIX}.affine_pci_irqs',
+                   side_effect=FileNotFoundError('nope')), \
+             MockHelper(stdout='') as mock_helper:
+            ok = parse_sriov.affine_pfs(
+                [{'pf_addr': '0000:99:00.0', 'cpu_list': '23,87'}])
+        self.assertFalse(ok)
+        self.assertIn('ERROR', mock_helper.get_output_str())
+
+    def test_affine_pfs_write_failure_fails(self):
+        with patch(f'{PREFIX}.affine_pci_irqs',
+                   return_value={1: 'failed: denied'}), \
+             MockHelper(stdout=''):
+            ok = parse_sriov.affine_pfs(
+                [{'pf_addr': '0000:07:00.0', 'cpu_list': '23,87'}])
+        self.assertFalse(ok)
+
+    def test_affine_vfs_all_ok(self):
+        with patch(f'{PREFIX}.affine_vf_irqs',
+                   return_value={2: True}) as mock_aff, \
+             MockHelper(stdout=''):
+            ok = parse_sriov.affine_vfs(
+                [{'vf_addr': '0000:07:02.0', 'cpu_list': '23,87'}])
+        self.assertTrue(ok)
+        mock_aff.assert_called_once_with('0000:07:02.0', '23,87')
+
+    def test_affine_vfs_skipped_vf_not_failure(self):
+        # affine_vf_irqs returns None for a skipped (vfio/unbound) VF.
+        with patch(f'{PREFIX}.affine_vf_irqs', return_value=None), \
+             MockHelper(stdout=''):
+            ok = parse_sriov.affine_vfs(
+                [{'vf_addr': '0000:07:02.2', 'cpu_list': '23,87'}])
+        self.assertTrue(ok)
+
+    def test_affine_vfs_missing_cpu_list_warns_not_fail(self):
+        with patch(f'{PREFIX}.affine_vf_irqs') as mock_aff, \
+             MockHelper(stdout='') as mock_helper:
+            ok = parse_sriov.affine_vfs(
+                [{'vf_addr': '0000:07:02.0', 'cpu_list': None}])
+        self.assertTrue(ok)
+        mock_aff.assert_not_called()
+        self.assertIn('no application_cpu_list', mock_helper.get_output_str())
+
+    def test_affine_vfs_write_failure_fails(self):
+        with patch(f'{PREFIX}.affine_vf_irqs',
+                   return_value={2: 'failed: denied'}), \
+             MockHelper(stdout=''):
+            ok = parse_sriov.affine_vfs(
+                [{'vf_addr': '0000:07:02.0', 'cpu_list': '23,87'}])
+        self.assertFalse(ok)
 
 
 if __name__ == '__main__':
