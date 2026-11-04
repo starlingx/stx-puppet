@@ -3,7 +3,6 @@ class platform::lvm::params (
   $final_filter = '[]',
   $cgts_thin_pool_enabled = false,
   $cgts_thin_pool_size = '',
-  $removing_lvgs = [],
   $csi_service_enabled = false,
   $node_lvm_csi_configured_flag = '/etc/platform/.node_lvm_csi_configured',
 ) {}
@@ -103,7 +102,10 @@ class platform::lvm::vg::nova_local(
 class platform::lvm::controller::vgs {
   include ::platform::lvm::vg::cgts_vg
   include ::platform::lvm::vg::nova_local
+  include ::platform::lvm::csi::removeresources
   include ::platform::lvm::csi::allresources
+  Class['::platform::lvm::csi::removeresources']
+  -> Class['::platform::lvm::csi::allresources']
 }
 
 class platform::lvm::controller
@@ -135,7 +137,10 @@ class platform::lvm::controller::runtime {
 class platform::lvm::compute::vgs {
   include ::platform::lvm::vg::cgts_vg
   include ::platform::lvm::vg::nova_local
+  include ::platform::lvm::csi::removeresources
   include ::platform::lvm::csi::allresources
+  Class['::platform::lvm::csi::removeresources']
+  -> Class['::platform::lvm::csi::allresources']
 }
 
 class platform::lvm::compute
@@ -304,97 +309,82 @@ define platform::lvm::csi::create_extend_vg(
   }
 }
 
-class platform::lvm::csi::params::thick (
-  $vg_name = '',
+define platform::lvm::csi::wipe_and_remove_pv {
+  # lint:ignore:140chars
+  $open = '--config \'devices { filter=["a|.*|"] global_filter=["a|.*|"] }\''
+
+  # Partitions must never be destroyed. The decision is taken on the lsblk,
+  # not on the path name.
+  $no_children = "test -z \"\$(lsblk -nr -o NAME ${name} | tail -n +2)\""
+  $is_part = "test \"\$(lsblk -dn -o TYPE ${name})\" = part && ${no_children}"
+  $is_bare_disk = "test \"\$(lsblk -dn -o TYPE ${name})\" = disk && ${no_children}"
+  # lint:endignore:140chars
+
+  exec { "pvremove ${name}":
+    command => "pvremove -ffy ${name} ${open}",
+    path    => ['/usr/sbin', '/sbin'],
+    onlyif  => "pvs ${name} ${open}",
+  }
+  -> exec { "wipefs removed pv ${name}":
+    command  => "wipefs -af ${name}",
+    path     => ['/usr/sbin', '/sbin', '/usr/bin', '/bin'],
+    provider => shell,
+    onlyif   => "test -b ${name} && { ${is_part} || ${is_bare_disk}; }",
+  }
+  -> exec { "GPT format removed pv disk ${name}":
+    command  => "parted -a optimal --script ${name} -- mktable gpt",
+    path     => ['/usr/sbin', '/sbin', '/usr/bin', '/bin'],
+    provider => shell,
+    onlyif   => "test -b ${name} && ${is_bare_disk}",
+    unless   => "parted --script ${name} print 2>/dev/null | grep -q '^Partition Table: gpt'",
+  }
+}
+
+define platform::lvm::csi::remove_vg(
   $physical_volumes = [],
+) {
+  # lint:ignore:140chars
+  $open = '--config \'devices { filter=["a|.*|"] global_filter=["a|.*|"] }\''
+  # lint:endignore:140chars
+
+  notice("Removing volume group ${name} with PVs ${physical_volumes}")
+
+  exec { "deactivate vg ${name}":
+    command => "vgchange -an ${name} ${open}",
+    path    => ['/usr/sbin', '/sbin'],
+    onlyif  => "vgs ${name} ${open}",
+  }
+  -> exec { "remove dm mappings ${name}":
+    command => "/usr/share/puppet/modules/platform/files/remove_vg_dm_mappings.sh ${name}",
+    path    => ['/usr/sbin', '/sbin', '/usr/bin', '/bin'],
+  }
+  -> exec { "vgremove ${name}":
+    command => "vgremove -fy ${name} ${open}",
+    path    => ['/usr/sbin', '/sbin'],
+    onlyif  => "vgs ${name} ${open}",
+  }
+  -> platform::lvm::csi::wipe_and_remove_pv { $physical_volumes: }
+}
+
+class platform::lvm::csi::params::removeresources (
+  $volume_groups = {},
 ) {}
 
-class platform::lvm::csi::thick::resources
-  inherits ::platform::lvm::csi::params::thick {
+class platform::lvm::csi::removeresources
+  inherits ::platform::lvm::csi::params::removeresources {
 
-    if $vg_name != '' {
-      platform::lvm::csi::create_extend_vg { $vg_name:
-        vg_name          => $vg_name,
-        physical_volumes => $physical_volumes,
-      }
-      -> exec { "vgchange ${vg_name}":
-        command => "vgchange --addtag lvm-csi ${vg_name}",
-        path    => ['/usr/sbin', '/sbin'],
-        onlyif  => "vgs ${vg_name}",
-      }
-    }
+  create_resources('platform::lvm::csi::remove_vg', $volume_groups)
 }
 
-class platform::lvm::csi::thick::runtime
-  inherits ::platform::lvm::params {
-    ::platform::lvm::global_filter { 'final filter':
-      filter => $final_filter,
-      before => Class['::platform::lvm::csi::thick::resources']
-    }
-
-    include ::platform::lvm::csi::thick::resources
-}
-
-class platform::lvm::csi::params::thin (
-  $vg_name = '',
-  $physical_volumes = [],
-  $pool_name = 'lvmcsi-pool',
-  $pool_size = '+99%FREE',
-  $metadata_size = undef,
-) {}
-
-class platform::lvm::csi::thin::resources
-  inherits ::platform::lvm::csi::params::thin {
-
-    if $vg_name != '' {
-      platform::lvm::csi::create_extend_vg { $vg_name:
-        vg_name          => $vg_name,
-        physical_volumes => $physical_volumes,
-      }
-      -> platform::lvm::csi::create_thinpool { $pool_name:
-        ensure        => present,
-        vg_name       => $vg_name,
-        pool_size     => $pool_size,
-        metadata_size => $metadata_size,
-      }
-      -> exec { "vgchange ${vg_name}":
-        command => "vgchange --addtag lvm-csi ${vg_name}",
-        path    => ['/usr/sbin', '/sbin'],
-        onlyif  => "vgs ${vg_name}",
-      }
-    }
-}
-
-class platform::lvm::csi::thin::runtime
+class platform::lvm::csi::remove_pv::runtime
   inherits ::platform::lvm::params {
 
   ::platform::lvm::global_filter { 'final filter':
     filter => $final_filter,
-    before => Class['::platform::lvm::csi::thin::resources']
+    before => Class['::platform::lvm::csi::removeresources'],
   }
 
-  include ::platform::lvm::csi::thin::resources
-}
-
-define platform::lvm::csi::remove_vg {
-  exec { "vgremove ${name}":
-    command => "vgremove -fy ${name}",
-    path    => ['/usr/sbin', '/sbin'],
-    onlyif  => "vgs ${name}",
-  }
-}
-
-class platform::lvm::csi::remove_pv::runtime (
-  $removing_pvs = lookup('platform::worker::storage::removing_pvs', Array, 'first', []),
-) {
-  include ::platform::lvm::params
-  notice("Removing VG ${$::platform::lvm::params::removing_lvgs}")
-  notice("Removing PV ${$removing_pvs}")
-  platform::lvm::csi::remove_vg { $::platform::lvm::params::removing_lvgs:
-  }
-  -> physical_volume { $removing_pvs:
-    ensure => absent,
-  }
+  include ::platform::lvm::csi::removeresources
 }
 
 class platform::lvm::csi::flag
@@ -490,4 +480,15 @@ class platform::lvm::csi::allresources
   inherits ::platform::lvm::csi::params::allresources {
 
   create_resources('platform::lvm::csi::create_vg', $volume_groups)
+}
+
+class platform::lvm::csi::allresources::runtime
+  inherits ::platform::lvm::params {
+
+  ::platform::lvm::global_filter { 'final filter':
+    filter => $final_filter,
+    before => Class['::platform::lvm::csi::allresources'],
+  }
+
+  include ::platform::lvm::csi::allresources
 }
