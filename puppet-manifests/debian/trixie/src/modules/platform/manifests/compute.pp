@@ -323,19 +323,9 @@ class platform::compute::allocate
     }
   }
 
-  if $nr_hugepages_1G  != undef {
-    $nr_hugepages_1G_array = regsubst($nr_hugepages_1G , '[\(\)\"]', '', 'G').split(' ')
-    $nr_hugepages_1G_array.each | String $val | {
-      $per_node_1G = $val.split(':')
-      if size($per_node_1G)== 3 {
-        $node = $per_node_1G[0]
-        $page_size = $per_node_1G[1]
-        platform::compute::allocate_pages { "Start ${node} ${page_size}":
-          path       => "${nodefs}/${node}/hugepages/hugepages-${page_size}/nr_hugepages",
-          page_count => $per_node_1G[2],
-        }
-      }
-    }
+  # 1G hugepages are boot-time only (kernel cmdline); skip runtime sysfs write.
+  if $nr_hugepages_1G != undef {
+    notice('Skipping 1G hugepage allocation; reserved at boot via kernel cmdline')
   }
 }
 # lint:endignore:variable_is_lowercase
