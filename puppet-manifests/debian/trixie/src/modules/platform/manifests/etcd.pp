@@ -352,6 +352,7 @@ class platform::etcd
     include ::platform::etcd::datadir::fixed
     include ::platform::etcd::datadir::floating
     include ::platform::etcd::setup
+    include ::platform::etcd::certificates
     include ::platform::etcd::membership
 
     # Fixed path (NO DRBD dependency)
@@ -367,6 +368,7 @@ class platform::etcd
     # 2. Adds floating member to the cluster via etcdctl
     # 3. Then floating etcd can start and join the existing cluster
     Class['::platform::etcd::setup']
+    -> Class['::platform::etcd::certificates']
     -> Class['::platform::etcd::membership']
     -> class { '::platform::etcd::init':
       # The floating instance is SM-managed: platform::drbd::etcd leaves the
@@ -727,9 +729,36 @@ class platform::etcd::membership
     exec { 'etcdctl member add floating':
       command     => "${etcdctl_local} member add ${floating_name} --learner --peer-urls=${floating_peer_url}",
       environment => ['ETCDCTL_API=3'],
-      unless      => "${etcdctl_local} member list | /bin/grep -q '${floating_name}'",
+      unless      => "${etcdctl_local} member list | /bin/grep -qF '${floating_peer_url}' || ${etcdctl_local} member list | /bin/grep -qw '${floating_name}'", # lint:ignore:140chars
       require     => Service[$fixed_service_name],
     }
+  }
+}
+
+
+# -----------------------------------------------------------------------
+# platform::etcd::certificates
+#
+# Reissue etcd server and apiserver-etcd-client certificates with the
+# controller unit addresses in the SAN set. At simplex bootstrap the
+# cert only carries the floating address; after SX-to-DX conversion the
+# fixed member binds the unit address and TLS verification fails without
+# it. Skips when the SAN set already covers the addresses, so it is a
+# no-op on a fresh duplex bootstrap where the certs are correct from the
+# start.
+# -----------------------------------------------------------------------
+class platform::etcd::certificates
+  inherits ::platform::etcd::params {
+
+  include ::platform::network::cluster_host::params
+  $floating_address = $::platform::network::cluster_host::params::controller_address
+  $controller0_address = $::platform::network::cluster_host::params::controller0_address
+
+  $script = '/usr/local/bin/etcd_duplex_migration.py'
+
+  exec { 'etcd reissue certificates with unit addresses':
+    command   => "${script} --certificates --floating-address ${floating_address}",
+    logoutput => true,
   }
 }
 
