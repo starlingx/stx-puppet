@@ -148,17 +148,22 @@ define platform::filesystem::resize(
 
   $device = "/dev/${vg_name}/${lv_name}"
 
-  # TODO (rchurch): Fix this... Allowing return code 5 so that lvextends using the same size doesn't blow up
+  # Only extend when the LV is smaller than the requested size. When the LV is
+  # already at (or above) the requested size lvextend is a no-op, and the wipe
+  # below must not run: it would zero the last 10MB of a filesystem that is
+  # already in use (e.g. the mounted root filesystem on every boot).
   exec { "lvextend ${device}":
     command => "lvextend -L${lv_size}G ${device}",
-    returns => [0, 5]
+    onlyif  => "test $(lvs --noheadings --nosuffix --units b -o lv_size ${device} | tr -d ' ') -lt $((${lv_size} * 1073741824))",
   }
   # After a partition extend, wipe 10MB at the end of the partition
   # to make sure that there is no leftover
-  # type metadata from a previous install
-  -> exec { "resizing: wipe end of device ${device}":
-    command => "dd if=/dev/zero of=${device} bs=1M seek=$(($(blockdev --getsz ${device})/2048 - 10)) count=10",
-    onlyif  => "blkid -s TYPE -o value ${devmapper} | grep -v xfs",
+  # type metadata from a previous install.
+  # refreshonly: only run when lvextend actually extended the LV.
+  ~> exec { "resizing: wipe end of device ${device}":
+    command     => "dd if=/dev/zero of=${device} bs=1M seek=$(($(blockdev --getsz ${device})/2048 - 10)) count=10",
+    onlyif      => "blkid -s TYPE -o value ${devmapper} | grep -v xfs",
+    refreshonly => true,
   }
   -> exec { "resize2fs ${devmapper}":
     command => "resize2fs ${devmapper}",
