@@ -25,6 +25,7 @@
 log_level = "<%= @log_level %>"
 log_format = "<%= @log_format %>"
 ui = false
+disable_standby_reads = <%= @disable_standby_reads %>
 
 cluster_addr = "https://<%= @cluster_addr_name %>:<%= @cluster_port %>"
 api_addr = "https://<%= bao_hostport(@effective_bind_address) %>:<%= @api_port %>"
