@@ -15,6 +15,7 @@ so none is dropped. The CA, validity and extension set match
 kube-cert-rotation.sh. Nothing is done when all are already present.
 """
 
+import argparse
 import ipaddress
 import os
 import re
@@ -84,6 +85,26 @@ def canonical(address):
         return None
 
 
+def unique(addresses):
+    """Return the valid addresses, brackets removed, each listed once.
+
+    Two spellings of one address count as the same address; the first
+    spelling seen is kept.
+    """
+    result = []
+    seen = set()
+    for address in addresses:
+        if not address:
+            continue
+        address = address.strip('[]')
+        key = canonical(address)
+        if key is None or key in seen:
+            continue
+        seen.add(key)
+        result.append(address)
+    return result
+
+
 def subject_cn(path):
     """Return the common name in a certificate's subject, or None.
 
@@ -104,12 +125,17 @@ def subject_cn(path):
     return found.group(1).strip() if found else None
 
 
-def local_fixed_member():
+def local_fixed_member(address=None):
     """Return this host's fixed etcd member name and the address it binds.
 
     Both are read from the member's own environment file, so this host is
     described by the configuration the member actually runs with. Returns
     (None, None) on a system with no fixed member.
+
+    A caller that knows the address the member is about to bind passes it
+    as address. During the simplex to duplex conversion the certificate is
+    reissued before the environment file is rewritten, so the file still
+    names the simplex address and cannot be used for the new one.
     """
     try:
         with open(FIXED_ENV_FILE) as handle:
@@ -121,6 +147,9 @@ def local_fixed_member():
     peer = re.search(r'^ETCD_LISTEN_PEER_URLS="?([^"\n,]+)', env, re.M)
     if not name or not peer:
         return None, None
+
+    if address:
+        return name.group(1).strip(), address.strip('[]')
 
     # https://192.168.206.2:2380 or https://[aefd:205::2]:2380
     address = re.match(r'https?://(\[[^\]]+\]|[^:/]+)', peer.group(1))
@@ -164,56 +193,156 @@ def regenerate(cert_dir, name, addresses, cn=None):
             stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT,
             timeout=OPENSSL_TIMEOUT)
 
-        # Replaced only once openssl has succeeded, so a failure leaves the
-        # working certificate in place.
-        shutil.copyfile(new, os.path.join(cert_dir, '%s.crt' % name))
+        install(new, os.path.join(cert_dir, '%s.crt' % name))
     finally:
         shutil.rmtree(work, ignore_errors=True)
     return True
 
 
-def maintain_local_member():
-    """Name this host's address in its own fixed member certificate.
+def install(new, target):
+    """Replace target with new in one rename, keeping target's mode and owner.
 
-    A fixed member's certificate names one address, the one that member binds,
-    so it is reissued from that address rather than from the union the shared
-    certificates carry. Returns 1 on failure, 0 otherwise.
+    Replaced only once openssl has succeeded, so a failure leaves the working
+    certificate in place. A running etcd reads its certificate on every TLS
+    handshake, so the file is never seen half written.
     """
-    name, address = local_fixed_member()
+    staged = target + '.new'
+    shutil.copyfile(new, staged)
+    if os.path.exists(target):
+        stat = os.stat(target)
+        os.chmod(staged, stat.st_mode & 0o7777)
+        os.chown(staged, stat.st_uid, stat.st_gid)
+    os.replace(staged, target)
+
+
+def maintain_local_member(address=None, floating=None):
+    """Name this host's addresses in its own fixed member certificate.
+
+    A fixed member's certificate names the address that member binds and,
+    when given, the cluster-host floating address. It is reissued from those
+    rather than from the union the shared certificates carry. address
+    overrides the one read from the environment file; see
+    local_fixed_member. Returns 1 on failure, 0 otherwise.
+
+    The floating address is needed because the certificate is also the
+    member's peer client certificate, and etcd rejects a peer connection
+    whose source address is not among that certificate's IP SANs. On the
+    controller holding the floating address the member dials the co-located
+    floating member from it, and may dial the other controller from it.
+    """
+    # A caller that names the unit address knows every address the member
+    # needs, so anything else on the certificate is stale and is dropped.
+    explicit = address is not None
+    name, address = local_fixed_member(address)
     if not name or not address:
         return 0
 
-    cert = os.path.join(ETCD_DIR, 'etcd-%s.crt' % name)
+    # The pair is etcd-<member>.crt/.key; the certificate CN is the member.
+    pair = 'etcd-%s' % name
+    cert = os.path.join(ETCD_DIR, '%s.crt' % pair)
     if not os.path.exists(cert):
         print("no per-member certificate at %s; skipping member %s"
               % (cert, name))
         return 0
 
-    held = set(a for a in map(canonical, cert_ip_sans(cert)) if a is not None)
-    if canonical(address) in held:
-        print("member %s already names %s" % (name, address))
+    if canonical(address.strip('[]')) is None:
+        print("ERROR: %s is not an IP address for member %s" % (address, name))
+        return 1
+    wanted = unique([address, floating])
+    present = cert_ip_sans(cert)
+    held = set(a for a in map(canonical, present) if a is not None)
+    missing = [a for a in wanted if canonical(a) not in held]
+    loopback = set(map(canonical, LOOPBACK))
+    others = [a for a in present
+              if canonical(a) not in loopback and
+              canonical(a) not in set(map(canonical, wanted))]
+    stale = others if explicit else []
+    if not missing and not stale:
+        print("member %s already names %s" % (name, ', '.join(wanted)))
         return 0
 
-    sans = [address] + list(LOOPBACK)
+    # The unit address first, as kube-cert-rotation.sh may read it from
+    # there. Without the unit address from the caller, the address read from
+    # the environment file may be the floating one, so the addresses the
+    # certificate already names are kept rather than dropped.
+    kept = [] if explicit else others
+    sans = unique(wanted + kept + list(LOOPBACK))
+    if stale:
+        print("member %s: dropping stale SAN: %s" % (name, ', '.join(stale)))
     print("regenerating %s for member %s; missing SAN: %s"
-          % (cert, name, address))
+          % (cert, name, ', '.join(missing) or '-'))
+    # A failure is fatal even when only the floating address is missing:
+    # without it the peers reject this member's snapshots, the floating
+    # member stays a learner and controller-1 cannot join. Failing here
+    # reports that on the host that has the problem.
+    return reissue_member(pair, name, sans)
+
+
+def reissue_member(pair, name, sans):
+    """Reissue member name's certificate pair with sans.
+
+    Returns 1 on failure, 0 otherwise.
+    """
+    cert = os.path.join(ETCD_DIR, '%s.crt' % pair)
+    if not os.path.exists(CA_KEY):
+        print("ERROR: cannot reissue %s: %s is not present" % (cert, CA_KEY))
+        return 1
     try:
-        regenerate(ETCD_DIR, name, sans)
+        done = regenerate(ETCD_DIR, pair, sans, cn=name)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
             OSError) as exc:
         print("ERROR: failed to regenerate %s: %s" % (name, exc))
+        return 1
+    if not done:
+        # The certificate exists but its key does not, so it cannot be
+        # reissued here. Report it rather than claiming success.
+        print("ERROR: %s was not regenerated" % cert)
         return 1
     print("regenerated %s with SANs %s" % (name, ', '.join(sans)))
     return 0
 
 
-def main():
-    wanted = [a for a in sys.argv[1:] if a]
-    if not wanted:
-        print("no addresses given; nothing to do")
-        return 0
+def parse_args(argv):
+    """Return the parsed command line, or raise ValueError.
 
-    rc = maintain_local_member()
+    Positional arguments are the addresses for the shared certificates.
+    --local-address and --floating-address describe this host's fixed member
+    and must be IP addresses when given.
+    """
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument('addresses', nargs='*',
+                        help="addresses the shared certificates must name")
+    parser.add_argument('--local-address',
+                        help="address this host's fixed member binds")
+    parser.add_argument('--floating-address',
+                        help="cluster-host floating address")
+    try:
+        args = parser.parse_intermixed_args(argv)
+    except SystemExit as exc:
+        raise ValueError("invalid arguments: %s" % ' '.join(argv)) from exc
+    for option in ('local_address', 'floating_address'):
+        value = getattr(args, option)
+        if value is not None and canonical(value.strip('[]')) is None:
+            raise ValueError("--%s needs an IP address, got '%s'"
+                             % (option.replace('_', '-'), value))
+    return args
+
+
+def main():
+    try:
+        args = parse_args(sys.argv[1:])
+    except ValueError as exc:
+        print("ERROR: %s" % exc)
+        return 1
+
+    # The member is checked even with no shared addresses to add: its
+    # certificate is separate from the shared ones.
+    rc = maintain_local_member(args.local_address, args.floating_address)
+
+    wanted = [a for a in args.addresses if a]
+    if not wanted:
+        print("no addresses given for the shared certificates")
+        return rc
 
     server = os.path.join(ETCD_DIR, '%s.crt' % CERTS[0][1])
     present = cert_ip_sans(server)

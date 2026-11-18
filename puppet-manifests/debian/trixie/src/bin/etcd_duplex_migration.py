@@ -43,6 +43,7 @@ import logging
 import os
 import time
 import shutil
+import socket
 import subprocess
 import sys
 
@@ -119,12 +120,29 @@ def handle_certificates(args):
                if addr is None]
     if missing:
         # The addresses are added to the pools between the mode change and
-        # the unlock. Before that there is nothing to add to the SAN set.
-        LOG.info("no cluster-host entry for %s yet; leaving the certificate "
-                 "alone", ", ".join(missing))
-        return 0
+        # the unlock. Before that there is nothing to add to the shared SAN
+        # set, but this host's member certificate is still checked.
+        LOG.info("no cluster-host entry for %s yet; leaving the shared "
+                 "certificates alone", ", ".join(missing))
+        addresses = []
 
     cmd = [ETCD_CERT_SANS] + addresses
+    # This runs before platform::etcd::membership rewrites
+    # /etc/default/etcd-fixed, so the file still names the simplex address
+    # here. Pass the unit address this member is about to bind, or its own
+    # certificate is left without it and the member cannot serve on it.
+    local_address = unit_address(socket.gethostname())
+    if local_address:
+        cmd = [ETCD_CERT_SANS, "--local-address", local_address] + addresses
+    else:
+        LOG.warning("no cluster-host entry for %s; the member certificate is "
+                    "checked against the address in %s",
+                    socket.gethostname(), FIXED_ENV)
+    # The member certificate is also its peer client certificate, and the
+    # member dials from the floating address on the controller that holds
+    # it, so the floating address has to be named too.
+    if args.floating_address:
+        cmd[1:1] = ["--floating-address", args.floating_address]
     proc = run(cmd, check=False)
     if proc.stdout.strip():
         LOG.info("%s", proc.stdout.strip())
