@@ -702,6 +702,17 @@ class platform::sm
     command => "sm-configure service_instance platform-export-fs platform-export-fs \"fsid=0,directory=${platform_fs_directory},options=rw,sync,no_root_squash,no_subtree_check,clientspec=${platform_nfs_subnet_url},unlock_on_stop=true\"",
   }
 
+  # A graceful swact evicts nothing: both controllers stay Ready, so nothing
+  # relocates the SCST iSCSI gateway pod. It needs the active controller,
+  # because that is where the platform filesystem carrying its APTPL
+  # reservation state is mounted and where the floating portal address lives.
+  # This service labels the active node and deletes the outgoing pod, so the
+  # active role drives placement. It is chained behind platform-fs rather than
+  # the rook filesystem, so it applies to Standard as well as AIO-DX.
+  exec { 'Configure SCST iSCSI Gateway exit':
+    command => "sm-configure service_instance scst-gw-exit scst-gw-exit \"\"",
+  }
+
   # etcd
   exec { 'Configure ETCD':
     command => "sm-configure service_instance etcd etcd \"config=/etc/etcd/etcd.conf,user=root\"",
@@ -1130,6 +1141,44 @@ class platform::sm
       -> exec { 'Deprovision Rook-mon-exit in SM (service-group-member rook-mon-exit)':
         command => 'sm-deprovision service-group-member controller-services rook-mon-exit',
       }
+    }
+  }
+
+  # SCST iSCSI gateway active-role follow service.
+  #
+  # Provisioned on AIO-DX and Standard, both of which have two controllers
+  # and a DRBD-replicated platform filesystem, so there is an active role to
+  # follow. On AIO-SX the gateway itself is supported (the pod self-heals and
+  # the two-VM WSFC consumer keeps its in-guest failover), but there is no
+  # peer and so no active role to follow - this follow-service has nothing to
+  # do there, so it is deprovisioned rather than provisioned. The plugin
+  # allows AIO-SX with that documented no-controller-failover caveat; this
+  # lines up with it.
+  #
+  # Deliberately not gated on $rook_float_configured. The floating Ceph
+  # monitor is an AIO-DX-only construct - Standard runs three real monitors
+  # and has no float to chase - so inheriting that gate would leave Standard
+  # without a relocation mechanism.
+  if $system_type == 'Standard' or ($system_type == 'All-in-one' and 'duplex' in $system_mode) {
+    # On a system that gets this service by a patch within the same release,
+    # /etc/sm/<release>/sm.db is the node's existing copy: the ostree /etc
+    # merge keeps it rather than the one the patched sm-db package carries.
+    # SM applies sm-patch.sql only to its runtime copy, which it rebuilds
+    # from /etc, so sm-provision finds no row to update and the member is
+    # lost on the next rebuild. Seed the persistent database from the same
+    # idempotent sm-patch.sql first; this is a no-op once the row exists.
+    $sm_persistent_db = "/etc/sm/${platform_sw_version}/sm.db"
+    exec { 'Seed SCST gateway exit into persistent SM database':
+      command  => "/usr/bin/sqlite3 ${sm_persistent_db} < /usr/share/sm/patches/sm-patch.sql",
+      onlyif   => "/usr/bin/test -f ${sm_persistent_db} -a -z \"\$(/usr/bin/sqlite3 ${sm_persistent_db} \"SELECT 1 FROM SERVICES WHERE NAME='scst-gw-exit';\")\"",
+      provider => shell,
+    }
+    -> exec { 'Provision SCST gateway exit in SM (service-group-member scst-gw-exit)':
+      command => 'sm-provision service-group-member controller-services scst-gw-exit --apply',
+    }
+  } else {
+    exec { 'Deprovision SCST gateway exit in SM (service-group-member scst-gw-exit)':
+      command => 'sm-deprovision service-group-member controller-services scst-gw-exit --apply',
     }
   }
 
