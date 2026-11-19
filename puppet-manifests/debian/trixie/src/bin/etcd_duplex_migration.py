@@ -168,7 +168,9 @@ def handle_relocate(args):
     # cluster, so the cluster is unavailable until it is started again -- the
     # same window any single-member cluster has while its process restarts.
     # The controller is locked at this point in the procedure.
+    # Stop pmon monitoring. This prevents service restart.
     LOG.info("stopping the member before its data moves")
+    run(["/usr/local/sbin/pmon-stop", "etcd-fixed"], check=False)
     run(["/usr/bin/systemctl", "stop", "etcd-fixed"], check=False)
     if to_fixed:
         # Coming off DRBD the running instance is the floating one, which
@@ -185,6 +187,8 @@ def handle_relocate(args):
         # instance is what serves this member from here on.
         run(["/usr/bin/systemctl", "enable", "--now", "etcd-fixed"],
             check=False)
+        # Resume pmon monitoring.
+        run(["/usr/local/sbin/pmon-start", "etcd-fixed"], check=False)
     else:
         # The unit is re-rendered for fixed-0 at unlock, and fixed-0 owns a
         # different data directory. Leave it stopped and disabled so that
@@ -432,8 +436,8 @@ def handle_finalize_conversion(args):
     # fixed-0 first and alone: it holds the data and is the whole cluster
     # until the floating member is registered.
     LOG.info("starting %s", fixed_name)
-    run(["/usr/bin/systemctl", "daemon-reload"], check=False)
     run(["/usr/bin/systemctl", "enable", "--now", "etcd-fixed"], check=False)
+    run(["/usr/local/sbin/pmon-start", "etcd-fixed"], check=False)
     if not wait_for_member(fixed_client):
         raise RuntimeError("%s did not become healthy at %s"
                            % (fixed_name, fixed_client))
@@ -507,7 +511,9 @@ def handle_rename_to_fixed(args):
         etcdctl_timeouts(command_timeout="60s") + etcdctl_certs() + ["snapshot", "save", snapshot])
 
     # Back to back with the snapshot: every commit in between is lost.
+    # Stop pmon monitoring. This prevents service restart.
     LOG.info("stopping %s", old_name)
+    run(["/usr/local/sbin/pmon-stop", "etcd-fixed"], check=False)
     run(["/usr/bin/systemctl", "stop", "etcd-fixed"], check=False)
 
     taken = snapshot_revision(snapshot)

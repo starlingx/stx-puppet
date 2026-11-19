@@ -1,0 +1,22 @@
+;
+; Copyright (c) 2026 Wind River Systems, Inc.
+;
+; SPDX-License-Identifier: Apache-2.0
+;
+[process]
+process     = etcd-fixed
+service     = etcd-fixed
+pidfile     = /var/run/etcd-fixed.pid
+style       = lsb            ; lsb
+; A single fixed member loss is tolerated on duplex/standard (the cluster
+; keeps quorum), so it is 'major'. On simplex etcd-fixed is the sole etcd
+; instance, so its loss is management-affecting -> 'critical'.
+severity    = <%= @etcd_fixed_pmon_severity %>          ; minor, major, critical
+restarts    = 3              ; restarts before error assertion
+; etcd-fixed is Type=notify and runs a membership pre-start; a restart takes
+; ~13s to reach ready, so allow a generous startup window (a shorter value
+; makes pmon time out mid-restart and loop).
+startuptime = 60             ; seconds to wait after process start
+interval    = 5              ; number of seconds to wait between restarts
+debounce    = 20             ; number of seconds to wait before degrade clear
+mode        = passive        ; passive: process death monitoring
