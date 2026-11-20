@@ -77,9 +77,12 @@ class platform::helm::repositories
     sw_version => $::platform::params::software_version,
   }
 
+  # Refresh only the platform repos (127.0.0.1). User-added repos may
+  # use hostnames that cannot be resolved yet, since dnsmasq starts
+  # only after config completes, and Helm 4 fails on any repo error.
   -> exec { 'Updating info of available charts locally from chart repo':
     environment => [ 'KUBECONFIG=/etc/kubernetes/admin.conf', 'HOME=/home/sysadmin' ],
-    command     => 'helm repo update',
+    command     => "helm repo update ${join($helm_repositories, ' ')}",
     logoutput   => true,
     user        => 'sysadmin',
     group       => 'sys_protected',
