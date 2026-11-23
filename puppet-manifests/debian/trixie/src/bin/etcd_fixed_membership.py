@@ -50,6 +50,8 @@ DIAL_TIMEOUT = 2
 LOOPBACK_ENDPOINT = "https://127.0.0.1:2379"
 CLIENT_PORT = "2379"
 PEER_PORT = "2380"
+USM_UPGRADE_IN_PROGRESS_FLAG = "/etc/platform/.usm_upgrade_in_progress"
+RESTORE_IN_PROGRESS_FLAG = "/etc/platform/.restore_in_progress"
 
 
 def setup_logging():
@@ -270,6 +272,9 @@ def add_member(name, peer_url, endpoint):
     reverse.
     """
     args = ["member", "add", name, "--learner", "--peer-urls", peer_url]
+    if not (os.path.exists(USM_UPGRADE_IN_PROGRESS_FLAG) or
+            os.path.exists(RESTORE_IN_PROGRESS_FLAG)):
+        args.remove("--learner")
     proc = run_etcdctl(args, endpoint=endpoint, check=False)
     if proc.returncode != 0:
         if "already exists" in proc.stderr or "Peer URLs already exists" in proc.stderr:
