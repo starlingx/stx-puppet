@@ -663,6 +663,7 @@ class platform::etcd::membership
 
   $cluster_host_controller0_address = $::platform::network::cluster_host::params::controller0_address
   $cluster_host_controller1_address = $::platform::network::cluster_host::params::controller1_address
+  $cluster_host_floating_address = $::platform::network::cluster_host::params::controller_address
 
   if $bind_address_version == $::platform::params::ipv6 {
     $fixed0_endpoint = "https://[${cluster_host_controller0_address}]:${port}"
@@ -700,13 +701,25 @@ class platform::etcd::membership
   # are the canonical per-member certificate parameters. The two other paths
   # that issue a member certificate -- etcd_cert_sans.py and the renewal block
   # in kube-cert-rotation.sh -- must stay in agreement with these values.
+  #
+  # The SAN names the cluster-host floating address as well as the unit
+  # address. The certificate is also this member's peer client certificate,
+  # and etcd checks a peer client certificate's IP SANs against the address
+  # the connection comes from. On the controller holding the floating
+  # address, this member dials the co-located floating member from the
+  # floating address, and may dial the other controller from it too.
+  if $cluster_host_floating_address =~ String[1] and $cluster_host_floating_address != $local_fixed_addr {
+    $member_sans = "IP:${local_fixed_addr},IP:${cluster_host_floating_address},IP:127.0.0.1,IP:::1"
+  } else {
+    $member_sans = "IP:${local_fixed_addr},IP:127.0.0.1,IP:::1"
+  }
   exec { "issue per-member etcd certificate ${local_fixed_name}":
     command  => "/bin/sh -c '\
 set -e; \
 /usr/bin/openssl genrsa -out ${member_key} 4096; \
 /bin/chmod 0600 ${member_key}; \
 /usr/bin/openssl req -new -key ${member_key} -subj \"/CN=${local_fixed_name}\" -out ${member_csr}; \
-/usr/bin/printf \"subjectAltName=IP:${local_fixed_addr},IP:127.0.0.1,IP:::1\\n\" > ${member_ext}; \
+/usr/bin/printf \"subjectAltName=${member_sans}\\n\" > ${member_ext}; \
 /usr/bin/printf \"keyUsage=digitalSignature,keyEncipherment\\n\" >> ${member_ext}; \
 /usr/bin/printf \"extendedKeyUsage=serverAuth,clientAuth\\n\" >> ${member_ext}; \
 /usr/bin/openssl x509 -req -in ${member_csr} -CA /etc/etcd/ca.crt -CAkey /etc/etcd/ca.key \
@@ -728,9 +741,8 @@ set -e; \
     content => template('platform/etcd-fixed.default.erb'),
   }
 
-  # Get the floating address for adding floating member to cluster
-  $cluster_host_floating_address = $::platform::network::cluster_host::params::controller_address
-
+  # The floating address, defined above, is used to add the floating member
+  # to the cluster.
   if $bind_address_version == $::platform::params::ipv6 {
     $fixed0_peer_url = "https://[${cluster_host_controller0_address}]:${peer_port}"
     $floating_peer_url = "https://[${cluster_host_floating_address}]:${peer_port}"
@@ -797,12 +809,14 @@ set -e; \
 # platform::etcd::certificates
 #
 # Reissue etcd server and apiserver-etcd-client certificates with the
-# controller unit addresses in the SAN set. At simplex bootstrap the
-# cert only carries the floating address; after SX-to-DX conversion the
-# fixed member binds the unit address and TLS verification fails without
-# it. Skips when the SAN set already covers the addresses, so it is a
-# no-op on a fresh duplex bootstrap where the certs are correct from the
-# start.
+# controller unit addresses in the SAN set, and this host's fixed member
+# certificate with its unit address and the cluster-host floating address.
+# At simplex bootstrap the shared cert only carries the floating address;
+# after SX-to-DX conversion the fixed member binds the unit address and TLS
+# verification fails without it. A member certificate issued at bootstrap
+# names only the unit address, and the member dials peers from the floating
+# address on the controller that holds it. Skips whatever is already
+# covered, so it is safe on every unlock.
 # -----------------------------------------------------------------------
 class platform::etcd::certificates
   inherits ::platform::etcd::params {
@@ -817,9 +831,14 @@ class platform::etcd::certificates
   # already carries and returns without reissuing when none are missing,
   # comparing addresses canonically rather than as text. That decision has one
   # owner, so this exec carries no unless of its own.
+  $floating_option = $floating_address ? {
+    undef   => '',
+    ''      => '',
+    default => " --floating-address ${floating_address}",
+  }
 
   exec { 'etcd reissue certificates with unit addresses':
-    command   => "${script} --certificates --floating-address ${floating_address}",
+    command   => "${script} --certificates${floating_option}",
     logoutput => true,
   }
 }
@@ -855,9 +874,15 @@ class platform::etcd::certs::runtime
   } else {
     $this_addr = $::platform::network::cluster_host::params::controller0_address
   }
+  $floating_addr = $::platform::network::cluster_host::params::controller_address
+  $floating_option = $floating_addr ? {
+    undef   => '',
+    ''      => '',
+    default => "--floating-address ${floating_addr} ",
+  }
 
   exec { 'ensure etcd certificate SANs for the local member':
-    command   => "${script} ${this_addr}",
+    command   => "${script} ${floating_option}${this_addr}",
     logoutput => true,
   }
 }

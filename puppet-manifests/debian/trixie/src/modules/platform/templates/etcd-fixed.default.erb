@@ -57,11 +57,10 @@ ETCD_INITIAL_CLUSTER="<%= initial_cluster %>"
 ETCD_INITIAL_CLUSTER_STATE="<%= initial_cluster_state %>"
 ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster"
 ETCD_QUOTA_BACKEND_BYTES="<%= @quota_backend_bytes %>"
-<%- # Per-member material. Each member presents a certificate whose common name
-    # is its own etcd member name and whose SAN covers only the address it
-    # binds, so ETCD_PEER_CLIENT_CERT_AUTH can assert which member is on the
-    # far end of a peer connection. With the shared etcd-server certificate it
-    # could only assert that the peer held a certificate signed by our CA.
+<%- # Per-member material. The CN is the member name and the key never leaves
+    # this host; together they identify the member. The SAN names the unit
+    # address and the cluster-host floating address, since etcd checks a
+    # peer's source address against it and peers can dial from either.
 -%>
 ETCD_CLIENT_CERT_AUTH="true"
 ETCD_CERT_FILE="/etc/etcd/etcd-<%= fixed_name %>.crt"
