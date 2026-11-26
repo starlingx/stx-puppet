@@ -953,7 +953,9 @@ class platform::sm
   # - simplex: no floating member at all; etcd runs as etcd-fixed.service
   # - post-transition: once the floating member has been removed
   # The else branch deprovisions (idempotent) to ensure SM state is clean.
-  if ($system_mode != 'simplex') {
+  # During a USM upgrade, simplex keeps it until activate migrates the data.
+  if ($system_mode != 'simplex') or
+    (str2bool($::usm_upgrade_in_progress) and !str2bool($::etcd_upgrade_data_migrated)) {
     exec { 'Provision etcd-fs (service-group-member)':
       command => 'sm-provision service-group-member controller-services etcd-fs',
     }
